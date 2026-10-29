@@ -1,0 +1,10 @@
+{{define "content"}}{{with .Data}}
+<div class="card">
+  <div class="empty">
+    {{icon "triangle-alert"}}
+    <h2>{{.Code}} · {{.Title}}</h2>
+    <p>{{.Message}}</p>
+    <a class="btn" href="/">{{icon "arrow-left"}} Back to the dashboard</a>
+  </div>
+</div>
+{{end}}{{end}}

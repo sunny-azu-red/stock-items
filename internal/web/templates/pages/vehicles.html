@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <h1>Vehicles</h1>
+    <p class="sub">Items are tagged with the vehicles they fit.</p>
+  </div>
+  <div class="actions"><a class="btn btn-primary" href="/vehicles/new">{{icon "plus"}} Add vehicle</a></div>
+</div>
+
+{{if .Data}}
+<div class="grid grid-3">
+  {{range .Data}}{{$v := .Vehicle}}
+  <a class="card vehicle-card" href="/vehicles/{{$v.ID}}" style="{{chipStyle $v.Color}}">
+    <span class="stripe"></span>
+    <span class="body">
+      <span class="name">{{icon $v.Kind.Icon}} {{$v.Name}}</span>
+      {{with $v.Subtitle}}<span class="muted small">{{.}}</span>{{end}}
+      <span class="stats">
+        <span><strong>{{$v.ItemCount}}</strong> items</span>
+        <span><strong>{{.Kits}}</strong> kits</span>
+        <span><strong>{{km $v.OdometerKm}}</strong></span>
+      </span>
+      {{with .Next}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}
+    </span>
+  </a>
+  {{end}}
+</div>
+<p class="mt"><a class="btn btn-ghost" href="/activity">{{icon "history"}} Activity log</a></p>
+{{else}}
+<div class="card">{{template "empty" (dict "Icon" "bike" "Title" "No vehicles yet" "Text" "Add your motorcycles and cars, then tag stock items with the vehicles they fit." "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
+{{end}}
+{{end}}

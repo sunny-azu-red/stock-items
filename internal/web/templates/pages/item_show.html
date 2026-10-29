@@ -1,0 +1,142 @@
+{{define "content"}}{{$d := .Data}}{{$it := $d.Item}}{{$m := $d.Move}}{{$e := $m.Errors}}
+<a class="back" href="/stock">{{icon "arrow-left"}} Stock</a>
+<div class="page-head">
+  <div>
+    <h1>{{$it.DisplayName}}</h1>
+    <div class="flex mt">
+      {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
+      {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}">{{.}}</a>{{end}}
+      {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">Low stock</span>{{end}}
+      {{if eq $d.ExpiryState "expired"}}<span class="badge badge-danger">Expired</span>{{else if eq $d.ExpiryState "soon"}}<span class="badge badge-warn">Expires soon</span>{{end}}
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/duplicate"><button class="btn" type="submit" title="Create a similar item">{{icon "copy"}} Duplicate</button></form>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete" data-confirm="Delete {{$it.DisplayName}} and its whole history?"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "package"}} Stock</h2>{{if $d.OnShopping}}<a class="badge badge-accent" href="/shopping">{{icon "shopping-cart"}} On shopping list</a>{{end}}</div>
+      <div class="card-body">
+        <div class="flex between">
+          <div>
+            <div class="big-qty {{if $it.IsOut}}qty zero{{else if $it.IsLow}}qty low{{end}}" id="item-qty">{{qty $it.Quantity $it.Unit}}</div>
+            <div class="muted small">{{with $it.MinQuantity}}keep at least {{qty . $it.Unit}}{{else}}no minimum set{{end}}{{with $d.StockValue}} · worth about {{money .}}{{end}}</div>
+          </div>
+          {{if not $d.OnShopping}}
+          <form method="post" action="/items/{{$it.ID}}/shopping"><button class="btn" type="submit">{{icon "shopping-cart"}} Add to shopping list</button></form>
+          {{end}}
+        </div>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-purchase" aria-controls="panel-purchase" aria-selected="{{if or (eq $m.Kind "purchase") (eq $m.Kind "")}}true{{else}}false{{end}}">{{icon "package-plus"}} Bought</button>
+        <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true{{else}}false{{end}}">{{icon "minus"}} Used</button>
+        <button type="button" role="tab" id="tab-correction" aria-controls="panel-correction" aria-selected="{{if eq $m.Kind "correction"}}true{{else}}false{{end}}">{{icon "list-checks"}} Count</button>
+      </div>
+      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
+      {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "use"))}}
+      {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "correction"))}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "history"}} History</h2><span class="muted small">{{plural (len $d.Movements) "entry"}}</span></div>
+      {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false)}}
+      {{else}}<div class="card-body muted small">No stock changes yet.</div>{{end}}
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card card-pad">
+      <div class="photo">
+        {{if $it.HasPhoto}}<a href="/items/{{$it.ID}}/photo"><img src="/items/{{$it.ID}}/photo" alt="Photo of {{$it.DisplayName}}"></a>{{else}}{{icon "image"}}{{end}}
+      </div>
+      <div class="flex mt">
+        <form method="post" action="/items/{{$it.ID}}/photo" enctype="multipart/form-data" class="flex">
+          <label class="btn btn-sm">{{icon "camera"}} {{if $it.HasPhoto}}Replace photo{{else}}Add photo{{end}}
+            <input class="sr-only" type="file" name="photo" accept="image/*" data-autosubmit>
+          </label>
+          <noscript><button class="btn btn-sm" type="submit">Upload</button></noscript>
+        </form>
+        {{if $it.HasPhoto}}<form method="post" action="/items/{{$it.ID}}/photo/delete" data-confirm="Remove the photo?"><button class="btn btn-sm btn-ghost" type="submit">{{icon "trash-2"}} Remove</button></form>{{end}}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "tag"}} SKUs</h2></div>
+      {{if $it.SKUs}}
+      <table class="table sku-table">
+        <tbody>
+        {{range $it.SKUs}}<tr><td>{{.Code}}</td><td>{{.Kind.Label}}{{with .Label}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
+        </tbody>
+      </table>
+      {{else}}<div class="card-body muted small">No part numbers yet. <a href="/items/{{$it.ID}}/edit">Add some</a> to find this item by SKU.</div>{{end}}
+    </section>
+
+    <section class="card card-pad">
+      <dl class="facts">
+        <div><dt>Location</dt><dd>{{or $it.Location "—"}}</dd></div>
+        <div><dt>Best before</dt><dd>{{date $it.ExpiresOn}}</dd></div>
+        <div><dt>Last price</dt><dd>{{with $d.UnitPrice}}{{unitPrice . $it.Unit}}{{else}}—{{end}}</dd></div>
+        <div><dt>Purchases</dt><dd>{{$d.PurchaseCount}}</dd></div>
+        <div><dt>Added</dt><dd>{{date $it.CreatedAt}}</dd></div>
+        <div><dt>Updated</dt><dd>{{ago $it.UpdatedAt}}</dd></div>
+      </dl>
+      {{with $it.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
+    </section>
+
+    {{if $d.Kits}}
+    <section class="card">
+      <div class="card-head"><h2>{{icon "list-checks"}} Used in kits</h2></div>
+      <ul class="list">
+        {{range $d.Kits}}<li><span class="grow"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a></span><span class="chip" style="{{chipStyle .VehicleColor}}"><span class="dot"></span>{{.VehicleName}}</span></li>{{end}}
+      </ul>
+    </section>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "move-form"}}{{$m := .Move}}{{$e := $m.Errors}}{{$active := eq $m.Kind .Kind}}
+<form class="card-body form" id="panel-{{.Kind}}" role="tabpanel" aria-labelledby="tab-{{.Kind}}" method="post" action="/items/{{.Item.ID}}/movements" {{if .Hidden}}hidden{{end}}>
+  <input type="hidden" name="kind" value="{{.Kind}}">
+  {{if and $active $e}}{{template "error-summary" $e}}{{end}}
+  <div class="form-grid">
+    <div class="field{{if and $active (index $e "amount")}} has-error{{end}}">
+      <label for="amount-{{.Kind}}">{{if eq .Kind "purchase"}}How much did you buy?{{else if eq .Kind "use"}}How much did you use?{{else}}How much is on the shelf?{{end}}</label>
+      <div class="qty-input">
+        <input class="input" id="amount-{{.Kind}}" name="amount" value="{{if $active}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Item.Unit}}">
+        <select class="input" name="amount_unit" aria-label="Unit">{{range .Units}}<option value="{{.Value}}" {{if eq .Value $m.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
+      </div>
+      {{if $active}}{{template "err" (index $e "amount")}}{{end}}
+    </div>
+    {{if eq .Kind "purchase"}}
+    <div class="field{{if and $active (index $e "total_price")}} has-error{{end}}">
+      <label for="price-{{.Kind}}">Total price</label>
+      <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional">
+      {{if $active}}{{template "err" (index $e "total_price")}}{{end}}
+    </div>
+    <div class="field">
+      <label for="supplier">Shop</label>
+      <input class="input" id="supplier" name="supplier" value="{{if $active}}{{$m.Supplier}}{{end}}" placeholder="optional">
+    </div>
+    {{end}}
+    {{if ne .Kind "correction"}}
+    <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">
+      <label for="date-{{.Kind}}">Date</label>
+      <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{$m.OccurredOn}}">
+    </div>
+    {{end}}
+    <div class="field">
+      <label for="note-{{.Kind}}">Note</label>
+      <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}" placeholder="optional">
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{if eq .Kind "purchase"}}{{icon "plus"}} Add to stock{{else if eq .Kind "use"}}{{icon "minus"}} Take from stock{{else}}{{icon "check"}} Set stock{{end}}</button>
+  </div>
+</form>
+{{end}}

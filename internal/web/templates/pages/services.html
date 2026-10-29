@@ -1,0 +1,32 @@
+{{define "content"}}{{$d := .Data}}
+<div class="page-head">
+  <div>
+    <h1>Services</h1>
+    <p class="sub">Service kits with their reminders, and everything you have done.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/kits/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "list-checks"}} New kit</a>
+    <a class="btn btn-primary" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
+  </div>
+</div>
+
+{{if $d.Vehicles}}
+<div class="chips mb" role="group" aria-label="Filter by vehicle">
+  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="/services">All vehicles</a>
+  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="/services?v={{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+</div>
+{{end}}
+
+<div class="split">
+  <section class="card">
+    <div class="card-head"><h2>{{icon "history"}} Service log</h2><span class="muted small">{{len $d.Services}}</span></div>
+    {{if $d.Services}}{{template "service-list" $d.Services}}
+    {{else}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log a service")}}{{end}}
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2></div>
+    {{if $d.Kits}}{{range $d.Kits}}{{template "kit-row" .}}{{end}}
+    {{else}}<div class="card-body muted small">No kits yet. A kit lists the parts of a recurring job (oil service, brake pads…) so you know what to buy before you start.</div>{{end}}
+  </section>
+</div>
+{{end}}

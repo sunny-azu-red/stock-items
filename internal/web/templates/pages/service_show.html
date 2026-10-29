@@ -1,0 +1,37 @@
+{{define "content"}}{{$s := .Data}}
+<a class="back" href="/vehicles/{{$s.VehicleID}}">{{icon "arrow-left"}} {{$s.VehicleName}}</a>
+<div class="page-head">
+  <div>
+    <h1>{{$s.Title}}</h1>
+    <div class="flex mt">
+      <span class="chip" style="{{chipStyle $s.VehicleColor}}"><span class="dot"></span>{{$s.VehicleName}}</span>
+      {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}</a>{{end}}
+    </div>
+  </div>
+  <div class="actions">
+    <form class="inline-form" method="post" action="/services/{{$s.ID}}/delete" data-confirm="Delete this service? Its parts go back on stock.">
+      <button class="btn btn-danger" type="submit">{{icon "undo-2"}} Delete &amp; return parts</button>
+    </form>
+  </div>
+</div>
+
+<div class="split">
+  <section class="card">
+    <div class="card-head"><h2>{{icon "package"}} Parts used</h2></div>
+    {{if $s.Parts}}
+    <table class="table">
+      <tbody>{{range $s.Parts}}<tr><td class="num" style="width:110px">{{qty .Quantity .Unit}}</td><td><a href="/items/{{.ItemID}}">{{.ItemName}}</a></td></tr>{{end}}</tbody>
+    </table>
+    {{else}}<div class="card-body muted small">No parts were taken from stock.</div>{{end}}
+  </section>
+  <section class="card card-pad">
+    <dl class="facts">
+      <div><dt>Date</dt><dd>{{date $s.PerformedOn}}</dd></div>
+      <div><dt>Odometer</dt><dd>{{km $s.OdometerKm}}</dd></div>
+      <div><dt>Labour</dt><dd>{{money $s.LaborCost}}</dd></div>
+      <div><dt>Logged</dt><dd>{{ago $s.CreatedAt}}</dd></div>
+    </dl>
+    {{with $s.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
+  </section>
+</div>
+{{end}}

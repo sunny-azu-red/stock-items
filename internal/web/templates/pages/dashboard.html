@@ -1,0 +1,94 @@
+{{define "content"}}{{$d := .Data}}
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="sub">{{.Today.Format "Monday, 2 January 2006"}}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/services/new">{{icon "wrench"}} Log service</a>
+    <a class="btn btn-primary" href="/items/new">{{icon "plus"}} Add item</a>
+  </div>
+</div>
+
+{{if not $d.Vehicles}}
+<div class="card card-pad welcome mb">
+  <h2>Welcome to Stock Items 👋</h2>
+  <p class="muted">Track the parts and fluids you keep on the shelf for your vehicles, and know what to buy before the next service.</p>
+  <ol>
+    <li><a href="/vehicles/new">Add your vehicles</a>: motorcycles, cars, anything.</li>
+    <li><a href="/items/new">Add the items you have on stock</a> and tag them with the vehicles they fit. Items can fit several vehicles.</li>
+    <li>Create a <strong>service kit</strong> (e.g. "Oil service") on a vehicle to see at a glance if you have every part, and get reminded when it is due.</li>
+  </ol>
+  <p class="mt"><a class="btn btn-primary" href="/vehicles/new">{{icon "plus"}} Add your first vehicle</a></p>
+</div>
+{{end}}
+
+<div class="tiles">
+  <a class="card tile" href="/stock"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
+  <a class="card tile{{if $d.LowItems}} warn{{end}}" href="/stock?low=1"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
+  <a class="card tile{{if $d.Expiring}} danger{{end}}" href="/stock?exp=1"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
+  <a class="card tile" href="/shopping"><span class="label">{{icon "shopping-cart"}} To buy</span><span class="value">{{.ShoppingCount}}</span></a>
+  <div class="card tile"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></div>
+  <div class="card tile"><span class="label">{{icon "calendar"}} Spent (12 months)</span><span class="value money">{{money $d.Stats.Spent12m}}</span></div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "wrench"}} Upcoming service</h2><a class="more" href="/services">All kits →</a></div>
+      {{if $d.Upcoming}}
+        {{range $i, $k := $d.Upcoming}}{{if lt $i 6}}{{template "kit-row" $k}}{{end}}{{end}}
+      {{else if $d.KitCount}}
+        <div class="card-body muted small">None of your service kits has an interval yet. Set "every X km / months" on a kit to get reminders.</div>
+      {{else}}
+        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles "/kits/new") "") "Action" "Create a kit")}}
+      {{end}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "history"}} Recent activity</h2><a class="more" href="/activity">Everything →</a></div>
+      {{if $d.Recent}}{{template "activity-list" $d.Recent}}
+      {{else}}<div class="card-body muted small">Stock changes (purchases, usage and services) will show up here.</div>{{end}}
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "bike"}} Vehicles</h2><a class="more" href="/vehicles">Manage →</a></div>
+      {{if $d.Vehicles}}
+      <ul class="list">
+        {{range $d.Vehicles}}
+        <li style="{{chipStyle .Color}}">
+          <span class="dot"></span>
+          <span class="grow"><a class="title" href="/vehicles/{{.ID}}">{{.Name}}</a><span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{km .}}{{end}}</span></span>
+          <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
+        </li>
+        {{end}}
+      </ul>
+      {{else}}<div class="card-body"><a href="/vehicles/new">Add a vehicle</a> to start tagging items.</div>{{end}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "triangle-alert"}} Running low</h2>{{if $d.SuggestionCount}}<a class="more" href="/shopping">{{$d.SuggestionCount}} to buy →</a>{{end}}</div>
+      {{if $d.LowItems}}
+      <ul class="list">
+        {{range $d.LowItems}}
+        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">min {{qty (deref .MinQuantity) .Unit}}</span></span><span class="end qty {{if .IsOut}}zero{{else}}low{{end}}">{{qty .Quantity .Unit}}</span></li>
+        {{end}}
+      </ul>
+      {{else}}<div class="card-body muted small">Nothing is below its minimum. Set a minimum quantity on an item to get warned here.</div>{{end}}
+    </section>
+
+    {{if $d.Expiring}}
+    <section class="card">
+      <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2></div>
+      <ul class="list">
+        {{range $d.Expiring}}
+        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end badge {{if eq (.ExpiryState $.Today 60) "expired"}}badge-danger{{else}}badge-warn{{end}}">{{date .ExpiresOn}}</span></li>
+        {{end}}
+      </ul>
+    </section>
+    {{end}}
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,146 @@
+{{/* Small building blocks shared by several pages. */}}
+
+{{define "chip"}}<span class="chip" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</span>{{end}}
+
+{{define "chip-link"}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+
+{{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle */}}
+{{define "vehicle-chips"}}{{$vs := .Vehicles}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{template "chip" .}}{{end}}{{else}}<span class="chip">General</span>{{end}}</span>{{end}}
+
+{{define "err"}}{{with .}}<p class="field-error">{{.}}</p>{{end}}{{end}}
+
+{{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} Please fix the highlighted fields.{{with index . "form"}} {{.}}{{end}}</div>{{end}}{{end}}
+
+{{define "empty"}}<div class="empty">{{icon .Icon}}<h2>{{.Title}}</h2>{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon "plus"}} {{$.Action}}</a>{{end}}</div>{{end}}
+
+{{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}
+
+{{define "ready-badge"}}{{if .Ready}}<span class="badge badge-ok">{{icon "check"}} Parts ready</span>{{else if eq .Lines 0}}<span class="badge badge-muted">No parts</span>{{else}}<span class="badge badge-danger">{{icon "x"}} {{plural .ShortLines "part"}} short</span>{{end}}{{end}}
+
+{{/* A kit as a clickable row: kitView */}}
+{{define "kit-row"}}
+<a class="kit-row" href="/kits/{{.Kit.ID}}">
+  <span class="status-icon {{if .Readiness.Ready}}status-ok{{else}}status-short{{end}}">{{if .Readiness.Ready}}{{icon "check"}}{{else}}{{icon "list-checks"}}{{end}}</span>
+  <span class="grow">
+    <span class="title">{{.Kit.Name}}</span>
+    <span class="meta">
+      <span class="chip" style="{{chipStyle .Kit.VehicleColor}}"><span class="dot"></span>{{.Kit.VehicleName}}</span>
+      {{with .Due.Summary}}<span>{{.}}</span>{{end}}
+      {{with .Kit.LastService}}<span>last {{date .PerformedOn}}</span>{{end}}
+    </span>
+  </span>
+  <span class="badges">{{template "due-badge" .Due}}{{template "ready-badge" .Readiness}}</span>
+</a>
+{{end}}
+
+{{/* rowData: one stock row with quick -/+ */}}
+{{define "item-row"}}{{$it := .Item}}
+<li class="item-row{{if .Flash}} flash-ok{{end}}" id="item-{{$it.ID}}">
+  <div class="qty{{if $it.IsOut}} zero{{else if $it.IsLow}} low{{end}}">{{qty $it.Quantity $it.Unit}}</div>
+  <div class="item-main">
+    <a class="item-name" href="/items/{{$it.ID}}">{{if $it.HasPhoto}}<img class="thumb" src="/items/{{$it.ID}}/photo?size=thumb" alt="" loading="lazy" width="36" height="36">{{end}}<span>{{if $it.Brand}}<span class="brand">{{$it.Brand}}</span> {{end}}{{$it.Name}}</span></a>
+    <div class="item-meta">
+      {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref $it.MinQuantity) $it.Unit}}</span>{{end}}
+      {{with $it.ExpiresOn}}<span class="badge badge-info">{{icon "hourglass"}} {{date .}}</span>{{end}}
+      {{range $i, $s := $it.SKUs}}{{if lt $i 2}}<span class="sku" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}}">{{$s.Code}}</span>{{end}}{{end}}{{if gt (len $it.SKUs) 2}}<span>+{{add (len $it.SKUs) -2}} more</span>{{end}}
+      {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
+      {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles)}}{{end}}
+    </div>
+  </div>
+  <div class="item-actions">
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
+      <input type="hidden" name="dir" value="down">
+      <button class="icon-btn" type="submit" title="Use some" aria-label="Use one {{$it.Name}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
+    </form>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
+      <input type="hidden" name="dir" value="up">
+      <button class="icon-btn" type="submit" title="Add some" aria-label="Add one {{$it.Name}}">{{icon "plus"}}</button>
+    </form>
+  </div>
+</li>
+{{end}}
+
+{{/* A group of item rows: dict "Section" Section "Vehicles" map "Title" string (optional) */}}
+{{define "stock-section"}}{{$vs := .Vehicles}}{{$sec := .Section}}
+<section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}">
+  <div class="section-head">
+    <h2>
+      {{if $sec.General}}{{icon "package"}} General <span class="muted small">(not tied to a vehicle)</span>
+      {{else if $sec.Shared}}{{icon "tag"}} Shared {{range $sec.Vehicles}}{{template "chip" .}}{{end}}
+      {{else}}{{with index $sec.Vehicles 0}}<span class="chip" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</span>{{end}}{{with $.Only}} only{{end}}{{end}}
+    </h2>
+    <span class="n">{{plural (len $sec.Items) "item"}}</span>
+  </div>
+  <ul class="item-list">
+    {{range $sec.Items}}{{template "item-row" (rowFor . $vs true)}}{{end}}
+  </ul>
+</section>
+{{end}}
+
+{{/* Movement history table: dict "Movements" []Movement "ShowItem" bool */}}
+{{define "movement-table"}}
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Date</th>{{if .ShowItem}}<th>Item</th>{{end}}<th>What</th><th class="num">Change</th><th class="num">Price</th><th>Note</th></tr></thead>
+  <tbody>
+  {{range .Movements}}
+    <tr>
+      <td class="nowrap">{{date .OccurredOn}}</td>
+      {{if $.ShowItem}}<td><a href="/items/{{.ItemID}}">{{.ItemName}}</a></td>{{end}}
+      <td class="nowrap">{{if .ServiceRecordID}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{.Kind.Label}}{{end}}</td>
+      <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
+      <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
+      <td class="muted small">{{.Supplier}}{{if and .Supplier .Note}} · {{end}}{{if not .ServiceRecordID}}{{.Note}}{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{/* Item + quantity row for kit / service forms:
+     dict "Row" lineRow "Groups" []itemGroup "Prefix" "line"|"part" */}}
+{{define "line-row"}}{{$row := .Row}}
+<div class="row-line part-line{{if $row.Error}} has-error{{end}}">
+  <div class="field">
+    <select class="input" name="{{.Prefix}}_item" data-part-item aria-label="Item">
+      <option value="">Choose an item…</option>
+      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-placeholder="{{placeholderFor .Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
+    </select>
+    {{template "err" $row.Error}}
+  </div>
+  <input class="input" name="{{.Prefix}}_qty" value="{{$row.Qty}}" placeholder="e.g. 1 or 1.7 L" aria-label="Quantity" data-part-qty>
+  <span class="stock-note"></span>
+  <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove row">{{icon "x"}}</button>
+</div>
+{{end}}
+
+{{define "service-list"}}
+<ul class="list">
+{{range .}}
+  <li>
+    <span class="status-icon status-ok">{{icon "wrench"}}</span>
+    <span class="grow">
+      <a class="title" href="/services/{{.ID}}">{{.Title}}</a>
+      <span class="meta">{{date .PerformedOn}}{{with .OdometerKm}} · {{km .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}</span>
+    </span>
+    <span class="chip" style="{{chipStyle .VehicleColor}}"><span class="dot"></span>{{.VehicleName}}</span>
+  </li>
+{{end}}
+</ul>
+{{end}}
+
+{{/* Compact movement list for narrow columns: []Movement */}}
+{{define "activity-list"}}
+<ul class="list">
+{{range .}}
+  <li>
+    <span class="grow">
+      <a class="title" href="/items/{{.ItemID}}">{{.ItemName}}</a>
+      <span class="meta">{{if .ServiceRecordID}}{{.ServiceTitle}}{{else}}{{.Kind.Label}}{{end}} · {{ago .OccurredOn}}{{with .TotalPrice}} · {{money .}}{{end}}</span>
+    </span>
+    <span class="end {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</span>
+  </li>
+{{end}}
+</ul>
+{{end}}

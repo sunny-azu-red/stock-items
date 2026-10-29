@@ -1,0 +1,16 @@
+{{define "content"}}{{$d := .Data}}
+<div class="page-head">
+  <div>
+    <h1>Activity</h1>
+    <p class="sub">Every change to your stock, newest first.</p>
+  </div>
+</div>
+<div class="chips mb" role="group" aria-label="Filter">
+  <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="/activity">Everything</a>
+  {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="/activity?kind={{.}}">{{.Label}}</a>{{end}}
+</div>
+<section class="card">
+  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" true)}}
+  {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}
+</section>
+{{end}}

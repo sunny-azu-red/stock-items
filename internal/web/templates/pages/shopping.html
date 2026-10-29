@@ -1,0 +1,102 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
+<div class="page-head">
+  <div>
+    <h1>Shopping list</h1>
+    <p class="sub">What to buy before the next job. Ticking an item off adds it to stock.</p>
+  </div>
+  <div class="actions">
+    {{if $d.Entries}}<button class="btn" type="button" data-copy-url="/shopping/export.txt">{{icon "copy"}} Copy as text</button>{{end}}
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "shopping-cart"}} To buy</h2><span class="muted small">{{len $d.Entries}}</span></div>
+      {{if $d.Entries}}
+      <ul class="list">
+        {{range $d.Entries}}{{$entry := .}}
+        <li>
+          <span class="grow">
+            {{if .ItemID}}<a class="title" href="/items/{{.ItemID}}">{{.Title}}</a>{{else}}<span class="title">{{.Title}}</span>{{end}}
+            {{with .Note}}<span class="meta">{{.}}</span>{{end}}
+          </span>
+          <span class="end qty">{{with .Quantity}}{{qty . $entry.ItemUnit}}{{end}}</span>
+          {{if .ItemID}}
+            <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "check"}} Bought</a>
+          {{else}}
+            <form class="inline-form" method="post" action="/shopping/{{.ID}}/bought"><button class="btn btn-sm btn-primary" type="submit">{{icon "check"}} Done</button></form>
+          {{end}}
+          <form class="inline-form" method="post" action="/shopping/{{.ID}}/delete"><button class="icon-btn" type="submit" aria-label="Remove {{.Title}}" title="Remove">{{icon "x"}}</button></form>
+        </li>
+        {{end}}
+      </ul>
+      {{else}}
+      {{template "empty" (dict "Icon" "shopping-cart" "Title" "Nothing to buy" "Text" "Add items below, or use the suggestions.")}}
+      {{end}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "plus"}} Add to the list</h2></div>
+      <form class="card-body form" method="post" action="/shopping" novalidate>
+        {{template "error-summary" $e}}
+        <div class="form-grid">
+          <div class="field">
+            <label for="item_id">Item on stock</label>
+            <select class="input" id="item_id" name="item_id">
+              <option value="">— or describe it below —</option>
+              {{range $d.Items}}<option value="{{.ID}}" {{if eq .ID $f.ItemID}}selected{{end}}>{{.DisplayName}} ({{qty .Quantity .Unit}})</option>{{end}}
+            </select>
+            {{template "err" (index $e "item_id")}}
+          </div>
+          <div class="field{{if index $e "free_text"}} has-error{{end}}">
+            <label for="free_text">Something new</label>
+            <input class="input" id="free_text" name="free_text" value="{{$f.FreeText}}" placeholder="e.g. Chain lube">
+            {{template "err" (index $e "free_text")}}
+          </div>
+          <div class="field{{if index $e "quantity"}} has-error{{end}}">
+            <label for="quantity">Quantity</label>
+            <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" placeholder="e.g. 2 or 4 L">
+            {{template "err" (index $e "quantity")}}
+          </div>
+          <div class="field">
+            <label for="note">Note</label>
+            <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="e.g. ask for the sintered ones">
+          </div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">{{icon "plus"}} Add</button></div>
+      </form>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>{{icon "triangle-alert"}} Suggestions</h2>
+      {{if gt (len $d.Suggestions) 1}}
+      <form class="inline-form" method="post" action="/shopping/suggestions">
+        {{range $d.Suggestions}}<input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}">{{end}}
+        <button class="btn btn-sm" type="submit">Add all</button>
+      </form>
+      {{end}}
+    </div>
+    {{if $d.Suggestions}}
+    <ul class="list">
+      {{range $d.Suggestions}}
+      <li>
+        <span class="grow">
+          <a class="title" href="/items/{{.Item.ID}}">{{.Item.DisplayName}}</a>
+          <span class="meta">{{join .Reasons " · "}} · have {{qty .Item.Quantity .Item.Unit}}</span>
+        </span>
+        <span class="end qty">{{qty .Quantity .Item.Unit}}</span>
+        <form class="inline-form" method="post" action="/shopping/suggestions">
+          <input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}">
+          <button class="icon-btn" type="submit" aria-label="Add {{.Item.DisplayName}} to the list" title="Add to list">{{icon "plus"}}</button>
+        </form>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <div class="card-body muted small">Items below their minimum, and parts missing for your service kits, show up here.</div>
+    {{end}}
+  </section>
+</div>
+{{end}}

@@ -1,0 +1,69 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
+<a class="back" href="{{if $d.IsNew}}{{if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}{{else}}/kits/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
+<div class="page-head">
+  <div>
+    <h1>{{if $d.IsNew}}New service kit{{else}}Edit {{$f.Name}}{{end}}</h1>
+    <p class="sub">The parts a recurring job needs. You will see at a glance what is on the shelf and what to buy.</p>
+  </div>
+</div>
+
+{{if not $d.Vehicles}}
+<div class="card">{{template "empty" (dict "Icon" "bike" "Title" "Add a vehicle first" "Text" "Kits belong to a vehicle." "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
+{{else}}
+<form class="card" method="post" action="{{if $d.IsNew}}/kits{{else}}/kits/{{$f.ID}}{{end}}" novalidate>
+  {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
+  <div class="form-section">
+    <div class="form-grid">
+      <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
+        <label for="vehicle_id">Vehicle</label>
+        <select class="input" id="vehicle_id" name="vehicle_id">
+          <option value="">Choose…</option>
+          {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+        {{template "err" (index $e "vehicle_id")}}
+      </div>
+      <div class="field{{if index $e "name"}} has-error{{end}}">
+        <label for="name">Name</label>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" placeholder="e.g. Oil service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>
+        <datalist id="kit-names"><option value="Oil service"><option value="Air filter"><option value="Brake pads (front)"><option value="Brake pads (rear)"><option value="Brake fluid"><option value="Coolant"><option value="Chain &amp; sprockets"><option value="Spark plugs"><option value="Valve check"></datalist>
+        {{template "err" (index $e "name")}}
+      </div>
+    </div>
+  </div>
+  <div class="form-section">
+    <h2>Repeat every (optional)</h2>
+    <div class="form-grid">
+      <div class="field{{if index $e "interval_km"}} has-error{{end}}">
+        <label for="interval_km">Kilometres</label>
+        <input class="input" id="interval_km" name="interval_km" value="{{$f.IntervalKm}}" inputmode="numeric" placeholder="e.g. 7500">
+        {{template "err" (index $e "interval_km")}}
+      </div>
+      <div class="field{{if index $e "interval_months"}} has-error{{end}}">
+        <label for="interval_months">Months</label>
+        <input class="input" id="interval_months" name="interval_months" value="{{$f.IntervalMonths}}" inputmode="numeric" placeholder="e.g. 12">
+        {{template "err" (index $e "interval_months")}}
+      </div>
+    </div>
+    <p class="hint mt">Whichever comes first. You get a reminder on the dashboard when the job is due.</p>
+  </div>
+  <div class="form-section">
+    <h2>Parts</h2>
+    {{template "err" (index $e "lines")}}
+    <div class="rows" id="kit-lines">
+      <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
+      {{range $f.Lines}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "line")}}{{end}}
+    </div>
+    <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "line")}}</template>
+    <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
+    <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? <a href="/items/new" target="_blank">Add it</a> (with 0 on stock) and reload.</p>
+  </div>
+  <div class="form-section">
+    <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Steps, torque values, capacities…">{{$f.Notes}}</textarea></div>
+  </div>
+  <div class="form-section form-actions">
+    <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}/services{{else}}/kits/{{$f.ID}}{{end}}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save kit</button>
+  </div>
+</form>
+{{end}}
+{{end}}

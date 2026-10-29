@@ -1,0 +1,136 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
+<a class="back" href="{{if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
+<div class="page-head">
+  <h1>{{if $d.IsNew}}New item{{else}}Edit {{$f.Name}}{{end}}</h1>
+</div>
+
+<form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
+  {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
+
+  <div class="form-section">
+    <h2>What is it?</h2>
+    <div class="form-grid">
+      <div class="field{{if index $e "name"}} has-error{{end}}">
+        <label for="name">Name</label>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus>
+        {{template "err" (index $e "name")}}
+      </div>
+      <div class="field">
+        <label for="brand">Brand</label>
+        <input class="input" id="brand" name="brand" value="{{$f.Brand}}" placeholder="e.g. OEM, Motorex, Hiflofiltro" list="brands">
+        <datalist id="brands"><option value="OEM"></datalist>
+      </div>
+      <div class="field">
+        <label for="category">Category</label>
+        <input class="input" id="category" name="category" value="{{$f.Category}}" list="categories" placeholder="e.g. Filters">
+        <datalist id="categories">{{range $d.Categories}}<option value="{{.}}">{{end}}</datalist>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h2>Fits these vehicles</h2>
+    {{if $d.Vehicles}}
+    <div class="chips" role="group" aria-label="Vehicles">
+      {{range $d.Vehicles}}
+      <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="vehicle" value="{{.ID}}" {{if hasID $f.VehicleIDs .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
+      {{end}}
+    </div>
+    <p class="hint mt">Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).</p>
+    {{else}}
+    <p class="hint">No vehicles yet. <a href="/vehicles/new">Add one</a> to tag items with it.</p>
+    {{end}}
+  </div>
+
+  <div class="form-section">
+    <h2>Quantity</h2>
+    <div class="form-grid">
+      <fieldset class="field{{if index $e "unit"}} has-error{{end}}">
+        <legend>Counted in</legend>
+        <span class="segmented">
+          {{range $d.Units}}<label><input type="radio" name="unit" value="{{.}}" {{if eq (print .) $f.Unit}}checked{{end}}>{{.Label}}</label>{{end}}
+        </span>
+        {{template "err" (index $e "unit")}}
+      </fieldset>
+    </div>
+    <div class="form-grid mt">
+      <div class="field{{if index $e "quantity"}} has-error{{end}}">
+        <label for="quantity">On stock</label>
+        <div class="qty-input">
+          <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" inputmode="decimal" placeholder="0">
+          <select class="input" name="quantity_unit" data-subunit aria-label="Unit">
+            {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.QuantityUnit}}selected{{end}}>{{.Label}}</option>{{end}}
+          </select>
+        </div>
+        {{template "err" (index $e "quantity")}}
+      </div>
+      <div class="field{{if index $e "min_quantity"}} has-error{{end}}">
+        <label for="min_quantity">Keep at least</label>
+        <div class="qty-input">
+          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="optional">
+          <select class="input" name="min_unit" data-subunit aria-label="Unit">
+            {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.MinUnit}}selected{{end}}>{{.Label}}</option>{{end}}
+          </select>
+        </div>
+        <p class="hint">You get a low-stock warning below this.</p>
+        {{template "err" (index $e "min_quantity")}}
+      </div>
+      <div class="field{{if index $e "expires_on"}} has-error{{end}}">
+        <label for="expires_on">Best before</label>
+        <input class="input" type="date" id="expires_on" name="expires_on" value="{{$f.ExpiresOn}}">
+        {{template "err" (index $e "expires_on")}}
+      </div>
+      <div class="field">
+        <label for="location">Location</label>
+        <input class="input" id="location" name="location" value="{{$f.Location}}" list="locations" placeholder="e.g. Garage shelf 2">
+        <datalist id="locations">{{range $d.Locations}}<option value="{{.}}">{{end}}</datalist>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h2>SKUs / part numbers</h2>
+    <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
+    {{template "err" (index $e "skus")}}
+    <div class="rows" id="sku-rows">
+      <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Label</span><span>Pack size</span><span></span></div>
+      {{range $f.SKUs}}{{template "sku-row" (dict "Row" . "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}{{end}}
+    </div>
+    <template id="sku-template">{{template "sku-row" (dict "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}</template>
+    <button class="btn btn-sm mt" type="button" data-add-row="sku-template" data-rows="sku-rows">{{icon "plus"}} Add SKU</button>
+  </div>
+
+  <div class="form-section">
+    <div class="field">
+      <label for="notes">Notes</label>
+      <textarea class="input" id="notes" name="notes" placeholder="Torque values, compatible models, where you bought it…">{{$f.Notes}}</textarea>
+    </div>
+  </div>
+
+  <div class="form-section form-actions">
+    <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
+    {{if $d.IsNew}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>
+  </div>
+</form>
+{{end}}
+
+{{define "sku-row"}}{{$r := .Row}}
+<div class="row-line sku-line{{if and $r $r.Error}} has-error{{end}}">
+  <div class="field">
+    <input class="input mono" name="sku_code" value="{{if $r}}{{$r.Code}}{{end}}" placeholder="Code" aria-label="SKU code" autocomplete="off">
+    {{if $r}}{{template "err" $r.Error}}{{end}}
+  </div>
+  <select class="input" name="sku_kind" aria-label="SKU type">
+    {{range .Kinds}}<option value="{{.}}" {{if and $r (eq (print .) $r.Kind)}}selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  <input class="input" name="sku_label" value="{{if $r}}{{$r.Label}}{{end}}" placeholder="e.g. 1 L bottle" aria-label="Label">
+  <div class="qty-input">
+    <input class="input" name="sku_pack" value="{{if $r}}{{$r.Pack}}{{end}}" inputmode="decimal" placeholder="—" aria-label="Pack size">
+    <select class="input" name="sku_pack_unit" data-subunit aria-label="Pack unit">
+      {{range .SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if and $r (eq .Value $r.PackUnit)}}selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </div>
+  <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove SKU">{{icon "x"}}</button>
+</div>
+{{end}}

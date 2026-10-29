@@ -1,0 +1,71 @@
+{{define "content"}}{{$d := .Data}}{{$v := $d.Vehicle}}
+<a class="back" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
+<div class="page-head">
+  <div class="vehicle-hero" style="{{chipStyle $v.Color}}">
+    <span class="avatar">{{icon $v.Kind.Icon}}</span>
+    <div>
+      <h1>{{$v.Name}}</h1>
+      <p class="sub">{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</p>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
+    <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
+    <a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2><a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} New kit</a></div>
+      {{if $d.Kits}}{{range $d.Kits}}{{template "kit-row" .}}{{end}}
+      {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
+    </section>
+
+    <div class="results-head">
+      <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">({{$d.ItemCount}})</span></h2>
+      <div class="flex">
+        <button class="btn btn-sm" type="button" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</button>
+        <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Open in stock →</a>
+      </div>
+    </div>
+    {{if $d.Sections}}
+      {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" true)}}{{end}}
+    {{else}}
+      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing on stock for this vehicle" "Href" (print "/items/new?vehicle=" $v.ID) "Action" "Add an item")}}</div>
+    {{end}}
+  </div>
+
+  <div class="stack">
+    <section class="card card-pad">
+      <h2 class="mb">{{icon "gauge"}} Odometer</h2>
+      <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
+        <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="km" aria-label="Odometer in km">
+        <button class="btn" type="submit">Update</button>
+      </form>
+      <p class="hint mt">Used for km-based service reminders. Logging a service also updates it.</p>
+    </section>
+
+    <section class="card card-pad">
+      <dl class="facts">
+        <div><dt>Make</dt><dd>{{or $v.Make "—"}}</dd></div>
+        <div><dt>Model</dt><dd>{{or $v.Model "—"}}</dd></div>
+        <div><dt>Year</dt><dd>{{with $v.Year}}{{.}}{{else}}—{{end}}</dd></div>
+        <div><dt>Plate</dt><dd>{{or $v.Plate "—"}}</dd></div>
+        <div><dt>VIN</dt><dd class="mono">{{or $v.VIN "—"}}</dd></div>
+      </dl>
+      {{with $v.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><a class="more" href="/services?v={{$v.ID}}">All →</a></div>
+      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
+    </section>
+
+    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Its kits and service history are deleted too. Items stay on stock.">
+      <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete vehicle</button>
+    </form>
+  </div>
+</div>
+{{end}}

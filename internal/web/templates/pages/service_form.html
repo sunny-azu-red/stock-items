@@ -1,0 +1,73 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
+<a class="back" href="{{if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">{{icon "arrow-left"}} Back</a>
+<div class="page-head">
+  <div>
+    <h1>Log service{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
+    <p class="sub">The parts below are taken from stock when you save.</p>
+  </div>
+</div>
+
+{{if not $d.Vehicles}}
+<div class="card">{{template "empty" (dict "Icon" "bike" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
+{{else}}
+<form class="card" method="post" action="/services" novalidate>
+  {{if $e}}<div class="form-section">{{template "error-summary" $e}}{{with index $e "parts"}}<p class="field-error mt">{{.}}</p>{{end}}</div>{{end}}
+  {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
+  <div class="form-section">
+    <div class="form-grid">
+      <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
+        <label for="vehicle_id">Vehicle</label>
+        {{if $f.KitID}}
+          <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
+          <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}} <span class="muted small">kit: {{$f.KitName}}</span></div>
+        {{else}}
+        <select class="input" id="vehicle_id" name="vehicle_id">
+          <option value="">Choose…</option>
+          {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+        {{end}}
+        {{template "err" (index $e "vehicle_id")}}
+      </div>
+      <div class="field{{if index $e "title"}} has-error{{end}}">
+        <label for="title">What was done</label>
+        <input class="input" id="title" name="title" value="{{$f.Title}}" placeholder="e.g. Oil service">
+        {{template "err" (index $e "title")}}
+      </div>
+      <div class="field{{if index $e "performed_on"}} has-error{{end}}">
+        <label for="performed_on">Date</label>
+        <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}">
+        {{template "err" (index $e "performed_on")}}
+      </div>
+      <div class="field{{if index $e "odometer_km"}} has-error{{end}}">
+        <label for="odometer_km">Odometer (km)</label>
+        <input class="input" id="odometer_km" name="odometer_km" value="{{$f.OdometerKm}}" inputmode="numeric" placeholder="e.g. 15000">
+        {{template "err" (index $e "odometer_km")}}
+      </div>
+      <div class="field{{if index $e "labor_cost"}} has-error{{end}}">
+        <label for="labor_cost">Labour / workshop cost</label>
+        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal" placeholder="optional">
+        {{template "err" (index $e "labor_cost")}}
+      </div>
+    </div>
+  </div>
+  <div class="form-section">
+    <h2>Parts used</h2>
+    {{template "err" (index $e "lines")}}
+    <div class="rows" id="part-lines">
+      <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
+      {{range $f.Parts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
+    </div>
+    <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "part")}}</template>
+    <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
+    <p class="hint mt">Remove rows for parts you did not use, or that did not come from your stock.</p>
+  </div>
+  <div class="form-section">
+    <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>
+  </div>
+  <div class="form-section form-actions">
+    <a class="btn btn-ghost spacer" href="/services">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save &amp; take parts from stock</button>
+  </div>
+</form>
+{{end}}
+{{end}}

@@ -1,0 +1,77 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.Filter}}
+<div class="page-head">
+  <div>
+    <h1>{{if eq (len $d.Selected) 1}}{{(index $d.Selected 0).Name}} stock{{else}}Stock{{end}}</h1>
+    <p class="sub">Everything on the shelf, grouped by the vehicles it fits.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="/items/new{{if eq (len $d.Selected) 1}}?vehicle={{(index $d.Selected 0).ID}}{{end}}">{{icon "plus"}} Add item</a>
+  </div>
+</div>
+
+<form id="filters" class="card filters" method="get" action="/stock"
+      hx-get="/stock" hx-trigger="change, input from:#q delay:300ms, submit" hx-target="#results" hx-select="#results"
+      hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">
+  <div class="filters-row">
+    <label class="input-icon">{{icon "search"}}<span class="sr-only">Search</span>
+      <input class="input" type="search" id="q" name="q" value="{{$f.Query}}" placeholder="Search name, brand, SKU, location…" autocomplete="off" data-search>
+    </label>
+    <select class="input" name="cat" aria-label="Category">
+      <option value="">All categories</option>
+      {{range $d.Categories}}<option {{if eq . $f.Category}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <noscript><button class="btn" type="submit">Apply</button></noscript>
+  </div>
+  <div class="filters-row" role="group" aria-label="Vehicles">
+    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" href="/stock">All</a>
+    {{range $d.Vehicles}}
+    <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="v" value="{{.ID}}" {{if $f.HasVehicle .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
+    {{end}}
+    <label class="chip chip-toggle"><input type="checkbox" name="general" value="1" {{if $f.General}}checked{{end}}><span class="dot"></span>General</label>
+    {{if gt (len $f.VehicleIDs) 1}}
+    <span class="segmented" title="How to combine the selected vehicles">
+      <label><input type="radio" name="match" value="any" {{if not $f.MatchAll}}checked{{end}}>Fits any</label>
+      <label><input type="radio" name="match" value="all" {{if $f.MatchAll}}checked{{end}}>Fits all</label>
+    </span>
+    {{end}}
+  </div>
+  <div class="filters-row">
+    <label class="toggle"><input type="checkbox" name="low" value="1" {{if $f.Low}}checked{{end}}> Low stock</label>
+    <label class="toggle"><input type="checkbox" name="exp" value="1" {{if $f.Expiring}}checked{{end}}> Expiring</label>
+    <label class="toggle"><input type="checkbox" name="instock" value="1" {{if $f.InStock}}checked{{end}}> In stock only</label>
+    {{if eq $f.View "list"}}<input type="hidden" name="view" value="list">{{end}}
+  </div>
+</form>
+
+<div id="results" class="loading-dim">
+  <div class="results-head">
+    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="/stock">clear filters</a>{{end}}</span>
+    <div class="flex">
+      <span class="segmented" role="group" aria-label="View">
+        <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>
+        <a class="btn btn-sm {{if eq $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "list")}}">List</a>
+      </span>
+      <button class="btn btn-sm" type="button" data-copy-url="{{withQuery "/stock/export.txt" $f.Encode}}" title="Copy this view as plain text">{{icon "copy"}} Copy as text</button>
+      <a class="btn btn-sm" href="{{withQuery "/stock/export.csv" $f.Encode}}" title="Download as CSV">{{icon "download"}} CSV</a>
+    </div>
+  </div>
+
+  {{if not $d.Items}}
+    <div class="card">
+      {{if $f.Active}}
+        {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search or remove some filters.")}}
+      {{else}}
+        {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep on stock." "Href" "/items/new" "Action" "Add your first item")}}
+      {{end}}
+    </div>
+  {{else if eq $f.View "list"}}
+    <section class="card">
+      <ul class="item-list">
+        {{range $d.Items}}{{template "item-row" (rowFor . $d.VehicleMap false)}}{{end}}
+      </ul>
+    </section>
+  {{else}}
+    {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" (gt (len $d.Selected) 0))}}{{end}}
+  {{end}}
+</div>
+{{end}}

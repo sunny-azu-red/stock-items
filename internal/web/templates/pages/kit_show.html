@@ -1,0 +1,64 @@
+{{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}
+<a class="back" href="/vehicles/{{$d.Vehicle.ID}}">{{icon "arrow-left"}} {{$d.Vehicle.Name}}</a>
+<div class="page-head">
+  <div>
+    <h1>{{$k.Name}}</h1>
+    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{template "due-badge" $due}}{{template "ready-badge" $r}}</div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
+    {{if not $r.Ready}}{{if $r.Lines}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}{{end}}
+    <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Do this service</a>
+  </div>
+</div>
+
+<div class="split">
+  <section class="card">
+    <div class="card-head"><h2>{{icon "list-checks"}} Parts</h2><span class="muted small">{{$r.Lines}} lines{{if $r.ShortLines}} · {{$r.ShortLines}} short{{end}}</span></div>
+    {{if $k.Lines}}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th></th><th>Item</th><th class="num">Need</th><th class="num">On stock</th><th class="num">Missing</th></tr></thead>
+      <tbody>
+      {{range $k.Lines}}
+      <tr>
+        <td style="width:40px">{{if .Short}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
+        <td><a href="/items/{{.ItemID}}">{{.ItemName}}</a><div class="meter{{if .Short}} short{{end}}" style="margin-top:.35rem"><span style="width:{{pct .Have .Need}}%"></span></div></td>
+        <td class="num">{{qty .Need .Unit}}</td>
+        <td class="num">{{qty .Have .Unit}}</td>
+        <td class="num">{{if .Short}}<span class="delta-neg">{{qty .Short .Unit}}</span>{{else}}—{{end}}</td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <div class="card-body muted small">No parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> this job needs.</div>
+    {{end}}
+  </section>
+
+  <div class="stack">
+    <section class="card card-pad">
+      <h2 class="mb">{{icon "clock"}} Schedule</h2>
+      <dl class="facts">
+        <div><dt>Every</dt><dd>{{if or $k.IntervalKm $k.IntervalMonths}}{{with $k.IntervalKm}}{{km .}}{{end}}{{if and $k.IntervalKm $k.IntervalMonths}} or {{end}}{{with $k.IntervalMonths}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}</dd></div>
+        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} · {{km .}}{{end}}{{else}}Never{{end}}</dd></div>
+        {{if $due.DueKm}}<div><dt>Due at</dt><dd>{{km $due.DueKm}}</dd></div>{{end}}
+        {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}
+        <div><dt>Odometer now</dt><dd>{{km $d.Vehicle.OdometerKm}}</dd></div>
+        {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}
+      </dl>
+      {{with $k.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{{icon "history"}} Done with this kit</h2></div>
+      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">Not done yet.</div>{{end}}
+    </section>
+
+    <form method="post" action="/kits/{{$k.ID}}/delete" data-confirm="Delete the kit {{$k.Name}}? Logged services are kept.">
+      <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete kit</button>
+    </form>
+  </div>
+</div>
+{{end}}

@@ -39,7 +39,10 @@
     {{end}}
     <div class="sidebar-foot">
       <a class="btn btn-primary btn-block" href="/items/new">{{icon "plus"}} Add item</a>
-      <p class="mt">Press <span class="kbd">/</span> to search, <span class="kbd">n</span> for a new item.</p>
+      <ul class="shortcuts mt" aria-label="Keyboard shortcuts">
+        <li><span class="kbd">/</span> Search stock</li>
+        <li><span class="kbd">n</span> New item</li>
+      </ul>
       <p>{{.Version}}</p>
     </div>
   </aside>

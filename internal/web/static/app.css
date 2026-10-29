@@ -85,6 +85,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .nav-vehicles a { font-weight: 400; }
 .dot { width: .65rem; height: .65rem; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
 .sidebar-foot { margin-top: auto; font-size: .75rem; color: var(--muted); padding: 0 .7rem; }
+.shortcuts { list-style: none; padding: 0; margin: 0 0 .75rem; display: grid; gap: .35rem; }
+.shortcuts li { display: flex; align-items: center; gap: .5rem; }
+.shortcuts .kbd { min-width: 1.5em; text-align: center; }
 
 .main { padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 3rem; max-width: 1180px; width: 100%; }
 .tabbar { display: none; }

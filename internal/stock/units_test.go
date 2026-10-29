@@ -1,0 +1,134 @@
+package stock
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestParseAmount(t *testing.T) {
+	tests := []struct {
+		in   string
+		unit Unit
+		sub  string
+		want float64
+	}{
+		{"2", UnitPiece, "", 2},
+		{"6x", UnitPiece, "", 6},
+		{"3 pcs", UnitPiece, "pcs", 3},
+		{"525", UnitML, "ml", 525},
+		{"525 ml", UnitML, "", 525},
+		{"1.5", UnitML, "l", 1500},
+		{"1,5 L", UnitML, "", 1500},
+		{"1.5L", UnitML, "ml", 1500}, // suffix wins over selector
+		{".5 l", UnitML, "", 500},
+		{"0.0005 l", UnitML, "", 0.5},
+		{"400g", UnitGram, "", 400},
+		{"1.2 kg", UnitGram, "", 1200},
+		{"0", UnitPiece, "", 0},
+		{"  4 litres ", UnitML, "", 4000},
+	}
+	for _, tt := range tests {
+		got, err := ParseAmount(tt.in, tt.unit, tt.sub)
+		if err != nil {
+			t.Errorf("ParseAmount(%q, %s, %q) error: %v", tt.in, tt.unit, tt.sub, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("ParseAmount(%q, %s, %q) = %v, want %v", tt.in, tt.unit, tt.sub, got, tt.want)
+		}
+	}
+}
+
+func TestParseAmountErrors(t *testing.T) {
+	tests := []struct {
+		in   string
+		unit Unit
+		sub  string
+	}{
+		{"abc", UnitPiece, ""},
+		{"-1", UnitPiece, ""},
+		{"1.5", UnitPiece, ""},  // fractional pieces
+		{"2 L", UnitPiece, ""},  // wrong dimension
+		{"2 kg", UnitML, ""},    // wrong dimension
+		{"2", UnitML, "kg"},     // selector of the wrong dimension
+		{"2 cups", UnitML, ""},  // unknown suffix
+		{"1.2.3", UnitML, "ml"}, // malformed
+	}
+	for _, tt := range tests {
+		if _, err := ParseAmount(tt.in, tt.unit, tt.sub); err == nil {
+			t.Errorf("ParseAmount(%q, %s, %q) expected an error", tt.in, tt.unit, tt.sub)
+		}
+	}
+	if _, err := ParseAmount("  ", UnitML, ""); !errors.Is(err, ErrEmpty) {
+		t.Errorf("blank input: want ErrEmpty, got %v", err)
+	}
+}
+
+func TestFormatQuantity(t *testing.T) {
+	tests := []struct {
+		q    float64
+		unit Unit
+		want string
+	}{
+		{1, UnitPiece, "1x"},
+		{6, UnitPiece, "6x"},
+		{525, UnitML, "525 ml"},
+		{640, UnitML, "640 ml"},
+		{1500, UnitML, "1.5 L"},
+		{1000, UnitML, "1 L"},
+		{4000, UnitML, "4 L"},
+		{1234.5, UnitML, "1234.5 ml"},
+		{1234, UnitML, "1.234 L"},
+		{0, UnitML, "0 ml"},
+		{400, UnitGram, "400 g"},
+		{1200, UnitGram, "1.2 kg"},
+		{0.5, UnitML, "0.5 ml"},
+	}
+	for _, tt := range tests {
+		if got := FormatQuantity(tt.q, tt.unit); got != tt.want {
+			t.Errorf("FormatQuantity(%v, %s) = %q, want %q", tt.q, tt.unit, got, tt.want)
+		}
+	}
+}
+
+func TestFormatDelta(t *testing.T) {
+	if got := FormatDelta(-500, UnitML); got != "−500 ml" {
+		t.Errorf("got %q", got)
+	}
+	if got := FormatDelta(2, UnitPiece); got != "+2x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestSplitForInput(t *testing.T) {
+	tests := []struct {
+		q          float64
+		unit       Unit
+		value, sub string
+	}{
+		{1500, UnitML, "1.5", "l"},
+		{525, UnitML, "525", "ml"},
+		{3, UnitPiece, "3", "pcs"},
+		{2500, UnitGram, "2.5", "kg"},
+	}
+	for _, tt := range tests {
+		v, s := SplitForInput(tt.q, tt.unit)
+		if v != tt.value || s != tt.sub {
+			t.Errorf("SplitForInput(%v, %s) = %q,%q want %q,%q", tt.q, tt.unit, v, s, tt.value, tt.sub)
+		}
+		// Round trip back through the parser.
+		back, err := ParseAmount(v, tt.unit, s)
+		if err != nil || back != tt.q {
+			t.Errorf("round trip of %v %s = %v, %v", tt.q, tt.unit, back, err)
+		}
+	}
+}
+
+func TestSubUnitsFor(t *testing.T) {
+	if got := SubUnitsFor(UnitML); len(got) != 2 || got[0].Value != "ml" || got[1].Value != "l" {
+		t.Errorf("SubUnitsFor(ml) = %+v", got)
+	}
+	if got := SubUnitsFor(UnitPiece); len(got) != 1 {
+		t.Errorf("SubUnitsFor(piece) = %+v", got)
+	}
+}

@@ -1,0 +1,103 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/sunny-azu-red/stock-items/internal/stock"
+)
+
+const shoppingSelect = `
+SELECT e.id, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, 'piece'), e.free_text,
+       e.quantity, e.note, e.created_at
+FROM shopping_entries e
+LEFT JOIN items i ON i.id = e.item_id`
+
+func scanShopping(row pgx.Row) (stock.ShoppingEntry, error) {
+	var e stock.ShoppingEntry
+	var brand, name string
+	err := row.Scan(&e.ID, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt)
+	if name != "" {
+		e.ItemName = displayName(brand, name)
+	}
+	return e, err
+}
+
+// ListShopping returns the shopping list, oldest first.
+func (s *Store) ListShopping(ctx context.Context) ([]stock.ShoppingEntry, error) {
+	rows, err := s.pool.Query(ctx, shoppingSelect+" ORDER BY e.created_at, e.id")
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.ShoppingEntry, error) { return scanShopping(r) })
+}
+
+// GetShopping returns one shopping list entry.
+func (s *Store) GetShopping(ctx context.Context, id int64) (stock.ShoppingEntry, error) {
+	e, err := scanShopping(s.pool.QueryRow(ctx, shoppingSelect+" WHERE e.id = $1", id))
+	return e, notFound(err)
+}
+
+// AddShopping adds an entry. Adding an item that is already on the list
+// increases the quantity of the existing entry instead.
+func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64, error) {
+	var id int64
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO shopping_entries (item_id, free_text, quantity, note) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
+		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
+		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
+		                    ELSE shopping_entries.quantity + excluded.quantity END,
+		    note = CASE WHEN excluded.note <> '' THEN excluded.note ELSE shopping_entries.note END
+		RETURNING id`,
+		in.ItemID, in.FreeText, in.Quantity, in.Note).Scan(&id)
+	if isForeignKeyViolation(err) {
+		return 0, ErrNotFound
+	}
+	return id, err
+}
+
+// EnsureShopping puts an item on the list with at least qty, without
+// adding up (used for kit shortfalls and low stock suggestions).
+func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, note string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO shopping_entries (item_id, quantity, note) VALUES ($1, $2, $3)
+		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
+		SET quantity = GREATEST(COALESCE(shopping_entries.quantity, 0), excluded.quantity)`,
+		itemID, qty, note)
+	if isForeignKeyViolation(err) {
+		return ErrNotFound
+	}
+	return err
+}
+
+// DeleteShopping removes an entry.
+func (s *Store) DeleteShopping(ctx context.Context, id int64) error {
+	return checkAffected(s.pool.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id))
+}
+
+// MarkBought removes an entry from the list. For entries linked to an
+// item, the purchase is recorded as a stock movement in the same
+// transaction (purchase.ItemID is filled in from the entry).
+func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) error {
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		var itemID *int64
+		if err := tx.QueryRow(ctx, `SELECT item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID); err != nil {
+			return notFound(err)
+		}
+		if itemID != nil && purchase != nil {
+			in := *purchase
+			in.ItemID = *itemID
+			in.Kind = stock.MovePurchase
+			if errs := in.Validate(); errs.Any() {
+				return errs
+			}
+			if err := applyMovement(ctx, tx, in); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id)
+		return err
+	})
+}

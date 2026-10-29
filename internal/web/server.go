@@ -121,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /shopping/{id}/delete", h(s.shoppingDelete))
 
 	mux.HandleFunc("GET /activity", h(s.activity))
+	mux.HandleFunc("POST /theme", h(s.setTheme))
 
 	mux.HandleFunc("/", h(func(w http.ResponseWriter, r *http.Request) error { return store.ErrNotFound }))
 

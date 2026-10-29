@@ -1,9 +1,9 @@
 {{define "layout"}}<!doctype html>
-<html lang="en">
+<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="{{or .Theme "light dark"}}">
   <meta name="theme-color" content="#f26b0f">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "historyCacheSize": 0, "scrollIntoViewOnBoost": false}'>
   <title>{{.Title}} · Stock Items</title>
@@ -16,7 +16,10 @@
 {{template "icons"}}
 <div class="shell">
   <aside class="sidebar">
-    <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Stock Items</a>
+    <div class="sidebar-head">
+      <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Stock Items</a>
+      {{template "theme-toggle" ""}}
+    </div>
     <nav class="nav" aria-label="Main">
       {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard"))}}
       {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock"))}}
@@ -59,5 +62,12 @@
 </html>{{end}}
 
 {{define "nav-link"}}<a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count">{{.}}</span>{{end}}</a>{{end}}
+
+{{/* Both buttons are rendered; CSS shows the one that switches away from the
+     current theme, so it also works without JavaScript. Data: extra class. */}}
+{{define "theme-toggle"}}<form class="theme-toggle {{.}}" method="post" action="/theme">
+  <button class="icon-btn theme-to-dark" type="submit" name="theme" value="dark" title="Dark theme" aria-label="Switch to the dark theme">{{icon "moon"}}</button>
+  <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Light theme" aria-label="Switch to the light theme">{{icon "sun"}}</button>
+</form>{{end}}
 
 {{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="status">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span></div>{{end}}{{end}}

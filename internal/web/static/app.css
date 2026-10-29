@@ -2,58 +2,38 @@
    Design tokens first, then layout, then components. */
 
 :root {
-  --bg: #f5f4f1;
-  --surface: #ffffff;
-  --surface-2: #f0eeea;
-  --border: #e3e0da;
-  --text: #1c1b19;
-  --muted: #6b6760;
-  --accent: #f26b0f;
-  --accent-strong: #d55a05;
-  --accent-soft: #fde7d6;
-  --on-accent: #ffffff;
-  --ok: #15803d;
-  --ok-soft: #dcfce7;
-  --warn: #b45309;
-  --warn-soft: #fef3c7;
-  --danger: #c2261d;
-  --danger-soft: #fee2e2;
-  --info: #1d4ed8;
-  --info-soft: #dbeafe;
-  --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 2px 8px rgb(0 0 0 / .04);
+  /* Colours are light-dark(light, dark). Which one applies follows
+     color-scheme: the system setting, unless data-theme on <html> (from the
+     theme cookie) forces one. */
+  color-scheme: light dark;
+  --bg: light-dark(#f5f4f1, #0f1013);
+  --surface: light-dark(#ffffff, #17191e);
+  --surface-2: light-dark(#f0eeea, #1f2228);
+  --border: light-dark(#e3e0da, #2b2f37);
+  --text: light-dark(#1c1b19, #ecebe8);
+  --muted: light-dark(#6b6760, #9b9a96);
+  --accent: light-dark(#f26b0f, #ff7a1f);
+  --accent-strong: light-dark(#d55a05, #ff9447);
+  --accent-soft: light-dark(#fde7d6, #3a2414);
+  --on-accent: light-dark(#ffffff, #1a0d03);
+  --ok: light-dark(#15803d, #4ade80);
+  --ok-soft: light-dark(#dcfce7, #12301d);
+  --warn: light-dark(#b45309, #fbbf24);
+  --warn-soft: light-dark(#fef3c7, #362a0d);
+  --danger: light-dark(#c2261d, #f87171);
+  --danger-soft: light-dark(#fee2e2, #3b1515);
+  --info: light-dark(#1d4ed8, #93c5fd);
+  --info-soft: light-dark(#dbeafe, #172544);
+  --shadow: 0 1px 2px light-dark(rgb(0 0 0 / .05), rgb(0 0 0 / .4)), 0 2px 8px light-dark(rgb(0 0 0 / .04), transparent);
   --radius: 12px;
   --radius-sm: 8px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sidebar: 236px;
   --tabbar: 64px;
-  color-scheme: light;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1013;
-    --surface: #17191e;
-    --surface-2: #1f2228;
-    --border: #2b2f37;
-    --text: #ecebe8;
-    --muted: #9b9a96;
-    --accent: #ff7a1f;
-    --accent-strong: #ff9447;
-    --accent-soft: #3a2414;
-    --on-accent: #1a0d03;
-    --ok: #4ade80;
-    --ok-soft: #12301d;
-    --warn: #fbbf24;
-    --warn-soft: #362a0d;
-    --danger: #f87171;
-    --danger-soft: #3b1515;
-    --info: #93c5fd;
-    --info-soft: #172544;
-    --shadow: 0 1px 2px rgb(0 0 0 / .4);
-    color-scheme: dark;
-  }
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -90,7 +70,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   background: var(--surface); border-right: 1px solid var(--border);
   padding: 1.1rem .8rem; display: flex; flex-direction: column; gap: 1.25rem;
 }
-.app-brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; font-weight: 700; font-size: 1.05rem; padding: 0 .5rem; }
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.app-brand { display: flex; align-items: center; gap: .6rem; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; padding: 0 .5rem; }
 .app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav a {
@@ -190,6 +171,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
 .icon-btn[disabled] { opacity: .4; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
 .inline-form { display: inline; margin: 0; }
+
+/* Theme toggle: show the button that switches away from the current theme. */
+.theme-toggle { display: inline-flex; margin: 0; }
+.theme-toggle .icon-btn { border-color: transparent; background: transparent; color: var(--muted); }
+.theme-toggle .icon-btn:hover { background: var(--surface-2); color: var(--accent); }
+.theme-to-light { display: none !important; }
+:root[data-theme="dark"] .theme-to-dark { display: none !important; }
+:root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-to-dark { display: none !important; }
+  :root:not([data-theme="light"]) .theme-to-light { display: inline-grid !important; }
+}
 
 /* ---------- Forms ---------- */
 .form { display: grid; gap: 1rem; }
@@ -387,6 +380,8 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .empty > .icon { width: 42px; height: 42px; color: var(--border); margin: 0 auto .75rem; display: block; }
 .empty h2 { color: var(--text); margin-bottom: .35rem; }
 .empty .btn { margin-top: .75rem; }
+/* For things that live in the sidebar on wider screens. */
+@media (min-width: 821px) { .mobile-only { display: none !important; } }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .nowrap { white-space: nowrap; }

@@ -45,5 +45,6 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 
 - Photos help to recognise similar parts: open an item → Add photo. Phone photos are rotated and resized automatically.
 - A USB or Bluetooth barcode scanner "types" into the search box. Put EAN codes in the SKU list and scanning finds the item.
-- Shortcuts: `/` focuses search, `n` opens a new item.
+- Shortcuts: `/` searches stock from any page, `n` opens a new item.
+- The app follows your system's light or dark mode. The sun / moon button (top of the sidebar; on a phone, top of the dashboard) overrides it on that device. Switch back to what your system shows to follow it again.
 - The *Activity* page lists every stock change across all items.

@@ -354,3 +354,37 @@ func TestErrorsAndInfrastructure(t *testing.T) {
 }
 
 func itoa(id int64) string { return strconv.FormatInt(id, 10) }
+
+func TestTheme(t *testing.T) {
+	a := newApp(t)
+	expect(t, a.get("/"), http.StatusOK, `<html lang="en">`, `content="light dark"`, `value="dark"`, `value="light"`)
+
+	// A plain form post stores the cookie and goes back.
+	req := httptest.NewRequest(http.MethodPost, "/theme", strings.NewReader("theme=dark"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "http://example.com/stock?low=1")
+	rec := a.do(req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/stock?low=1" {
+		t.Fatalf("theme redirect = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != themeCookie || cookies[0].Value != "dark" || cookies[0].MaxAge <= 0 {
+		t.Fatalf("theme cookie = %+v", cookies)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(cookies[0])
+	expect(t, a.do(req), http.StatusOK, `<html lang="en" data-theme="dark">`, `name="color-scheme" content="dark"`)
+
+	// app.js posts "system" to forget the choice; it gets a bare 204.
+	rec = a.post("/theme", url.Values{"theme": {"system"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusNoContent)
+	if c := rec.Result().Cookies(); len(c) != 1 || c[0].MaxAge >= 0 {
+		t.Errorf("theme cookie not cleared: %+v", c)
+	}
+
+	// Unknown cookie values are ignored.
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: themeCookie, Value: `"><script>`})
+	expect(t, a.do(req), http.StatusOK, `<html lang="en">`)
+}

@@ -164,25 +164,70 @@
     });
   });
 
+  // ---- Theme --------------------------------------------------------------
+  // Switch without a reload, then let the server remember it. Picking what
+  // the system already shows clears the choice, so the app follows the
+  // system again.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains("theme-toggle")) return;
+    e.preventDefault();
+    var theme = e.submitter && e.submitter.value;
+    if (theme !== "light" && theme !== "dark") return;
+    var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var root = document.documentElement;
+    var meta = document.querySelector('meta[name="color-scheme"]');
+    if ((theme === "dark") === systemDark) {
+      root.removeAttribute("data-theme");
+      if (meta) meta.content = "light dark";
+      theme = "system";
+    } else {
+      root.setAttribute("data-theme", theme);
+      if (meta) meta.content = theme;
+    }
+    // The button that was clicked is now hidden; keep focus on the toggle.
+    form.querySelectorAll("button").forEach(function (b) {
+      if (b.offsetParent !== null) b.focus();
+    });
+    fetch(form.action, {
+      method: "POST",
+      headers: { "HX-Request": "true", "Content-Type": "application/x-www-form-urlencoded" },
+      body: "theme=" + theme
+    }).catch(function () { toast("Could not save the theme.", "error"); });
+  });
+
   // ---- Keyboard shortcuts -------------------------------------------------
-  // "/" focuses search, "n" opens the new item form.
+  // "/" focuses search (opening the stock page when this page has none),
+  // "n" opens the new item form.
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;
     if (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     if (e.key === "/") {
-      var s = document.querySelector("[data-search]");
-      if (s) { e.preventDefault(); s.focus(); s.select(); }
+      e.preventDefault();
+      if (!focusSearch()) window.location.href = "/stock#search";
     } else if (e.key === "n") {
       window.location.href = "/items/new";
     }
   });
+  function focusSearch() {
+    var s = document.querySelector("[data-search]");
+    if (!s) return false;
+    s.focus();
+    s.select();
+    return true;
+  }
 
   // ---- Init ---------------------------------------------------------------
   function init(root) {
     root.querySelectorAll("form").forEach(syncUnits);
     root.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
   }
-  document.addEventListener("DOMContentLoaded", function () { init(document); });
+  document.addEventListener("DOMContentLoaded", function () {
+    init(document);
+    if (window.location.hash === "#search" && focusSearch()) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  });
   document.addEventListener("htmx:load", function (e) { init(e.target); });
 })();

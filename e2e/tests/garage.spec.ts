@@ -203,6 +203,39 @@ test("edit and delete items", async ({ page }) => {
   await expect(page.locator("#results")).not.toContainText("Fuel Filter");
 });
 
+test("slash focuses search from any page", async ({ page }) => {
+  await page.goto("/");
+  await page.keyboard.press("/");
+  await expect(page).toHaveURL(/\/stock$/);
+  await expect(page.getByPlaceholder(/Search name/)).toBeFocused();
+
+  await page.locator("main h1").click();
+  await page.keyboard.press("/");
+  await expect(page.getByPlaceholder(/Search name/)).toBeFocused();
+});
+
+test("switch between light and dark theme", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  const html = page.locator("html");
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await bg();
+
+  await page.getByRole("button", { name: "Switch to the dark theme" }).click();
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  expect(await bg()).not.toBe(light);
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", "dark");
+
+  // Back to what the system shows: the choice is forgotten.
+  await page.getByRole("button", { name: "Switch to the light theme" }).click();
+  await expect(html).not.toHaveAttribute("data-theme");
+  expect(await bg()).toBe(light);
+  await page.reload();
+  await expect(html).not.toHaveAttribute("data-theme");
+  await expect(page.getByRole("button", { name: "Switch to the dark theme" })).toBeVisible();
+});
+
 test("no page scrolls sideways", async ({ page }) => {
   const paths = ["/", "/stock", "/stock?view=list", "/vehicles", "/services", "/shopping", "/activity", "/items/new", "/kits/new", "/services/new"];
   // Also every detail page linked from the stock list and vehicles.

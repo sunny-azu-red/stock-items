@@ -34,6 +34,8 @@ type View struct {
 	Currency string
 	Version  string
 	Today    time.Time
+	// Theme is "light", "dark" or "" to follow the system.
+	Theme string
 	// NavVehicles and ShoppingCount feed the sidebar.
 	NavVehicles   []stock.Vehicle
 	ShoppingCount int
@@ -190,6 +192,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	v.Currency = s.currency
 	v.Version = s.version
 	v.Today = s.now()
+	v.Theme = themeFrom(r)
 	if v.Flash == nil {
 		v.Flash = s.popFlash(w, r)
 	}

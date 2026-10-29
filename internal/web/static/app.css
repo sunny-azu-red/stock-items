@@ -151,7 +151,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .grid { display: grid; gap: 1rem; }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
-.grid > .card + .card, .tiles > .card + .card { margin-top: 0; }
+.grid > .card + .card, .tiles > .card + .card, .split > .card + .card { margin-top: 0; }
 .split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
@@ -384,7 +384,7 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 
 /* ---------- Misc ---------- */
 .empty { text-align: center; padding: 2.5rem 1.25rem; color: var(--muted); }
-.empty .icon { width: 42px; height: 42px; color: var(--border); margin: 0 auto .75rem; display: block; }
+.empty > .icon { width: 42px; height: 42px; color: var(--border); margin: 0 auto .75rem; display: block; }
 .empty h2 { color: var(--text); margin-bottom: .35rem; }
 .empty .btn { margin-top: .75rem; }
 .muted { color: var(--muted); }

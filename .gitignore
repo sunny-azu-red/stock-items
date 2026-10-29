@@ -1,0 +1,23 @@
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Build output
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# End-to-end tests
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.cache/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

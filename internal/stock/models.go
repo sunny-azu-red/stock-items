@@ -81,11 +81,12 @@ const (
 	SKUOEM          SKUKind = "oem"
 	SKUManufacturer SKUKind = "manufacturer"
 	SKURetailer     SKUKind = "retailer"
+	SKUBarcode      SKUKind = "ean" // EAN / UPC / GTIN barcode number
 	SKUOther        SKUKind = "other"
 )
 
 // SKUKinds lists the valid SKU kinds in display order.
-var SKUKinds = []SKUKind{SKUOEM, SKUManufacturer, SKURetailer, SKUOther}
+var SKUKinds = []SKUKind{SKUOEM, SKUManufacturer, SKUBarcode, SKURetailer, SKUOther}
 
 // Label is a human readable name for the SKU kind.
 func (k SKUKind) Label() string {
@@ -96,6 +97,8 @@ func (k SKUKind) Label() string {
 		return "Manufacturer"
 	case SKURetailer:
 		return "Retailer"
+	case SKUBarcode:
+		return "EAN / Barcode"
 	default:
 		return "Other"
 	}

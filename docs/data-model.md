@@ -19,7 +19,7 @@ items ─< shopping_entries (or free text)
 - `quantity >= 0` is enforced by a check constraint.
 - Quantities are always in the base unit: 1.5 L is stored as `1500`.
 
-**item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`retailer`/`other`), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
+**item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`ean`/`retailer`/`other`; `ean` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
 
 **item_vehicles:** many-to-many tags.
 - Deleting a vehicle removes its tags, but its items stay.

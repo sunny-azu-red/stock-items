@@ -39,6 +39,47 @@ func TestItemInputValidateErrors(t *testing.T) {
 	}
 }
 
+func TestValidGTIN(t *testing.T) {
+	tests := []struct {
+		code string
+		want bool
+	}{
+		{"7611197108900", true},  // EAN-13
+		{"7611197115052", true},  // EAN-13
+		{"7611197108901", false}, // wrong check digit
+		{"036000291452", true},   // UPC-A
+		{"96385074", true},       // EAN-8
+		{"10614141000415", true}, // GTIN-14
+		{"036000291453", false},  // UPC-A, wrong check digit
+		{"761119710890X", false},
+		{"12345", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := ValidGTIN(tt.code); got != tt.want {
+			t.Errorf("ValidGTIN(%q) = %v, want %v", tt.code, got, tt.want)
+		}
+	}
+}
+
+func TestItemInputBarcodeSKU(t *testing.T) {
+	in := ItemInput{
+		Name: "Coolant", Unit: UnitML, Quantity: 1000,
+		SKUs: []SKU{{Code: " 7 611197 108900 ", Kind: SKUBarcode}, {Code: "7611197108901", Kind: SKUBarcode}},
+	}
+	in.Normalize()
+	if in.SKUs[0].Code != "7611197108900" {
+		t.Errorf("barcode spaces not removed: %q", in.SKUs[0].Code)
+	}
+	errs := in.Validate()
+	if _, ok := errs["sku_0"]; ok {
+		t.Errorf("valid barcode rejected: %v", errs)
+	}
+	if _, ok := errs["sku_1"]; !ok {
+		t.Errorf("bad check digit accepted: %v", errs)
+	}
+}
+
 func TestVehicleInputValidate(t *testing.T) {
 	in := VehicleInput{Name: " KTM 390 ", VIN: " vbk123 "}
 	in.Normalize()

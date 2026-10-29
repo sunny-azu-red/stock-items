@@ -69,6 +69,10 @@ func (in *ItemInput) Normalize() {
 		if s.Kind == "" {
 			s.Kind = SKUOEM
 		}
+		if s.Kind == SKUBarcode {
+			// Barcodes are often printed in groups: "7 611197 108900".
+			s.Code = strings.Join(strings.Fields(s.Code), "")
+		}
 		skus = append(skus, s)
 	}
 	in.SKUs = skus
@@ -104,6 +108,8 @@ func (in ItemInput) Validate() Errors {
 		seen[strings.ToLower(s.Code)] = true
 		if !validSKUKind(s.Kind) {
 			errs.Add(field, "Unknown SKU type")
+		} else if s.Kind == SKUBarcode && s.Code != "" && !ValidGTIN(s.Code) {
+			errs.Add(field, "Not a valid barcode (8, 12, 13 or 14 digits with a correct check digit)")
 		}
 		if s.PackSize != nil && *s.PackSize <= 0 {
 			errs.Add(field, "Pack size must be greater than zero")
@@ -119,6 +125,30 @@ func validSKUKind(k SKUKind) bool {
 		}
 	}
 	return false
+}
+
+// ValidGTIN reports whether code is a GTIN-8, -12 (UPC-A), -13 (EAN-13) or
+// -14 with a correct GS1 check digit.
+func ValidGTIN(code string) bool {
+	switch len(code) {
+	case 8, 12, 13, 14:
+	default:
+		return false
+	}
+	sum := 0
+	for i := len(code) - 1; i >= 0; i-- {
+		c := code[i]
+		if c < '0' || c > '9' {
+			return false
+		}
+		d := int(c - '0')
+		// Weights alternate 1, 3, 1, ... from the right, check digit included.
+		if (len(code)-1-i)%2 == 1 {
+			d *= 3
+		}
+		sum += d
+	}
+	return sum%10 == 0
 }
 
 var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -153,6 +154,10 @@ func (s *Server) funcs() template.FuncMap {
 				return template.URL(path)
 			}
 			return template.URL(path + "?" + query)
+		},
+		// skuSearch links a part number to a Google search limited to .ro sites.
+		"skuSearch": func(code string) template.URL {
+			return template.URL("https://www.google.com/search?q=" + url.QueryEscape(code+" site:ro"))
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
 		"lower":     strings.ToLower,

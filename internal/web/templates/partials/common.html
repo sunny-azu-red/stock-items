@@ -42,7 +42,7 @@
     <div class="item-meta">
       {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref $it.MinQuantity) $it.Unit}}</span>{{end}}
       {{with $it.ExpiresOn}}<span class="badge badge-info">{{icon "hourglass"}} {{date .}}</span>{{end}}
-      {{range $i, $s := $it.SKUs}}{{if lt $i 2}}<span class="sku" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}}">{{$s.Code}}</span>{{end}}{{end}}{{if gt (len $it.SKUs) 2}}<span>+{{add (len $it.SKUs) -2}} more</span>{{end}}
+      {{range $i, $s := $it.SKUs}}{{if lt $i 2}}<a class="sku sku-link" href="{{skuSearch $s.Code}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}} — search on Google (.ro)">{{$s.Code}}</a>{{end}}{{end}}{{if gt (len $it.SKUs) 2}}<span>+{{add (len $it.SKUs) -2}} more</span>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
       {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles)}}{{end}}
     </div>

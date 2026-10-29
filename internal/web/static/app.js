@@ -112,7 +112,11 @@
     var opt = sel.options[sel.selectedIndex];
     var qty = row.querySelector("input[data-part-qty]");
     if (note) note.textContent = opt && opt.getAttribute("data-have") ? "on stock: " + opt.getAttribute("data-have") : "";
-    if (qty && opt) qty.placeholder = opt.getAttribute("data-placeholder") || "";
+    if (qty) {
+      // Keep the generic hint for rows with no item chosen yet.
+      if (qty.dataset.defaultPlaceholder === undefined) qty.dataset.defaultPlaceholder = qty.placeholder;
+      qty.placeholder = (opt && opt.getAttribute("data-placeholder")) || qty.dataset.defaultPlaceholder;
+    }
   }
 
   // ---- Clipboard ----------------------------------------------------------

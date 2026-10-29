@@ -203,6 +203,17 @@ test("edit and delete items", async ({ page }) => {
   await expect(page.locator("#results")).not.toContainText("Fuel Filter");
 });
 
+test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
+  await page.goto("/services/new");
+  const items = page.locator('select[name="part_item"]');
+  const qtys = page.locator('input[name="part_qty"]');
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+  await items.first().selectOption({ label: "OEM Oil Filter" });
+  await expect(qtys.first()).not.toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+  await items.first().selectOption({ label: "Choose an item…" });
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+});
+
 test("slash focuses search from any page", async ({ page }) => {
   await page.goto("/");
   await page.keyboard.press("/");

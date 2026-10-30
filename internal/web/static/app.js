@@ -144,6 +144,20 @@
       if (qty.dataset.defaultPlaceholder === undefined) qty.dataset.defaultPlaceholder = qty.placeholder;
       qty.placeholder = (opt && opt.getAttribute("data-placeholder")) || qty.dataset.defaultPlaceholder;
     }
+    // Offer only the chosen item's units, preferring the larger one (L, kg).
+    var unit = row.querySelector("select[data-part-unit]");
+    if (unit) {
+      var base = (opt && opt.getAttribute("data-unit")) || "";
+      var last = null;
+      Array.prototype.forEach.call(unit.options, function (o) {
+        var ok = base ? o.getAttribute("data-base") === base : true;
+        o.hidden = !ok;
+        o.disabled = !ok;
+        if (ok && o.value) last = o;
+      });
+      var cur = unit.options[unit.selectedIndex];
+      if (base && (!cur || cur.disabled || !cur.value)) unit.value = last ? last.value : "";
+    }
   }
 
   // ---- Suggestion lists ---------------------------------------------------

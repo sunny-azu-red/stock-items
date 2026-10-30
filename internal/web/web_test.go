@@ -994,8 +994,8 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	expectNot(t, kitPage, "Add missing to shopping list")
 	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
 	ring := itoa(itemID(t, a.store, "O-Ring"))
-	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6x" data-placeholder="e.g. 2" selected>`)
-	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1x" data-placeholder="e.g. 2" selected>`)
+	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6x" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1x" data-placeholder="e.g. 2" data-unit="piece" selected>`)
 }
 
 func TestQuickAdjustRowKeepsChipsHidden(t *testing.T) {
@@ -1074,4 +1074,34 @@ func TestEditService(t *testing.T) {
 	if got.VehicleID != k390 || *got.LaborCost != 100 {
 		t.Errorf("service = %+v", got)
 	}
+}
+
+func TestPartRowsHaveUnits(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	pads := itemID(t, a.store, "Rear Brake")
+
+	// A bare number with the L unit is litres; with no unit chosen it is the base unit.
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
+		"line_item": {itoa(oil), itoa(pads)}, "line_qty": {"1.7", "1"}, "line_unit": {"l", ""}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	k, _ := a.store.GetKit(ctx, mustID(t, kit))
+	if len(k.Lines) != 2 || k.Lines[0].Need != 1700 || k.Lines[1].Need != 1 {
+		t.Fatalf("kit lines = %+v", k.Lines)
+	}
+	// A unit that doesn't fit the item is explained on its row.
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
+		"line_item": {itoa(pads)}, "line_qty": {"1"}, "line_unit": {"l"}}), http.StatusUnprocessableEntity, "L cannot be used for pieces")
+
+	// Prefilled rows come with their unit and what is on stock.
+	edit := a.get(kit + "/edit")
+	expect(t, edit, http.StatusOK, `name="line_qty" value="1.7"`, `<option value="l" data-base="ml" selected>L</option>`, "on stock: 525 ml")
+
+	// Every short part is marked at once.
+	form := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"2", "3"}, "part_unit": {"l", ""}}
+	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are short", "Only 525 ml on stock", "Only 1x on stock")
 }

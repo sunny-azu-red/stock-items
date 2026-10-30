@@ -112,12 +112,18 @@
   <div class="field">
     <select class="input" name="{{.Prefix}}_item" data-part-item aria-label="Item">
       <option value="">Choose an item…</option>
-      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-placeholder="{{placeholderFor .Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
+      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-placeholder="{{placeholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
     </select>
     {{template "err" $row.Error}}
   </div>
-  <input class="input" name="{{.Prefix}}_qty" value="{{$row.Qty}}" placeholder="e.g. 1 or 1.7 L" aria-label="Quantity" data-part-qty>
-  <span class="stock-note"></span>
+  <div class="qty-input">
+    <input class="input" name="{{.Prefix}}_qty" value="{{$row.Qty}}" placeholder="e.g. 1 or 1.7 L" aria-label="Quantity" data-part-qty>
+    <select class="input" name="{{.Prefix}}_unit" aria-label="Unit" data-part-unit>
+      <option value="" data-base="">unit</option>
+      {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $row.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </div>
+  <span class="stock-note">{{with $row.Have}}on stock: {{.}}{{end}}</span>
   <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove row">{{icon "x"}}</button>
 </div>
 {{end}}

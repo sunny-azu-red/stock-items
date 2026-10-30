@@ -40,6 +40,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	if err != nil {
 		return err
 	}
+	describeRows(f.Parts, items)
 	p := serviceFormPage{Vehicles: vehicles}
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
@@ -76,7 +77,7 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			if l.Archived {
 				continue // no longer kept; the kit should be edited
 			}
-			f.Parts = append(f.Parts, lineRow{ItemID: l.ItemID, Qty: stock.FormatQuantity(l.Need, l.Unit)})
+			f.Parts = append(f.Parts, partRow(l.ItemID, l.Need, l.Unit))
 		}
 	}
 	if f.VehicleID != 0 {
@@ -127,15 +128,20 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	return f, in, nil
 }
 
-// serviceConflict maps a store error onto the service form.
+// serviceConflict maps a store error onto the service form, marking every
+// part that is short on its row.
 func serviceConflict(f serviceForm, err error) bool {
-	var short *store.InsufficientStockError
-	if errors.As(err, &short) {
-		for i := range f.Parts {
-			if f.Parts[i].ItemID == short.ItemID {
-				f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " on stock"
+	var shorts *store.ShortPartsError
+	if errors.As(err, &shorts) {
+		for _, short := range shorts.Parts {
+			for i := range f.Parts {
+				if f.Parts[i].ItemID == short.ItemID {
+					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " on stock"
+				}
 			}
 		}
+		f.Errors.Add("lines", fmt.Sprintf("%d %s short", len(shorts.Parts), pluralWord(len(shorts.Parts), "part is", "parts are")))
+		return true
 	}
 	return formConflict(f.Errors, err)
 }
@@ -181,7 +187,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 		f.LaborCost = stock.FormatMoney(*rec.LaborCost)
 	}
 	for _, p := range rec.Parts {
-		f.Parts = append(f.Parts, lineRow{ItemID: p.ItemID, Qty: stock.FormatQuantity(p.Quantity, p.Unit)})
+		f.Parts = append(f.Parts, partRow(p.ItemID, p.Quantity, p.Unit))
 	}
 	return s.renderServiceForm(w, r, http.StatusOK, f)
 }

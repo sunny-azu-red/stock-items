@@ -27,6 +27,7 @@
         </select>
         {{end}}
         {{template "err" (index $e "vehicle_id")}}
+        {{template "err" (index $e "kit_id")}}
       </div>
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <label for="title">What was done</label>

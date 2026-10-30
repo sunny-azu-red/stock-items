@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/jackc/pgx/v5"
@@ -163,18 +164,28 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 }
 
 // takeServiceParts takes a service's parts from stock, in item id order
-// so two services sharing parts cannot deadlock.
+// so two services sharing parts cannot deadlock. Parts that are short are
+// all reported in one *ShortPartsError; the caller rolls back.
 func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.ServiceInput) error {
 	parts := slices.Clone(in.Parts)
 	slices.SortFunc(parts, func(a, b stock.KitLineInput) int { return cmp.Compare(a.ItemID, b.ItemID) })
+	var shorts ShortPartsError
 	for _, p := range parts {
 		err := applyMovement(ctx, tx, stock.MovementInput{
 			ItemID: p.ItemID, Kind: stock.MoveService, Delta: -p.Quantity,
 			Note: in.Title, OccurredOn: &in.PerformedOn, ServiceRecordID: &serviceID,
 		})
+		var short *InsufficientStockError
+		if errors.As(err, &short) {
+			shorts.Parts = append(shorts.Parts, short)
+			continue
+		}
 		if err != nil {
 			return err
 		}
+	}
+	if len(shorts.Parts) > 0 {
+		return &shorts
 	}
 	return nil
 }

@@ -154,6 +154,7 @@ func (s *Server) funcs() template.FuncMap {
 			return template.URL("https://www.google.com/search?q=" + url.QueryEscape(code+" site:ro"))
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
+		"subUnits":  func() []stock.SubUnit { return stock.SubUnits },
 		"join":      strings.Join,
 		"plural": func(n int, word string) string {
 			if n == 1 {

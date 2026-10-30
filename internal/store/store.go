@@ -41,6 +41,30 @@ func (e *InsufficientStockError) Error() string {
 		stock.FormatQuantity(e.Have, e.Unit), stock.FormatQuantity(e.Need, e.Unit))
 }
 
+// ShortPartsError lists every part of a service that is short, so the
+// form can mark them all at once. errors.As also finds the first
+// *InsufficientStockError in it.
+type ShortPartsError struct {
+	Parts []*InsufficientStockError
+}
+
+func (e *ShortPartsError) Error() string {
+	msgs := make([]string, len(e.Parts))
+	for i, p := range e.Parts {
+		msgs[i] = p.Error()
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// Unwrap exposes the individual shortages to errors.As.
+func (e *ShortPartsError) Unwrap() []error {
+	errs := make([]error, len(e.Parts))
+	for i, p := range e.Parts {
+		errs[i] = p
+	}
+	return errs
+}
+
 // Store gives access to all persisted data.
 type Store struct {
 	pool *pgxpool.Pool

@@ -322,6 +322,17 @@ test("part rows keep a quantity hint until an item is chosen", async ({ page }) 
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
 });
 
+test("part rows offer the chosen item's units", async ({ page }) => {
+  await page.goto("/services/new");
+  const row = page.locator(".part-line:not(.row-head)").first();
+  const unit = row.locator('select[name="part_unit"]');
+  await row.locator('select[name="part_item"]').selectOption({ label: "OEM Oil Filter" });
+  await expect(unit).toHaveValue("pcs");
+  await row.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await expect(unit).toHaveValue("l");
+  await expect(row.locator(".stock-note")).toContainText("on stock:");
+});
+
 test("form hints open from the question mark", async ({ page }) => {
   await page.goto("/items/new");
   const hint = page.getByRole("tooltip", { name: "You get a low-stock warning below this." });

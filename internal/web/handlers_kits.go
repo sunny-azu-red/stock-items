@@ -15,7 +15,26 @@ import (
 type lineRow struct {
 	ItemID int64
 	Qty    string
+	Unit   string // sub-unit chosen next to Qty; "" means the item's base unit
+	Have   string // what is on stock of the chosen item, shown next to the row
 	Error  string
+}
+
+// partRow is a prefilled row for qty (base units) of an item.
+func partRow(itemID int64, qty float64, u stock.Unit) lineRow {
+	row := lineRow{ItemID: itemID}
+	row.Qty, row.Unit = stock.SplitForInput(qty, u)
+	return row
+}
+
+// describeRows fills in what is on stock for each row's item.
+func describeRows(rows []lineRow, items []stock.Item) {
+	byID := itemsByID(items)
+	for i := range rows {
+		if it, ok := byID[rows[i].ItemID]; ok {
+			rows[i].Have = stock.FormatQuantity(it.Quantity, it.Unit)
+		}
+	}
 }
 
 // itemGroup groups items in a <select> (vehicle items first).
@@ -69,15 +88,19 @@ func itemOptions(items []stock.Item, vehicle *stock.Vehicle) []itemGroup {
 	return out
 }
 
-// parseLines reads parallel <prefix>_item / <prefix>_qty fields.
+// parseLines reads parallel <prefix>_item / <prefix>_qty / <prefix>_unit
+// fields. A unit typed into the quantity wins over the unit select.
 func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
-	ids, qtys := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_qty"]
+	ids, qtys, units := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_qty"], r.PostForm[prefix+"_unit"]
 	var rows []lineRow
 	var lines []stock.KitLineInput
 	for i, raw := range ids {
 		row := lineRow{}
 		if i < len(qtys) {
 			row.Qty = qtys[i]
+		}
+		if i < len(units) {
+			row.Unit = units[i]
 		}
 		id, _ := strconv.ParseInt(raw, 10, 64)
 		row.ItemID = id
@@ -88,7 +111,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 		case !ok:
 			row.Error = "Choose an item"
 		default:
-			q, err := stock.ParseAmount(row.Qty, it.Unit, "")
+			q, err := stock.ParseAmount(row.Qty, it.Unit, row.Unit)
 			switch {
 			case errors.Is(err, stock.ErrEmpty):
 				row.Error = "Enter a quantity, e.g. " + examplesFor(it.Unit)
@@ -144,6 +167,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if err != nil {
 		return err
 	}
+	describeRows(f.Lines, items)
 	var vehicle *stock.Vehicle
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
@@ -197,7 +221,7 @@ func kitFormFrom(k stock.Kit) kitForm {
 		IntervalMonths: optIntString(k.IntervalMonths), Notes: k.Notes,
 	}
 	for _, l := range k.Lines {
-		f.Lines = append(f.Lines, lineRow{ItemID: l.ItemID, Qty: stock.FormatQuantity(l.Need, l.Unit)})
+		f.Lines = append(f.Lines, partRow(l.ItemID, l.Need, l.Unit))
 	}
 	return f
 }

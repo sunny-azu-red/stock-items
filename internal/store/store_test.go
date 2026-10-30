@@ -1285,3 +1285,27 @@ func TestUpdateService(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+func TestServiceReportsEveryShortPart(t *testing.T) {
+	s, ctx := newStore(t)
+	k390 := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 1})
+	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 1})
+	in := stock.ServiceInput{VehicleID: k390, Title: "Service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{
+		{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}, {ItemID: pads, Quantity: 2}}}
+	in.Normalize()
+	_, err := s.CreateService(ctx, in)
+	var shorts *store.ShortPartsError
+	if !errors.As(err, &shorts) || len(shorts.Parts) != 2 || shorts.Parts[0].ItemID != oil || shorts.Parts[1].ItemID != pads {
+		t.Fatalf("want oil and pads short, got %v", err)
+	}
+	var first *store.InsufficientStockError
+	if !errors.As(err, &first) {
+		t.Error("errors.As should find an InsufficientStockError")
+	}
+	if it := mustGet(t, s, filter); it.Quantity != 1 {
+		t.Errorf("filter = %v: nothing should be taken", it.Quantity)
+	}
+	assertLedger(t, s)
+}

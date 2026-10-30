@@ -31,15 +31,15 @@
   </div>
 
   <div class="form-section">
+    <h2>Fits these vehicles</h2>
     {{if $d.Vehicles}}
-    <div class="label-row"><h2>Fits these vehicles</h2>{{template "tip" (dict "ID" "vehicles-tip" "Text" "Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).")}}</div>
     <div class="chips" role="group" aria-label="Vehicles">
       {{range $d.Vehicles}}
       <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="vehicle" value="{{.ID}}" {{if hasID $f.VehicleIDs .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
       {{end}}
     </div>
+    <p class="hint mt">Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).</p>
     {{else}}
-    <h2>Fits these vehicles</h2>
     <p class="hint">No vehicles yet. <a href="/vehicles/new">Add one</a> to tag items with it.</p>
     {{end}}
   </div>
@@ -91,7 +91,8 @@
 
   {{if $d.IsNew}}
   <div class="form-section">
-    <div class="label-row"><h2>Bought it just now?</h2>{{template "tip" (dict "ID" "bought-tip" "Text" "Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.")}}</div>
+    <h2>Bought it just now?</h2>
+    <p class="hint mb">Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
         <label for="total_price">Total price ({{.Currency}})</label>
@@ -112,7 +113,8 @@
   {{end}}
 
   <div class="form-section">
-    <div class="label-row"><h2>SKUs / part numbers</h2>{{template "tip" (dict "ID" "skus-tip" "Text" "Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).")}}</div>
+    <h2>SKUs / part numbers</h2>
+    <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
     {{template "err" (index $e "skus")}}
     <div class="rows" id="sku-rows">
       <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Label</span><span>Pack size</span><span></span></div>

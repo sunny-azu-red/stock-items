@@ -7,7 +7,7 @@
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle */}}
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{template "chip" .}}{{end}}{{else}}<span class="chip">General</span>{{end}}</span>{{end}}
 
-{{/* A "?" after a label or heading that shows a hint on hover, focus or tap: dict "ID" string "Text" string.
+{{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string.
    Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
 {{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="Help" aria-describedby="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}">{{.Text}}</span></span>{{end}}
 

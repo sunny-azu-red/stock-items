@@ -2,7 +2,7 @@
 <a class="back" href="/items/{{$m.ItemID}}">{{icon "arrow-left"}} {{$m.ItemName}}</a>
 <div class="page-head">
   <div>
-    {{if $m.AmountEditable}}<h1>Edit {{$d.Name}}</h1>{{else}}<div class="label-row"><h1>Edit {{$d.Name}}</h1>{{template "tip" (dict "ID" "count-tip" "Text" "A count's change follows from what was on the shelf. To fix it, delete it or do a new count.")}}</div>{{end}}
+    <h1>Edit {{$d.Name}}</h1>
     <p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>
   </div>
   <div class="actions">
@@ -49,6 +49,7 @@
       <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="optional">
     </div>
   </div>
+  {{if not $m.AmountEditable}}<p class="hint mt">A count's change follows from what was on the shelf. To fix it, delete it or do a new count.</p>{{end}}
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="/items/{{$m.ItemID}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save</button>

@@ -51,7 +51,7 @@
     </div>
   </div>
   <div class="form-section">
-    <div class="label-row"><h2>Parts used</h2>{{template "tip" (dict "ID" "parts-tip" "Text" "Remove rows for parts you did not use, or that did not come from your stock. Quantities accept units, e.g. 1.7 L or 500 ml.")}}</div>
+    <h2>Parts used</h2>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="part-lines">
       <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
@@ -59,6 +59,7 @@
     </div>
     <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "part")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
+    <p class="hint mt">Remove rows for parts you did not use, or that did not come from your stock.</p>
   </div>
   <div class="form-section">
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>

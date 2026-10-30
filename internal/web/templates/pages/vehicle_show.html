@@ -39,11 +39,12 @@
 
   <div class="stack">
     <section class="card card-pad">
-      <div class="label-row mb"><h2>{{icon "gauge"}} Odometer</h2>{{template "tip" (dict "ID" "odometer-tip" "Text" "Used for km-based service reminders. Logging a service also updates it.")}}</div>
+      <h2 class="mb">{{icon "gauge"}} Odometer</h2>
       <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
-        <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="km" aria-label="Odometer in km" aria-describedby="odometer-tip">
+        <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="km" aria-label="Odometer in km">
         <button class="btn" type="submit">Update</button>
       </form>
+      <p class="hint mt">Used for km-based service reminders. Logging a service also updates it.</p>
     </section>
 
     <section class="card card-pad">

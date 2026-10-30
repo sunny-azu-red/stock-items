@@ -195,10 +195,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .form-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
 .field { display: grid; gap: .35rem; align-content: start; min-width: 0; }
 .field > label, .label-row > label, .label { font-weight: 600; font-size: .85rem; }
-/* A label or heading followed by a "?" hint; the hint opens below the row. */
+/* A field label followed by a "?" hint; the hint opens below the label. */
 .label-row { position: relative; display: flex; align-items: center; gap: .3rem; min-width: 0; }
-.label-row > h1, .label-row > h2, .form-section .label-row > h2 { margin: 0; }
-.form-section > .label-row { margin-bottom: .8rem; }
 .tip { display: inline-flex; }
 .tip-btn { display: inline-flex; margin: -.3rem 0; padding: .1rem; border: 0; border-radius: 99px; background: none; color: var(--muted); cursor: help; }
 .tip-btn .icon { width: .95rem; height: .95rem; vertical-align: 0; }

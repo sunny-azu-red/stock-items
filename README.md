@@ -62,8 +62,8 @@ All settings come from environment variables or a `.env` file (real environment 
 |---|---|---|
 | `DB_HOST`, `DB_PORT` | `127.0.0.1`, `5432` | Postgres server |
 | `DB_DATABASE` | `stock_items` | Database name |
-| `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `DB_SCHEMA` | `public` | Postgres schema (tests use throwaway schemas) |
+| `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices |
 | `TZ` | system zone | When "today" starts (reminders, date checks, spending). Set it in Docker, whose default is UTC |

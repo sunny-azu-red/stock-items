@@ -18,10 +18,10 @@ type DB struct {
 	Host     string
 	Port     string
 	Database string
+	// Schema is the Postgres schema used as search_path. Empty means "public".
+	Schema   string
 	Username string
 	Password string
-	// Schema is the Postgres schema used as search_path. Empty means "public".
-	Schema string
 }
 
 // Config is the full application configuration.
@@ -60,9 +60,9 @@ func Load() (Config, error) {
 			Host:     env("DB_HOST", "127.0.0.1"),
 			Port:     env("DB_PORT", "5432"),
 			Database: env("DB_DATABASE", "stock_items"),
+			Schema:   schema(os.Getenv("DB_SCHEMA")),
 			Username: env("DB_USERNAME", "postgres"),
 			Password: os.Getenv("DB_PASSWORD"),
-			Schema:   schema(os.Getenv("DB_SCHEMA")),
 		},
 		Host:     env("HOST", "0.0.0.0"),
 		Port:     env("PORT", "8080"),

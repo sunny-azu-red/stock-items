@@ -809,6 +809,18 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	}
 	expect(t, a.get(item), http.StatusOK, "19.90 EUR / L", "2.5 L")
 
+	// Opened from the activity page, the form returns there; a posted
+	// "back" pointing off-site falls back to the item.
+	req := httptest.NewRequest(http.MethodGet, edit+"/edit", nil)
+	req.Header.Set("Referer", "http://example.com/activity?kind=purchase")
+	expect(t, a.do(req), http.StatusOK, `href="/activity?kind=purchase">Cancel`, `name="back" value="/activity?kind=purchase"`)
+	for back, want := range map[string]string{"/activity?kind=purchase": "/activity?kind=purchase", "//evil.example/": item, "https://evil.example/": item} {
+		rec = a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "occurred_on": {"2026-10-29"}, "back": {back}})
+		if l := rec.Header().Get("Location"); l != want {
+			t.Errorf("back %q: location = %q, want %q", back, l, want)
+		}
+	}
+
 	// Taking away more than is left is refused with a hint.
 	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
 	expect(t, a.post(edit+"/delete", nil), http.StatusUnprocessableEntity, "Only 100 ml is left on stock")

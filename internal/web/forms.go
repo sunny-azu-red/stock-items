@@ -146,14 +146,29 @@ func safeBack(r *http.Request, fallback string) string {
 	if err != nil || ref.Host != r.Host {
 		return fallback
 	}
+	return localPath(ref, fallback)
+}
+
+// postedBack returns the form's "back" field when it is a path on this
+// site, so a form can return to the page that opened it.
+func postedBack(r *http.Request, fallback string) string {
+	u, err := url.Parse(r.PostFormValue("back"))
+	if err != nil || u.Scheme != "" || u.Host != "" {
+		return fallback
+	}
+	return localPath(u, fallback)
+}
+
+// localPath returns u's path and query when the path is safe to redirect to.
+func localPath(u *url.URL, fallback string) string {
 	// Use the escaped path: the decoded one can turn "%5Cevil.example" into
 	// "/\evil.example", which browsers follow to another site.
-	p := ref.EscapedPath()
+	p := u.EscapedPath()
 	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\\t\r\n") {
 		return fallback
 	}
-	if ref.RawQuery != "" {
-		return p + "?" + ref.RawQuery
+	if u.RawQuery != "" {
+		return p + "?" + u.RawQuery
 	}
 	return p
 }

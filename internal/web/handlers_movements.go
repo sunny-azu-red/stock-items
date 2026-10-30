@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 
@@ -13,6 +14,7 @@ import (
 // movementEditForm holds the edit form for a recorded stock change.
 type movementEditForm struct {
 	Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
+	Back                                                       string // page to return to
 	Errors                                                     stock.Errors
 }
 
@@ -21,6 +23,7 @@ type movementPage struct {
 	Name     string // "purchase", "use", …
 	Undo     string // how deleting it changes the stock, e.g. "−1 L"
 	Form     movementEditForm
+	Back     template.URL // the page that opened the form, already checked
 	Units    []stock.SubUnit
 }
 
@@ -44,7 +47,7 @@ func (s *Server) loadMovement(r *http.Request) (stock.Movement, error) {
 func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) {
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
-			Form: f, Units: stock.SubUnitsFor(m.ItemUnit)}})
+			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit)}})
 }
 
 func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
@@ -52,7 +55,8 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02")}
+	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
+		Back: safeBack(r, itemPath(m.ItemID))}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)
@@ -72,7 +76,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	f := movementEditForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		Errors: stock.Errors{},
+		Back: postedBack(r, itemPath(m.ItemID)), Errors: stock.Errors{},
 	}
 	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note}
 	if m.AmountEditable() {
@@ -95,7 +99,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateMovement(r.Context(), m.ID, e)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/items/%d", m.ItemID), "Updated the "+changeName(m.Kind))
+			s.redirect(w, r, f.Back, "Updated the "+changeName(m.Kind))
 			return nil
 		}
 		if !movementConflict(f.Errors, err) {
@@ -111,17 +115,22 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	back := postedBack(r, itemPath(m.ItemID))
 	deleted, err := s.store.DeleteMovement(r.Context(), m.ID)
 	if err == nil {
 		it, err := s.store.GetItem(r.Context(), deleted.ItemID)
 		if err != nil {
 			return err
 		}
-		s.redirect(w, r, fmt.Sprintf("/items/%d", it.ID),
+		s.redirect(w, r, back,
 			"Deleted the "+changeName(m.Kind)+". Stock is now "+stock.FormatQuantity(it.Quantity, it.Unit)+".")
 		return nil
 	}
-	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"), Errors: stock.Errors{}}
+	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
+		Back: back, Errors: stock.Errors{}}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)
@@ -132,6 +141,8 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 	s.renderMovementForm(w, r, http.StatusUnprocessableEntity, m, f)
 	return nil
 }
+
+func itemPath(id int64) string { return fmt.Sprintf("/items/%d", id) }
 
 // changeName names a kind of stock change in a sentence.
 func changeName(k stock.MovementKind) string {

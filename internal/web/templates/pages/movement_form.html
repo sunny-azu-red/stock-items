@@ -6,10 +6,11 @@
     <p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>
   </div>
   <div class="actions">
-    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><input type="hidden" name="back" value="{{$d.Back}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
   </div>
 </div>
 <form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
+  <input type="hidden" name="back" value="{{$d.Back}}">
   {{template "error-summary" $e}}
   {{with index $e "amount"}}{{if not $m.AmountEditable}}<p class="field-error">{{.}}</p>{{end}}{{end}}
   <div class="form-grid">
@@ -51,7 +52,7 @@
   </div>
   {{if not $m.AmountEditable}}<p class="hint mt">A count's change follows from what was on the shelf. To fix it, delete it or do a new count.</p>{{end}}
   <div class="form-actions">
-    <a class="btn btn-ghost spacer" href="/items/{{$m.ItemID}}">Cancel</a>
+    <a class="btn btn-ghost spacer" href="{{$d.Back}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save</button>
   </div>
 </form>

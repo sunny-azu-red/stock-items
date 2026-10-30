@@ -47,7 +47,7 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 - Add items from your stock (with a quantity) or free text ("chain lube"). Pick the unit next to the quantity, or type it (`4 L`, `500 g`); for an item from your stock the units follow the item. A free-text entry keeps its unit, and adding it to stock later starts the new item in that unit. Text typed next to a chosen item is kept as its note. Adding an item that's already listed adds to its quantity and keeps both notes.
 - **Suggestions** list items below their minimum and parts missing for any kit, as long as the list asks for less than that (it then shows how much is already listed). Add them one by one or all at once. **Add to shopping list** on an item's page uses the same amount.
 - **Bought** on an entry for a stock item records the purchase (amount, price, shop, date, optional best before). If you bought less than listed, the rest stays on the list; otherwise the entry is removed.
-- **Bought** on a free-text entry asks what to do:
+- **Bought** on a free-text entry asks what to do. If an item with that name is already on stock (or archived), it is offered first: **Add to this item** links the entry to it (restoring it if archived) and opens the usual Bought form. Otherwise:
   - **Add to stock as a new item** opens the new-item form with the name, quantity and note filled in. Add the price and shop under *Bought it just now?*. Saving creates the item with its purchase and removes the entry.
   - **Just tick it off** removes the entry, for things you don't keep on stock.
 - Suggestions keep their reason ("Below minimum", "Short for KTM 390: Oil service") as the entry's note.

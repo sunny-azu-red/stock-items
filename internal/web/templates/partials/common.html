@@ -157,3 +157,19 @@
 {{end}}
 </ul>
 {{end}}
+
+{{/* Items already on stock with a free-text shopping entry's name:
+     dict "EntryID" int64 "Matches" []Item */}}
+{{define "shopping-matches"}}{{$entry := .EntryID}}
+<div class="card card-body">
+  <p><strong>Already have it?</strong> Add this purchase to the item instead of creating a new one.</p>
+  <ul class="list">
+    {{range .Matches}}
+    <li>
+      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}} on stock{{if .Archived}} · archived{{end}}</span></span>
+      <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
+    </li>
+    {{end}}
+  </ul>
+</div>
+{{end}}

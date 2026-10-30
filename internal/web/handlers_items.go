@@ -47,6 +47,7 @@ type itemFormPage struct {
 	Units      []stock.Unit
 	SubUnits   []stock.SubUnit
 	SKUKinds   []stock.SKUKind
+	Matches    []stock.Item // for a new item from the shopping list: items with its name
 }
 
 func itemFormFromItem(it stock.Item) itemForm {
@@ -235,6 +236,11 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	page, err := s.itemFormPage(r, f, true)
 	if err != nil {
 		return err
+	}
+	if f.ShoppingID != 0 {
+		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
+			return err
+		}
 	}
 	s.render(w, r, http.StatusOK, "item_form", View{Title: "New item", Nav: "stock", Data: page})
 	return nil

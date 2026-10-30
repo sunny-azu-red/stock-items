@@ -4,6 +4,7 @@
   <h1>{{if $d.IsNew}}New item{{else}}Edit {{$f.Name}}{{end}}</h1>
 </div>
 
+{{if $d.Matches}}<div class="mb">{{template "shopping-matches" (dict "EntryID" $f.ShoppingID "Matches" $d.Matches)}}</div>{{end}}
 <form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}">{{end}}
   {{if $f.ShoppingID}}<input type="hidden" name="shopping_id" value="{{$f.ShoppingID}}">{{end}}

@@ -141,3 +141,76 @@ func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.Moveme
 	}
 	return left, nil
 }
+
+// ItemsNamed returns the items, archived ones included, whose name or
+// "brand name" is text (ignoring case and surrounding spaces): candidates
+// for a free-text entry that is already on stock.
+func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id FROM items
+		WHERE lower(btrim(name)) = lower(btrim($1)) OR lower(btrim(brand || ' ' || name)) = lower(btrim($1))
+		ORDER BY archived_at IS NOT NULL, id`, text)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	return s.ListItems(ctx, ItemFilter{IDs: ids})
+}
+
+// LinkShopping turns a free-text entry into an entry for an existing item,
+// restoring the item if it was archived, and returns the entry to mark
+// bought. If the item is on the list already, the free-text entry is
+// merged into that one. A quantity in another unit than the item's is
+// dropped. ErrNotFound means the entry is gone or already linked, or the
+// item is gone.
+func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (int64, error) {
+	var id int64
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		var linked *int64
+		var unit stock.Unit
+		var qty *float64
+		var note string
+		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, note FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
+			Scan(&linked, &unit, &qty, &note)
+		if err != nil {
+			return notFound(err)
+		}
+		if linked != nil {
+			return ErrNotFound
+		}
+		var itemUnit stock.Unit
+		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&itemUnit); err != nil {
+			return notFound(err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, itemID); err != nil {
+			return err
+		}
+		if itemUnit != unit {
+			qty = nil
+		}
+		err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, itemID).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			id = entryID
+			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4 WHERE id = $1`,
+				entryID, itemID, qty, itemUnit)
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE shopping_entries SET
+			  quantity = CASE WHEN quantity IS NULL OR $2::numeric IS NULL THEN COALESCE($2, quantity)
+			                  ELSE LEAST(quantity + $2, $4) END,
+			  note = CASE WHEN $3 = '' OR strpos(note, $3) > 0 THEN note WHEN note = '' THEN $3 ELSE note || '; ' || $3 END
+			WHERE id = $1`, id, qty, note, stock.MaxQuantity)
+		return err
+	})
+	return id, err
+}

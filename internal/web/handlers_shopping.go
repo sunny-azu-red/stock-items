@@ -165,9 +165,10 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 }
 
 type boughtPage struct {
-	Entry stock.ShoppingEntry
-	Move  movementForm
-	Units []stock.SubUnit
+	Entry   stock.ShoppingEntry
+	Move    movementForm
+	Units   []stock.SubUnit
+	Matches []stock.Item // items already on stock with a free-text entry's name
 }
 
 func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) error {
@@ -185,8 +186,44 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 	} else {
 		_, f.AmountUnit = stock.SplitForInput(0, e.ItemUnit)
 	}
+	var matches []stock.Item
+	if e.ItemID == nil {
+		if matches, err = s.store.ItemsNamed(r.Context(), e.FreeText); err != nil {
+			return err
+		}
+	}
 	s.render(w, r, http.StatusOK, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit)}})
+		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches}})
+	return nil
+}
+
+// shoppingLink records that a free-text entry is an item already on stock,
+// then opens the usual Bought form for it.
+func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	itemID := parseOptID(formText(r, "item_id"))
+	if itemID == nil {
+		return store.ErrNotFound
+	}
+	it, err := s.store.GetItem(r.Context(), *itemID)
+	if err != nil {
+		return err
+	}
+	entry, err := s.store.LinkShopping(r.Context(), id, *itemID)
+	if err != nil {
+		return err
+	}
+	msg := ""
+	if it.Archived() {
+		msg = "Restored " + it.DisplayName()
+	}
+	s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", entry), msg)
 	return nil
 }
 

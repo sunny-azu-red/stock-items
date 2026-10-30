@@ -8,7 +8,8 @@
   </div>
 </div>
 {{if not $d.Entry.ItemID}}
-<div class="card card-body">
+{{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Matches" $d.Matches)}}{{end}}
+<div class="card card-body{{if $d.Matches}} mt{{end}}">
   <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep on stock.</p>
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>

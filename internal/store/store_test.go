@@ -1322,3 +1322,48 @@ func TestAddShoppingKeepsBothNotes(t *testing.T) {
 		t.Errorf("note = %q", list[0].Note)
 	}
 }
+
+func TestLinkShopping(t *testing.T) {
+	s, ctx := newStore(t)
+	lube := mustItem(t, s, stock.ItemInput{Name: "Chain lube", Brand: "Motul", Unit: stock.UnitML})
+	pads := mustItem(t, s, stock.ItemInput{Name: "Brake pads", Unit: stock.UnitPiece})
+	if _, err := s.ArchiveItem(ctx, lube); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"chain lube", " Motul Chain Lube "} {
+		if got, _ := s.ItemsNamed(ctx, text); len(got) != 1 || got[0].ID != lube {
+			t.Errorf("ItemsNamed(%q) = %v", text, ids(got))
+		}
+	}
+
+	// A free-text entry becomes the archived item's entry, which is restored.
+	free, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube", Quantity: ptr(400.0), Unit: stock.UnitML, Note: "the white one"})
+	entry, err := s.LinkShopping(ctx, free, lube)
+	if err != nil || entry != free {
+		t.Fatalf("link = %d, %v", entry, err)
+	}
+	if it := mustGet(t, s, lube); it.Archived() {
+		t.Error("item should be restored")
+	}
+	if e, _ := s.GetShopping(ctx, free); e.ItemID == nil || *e.ItemID != lube || *e.Quantity != 400 || e.Note != "the white one" {
+		t.Errorf("linked entry = %+v", e)
+	}
+	if _, err := s.LinkShopping(ctx, free, pads); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("relinking: want ErrNotFound, got %v", err)
+	}
+
+	// When the item is listed already, the two entries merge; a quantity in
+	// another unit is dropped.
+	listed, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "sintered"})
+	other, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Brake pads", Quantity: ptr(500.0), Unit: stock.UnitML, Note: "rear"})
+	entry, err = s.LinkShopping(ctx, other, pads)
+	if err != nil || entry != listed {
+		t.Fatalf("merge = %d, %v; want %d", entry, err, listed)
+	}
+	if e, _ := s.GetShopping(ctx, listed); *e.Quantity != 2 || e.Note != "sintered; rear" {
+		t.Errorf("merged entry = %+v", e)
+	}
+	if _, err := s.GetShopping(ctx, other); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("free entry should be gone: %v", err)
+	}
+}

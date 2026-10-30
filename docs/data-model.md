@@ -46,6 +46,7 @@ items ─< shopping_entries (or free text)
 
 **shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note. `unit` is the unit of a free-text entry's quantity (`stock.ParseAmountAnyUnit` picks it from the typed suffix); linked entries use the item's unit.
 - Marking a linked entry bought records a purchase. If less was bought than the entry's quantity, the entry stays with the rest (`store.MarkBought`).
+- A free-text entry can be linked to an existing item with the same name (`store.ItemsNamed`, `store.LinkShopping`): the item is restored if archived, and the entry is merged into the item's own entry if it has one.
 - A free-text entry can become a new item: `store.CreateItemFromShopping` creates the item with its starting purchase and deletes the entry in one transaction.
 
 ## Invariants

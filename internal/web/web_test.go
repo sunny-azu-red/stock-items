@@ -1175,3 +1175,25 @@ func TestEditACount(t *testing.T) {
 		t.Errorf("oil = %v, want 425", it.Quantity)
 	}
 }
+
+func TestBuyingSomethingYouAlreadyHave(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "silkolene 15w50 pro 4 xp", Quantity: ptr(1000.0), Unit: stock.UnitML})
+	page := "/shopping/" + itoa(free)
+	expect(t, a.get(page+"/bought"), http.StatusOK, "Already have it?", `action="`+page+`/link"`, "Add to this item")
+	expect(t, a.get("/items/new?shopping="+itoa(free)), http.StatusOK, "Already have it?")
+
+	rec := a.post(page+"/link", url.Values{"item_id": {itoa(oil)}})
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != page+"/bought" {
+		t.Fatalf("location = %q", l)
+	}
+	expect(t, a.get(page+"/bought"), http.StatusOK, `name="amount" value="1"`, `value="l" selected`)
+	expect(t, a.post(page+"/bought", url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 1525 {
+		t.Errorf("oil = %v, want 1525", it.Quantity)
+	}
+}

@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="{{asset "app.css"}}">
   <script src="{{asset "vendor/htmx.min.js"}}" defer></script>
   <script src="{{asset "app.js"}}" defer></script>
+  {{/* Without JS the tab buttons cannot switch panels: show every panel. */}}
+  <noscript><style>[role="tablist"] { display: none; } [role="tabpanel"][hidden] { display: grid !important; }</style></noscript>
 </head>
 <body>
 {{template "icons"}}

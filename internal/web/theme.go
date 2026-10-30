@@ -22,8 +22,11 @@ func themeFrom(r *http.Request) string {
 // setTheme stores the theme choice. app.js applies it on the spot and posts
 // with HX-Request, which gets a bare 204; plain form posts go back.
 func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) error {
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
 	c := &http.Cookie{Name: themeCookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode}
-	switch v := r.FormValue("theme"); v {
+	switch v := r.PostFormValue("theme"); v {
 	case "light", "dark":
 		c.Value, c.MaxAge = v, 400*24*60*60 // the longest browsers keep a cookie
 	default:

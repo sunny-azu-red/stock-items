@@ -388,3 +388,165 @@ func TestTheme(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: themeCookie, Value: `"><script>`})
 	expect(t, a.do(req), http.StatusOK, `<html lang="en">`)
 }
+
+// TestHostileInput posts values people (or scripts) might send by accident
+// or on purpose. None of them may end in a 500 or store nonsense.
+func TestHostileInput(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	pads := itemID(t, a.store, "Rear Brake")
+	item := "/items/" + itoa(oil)
+
+	cases := []struct {
+		name   string
+		path   string
+		form   url.Values
+		status int
+	}{
+		{"NaN price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"NaN"}}, 422},
+		{"Inf price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"Inf"}}, 422},
+		{"huge price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"1e20"}}, 422},
+		{"huge amount", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"99999999999"}}, 422},
+		{"forged kind", item + "/movements", url.Values{"kind": {"initial"}, "amount": {"1"}}, 422},
+		{"huge item quantity", "/items", url.Values{"name": {"X"}, "unit": {"piece"}, "quantity": {"1"}, "min_quantity": {"9999999999"}}, 422},
+		{"huge odometer", "/vehicles", url.Values{"name": {"Big"}, "odometer_km": {"9999999999"}}, 422},
+		{"huge odometer update", "/vehicles/" + itoa(k390) + "/odometer", url.Values{"odometer_km": {"9999999999"}}, 303},
+		{"huge interval", "/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"K"}, "interval_km": {"99999999999"}}, 422},
+		{"huge labour", "/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"S"}, "performed_on": {"2026-10-01"}, "labor_cost": {"1e15"}}, 422},
+		{"NaN suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"NaN"}}, 303},
+		{"huge suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"1e20"}}, 303},
+		{"gone suggestion", "/shopping/suggestions", url.Values{"item_id": {"999999"}, "qty": {"1"}}, 303},
+		{"huge shopping qty", "/shopping", url.Values{"free_text": {"Lube"}, "quantity": {"1e12"}}, 422},
+		{"tiny suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"0.0001"}}, 303},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := a.post(c.path, c.form)
+			if rec.Code != c.status {
+				t.Fatalf("status = %d, want %d\n%s", rec.Code, c.status, truncate(rec.Body.String()))
+			}
+		})
+	}
+	list, err := a.store.ListShopping(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Errorf("bad suggestions were stored: %+v", list)
+	}
+	if it, _ := a.store.GetItem(context.Background(), oil); it.Quantity != 525 {
+		t.Errorf("oil quantity = %v, want 525", it.Quantity)
+	}
+
+	// A zero quantity falls back to "no quantity" instead of failing.
+	expect(t, a.post("/items/"+itoa(pads)+"/shopping", url.Values{"quantity": {"0"}}), http.StatusSeeOther)
+
+	// Quick + on an item that is already at the maximum.
+	full := itemAtMax(t, a)
+	rec := a.post("/items/"+itoa(full)+"/adjust", url.Values{"dir": {"up"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusOK)
+	if !strings.Contains(rec.Header().Get("HX-Trigger"), "error") {
+		t.Errorf("want an error toast, got %q", rec.Header().Get("HX-Trigger"))
+	}
+}
+
+// itemAtMax creates an item holding stock.MaxQuantity pieces.
+func itemAtMax(t *testing.T, a *testApp) int64 {
+	t.Helper()
+	in := stock.ItemInput{Name: "Washers", Unit: stock.UnitPiece, Quantity: stock.MaxQuantity}
+	in.Normalize()
+	id, err := a.store.CreateItem(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestSafeBackRejectsOffSiteTargets(t *testing.T) {
+	for ref, want := range map[string]string{
+		"http://example.com/stock?low=1":         "/stock?low=1",
+		"http://example.com/%5Cevil.example":     "/%5Cevil.example", // stays escaped: a path, not a host
+		"http://example.com/%09/evil.example":    "/%09/evil.example",
+		"http://example.com//evil.example":       "/fallback",
+		"http://evil.example/stock":              "/fallback",
+		"http://example.com/items/1%2F2?x=a%20b": "/items/1%2F2?x=a%20b",
+	} {
+		r := httptest.NewRequest(http.MethodPost, "/theme", nil)
+		r.Header.Set("Referer", ref)
+		if got := safeBack(r, "/fallback"); got != want {
+			t.Errorf("safeBack(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}
+
+func TestParseOptInt(t *testing.T) {
+	for in, want := range map[string]int{"12 345": 12345, "12,345": 12345, "12.345": 12345, "1_000_000": 1000000, "7500": 7500, "-5": -5} {
+		got, err := parseOptInt(in)
+		if err != nil || *got != want {
+			t.Errorf("parseOptInt(%q) = %v, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"1.5", "12,34", "1 2", "abc", "99999999999"} {
+		if got, err := parseOptInt(in); err == nil {
+			t.Errorf("parseOptInt(%q) = %d, want an error", in, *got)
+		}
+	}
+}
+
+func TestFormatDecimal(t *testing.T) {
+	for in, want := range map[float64]string{0: "0.00", 2.995: "3.00", 1234.5: "1,234.50", -0.001: "0.00", -12.5: "-12.50"} {
+		if got := formatDecimal(in); got != want {
+			t.Errorf("formatDecimal(%v) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestOversizedFormIs413(t *testing.T) {
+	a := newApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"Big"}, "notes": {strings.Repeat("x", maxFormBytes)}})
+	expect(t, rec, http.StatusRequestEntityTooLarge, "too large")
+}
+
+func TestStockFilterDetails(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	// Duplicate ids must not break "fits all".
+	expect(t, a.get("/stock?v="+itoa(k390)+"&v="+itoa(k390)+"&match=all"), http.StatusOK, "Rear Brake Pads")
+	// The parts htmx swaps out of band are always present.
+	rec := a.get("/stock?v=" + itoa(k390) + "&v=" + itoa(k1290))
+	expect(t, rec, http.StatusOK, `id="stock-head"`, `id="filter-all"`, `id="match-toggle"`, "Fits all")
+	// Without JS every stock change form is reachable.
+	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Silkolene"))), http.StatusOK, `[role="tabpanel"][hidden] { display: grid !important; }`)
+}
+
+func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	id := itemID(t, a.store, "Silkolene")
+	path := "/items/" + itoa(id)
+	expect(t, a.get(path+"/edit"), http.StatusOK, `name="quantity_was" value="525"`)
+	// Someone uses 25 ml while the form is open...
+	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"25"}}), http.StatusSeeOther)
+	// ...then the form is saved with the quantity it showed.
+	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {"525"},
+		"quantity_unit": {"ml"}, "quantity_was": {"525"}, "notes": {"Changed"}}
+	expect(t, a.post(path, form), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(context.Background(), id); it.Quantity != 500 || it.Notes != "Changed" {
+		t.Errorf("quantity = %v notes = %q, want 500 and Changed", it.Quantity, it.Notes)
+	}
+}
+
+func TestSKUErrorsLandOnTheirRow(t *testing.T) {
+	a := newApp(t)
+	form := url.Values{"name": {"Filter"}, "unit": {"piece"},
+		"sku_code": {"   ", "123"}, "sku_kind": {"oem", "ean"}, "sku_label": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"}}
+	rec := a.post("/items", form)
+	expect(t, rec, http.StatusUnprocessableEntity, "Not a valid barcode")
+	body := rec.Body.String()
+	row := strings.Index(body, `value="123"`)
+	msg := strings.Index(body, "Not a valid barcode")
+	if row < 0 || msg < row {
+		t.Errorf("barcode error is not on the row with the code (row at %d, message at %d)", row, msg)
+	}
+}

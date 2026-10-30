@@ -31,7 +31,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 2, // one per project; each has its own server and schema
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // No retries: the tests run in order against one schema, so a retry of a
+  // later test would start from a state the earlier ones already changed.
+  retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     trace: "retain-on-failure",

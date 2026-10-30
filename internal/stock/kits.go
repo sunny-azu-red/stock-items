@@ -103,13 +103,15 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 			left := dueKm - *currentKm
 			d.KmLeft = &left
 			known = true
-			threshold := max(500, *k.IntervalKm/10)
+			// 10% of the interval, at least 500 km, but never more than
+			// half of it (or a short interval is "soon" right away).
+			threshold := min(max(500, *k.IntervalKm/10), *k.IntervalKm/2)
 			overdue = overdue || left <= 0
 			soon = soon || left <= threshold
 		}
 	}
 	if k.IntervalMonths != nil {
-		dueDate := DateOnly(k.LastService.PerformedOn).AddDate(0, *k.IntervalMonths, 0)
+		dueDate := addMonths(DateOnly(k.LastService.PerformedOn), *k.IntervalMonths)
 		d.DueDate = &dueDate
 		days := int(dueDate.Sub(DateOnly(today)).Hours() / 24)
 		d.DaysLeft = &days
@@ -128,6 +130,15 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 		d.State = DueOK
 	}
 	return d
+}
+
+// addMonths adds n months, clamping to the end of the month: 31 Jan + 1
+// month is 28 (or 29) Feb, not 3 Mar as time.AddDate gives.
+func addMonths(t time.Time, n int) time.Time {
+	y, m, d := t.Date()
+	first := time.Date(y, m+time.Month(n), 1, 0, 0, 0, 0, t.Location())
+	last := first.AddDate(0, 1, -1).Day()
+	return time.Date(first.Year(), first.Month(), min(d, last), 0, 0, 0, 0, t.Location())
 }
 
 // Summary describes the due date in words, e.g. "in 1,200 km or 45 days".

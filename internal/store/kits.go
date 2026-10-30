@@ -27,7 +27,8 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
 			SELECT sr.id, sr.performed_on, sr.odometer_km FROM service_records sr
-			WHERE sr.kit_id = k.id ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
+			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
+			ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
 		) ls ON true
 		WHERE true`
 	if len(f.IDs) > 0 {

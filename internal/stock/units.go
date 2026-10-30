@@ -86,6 +86,10 @@ func findSubUnit(value string) (SubUnit, bool) {
 // ErrEmpty is returned by ParseAmount for blank input.
 var ErrEmpty = errors.New("empty amount")
 
+// MaxQuantity is the largest amount (in base units) one item can hold or
+// one input can carry. It keeps sums well inside the numeric(12,3) columns.
+const MaxQuantity = 100_000_000
+
 var amountRe = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?$`)
 
 // ParseAmount parses a user typed amount such as "2", "525 ml", "1,5 L" or
@@ -125,6 +129,9 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 		factor = su.Factor
 	}
 	v := round3(n * factor)
+	if v > MaxQuantity {
+		return 0, errors.New("that amount is too large")
+	}
 	if u == UnitPiece && v != math.Trunc(v) {
 		return 0, errors.New("pieces must be a whole number")
 	}

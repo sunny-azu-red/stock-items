@@ -1,6 +1,9 @@
 package stock
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestItemInputValidate(t *testing.T) {
 	in := ItemInput{
@@ -113,6 +116,8 @@ func TestMovementInputValidate(t *testing.T) {
 		{"zero", MovementInput{Kind: MoveCorrection, Delta: 0}, false},
 		{"unknown kind", MovementInput{Kind: "theft", Delta: -1}, false},
 		{"negative price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(-1.0)}, false},
+		{"NaN price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(math.NaN())}, false},
+		{"huge price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(1e12)}, false},
 	}
 	for _, c := range cases {
 		if got := !c.in.Validate().Any(); got != c.ok {

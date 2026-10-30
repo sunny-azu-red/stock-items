@@ -3,7 +3,6 @@
 // suggestion dropdowns, clipboard, toasts and keyboard shortcuts).
 (function () {
   "use strict";
-  document.documentElement.classList.add("js");
 
   // ---- Toasts -------------------------------------------------------------
   function toast(message, kind) {
@@ -38,6 +37,34 @@
       e.stopImmediatePropagation();
     }
   }, true);
+
+  // ---- Double submits ---------------------------------------------------
+  // A double click on "Save" must not log a service (and take its parts from
+  // stock) twice. Runs after the confirmation above. htmx forms (the quick
+  // -/+ buttons) are meant to be clicked repeatedly and are left alone.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (e.defaultPrevented || form.method !== "post" || form.hasAttribute("hx-post") ||
+        form.classList.contains("theme-toggle")) return;
+    if (form.dataset.submitting) {
+      e.preventDefault();
+      return;
+    }
+    form.dataset.submitting = "1";
+  });
+  // Coming back with the back button restores the page as it was left.
+  window.addEventListener("pageshow", function () {
+    document.querySelectorAll("form[data-submitting]").forEach(function (f) {
+      delete f.dataset.submitting;
+    });
+  });
+
+  // Typing in a form (other than the stock filters) marks the page as
+  // having unsaved changes, so the "n" shortcut asks before leaving.
+  var dirty = false;
+  document.addEventListener("input", function (e) {
+    if (e.target.form && e.target.form.method === "post") dirty = true;
+  });
 
   // ---- Repeating form rows ------------------------------------------------
   // <button data-add-row="tpl-id" data-rows="container-id"> clones a <template>.
@@ -279,8 +306,8 @@
   // ---- Tabs ---------------------------------------------------------------
   document.addEventListener("click", function (e) {
     var tab = e.target.closest('[role="tab"]');
-    if (!tab) return;
-    var list = tab.closest('[role="tablist"]');
+    var list = tab && tab.closest('[role="tablist"]');
+    if (!list) return;
     list.querySelectorAll('[role="tab"]').forEach(function (t) {
       var on = t === tab;
       t.setAttribute("aria-selected", on ? "true" : "false");
@@ -332,6 +359,7 @@
       e.preventDefault();
       if (!focusSearch()) window.location.href = "/stock#search";
     } else if (e.key === "n") {
+      if (dirty && !window.confirm("Leave this page? Your changes are not saved.")) return;
       window.location.href = "/items/new";
     }
   });

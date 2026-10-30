@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,12 @@ import (
 // applyMovement changes an item's quantity and records the movement. It
 // must run inside a transaction so the ledger and quantity never diverge.
 func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error {
+	// The columns keep three decimals. Rounding here (not in the database)
+	// makes the stored delta exactly the change applied to the quantity.
+	in.Delta = math.Round(in.Delta*1000) / 1000
+	if in.Delta == 0 {
+		return stock.Errors{"amount": "Amount must not be zero"}
+	}
 	var qty float64
 	var name, brand string
 	var unit stock.Unit
@@ -24,7 +31,10 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error
 	if qty+in.Delta < -0.0005 {
 		return &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE items SET quantity = GREATEST(quantity + $2, 0), updated_at = now() WHERE id = $1`,
+	if qty+in.Delta > stock.MaxQuantity {
+		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " on stock"}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE items SET quantity = quantity + $2, updated_at = now() WHERE id = $1`,
 		in.ItemID, in.Delta); err != nil {
 		return err
 	}
@@ -45,6 +55,33 @@ func (s *Store) AddMovement(ctx context.Context, in stock.MovementInput) error {
 		return errs
 	}
 	return s.inTx(ctx, func(tx pgx.Tx) error { return applyMovement(ctx, tx, in) })
+}
+
+// CorrectStock sets an item's quantity to a counted amount and records the
+// difference as a correction. The difference is worked out under the row
+// lock, so a change made by someone else in the meantime is not undone. It
+// returns the recorded change (0 when the stock already matched).
+func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string) (float64, error) {
+	var delta float64
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		var qty float64
+		if err := tx.QueryRow(ctx, `SELECT quantity FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&qty); err != nil {
+			return notFound(err)
+		}
+		var err error
+		delta, err = correctTo(ctx, tx, itemID, qty, count, note)
+		return err
+	})
+	return delta, err
+}
+
+// correctTo records a correction from qty (read under lock) to target.
+func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string) (float64, error) {
+	delta := math.Round((target-qty)*1000) / 1000
+	if delta == 0 {
+		return 0, nil
+	}
+	return delta, applyMovement(ctx, tx, stock.MovementInput{ItemID: itemID, Kind: stock.MoveCorrection, Delta: delta, Note: note})
 }
 
 // MovementFilter narrows ListMovements.

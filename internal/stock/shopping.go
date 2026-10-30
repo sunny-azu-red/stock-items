@@ -54,7 +54,11 @@ func SuggestPurchases(items []Item, kits []Kit, onList map[int64]bool) []Suggest
 		out = append(out, *s)
 	}
 	sort.Slice(out, func(a, b int) bool {
-		return strings.ToLower(out[a].Item.DisplayName()) < strings.ToLower(out[b].Item.DisplayName())
+		na, nb := strings.ToLower(out[a].Item.DisplayName()), strings.ToLower(out[b].Item.DisplayName())
+		if na != nb {
+			return na < nb
+		}
+		return out[a].Item.ID < out[b].Item.ID
 	})
 	return out
 }

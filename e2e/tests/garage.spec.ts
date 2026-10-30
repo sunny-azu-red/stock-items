@@ -105,6 +105,15 @@ test("filter stock by vehicle and copy it as text", async ({ page }, testInfo) =
   expect(text).toContain("KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6x - OEM Oil Filter O-Ring");
   expect(text).not.toContain("Hiflofiltro");
 
+  // Ticking a second vehicle offers "fits all" without a reload.
+  await expect(page.getByText("Fits all")).toHaveCount(0);
+  await expect(page.locator("#filter-all")).not.toHaveClass(/active/);
+  await page.locator("#filters label.chip-toggle").filter({ hasText: exact("KTM 1290") }).click();
+  await page.getByText("Fits all").click();
+  await expect(page).toHaveURL(/match=all/);
+  await expect(page.locator(".item-row")).toHaveCount(2);
+  await expect(page.locator(".section-shared")).toContainText("Oil Filter O-Ring");
+
   // Search by SKU, with or without the dash.
   await page.goto("/stock");
   await page.locator("#q").fill("hf650");
@@ -158,6 +167,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.screenshot({ path: testInfo.outputPath("kit-short.png"), fullPage: true });
 
   await page.getByRole("button", { name: "Add missing to shopping list" }).click();
+  await expect(page.locator(".flash-success")).toContainText("missing");
   await page.goto("/shopping");
   const entry = page.locator(".list li").filter({ hasText: "Silkolene" }).first();
   await expect(entry).toContainText("175 ml");
@@ -261,7 +271,7 @@ test("no page scrolls sideways", async ({ page }) => {
   }
 });
 
-// Opt-in: SCREENSHOT_DIR=../docs/screenshots npx playwright test -g screenshots
+// Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test -g screenshots (see docs/development.md)
 test("screenshots", async ({ page }, testInfo) => {
   const dir = process.env.SCREENSHOT_DIR;
   test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");

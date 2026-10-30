@@ -78,19 +78,23 @@ func env(key, def string) string {
 	return def
 }
 
-// findDotenv walks up from the working directory looking for a .env file,
-// stopping at the first directory that contains go.mod.
+// findDotenv returns the .env in the working directory. Inside a Go module
+// (tests run in package directories) it also looks in the parents up to
+// the module root, but never above it, so a deployed binary cannot pick up
+// an unrelated /opt/.env or /.env.
 func findDotenv() string {
-	dir, err := os.Getwd()
+	cwd, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
-	for {
-		p := filepath.Join(dir, ".env")
-		if _, err := os.Stat(p); err == nil {
-			return p
+	for dir := cwd; ; {
+		if p := filepath.Join(dir, ".env"); exists(p) {
+			if dir == cwd || insideModule(dir) {
+				return p
+			}
+			return ""
 		}
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		if exists(filepath.Join(dir, "go.mod")) {
 			return ""
 		}
 		parent := filepath.Dir(dir)
@@ -99,4 +103,24 @@ func findDotenv() string {
 		}
 		dir = parent
 	}
+}
+
+// insideModule reports whether a go.mod exists in dir or above it, so the
+// walk from cwd up to dir stayed within one module.
+func insideModule(dir string) bool {
+	for d := dir; ; {
+		if exists(filepath.Join(d, "go.mod")) {
+			return true
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return false
+		}
+		d = parent
+	}
+}
+
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }

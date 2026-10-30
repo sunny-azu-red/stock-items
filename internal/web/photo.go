@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	_ "image/gif" // register decoder
@@ -16,12 +17,24 @@ import (
 const (
 	photoMaxSide = 1600
 	thumbSide    = 320
+	// photoMaxPixels bounds the memory a decode can take. A small file can
+	// declare a huge image ("decompression bomb").
+	photoMaxPixels = 80_000_000
 )
+
+var errPhotoTooBig = errors.New("image has too many pixels")
 
 // processPhoto decodes an uploaded image, applies the EXIF orientation
 // (phone photos are often stored sideways), and returns a resized JPEG and
 // a square JPEG thumbnail.
 func processPhoto(data []byte) (full, thumb []byte, err error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > photoMaxPixels {
+		return nil, nil, errPhotoTooBig
+	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, nil, err
@@ -67,8 +80,8 @@ func fit(img image.Image, maxSide int) image.Image {
 func cover(img image.Image, side int) image.Image {
 	b := img.Bounds()
 	s := min(b.Dx(), b.Dy())
-	crop := image.Rect(b.Min.X+(b.Dx()-s)/2, b.Min.Y+(b.Dy()-s)/2, 0, 0)
-	crop.Max = crop.Min.Add(image.Pt(s, s))
+	x, y := b.Min.X+(b.Dx()-s)/2, b.Min.Y+(b.Dy()-s)/2
+	crop := image.Rect(x, y, x+s, y+s)
 	dst := image.NewRGBA(image.Rect(0, 0, side, side))
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 	draw.CatmullRom.Scale(dst, dst.Bounds(), img, crop, draw.Over, nil)

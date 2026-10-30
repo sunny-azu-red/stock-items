@@ -159,8 +159,11 @@ func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, erro
 }
 
 // UpdateItem replaces an item's fields, SKUs and tags. A changed quantity
-// is recorded as a "correction" movement. Changing the unit of an item
-// with history is refused, as old movements would no longer make sense.
+// is recorded as a "correction" movement; when in.QuantityWas says the
+// quantity field was left as it was, the stock is not touched (it may have
+// changed since the form was opened). Changing the unit is refused once the
+// item has history or is used in a kit or on the shopping list, as those
+// amounts would no longer make sense.
 func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
@@ -170,12 +173,16 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 			return notFound(err)
 		}
 		if unit != in.Unit {
-			var moves int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM stock_movements WHERE item_id = $1`, id).Scan(&moves); err != nil {
+			var used bool
+			err := tx.QueryRow(ctx, `
+				SELECT EXISTS (SELECT 1 FROM stock_movements WHERE item_id = $1)
+				    OR EXISTS (SELECT 1 FROM service_kit_lines WHERE item_id = $1)
+				    OR EXISTS (SELECT 1 FROM shopping_entries WHERE item_id = $1 AND quantity IS NOT NULL)`, id).Scan(&used)
+			if err != nil {
 				return err
 			}
-			if moves > 0 {
-				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history"}
+			if used {
+				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list"}
 			}
 		}
 		_, err = tx.Exec(ctx, `
@@ -186,9 +193,8 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 		if err != nil {
 			return err
 		}
-		if delta := in.Quantity - qty; delta != 0 {
-			err := applyMovement(ctx, tx, stock.MovementInput{ItemID: id, Kind: stock.MoveCorrection, Delta: delta, Note: "Edited quantity"})
-			if err != nil {
+		if in.QuantityWas == nil || in.Quantity != *in.QuantityWas {
+			if _, err := correctTo(ctx, tx, id, qty, in.Quantity, "Edited quantity"); err != nil {
 				return err
 			}
 		}
@@ -236,7 +242,7 @@ func (s *Store) DuplicateItem(ctx context.Context, id int64) (int64, error) {
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			INSERT INTO items (name, brand, category, unit, min_quantity, expires_on, location, notes)
-			SELECT name || ' (copy)', brand, category, unit, min_quantity, expires_on, location, notes
+			SELECT left(name, 193) || ' (copy)', brand, category, unit, min_quantity, expires_on, location, notes
 			FROM items WHERE id = $1 RETURNING id`, id).Scan(&newID)
 		if err != nil {
 			return notFound(err)
@@ -257,18 +263,18 @@ func (s *Store) DuplicateItem(ctx context.Context, id int64) (int64, error) {
 // Categories returns the distinct categories in use, plus common defaults.
 func (s *Store) Categories(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `
-		SELECT c FROM (
-			SELECT category AS c FROM items WHERE category <> ''
+		SELECT DISTINCT ON (lower(c)) c FROM (
+			SELECT category AS c, 0 AS pref FROM items WHERE category <> ''
 			UNION SELECT unnest(ARRAY['Oil & fluids', 'Filters', 'Brakes', 'Gaskets & O-rings', 'Chain & sprockets',
-			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools'])
-		) x ORDER BY lower(c)`)
+			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools']), 1
+		) x ORDER BY lower(c), pref, c`)
 }
 
 // Brands returns the distinct brands in use, plus OEM.
 func (s *Store) Brands(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `
-		SELECT b FROM (SELECT brand AS b FROM items WHERE brand <> '' UNION SELECT 'OEM') x
-		ORDER BY lower(b)`)
+		SELECT DISTINCT ON (lower(b)) b FROM (SELECT brand AS b, 0 AS pref FROM items WHERE brand <> '' UNION SELECT 'OEM', 1) x
+		ORDER BY lower(b), pref, b`)
 }
 
 // Locations returns the distinct storage locations in use.

@@ -46,6 +46,7 @@ func TestKitDue(t *testing.T) {
 		{"overdue by date", Kit{IntervalMonths: ptr(12), LastService: last(400, 0)}, nil, DueOverdue},
 		{"date overdue wins over km ok", Kit{IntervalKm: ptr(6000), IntervalMonths: ptr(12), LastService: last(400, 10000)}, ptr(10100), DueOverdue},
 		{"km interval but no odometer", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, nil, DueUnknown},
+		{"short interval is not soon right after", Kit{IntervalKm: ptr(300), LastService: last(1, 10000)}, ptr(10010), DueOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,6 +76,24 @@ func TestFormatInt(t *testing.T) {
 	for in, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 1234567: "1,234,567", -4500: "-4,500"} {
 		if got := FormatInt(in); got != want {
 			t.Errorf("FormatInt(%d) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAddMonthsClampsToMonthEnd(t *testing.T) {
+	d := func(y int, m time.Month, day int) time.Time { return time.Date(y, m, day, 0, 0, 0, 0, time.UTC) }
+	tests := []struct {
+		from, want time.Time
+		n          int
+	}{
+		{d(2026, 1, 31), d(2026, 2, 28), 1},
+		{d(2028, 1, 31), d(2028, 2, 29), 1},
+		{d(2026, 8, 31), d(2027, 2, 28), 6},
+		{d(2026, 3, 15), d(2027, 3, 15), 12},
+	}
+	for _, tt := range tests {
+		if got := addMonths(tt.from, tt.n); !got.Equal(tt.want) {
+			t.Errorf("addMonths(%s, %d) = %s, want %s", tt.from.Format("2006-01-02"), tt.n, got.Format("2006-01-02"), tt.want.Format("2006-01-02"))
 		}
 	}
 }

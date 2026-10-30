@@ -1,7 +1,9 @@
 package store
 
 import (
+	"cmp"
 	"context"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -96,7 +98,10 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err != nil {
 			return err
 		}
-		for _, p := range in.Parts {
+		// Lock items in id order, so two services sharing parts cannot deadlock.
+		parts := slices.Clone(in.Parts)
+		slices.SortFunc(parts, func(a, b stock.KitLineInput) int { return cmp.Compare(a.ItemID, b.ItemID) })
+		for _, p := range parts {
 			err := applyMovement(ctx, tx, stock.MovementInput{
 				ItemID: p.ItemID, Kind: stock.MoveService, Delta: -p.Quantity,
 				Note: in.Title, OccurredOn: &in.PerformedOn, ServiceRecordID: &id,
@@ -119,8 +124,17 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 }
 
 // DeleteService removes a service record and puts its parts back on stock.
+// It is the one deliberate exception to "every change goes through
+// applyMovement": it undoes a mistaken entry by deleting its movements
+// together with their effect, so the ledger still adds up.
 func (s *Store) DeleteService(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
+		// Lock the items in id order first, like CreateService.
+		if _, err := tx.Exec(ctx, `
+			SELECT id FROM items WHERE id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
+			ORDER BY id FOR UPDATE`, id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
 			FROM (SELECT item_id, sum(delta) AS total FROM stock_movements WHERE service_record_id = $1 GROUP BY item_id) m

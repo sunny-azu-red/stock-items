@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"math"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -112,22 +114,13 @@ func (s *Server) funcs() template.FuncMap {
 		"qty":   stock.FormatQuantity,
 		"delta": stock.FormatDelta,
 		"num":   stock.FormatNumber,
-		"int":   stock.FormatInt,
 		"km":    formatKm,
 		"money": s.formatMoney,
 		"date":  formatDate,
-		"isodate": func(v any) string {
-			if t, ok := derefTime(v); ok {
-				return t.Format("2006-01-02")
-			}
-			return ""
-		},
-		"ago":      func(t time.Time) string { return relativeDate(t, s.now()) },
-		"deref":    derefFloat,
-		"derefInt": derefInt,
-		"dict":     dict,
-		"list":     func(v ...any) []any { return v },
-		"add":      func(a, b int) int { return a + b },
+		"ago":   func(t time.Time) string { return relativeDate(t, s.now()) },
+		"deref": derefFloat,
+		"dict":  dict,
+		"add":   func(a, b int) int { return a + b },
 		"pct": func(have, need float64) int {
 			if need <= 0 {
 				return 100
@@ -142,7 +135,6 @@ func (s *Server) funcs() template.FuncMap {
 			}
 			return false
 		},
-		"subunits": stock.SubUnitsFor,
 		"rowFor": func(it stock.Item, vs map[int64]stock.Vehicle, hideChips bool) rowData {
 			return rowData{Item: it, Vehicles: vs, HideChips: hideChips}
 		},
@@ -162,7 +154,6 @@ func (s *Server) funcs() template.FuncMap {
 			return template.URL("https://www.google.com/search?q=" + url.QueryEscape(code+" site:ro"))
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
-		"lower":     strings.ToLower,
 		"join":      strings.Join,
 		"plural": func(n int, word string) string {
 			if n == 1 {
@@ -321,14 +312,19 @@ func (s *Server) formatUnitPrice(p *float64, u stock.Unit) string {
 	return s.formatMoney(*p) + " / piece"
 }
 
+// formatDecimal renders f with two decimals and thousands separators.
 func formatDecimal(f float64) string {
-	whole := int(f)
-	frac := int((f-float64(whole))*100 + 0.5)
-	if frac >= 100 {
-		whole++
-		frac -= 100
+	s := strconv.FormatFloat(math.Abs(f), 'f', 2, 64)
+	whole, frac, _ := strings.Cut(s, ".")
+	n, err := strconv.Atoi(whole)
+	if err != nil { // NaN, Inf or beyond int: show it as is
+		return s
 	}
-	return fmt.Sprintf("%s.%02d", stock.FormatInt(whole), frac)
+	sign := ""
+	if f < 0 && s != "0.00" {
+		sign = "-"
+	}
+	return sign + stock.FormatInt(n) + "." + frac
 }
 
 func formatKm(v any) string {
@@ -395,8 +391,6 @@ func derefIntOK(v any) (int, bool) {
 	}
 	return 0, false
 }
-
-func derefInt(v any) int { n, _ := derefIntOK(v); return n }
 
 func dict(kv ...any) (map[string]any, error) {
 	if len(kv)%2 != 0 {

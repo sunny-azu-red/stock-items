@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,13 +29,16 @@ func Open(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse db config: %w", err)
 	}
 	if cfg.Schema != "" {
-		pcfg.ConnConfig.RuntimeParams["search_path"] = cfg.Schema
+		// Quoted, so a name like "e2e_x,public" cannot widen the search path.
+		pcfg.ConnConfig.RuntimeParams["search_path"] = pgx.Identifier{cfg.Schema}.Sanitize()
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, pcfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
-	if err := pool.Ping(ctx); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("ping %s:%s/%s: %w", cfg.Host, cfg.Port, cfg.Database, err)
 	}

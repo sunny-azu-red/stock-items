@@ -1,7 +1,9 @@
 package web
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -110,10 +112,15 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		q, err := strconv.ParseFloat(qtys[i], 64)
-		if err != nil || q <= 0 {
+		q = math.Round(q*1000) / 1000 // the column keeps three decimals
+		if err != nil || !(q > 0 && q <= stock.MaxQuantity) {
 			continue
 		}
-		if err := s.store.EnsureShopping(r.Context(), id, q, ""); err != nil {
+		err = s.store.EnsureShopping(r.Context(), id, q, "")
+		if errors.Is(err, store.ErrNotFound) {
+			continue // deleted in the meantime
+		}
+		if err != nil {
 			return err
 		}
 		n++

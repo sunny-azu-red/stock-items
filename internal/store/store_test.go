@@ -3,7 +3,9 @@ package store_test
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -70,7 +72,8 @@ func assertLedger(t *testing.T, s *store.Store) {
 		for _, m := range moves {
 			sum += m.Delta
 		}
-		if sum != it.Quantity {
+		// Compare in thousandths: float sums of 0.1 + 0.2 are not exact.
+		if math.Round(sum*1000) != math.Round(it.Quantity*1000) {
 			t.Errorf("ledger mismatch for %s: quantity %v, movements sum %v", it.Name, it.Quantity, sum)
 		}
 	}
@@ -480,5 +483,124 @@ func TestPhotos(t *testing.T) {
 	}
 	if _, err := s.GetPhoto(ctx, id, false); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
+	}
+}
+
+// Saving the edit form with the quantity left as it was must not undo
+// stock changes made while the form was open.
+func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
+	s, ctx := newStore(t)
+	id := mustItem(t, s, stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
+		t.Fatal(err)
+	}
+	form := stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5, QuantityWas: ptr(5.0), Notes: "NGK"}
+	if err := s.UpdateItem(ctx, id, form); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); it.Quantity != 3 || it.Notes != "NGK" {
+		t.Errorf("after untouched quantity: %v (%q), want 3", it.Quantity, it.Notes)
+	}
+	form.Quantity = 8
+	if err := s.UpdateItem(ctx, id, form); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); it.Quantity != 8 {
+		t.Errorf("after edited quantity: %v, want 8", it.Quantity)
+	}
+
+	if d, err := s.CorrectStock(ctx, id, 8, "count"); err != nil || d != 0 {
+		t.Errorf("CorrectStock to same = %v, %v", d, err)
+	}
+	if d, err := s.CorrectStock(ctx, id, 6, "count"); err != nil || d != -2 {
+		t.Errorf("CorrectStock to 6 = %v, %v", d, err)
+	}
+	// Deltas are rounded to the three decimals the ledger keeps.
+	var short *store.InsufficientStockError
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -6.0005}); !errors.As(err, &short) {
+		t.Errorf("use 6.0005 of 6: want InsufficientStockError, got %v", err)
+	}
+	assertLedger(t, s)
+}
+
+func TestUnitLockedOnceUsedInKitOrShoppingList(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	in := stock.ItemInput{Name: "Coolant", Unit: stock.UnitML}
+	id := mustItem(t, s, in)
+	if _, err := s.CreateKit(ctx, stock.KitInput{VehicleID: v, Name: "Coolant", Lines: []stock.KitLineInput{{ItemID: id, Quantity: 1500}}}); err != nil {
+		t.Fatal(err)
+	}
+	in.Unit = stock.UnitPiece
+	var conflict *store.ConflictError
+	if err := s.UpdateItem(ctx, id, in); !errors.As(err, &conflict) || conflict.Field != "unit" {
+		t.Errorf("unit change of an item in a kit: want conflict, got %v", err)
+	}
+	other := mustItem(t, s, stock.ItemInput{Name: "Grease", Unit: stock.UnitGram})
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &other, Quantity: ptr(400.0)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateItem(ctx, other, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece}); !errors.As(err, &conflict) {
+		t.Errorf("unit change of an item on the list: want conflict, got %v", err)
+	}
+}
+
+// Two services taking the same parts in opposite order must not deadlock.
+func TestConcurrentServicesDoNotDeadlock(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	a := mustItem(t, s, stock.ItemInput{Name: "A", Unit: stock.UnitPiece, Quantity: 1000})
+	b := mustItem(t, s, stock.ItemInput{Name: "B", Unit: stock.UnitPiece, Quantity: 1000})
+	var wg sync.WaitGroup
+	errs := make(chan error, 80)
+	for g := range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			parts := []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}
+			if g%2 == 1 {
+				parts[0], parts[1] = parts[1], parts[0]
+			}
+			for range 20 {
+				_, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(), Parts: parts})
+				if err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	if got := mustGet(t, s, a).Quantity; got != 920 {
+		t.Errorf("A = %v, want 920", got)
+	}
+	assertLedger(t, s)
+}
+
+// A kit moved to another vehicle starts without the old vehicle's history.
+func TestKitMovedToAnotherVehicle(t *testing.T) {
+	s, ctx := newStore(t)
+	v1, v2 := mustVehicle(t, s, "KTM 390"), mustVehicle(t, s, "KTM 1290")
+	in := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalKm: ptr(6000)}
+	kit, err := s.CreateKit(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v1, KitID: &kit, Title: "Oil", PerformedOn: time.Now(), OdometerKm: ptr(20000)}); err != nil {
+		t.Fatal(err)
+	}
+	in.VehicleID = v2
+	if err := s.UpdateKit(ctx, kit, in); err != nil {
+		t.Fatal(err)
+	}
+	k, err := s.GetKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.LastService != nil {
+		t.Errorf("moved kit kept the other vehicle's last service: %+v", k.LastService)
 	}
 }

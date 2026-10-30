@@ -48,10 +48,10 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
 		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
-		                    ELSE shopping_entries.quantity + excluded.quantity END,
+		                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
 		    note = CASE WHEN excluded.note <> '' THEN excluded.note ELSE shopping_entries.note END
 		RETURNING id`,
-		in.ItemID, in.FreeText, in.Quantity, in.Note).Scan(&id)
+		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity).Scan(&id)
 	if isForeignKeyViolation(err) {
 		return 0, ErrNotFound
 	}

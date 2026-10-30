@@ -47,12 +47,15 @@ func TestParseAmountErrors(t *testing.T) {
 	}{
 		{"abc", UnitPiece, ""},
 		{"-1", UnitPiece, ""},
-		{"1.5", UnitPiece, ""},  // fractional pieces
-		{"2 L", UnitPiece, ""},  // wrong dimension
-		{"2 kg", UnitML, ""},    // wrong dimension
-		{"2", UnitML, "kg"},     // selector of the wrong dimension
-		{"2 cups", UnitML, ""},  // unknown suffix
-		{"1.2.3", UnitML, "ml"}, // malformed
+		{"1.5", UnitPiece, ""},   // fractional pieces
+		{"2 L", UnitPiece, ""},   // wrong dimension
+		{"2 kg", UnitML, ""},     // wrong dimension
+		{"2", UnitML, "kg"},      // selector of the wrong dimension
+		{"2 cups", UnitML, ""},   // unknown suffix
+		{"1.2.3", UnitML, "ml"},  // malformed
+		{"100001 l", UnitML, ""}, // above MaxQuantity
+		{"NaN", UnitML, ""},
+		{"1e3", UnitML, ""},
 	}
 	for _, tt := range tests {
 		if _, err := ParseAmount(tt.in, tt.unit, tt.sub); err == nil {

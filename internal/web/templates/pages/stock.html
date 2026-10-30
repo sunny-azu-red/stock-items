@@ -1,5 +1,5 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Filter}}
-<div class="page-head">
+<div class="page-head" id="stock-head">
   <div>
     <h1>{{if eq (len $d.Selected) 1}}{{(index $d.Selected 0).Name}} stock{{else}}Stock{{end}}</h1>
     <p class="sub">Everything on the shelf, grouped by the vehicles it fits.</p>
@@ -11,6 +11,7 @@
 
 <form id="filters" class="card filters" method="get" action="/stock"
       hx-get="/stock" hx-trigger="change, input from:#q delay:300ms, submit" hx-target="#results" hx-select="#results"
+      hx-select-oob="#stock-head,#filter-all,#match-toggle"
       hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">
   <div class="filters-row">
     <label class="input-icon">{{icon "search"}}<span class="sr-only">Search</span>
@@ -23,17 +24,18 @@
     <noscript><button class="btn" type="submit">Apply</button></noscript>
   </div>
   <div class="filters-row" role="group" aria-label="Vehicles">
-    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" href="/stock">All</a>
+    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="/stock">All</a>
     {{range $d.Vehicles}}
     <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="v" value="{{.ID}}" {{if $f.HasVehicle .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
     {{end}}
     <label class="chip chip-toggle"><input type="checkbox" name="general" value="1" {{if $f.General}}checked{{end}}><span class="dot"></span>General</label>
-    {{if gt (len $f.VehicleIDs) 1}}
+    {{/* Always present, so htmx can swap it in when a second vehicle is ticked. */}}
+    <span id="match-toggle">{{if gt (len $f.VehicleIDs) 1}}
     <span class="segmented" title="How to combine the selected vehicles">
-      <label><input type="radio" name="match" value="any" {{if not $f.MatchAll}}checked{{end}}>Fits any</label>
-      <label><input type="radio" name="match" value="all" {{if $f.MatchAll}}checked{{end}}>Fits all</label>
+      <label><input type="radio" id="match-any" name="match" value="any" {{if not $f.MatchAll}}checked{{end}}>Fits any</label>
+      <label><input type="radio" id="match-all" name="match" value="all" {{if $f.MatchAll}}checked{{end}}>Fits all</label>
     </span>
-    {{end}}
+    {{end}}</span>
   </div>
   <div class="filters-row">
     <label class="toggle"><input type="checkbox" name="low" value="1" {{if $f.Low}}checked{{end}}> Low stock</label>

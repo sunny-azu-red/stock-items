@@ -77,7 +77,7 @@ func run() error {
 		Addr:              cfg.Addr(),
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
+		ReadTimeout:       60 * time.Second, // photo uploads extend their own deadlines
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -94,6 +94,7 @@ func run() error {
 			return err
 		}
 	case <-ctx.Done():
+		stop() // a second Ctrl+C kills the process right away
 		logger.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

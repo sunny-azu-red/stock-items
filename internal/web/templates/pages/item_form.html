@@ -5,6 +5,7 @@
 </div>
 
 <form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
+  {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}">{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
 
   <div class="form-section">

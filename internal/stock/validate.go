@@ -5,7 +5,16 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
+
+// MaxMoney is the largest price or cost accepted. It keeps values inside
+// the numeric(12,2) columns.
+const MaxMoney = 100_000_000
+
+// validMoney reports whether an optional amount of money is in range. NaN
+// fails both comparisons, so it is rejected too.
+func validMoney(p *float64) bool { return p == nil || (*p >= 0 && *p <= MaxMoney) }
 
 // Errors maps form field names to a validation message.
 type Errors map[string]string
@@ -29,14 +38,6 @@ func (e Errors) Error() string {
 	return "validation failed: " + strings.Join(parts, "; ")
 }
 
-// ErrOrNil returns e as an error when it has entries, nil otherwise.
-func (e Errors) ErrOrNil() error {
-	if e.Any() {
-		return e
-	}
-	return nil
-}
-
 // ItemInput is the data needed to create or update an item.
 type ItemInput struct {
 	Name        string
@@ -50,6 +51,9 @@ type ItemInput struct {
 	Notes       string
 	SKUs        []SKU
 	VehicleIDs  []int64
+	// QuantityWas is the quantity the edit form was opened with. When
+	// Quantity still equals it, an update leaves the stock alone.
+	QuantityWas *float64
 }
 
 // Normalize trims text fields and drops empty SKU rows / duplicate tags.
@@ -84,7 +88,7 @@ func (in ItemInput) Validate() Errors {
 	errs := Errors{}
 	if in.Name == "" {
 		errs.Add("name", "Name is required")
-	} else if len(in.Name) > 200 {
+	} else if utf8.RuneCountInString(in.Name) > 200 {
 		errs.Add("name", "Name is too long (max 200 characters)")
 	}
 	if !in.Unit.Valid() {
@@ -189,7 +193,7 @@ func (in VehicleInput) Validate() Errors {
 	errs := Errors{}
 	if in.Name == "" {
 		errs.Add("name", "Name is required")
-	} else if len(in.Name) > 80 {
+	} else if utf8.RuneCountInString(in.Name) > 80 {
 		errs.Add("name", "Name is too long (max 80 characters)")
 	}
 	if in.Kind != KindMotorcycle && in.Kind != KindCar && in.Kind != KindOther {
@@ -238,8 +242,8 @@ func (in MovementInput) Validate() Errors {
 	default:
 		errs.Add("kind", "Unknown movement type")
 	}
-	if in.TotalPrice != nil && *in.TotalPrice < 0 {
-		errs.Add("total_price", "Price cannot be negative")
+	if !validMoney(in.TotalPrice) {
+		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
 	}
 	return errs
 }
@@ -324,8 +328,8 @@ func (in ServiceInput) Validate() Errors {
 	if in.OdometerKm != nil && *in.OdometerKm < 0 {
 		errs.Add("odometer_km", "Odometer cannot be negative")
 	}
-	if in.LaborCost != nil && *in.LaborCost < 0 {
-		errs.Add("labor_cost", "Cost cannot be negative")
+	if !validMoney(in.LaborCost) {
+		errs.Add("labor_cost", "Enter a cost between 0 and 100,000,000")
 	}
 	for i, l := range in.Parts {
 		if l.Quantity <= 0 {

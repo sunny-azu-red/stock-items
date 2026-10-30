@@ -16,8 +16,8 @@
       <span class="name">{{icon $v.Kind.Icon}} {{$v.Name}}</span>
       {{with $v.Subtitle}}<span class="muted small">{{.}}</span>{{end}}
       <span class="stats">
-        <span><strong>{{$v.ItemCount}}</strong> items</span>
-        <span><strong>{{.Kits}}</strong> kits</span>
+        <span><strong>{{$v.ItemCount}}</strong> {{if eq $v.ItemCount 1}}item{{else}}items{{end}}</span>
+        <span><strong>{{.Kits}}</strong> {{if eq .Kits 1}}kit{{else}}kits{{end}}</span>
         <span><strong>{{km $v.OdometerKm}}</strong></span>
       </span>
       {{with .Next}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}

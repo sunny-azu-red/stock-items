@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -39,6 +40,22 @@ func TestProcessPhoto(t *testing.T) {
 	}
 	if _, _, err := processPhoto([]byte("not an image")); err == nil {
 		t.Error("expected an error for garbage input")
+	}
+}
+
+// A tiny PNG can declare a huge canvas; it must be refused before decoding.
+func TestProcessPhotoRefusesDecompressionBomb(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	b := buf.Bytes()
+	// Patch width and height in the IHDR chunk and fix up its CRC.
+	binary.BigEndian.PutUint32(b[16:20], 20000)
+	binary.BigEndian.PutUint32(b[20:24], 20000)
+	binary.BigEndian.PutUint32(b[29:33], crc32.ChecksumIEEE(b[12:29]))
+	if _, _, err := processPhoto(b); err != errPhotoTooBig {
+		t.Fatalf("err = %v, want errPhotoTooBig", err)
 	}
 }
 
@@ -86,5 +103,23 @@ func TestEXIFOrientation(t *testing.T) {
 	}
 	if got := exifOrientation([]byte("nope")); got != 1 {
 		t.Errorf("non-jpeg orientation = %d", got)
+	}
+}
+
+// The thumbnail is the centre square, not the left or top edge.
+func TestCoverCropsTheCentre(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 300, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 300; x++ {
+			c := color.RGBA{255, 0, 0, 255} // red edges
+			if x >= 100 && x < 200 {
+				c = color.RGBA{0, 255, 0, 255} // green centre
+			}
+			img.Set(x, y, c)
+		}
+	}
+	r, g, _, _ := cover(img, 10).At(1, 5).RGBA()
+	if r > g {
+		t.Errorf("thumbnail edge is red (r=%d g=%d): not the centre crop", r>>8, g>>8)
 	}
 }

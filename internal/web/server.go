@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -144,6 +145,10 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 		case err == nil:
 		case errors.Is(err, store.ErrNotFound), errors.Is(err, errBadID):
 			s.notFound(w, r)
+		case errors.As(err, new(*http.MaxBytesError)):
+			s.render(w, r, http.StatusRequestEntityTooLarge, "error", View{Title: "Too large", Data: errorPage{
+				Code: 413, Title: "Too large", Message: "That form was too large to save. Shorten the notes and try again.",
+			}})
 		case errors.Is(err, context.Canceled):
 		default:
 			s.serverError(w, r, err)
@@ -161,7 +166,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"unavailable","database":"down"}`))
 		return
 	}
-	_, _ = w.Write([]byte(`{"status":"ok","version":"` + s.version + `"}`))
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": s.version})
 }
 
 func (s *Server) static() http.Handler {

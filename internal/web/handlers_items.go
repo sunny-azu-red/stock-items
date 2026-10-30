@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -23,6 +25,7 @@ type itemForm struct {
 	ID                          int64
 	Name, Brand, Category, Unit string
 	Quantity, QuantityUnit      string
+	QuantityWas                 string // base units, as the edit form was opened
 	MinQuantity, MinUnit        string
 	ExpiresOn, Location, Notes  string
 	VehicleIDs                  []int64
@@ -48,6 +51,7 @@ func itemFormFromItem(it stock.Item) itemForm {
 		Location: it.Location, Notes: it.Notes, VehicleIDs: it.VehicleIDs,
 	}
 	f.Quantity, f.QuantityUnit = stock.SplitForInput(it.Quantity, it.Unit)
+	f.QuantityWas = stock.FormatNumber(it.Quantity)
 	if it.MinQuantity != nil {
 		f.MinQuantity, f.MinUnit = stock.SplitForInput(*it.MinQuantity, it.Unit)
 	} else {
@@ -72,6 +76,7 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 	f := itemForm{
 		Name: formText(r, "name"), Brand: formText(r, "brand"), Category: formText(r, "category"),
 		Unit: formText(r, "unit"), Quantity: formText(r, "quantity"), QuantityUnit: formText(r, "quantity_unit"),
+		QuantityWas: formText(r, "quantity_was"),
 		MinQuantity: formText(r, "min_quantity"), MinUnit: formText(r, "min_unit"), ExpiresOn: formText(r, "expires_on"),
 		Location: formText(r, "location"), Notes: formText(r, "notes"), VehicleIDs: parseIDs(r.PostForm["vehicle"]),
 		Errors: stock.Errors{},
@@ -85,6 +90,9 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 		f.Errors.Add("quantity", err.Error())
 	} else if q != nil {
 		in.Quantity = *q
+	}
+	if was, err := strconv.ParseFloat(f.QuantityWas, 64); err == nil {
+		in.QuantityWas = &was
 	}
 	if q, err := parseOptAmount(f.MinQuantity, unit, f.MinUnit); err != nil {
 		f.Errors.Add("min_quantity", err.Error())
@@ -105,6 +113,7 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 		}
 		return ""
 	}
+	var kept []bool // whether Normalize keeps row i, to map errors back
 	for i := range codes {
 		row := skuRow{Code: at(codes, i), Kind: at(kinds, i), Label: at(labels, i), Pack: at(packs, i), PackUnit: at(packUnits, i)}
 		sku := stock.SKU{Code: row.Code, Kind: stock.SKUKind(row.Kind), Label: row.Label}
@@ -114,6 +123,7 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 		} else {
 			sku.PackSize = p
 		}
+		kept = append(kept, strings.TrimSpace(sku.Code) != "" || strings.TrimSpace(sku.Label) != "" || sku.PackSize != nil)
 		f.SKUs = append(f.SKUs, row)
 		in.SKUs = append(in.SKUs, sku)
 	}
@@ -125,7 +135,7 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 	// Map per-row SKU errors back onto the visible (non-empty) rows.
 	visible := 0
 	for i := range f.SKUs {
-		if f.SKUs[i].Code == "" && f.SKUs[i].Label == "" && f.SKUs[i].Pack == "" {
+		if !kept[i] {
 			continue
 		}
 		if msg, ok := f.Errors[fmt.Sprintf("sku_%d", visible)]; ok {
@@ -334,7 +344,6 @@ type itemPage struct {
 	OnShopping    bool
 	SubUnits      []stock.SubUnit
 	ExpiryState   string
-	PhotoVersion  int64
 	PurchaseCount int
 }
 
@@ -367,7 +376,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
-		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PhotoVersion: it.UpdatedAt.Unix(),
+		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays),
 	}
 	if price != nil {
 		v := *price * it.Quantity
@@ -427,6 +436,14 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		Note: formText(r, "note"), Errors: stock.Errors{},
 	}
 	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Supplier: f.Supplier, Note: f.Note}
+	switch in.Kind {
+	case stock.MovePurchase, stock.MoveUse, stock.MoveCorrection:
+	default:
+		// Only these three have a form; "initial" and "service" are recorded
+		// by the app itself.
+		in.Kind, f.Kind = stock.MovePurchase, string(stock.MovePurchase)
+		f.Errors.Add("kind", "Unknown kind of stock change")
+	}
 	amount, err := stock.ParseAmount(f.Amount, it.Unit, f.AmountUnit)
 	if err != nil {
 		f.Errors.Add("amount", "Enter an amount, e.g. "+examplesFor(it.Unit))
@@ -435,12 +452,9 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	case stock.MoveUse:
 		in.Delta = -amount
 	case stock.MoveCorrection:
-		// Corrections set the stock to the counted amount.
-		in.Delta = amount - it.Quantity
-		if in.Delta == 0 && !f.Errors.Any() {
-			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
-			return nil
-		}
+		// Corrections set the stock to the counted amount; the store works
+		// out the change under a row lock.
+		in.Delta = amount
 	default:
 		in.Delta = amount
 	}
@@ -455,7 +469,17 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		in.OccurredOn = d
 	}
 	if !f.Errors.Any() {
-		err := s.store.AddMovement(r.Context(), in)
+		var err error
+		if in.Kind == stock.MoveCorrection {
+			var delta float64
+			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note)
+			if err == nil && delta == 0 {
+				s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
+				return nil
+			}
+		} else {
+			err = s.store.AddMovement(r.Context(), in)
+		}
 		if err == nil {
 			msg := map[stock.MovementKind]string{
 				stock.MovePurchase:   "Added " + stock.FormatQuantity(in.Delta, it.Unit) + " to stock",
@@ -516,8 +540,12 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err := s.store.AddMovement(ctx, in); err != nil {
 		var short *store.InsufficientStockError
-		if errors.As(err, &short) {
+		var verrs stock.Errors
+		switch {
+		case errors.As(err, &short):
 			return s.adjustDone(w, r, it, "error", short.Error())
+		case errors.As(err, &verrs):
+			return s.adjustDone(w, r, it, "error", verrs["amount"])
 		}
 		return err
 	}
@@ -555,7 +583,7 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	in := stock.ShoppingInput{ItemID: &id}
-	if q, err := parseOptAmount(formText(r, "quantity"), it.Unit, formText(r, "quantity_unit")); err == nil {
+	if q, err := parseOptAmount(formText(r, "quantity"), it.Unit, formText(r, "quantity_unit")); err == nil && q != nil && *q > 0 {
 		in.Quantity = q
 	}
 	if in.Quantity == nil && it.MinQuantity != nil && *it.MinQuantity > it.Quantity {
@@ -571,16 +599,29 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 
 // ---- Photos ----
 
-const maxPhotoBytes = 15 << 20
+const (
+	maxPhotoBytes      = 15 << 20
+	photoUploadTimeout = 5 * time.Minute
+)
 
 func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {
 		return err
 	}
+	// A 15 MB photo over a slow phone connection can take minutes. Both
+	// deadlines count from the request headers, so extend both.
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Now().Add(photoUploadTimeout))
+	_ = rc.SetWriteDeadline(time.Now().Add(photoUploadTimeout + 30*time.Second))
 	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes)
 	if err := r.ParseMultipartForm(4 << 20); err != nil {
-		s.setFlash(w, "error", "The photo is too large (max 15 MB)")
+		msg := "Choose a photo to upload"
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			msg = "The photo is too large (max 15 MB)"
+		}
+		s.setFlash(w, "error", msg)
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
 		return nil
 	}
@@ -596,6 +637,11 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	full, thumb, err := processPhoto(buf.Bytes())
+	if errors.Is(err, errPhotoTooBig) {
+		s.setFlash(w, "error", fmt.Sprintf("The photo has too many pixels (max %d megapixels)", photoMaxPixels/1_000_000))
+		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
+		return nil
+	}
 	if err != nil {
 		s.setFlash(w, "error", "That file is not a JPEG, PNG, GIF or WebP image")
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)

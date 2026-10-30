@@ -3,8 +3,11 @@ package web
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,18 +36,30 @@ func parseForm(w http.ResponseWriter, r *http.Request) error {
 
 func formText(r *http.Request, key string) string { return strings.TrimSpace(r.PostFormValue(key)) }
 
-// parseOptInt parses an optional whole number ("12 345" and "12,345" are fine).
+// groupedIntRe matches whole numbers written with thousands separators.
+var groupedIntRe = regexp.MustCompile(`^-?[0-9]{1,3}(?:[ ,._][0-9]{3})+$`)
+
+// parseOptInt parses an optional whole number. Thousands separators are
+// fine ("12 345", "12,345", "12.345"), but "1.5" is not read as 15.
 func parseOptInt(s string) (*int, error) {
-	s = strings.NewReplacer(" ", "", ",", "", ".", "", "_", "").Replace(strings.TrimSpace(s))
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil
+	}
+	if groupedIntRe.MatchString(s) {
+		s = strings.NewReplacer(" ", "", ",", "", ".", "", "_", "").Replace(s)
 	}
 	n, err := strconv.Atoi(s)
 	if err != nil {
 		return nil, fmt.Errorf("%q is not a whole number", s)
 	}
+	if n > math.MaxInt32 || n < math.MinInt32 { // the database columns are 32 bit
+		return nil, fmt.Errorf("%q is too large", s)
+	}
 	return &n, nil
 }
+
+var moneyRe = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$`)
 
 // parseOptMoney parses an optional decimal amount, accepting a decimal comma.
 func parseOptMoney(s string) (*float64, error) {
@@ -52,8 +67,9 @@ func parseOptMoney(s string) (*float64, error) {
 	if s == "" {
 		return nil, nil
 	}
+	// Plain digits only: ParseFloat would also take "NaN", "Inf" and "1e9".
 	f, err := strconv.ParseFloat(s, 64)
-	if err != nil || f < 0 {
+	if err != nil || !moneyRe.MatchString(s) {
 		return nil, fmt.Errorf("%q is not a valid amount", s)
 	}
 	return &f, nil
@@ -84,10 +100,11 @@ func parseOptAmount(s string, u stock.Unit, sub string) (*float64, error) {
 	return &v, nil
 }
 
+// parseIDs reads positive ids, dropping duplicates.
 func parseIDs(vals []string) []int64 {
 	var out []int64
 	for _, v := range vals {
-		if id, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && id > 0 {
+		if id, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && id > 0 && !slices.Contains(out, id) {
 			out = append(out, id)
 		}
 	}
@@ -112,13 +129,19 @@ func optIntString(v *int) string {
 // non-htmx form posts can return to where the user was.
 func safeBack(r *http.Request, fallback string) string {
 	ref, err := url.Parse(r.Referer())
-	if err != nil || ref.Host != r.Host || !strings.HasPrefix(ref.Path, "/") || strings.HasPrefix(ref.Path, "//") {
+	if err != nil || ref.Host != r.Host {
+		return fallback
+	}
+	// Use the escaped path: the decoded one can turn "%5Cevil.example" into
+	// "/\evil.example", which browsers follow to another site.
+	p := ref.EscapedPath()
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\\t\r\n") {
 		return fallback
 	}
 	if ref.RawQuery != "" {
-		return ref.Path + "?" + ref.RawQuery
+		return p + "?" + ref.RawQuery
 	}
-	return ref.Path
+	return p
 }
 
 // unitOrDefault returns u when valid, otherwise pieces.

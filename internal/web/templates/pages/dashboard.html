@@ -85,7 +85,7 @@
       <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2></div>
       <ul class="list">
         {{range $d.Expiring}}
-        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end badge {{if eq (.ExpiryState $.Today 60) "expired"}}badge-danger{{else}}badge-warn{{end}}">{{date .ExpiresOn}}</span></li>
+        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end badge {{if eq (.ExpiryState $.Today $d.ExpiringDays) "expired"}}badge-danger{{else}}badge-warn{{end}}">{{date .ExpiresOn}}</span></li>
         {{end}}
       </ul>
     </section>

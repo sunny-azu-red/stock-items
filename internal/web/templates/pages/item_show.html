@@ -128,6 +128,7 @@
     <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">
       <label for="date-{{.Kind}}">Date</label>
       <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{$m.OccurredOn}}">
+      {{if $active}}{{template "err" (index $e "occurred_on")}}{{end}}
     </div>
     {{end}}
     <div class="field">

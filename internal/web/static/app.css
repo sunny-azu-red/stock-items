@@ -160,7 +160,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   transition: background .12s, border-color .12s, color .12s;
 }
 .btn:hover { border-color: var(--muted); }
-.btn:focus-visible, .input:focus-visible, .chip:focus-within, .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:focus-visible, .btn:has(input:focus-visible), .input:focus-visible, .chip:focus-within, .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
 .btn-danger { color: var(--danger); }

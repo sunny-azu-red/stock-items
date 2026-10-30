@@ -155,7 +155,9 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
 		"subUnits":  func() []stock.SubUnit { return stock.SubUnits },
-		"join":      strings.Join,
+		// step is how much quick -/+ changes an item's stock, e.g. "100 ml".
+		"step": func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
+		"join": strings.Join,
 		"plural": func(n int, word string) string {
 			if n == 1 {
 				return "1 " + word

@@ -12,7 +12,8 @@
   <script src="{{asset "vendor/htmx.min.js"}}" defer></script>
   <script src="{{asset "app.js"}}" defer></script>
   {{/* Without JS the tab buttons cannot switch panels: show every panel. */}}
-  <noscript><style>[role="tablist"] { display: none; } [role="tabpanel"][hidden] { display: grid !important; }</style></noscript>
+  {{/* Adding and removing form rows needs JS too: hide those buttons. */}}
+  <noscript><style>[role="tablist"] { display: none; } [role="tabpanel"][hidden] { display: grid !important; } [data-add-row], [data-remove-row] { display: none !important; }</style></noscript>
 </head>
 <body>
 {{template "icons"}}

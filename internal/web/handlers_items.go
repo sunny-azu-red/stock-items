@@ -456,7 +456,8 @@ type itemPage struct {
 	ExpiryState   string
 	PurchaseCount int
 	Usage         stock.ItemUsage
-	HistoryCapped bool // Movements holds only the newest itemHistory entries
+	HistoryCapped bool   // Movements holds only the newest itemHistory entries
+	Today         string // yyyy-mm-dd, the default date of a stock change
 }
 
 // itemHistory is how many stock changes the item page shows.
@@ -500,7 +501,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
-		HistoryCapped: len(moves) > itemHistory,
+		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]
@@ -817,7 +818,16 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeletePhoto(r.Context(), id); err != nil && !errors.Is(err, store.ErrNotFound) {
+	err = s.store.DeletePhoto(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		// No photo: say so, unless the item is gone too (then 404).
+		if _, err := s.store.GetItem(r.Context(), id); err != nil {
+			return err
+		}
+		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "There was no photo to remove")
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Photo removed")

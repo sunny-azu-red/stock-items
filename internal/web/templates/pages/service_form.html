@@ -66,7 +66,7 @@
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
-    <a class="btn btn-ghost spacer" href="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}">Cancel</a>
+    <a class="btn btn-ghost spacer" href="{{if $f.ID}}/services/{{$f.ID}}{{else if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} {{if $f.ID}}Save changes{{else}}Save &amp; take parts from stock{{end}}</button>
   </div>
 </form>

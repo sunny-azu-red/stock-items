@@ -55,11 +55,11 @@
   <div class="item-actions">
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
       <input type="hidden" name="dir" value="down">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
-      <button class="icon-btn" type="submit" title="Use some" aria-label="Use one {{$it.Name}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
+      <button class="icon-btn" type="submit" title="Use some" aria-label="Use {{step $it.Unit}} of {{$it.DisplayName}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
     </form>
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
       <input type="hidden" name="dir" value="up">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
-      <button class="icon-btn" type="submit" title="Add some" aria-label="Add one {{$it.Name}}">{{icon "plus"}}</button>
+      <button class="icon-btn" type="submit" title="Add some" aria-label="Add {{step $it.Unit}} of {{$it.DisplayName}}">{{icon "plus"}}</button>
     </form>
   </div>
   {{end}}

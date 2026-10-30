@@ -136,7 +136,8 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 	case SortRecent:
 		sql += " ORDER BY i.updated_at DESC, i.id DESC"
 	case SortQuantity:
-		sql += " ORDER BY i.quantity, " + nameOrder
+		// Pieces, millilitres and grams don't compare: group by unit first.
+		sql += " ORDER BY i.unit, i.quantity, " + nameOrder
 	default:
 		sql += " ORDER BY " + nameOrder
 	}

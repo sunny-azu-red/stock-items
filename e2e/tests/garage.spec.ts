@@ -147,9 +147,9 @@ test("quick adjust and record a purchase", async ({ page }) => {
   await page.goto("/stock");
   const oil = row(page, "15W50 PRO 4 XP");
   await expect(oil.locator(".qty")).toHaveText("525 ml");
-  await oil.getByRole("button", { name: /Add one/ }).click();
+  await oil.getByRole("button", { name: /^Add 100 ml of/ }).click();
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("625 ml");
-  await row(page, "15W50 PRO 4 XP").getByRole("button", { name: /Use one/ }).click();
+  await row(page, "15W50 PRO 4 XP").getByRole("button", { name: /^Use 100 ml of/ }).click();
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("525 ml");
 
   await row(page, "15W50 PRO 4 XP").getByRole("link").first().click();

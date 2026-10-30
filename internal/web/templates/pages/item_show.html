@@ -1,5 +1,5 @@
 {{define "content"}}{{$d := .Data}}{{$it := $d.Item}}{{$m := $d.Move}}{{$e := $m.Errors}}
-<a class="back" href="/stock">{{icon "arrow-left"}} Stock</a>
+<a class="back" href="/stock{{if $it.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Stock</a>
 <div class="page-head item-head">
   <h1>{{$it.DisplayName}}</h1>
   <div class="actions">
@@ -47,9 +47,9 @@
         <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true{{else}}false{{end}}">{{icon "minus"}} Used</button>
         <button type="button" role="tab" id="tab-correction" aria-controls="panel-correction" aria-selected="{{if eq $m.Kind "correction"}}true{{else}}false{{end}}">{{icon "list-checks"}} Count</button>
       </div>
-      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
-      {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "use"))}}
-      {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "correction"))}}
+      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
+      {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (ne $m.Kind "use"))}}
+      {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (ne $m.Kind "correction"))}}
       {{end}}
     </section>
 
@@ -143,7 +143,7 @@
     {{if ne .Kind "correction"}}
     <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">
       <label for="date-{{.Kind}}">Date</label>
-      <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{$m.OccurredOn}}">
+      <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{if $active}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}">
       {{if $active}}{{template "err" (index $e "occurred_on")}}{{end}}
     </div>
     {{end}}

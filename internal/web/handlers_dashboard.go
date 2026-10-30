@@ -180,6 +180,7 @@ func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Disposition", `attachment; filename="history-`+s.now().Format("2006-01-02")+`.csv"`)
 	_, err = buf.WriteTo(w)
 	return err

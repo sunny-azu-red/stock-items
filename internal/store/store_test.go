@@ -1492,3 +1492,15 @@ func TestDuplicateItemLeavesBarcodesAndExpiry(t *testing.T) {
 		t.Errorf("barcode search = %v", ids(got))
 	}
 }
+
+func TestSortByQuantityGroupsUnits(t *testing.T) {
+	s, _ := newStore(t)
+	mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
+	mustItem(t, s, stock.ItemInput{Name: "Bolts", Unit: stock.UnitPiece, Quantity: 20})
+	mustItem(t, s, stock.ItemInput{Name: "Grease", Unit: stock.UnitGram, Quantity: 100})
+	mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 2})
+	got := ids(mustList(t, s, store.ItemFilter{Sort: store.SortQuantity}))
+	if want := []string{"Grease", "Oil", "Pads", "Bolts"}; !slices.Equal(got, want) {
+		t.Errorf("sorted = %v, want %v", got, want)
+	}
+}

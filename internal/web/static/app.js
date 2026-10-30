@@ -368,17 +368,35 @@
   });
 
   // ---- Tabs ---------------------------------------------------------------
-  document.addEventListener("click", function (e) {
-    var tab = e.target.closest('[role="tab"]');
+  function selectTab(tab) {
     var list = tab && tab.closest('[role="tablist"]');
     if (!list) return;
     list.querySelectorAll('[role="tab"]').forEach(function (t) {
       var on = t === tab;
       t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
       var panel = document.getElementById(t.getAttribute("aria-controls"));
       if (panel) panel.hidden = !on;
     });
+  }
+  document.addEventListener("click", function (e) {
+    selectTab(e.target.closest('[role="tab"]'));
   });
+  // Left/right arrows move between tabs, like any tab list.
+  document.addEventListener("keydown", function (e) {
+    var tab = e.target.closest && e.target.closest('[role="tab"]');
+    if (!tab || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    var tabs = Array.prototype.slice.call(tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]'));
+    var next = tabs[(tabs.indexOf(tab) + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    e.preventDefault();
+    selectTab(next);
+    next.focus();
+  });
+
+  // After a form error, start at the first field to fix rather than the
+  // autofocused one.
+  var firstError = document.querySelector(".has-error input:not([type=hidden]), .has-error select, .has-error textarea");
+  if (firstError) firstError.focus();
 
   // ---- Theme --------------------------------------------------------------
   // Switch without a reload, then let the server remember it. Picking what

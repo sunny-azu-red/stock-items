@@ -55,13 +55,13 @@
     </div>
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
-    <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? <a href="/items/new" target="_blank">Add it</a> (with 0 on stock) and reload.</p>
+    <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new" target="_blank">add the item</a> (with 0 on stock), then edit the kit to include it.</p>
   </div>
   <div class="form-section">
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Steps, torque values, capacities…">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
-    <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}/services{{else}}/kits/{{$f.ID}}{{end}}">Cancel</a>
+    <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}{{if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}{{else}}/kits/{{$f.ID}}{{end}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save kit</button>
   </div>
 </form>

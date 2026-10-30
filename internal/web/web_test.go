@@ -1274,3 +1274,30 @@ func TestServicesShowLabour(t *testing.T) {
 	expect(t, a.get("/services"), http.StatusOK, "350.00 EUR labour", "350.00 EUR labour in total")
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "350.00 EUR labour")
 }
+
+func TestPolish(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	item := "/items/" + itoa(oil)
+
+	for _, path := range []string{"/stock/export.csv", "/activity/export.csv"} {
+		if cc := a.get(path).Header().Get("Cache-Control"); cc != "no-store" {
+			t.Errorf("%s Cache-Control = %q", path, cc)
+		}
+	}
+	if f := flashOf(t, a.post(item+"/photo/delete", nil)); f.Message != "There was no photo to remove" {
+		t.Errorf("photo delete flash = %+v", f)
+	}
+	expect(t, a.post("/items/424242/photo/delete", nil), http.StatusNotFound)
+
+	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1x of OEM Rear Brake Pads"`)
+
+	// A bad date typed in one tab doesn't show up in the others.
+	page := a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})
+	expect(t, page, http.StatusUnprocessableEntity, `id="date-purchase" name="occurred_on" value="2062-01-01"`, `id="date-use" name="occurred_on" value="2026-10-29"`)
+
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil)}, "part_qty": {"25"}})
+	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "<th>Item</th>")
+}

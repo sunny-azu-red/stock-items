@@ -21,6 +21,7 @@
     <div class="card-head"><h2>{{icon "package"}} Parts used</h2></div>
     {{if $s.Parts}}
     <table class="table">
+      <thead><tr><th class="num">Amount</th><th>Item</th></tr></thead>
       <tbody>{{range $s.Parts}}<tr><td class="num" style="width:110px">{{qty .Quantity .Unit}}</td><td><a href="/items/{{.ItemID}}">{{.ItemName}}</a></td></tr>{{end}}</tbody>
     </table>
     {{else}}<div class="card-body muted small">No parts were taken from stock.</div>{{end}}

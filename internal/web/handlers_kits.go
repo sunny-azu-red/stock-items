@@ -303,14 +303,15 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var conflict *store.ConflictError
-	if err := s.store.DeleteKit(r.Context(), id); errors.As(err, &conflict) {
+	trashID, err := s.store.DeleteKit(r.Context(), id)
+	if errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted kit "+k.Name)
+	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted kit "+k.Name, trashID)
 	return nil
 }
 

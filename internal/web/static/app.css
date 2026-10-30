@@ -477,6 +477,7 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .flash { display: flex; align-items: center; gap: .6rem; padding: .75rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-weight: 500; }
 .flash-success { background: var(--ok-soft); color: var(--ok); }
 .flash-error { background: var(--danger-soft); color: var(--danger); }
+.flash-undo { margin-left: auto; }
 .toasts { position: fixed; z-index: 50; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; max-width: min(380px, calc(100vw - 2rem)); }
 @media (max-width: 820px) { .toasts { bottom: calc(var(--tabbar) + 1rem); left: 1rem; right: 1rem; } }
 .toast { background: var(--text); color: var(--bg); padding: .7rem 1rem; border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgb(0 0 0 / .2); font-weight: 500; display: flex; gap: .5rem; align-items: center; animation: toast-in .2s ease-out; }

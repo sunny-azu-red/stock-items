@@ -121,7 +121,7 @@ func TestVehicles(t *testing.T) {
 		t.Errorf("list = %+v", list)
 	}
 
-	if err := s.DeleteVehicle(ctx, id); err != nil {
+	if _, err := s.DeleteVehicle(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, itemID); len(it.VehicleIDs) != 0 {
@@ -130,7 +130,7 @@ func TestVehicles(t *testing.T) {
 	if _, err := s.GetVehicle(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
-	if err := s.DeleteVehicle(ctx, id); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.DeleteVehicle(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }
@@ -172,7 +172,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 	}
 	assertLedger(t, s)
 
-	if err := s.DeleteItem(ctx, id); err != nil {
+	if _, err := s.DeleteItem(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetItem(ctx, id); !errors.Is(err, store.ErrNotFound) {
@@ -337,7 +337,7 @@ func TestKitsAndServices(t *testing.T) {
 	if len(list) != 1 || *list[0].Quantity != 1175 || list[0].ItemName != "Silkolene 15W50" {
 		t.Fatalf("shopping = %+v", list)
 	}
-	if _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
+	if _, _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -386,7 +386,7 @@ func TestKitsAndServices(t *testing.T) {
 	}
 	assertLedger(t, s)
 
-	if err := s.DeleteService(ctx, svcID); err != nil {
+	if _, err := s.DeleteService(ctx, svcID); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, oil); it.Quantity != 4525 {
@@ -401,7 +401,7 @@ func TestKitsAndServices(t *testing.T) {
 	if len(using) != 1 {
 		t.Errorf("kits using oil = %d", len(using))
 	}
-	if err := s.DeleteKit(ctx, kitID); err != nil {
+	if _, err := s.DeleteKit(ctx, kitID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetKit(ctx, kitID); !errors.Is(err, store.ErrNotFound) {
@@ -434,19 +434,19 @@ func TestShoppingList(t *testing.T) {
 		t.Errorf("unknown item: want ErrNotFound, got %v", err)
 	}
 
-	if _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
+	if _, _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, pads); it.Quantity != 3 {
 		t.Errorf("pads after purchase = %v", it.Quantity)
 	}
-	if _, err := s.MarkBought(ctx, freeID, nil); err != nil {
+	if _, _, err := s.MarkBought(ctx, freeID, nil); err != nil {
 		t.Fatal(err)
 	}
 	if list, _ := s.ListShopping(ctx); len(list) != 0 {
 		t.Errorf("list should be empty: %+v", list)
 	}
-	if err := s.DeleteShopping(ctx, freeID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.DeleteShopping(ctx, freeID); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -471,7 +471,7 @@ func TestPhotos(t *testing.T) {
 	if err := s.SetPhoto(ctx, 987654, "image/jpeg", []byte("x"), []byte("x")); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
-	if err := s.DeletePhoto(ctx, id); err != nil {
+	if _, err := s.DeletePhoto(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetPhoto(ctx, id, false); !errors.Is(err, store.ErrNotFound) {
@@ -700,7 +700,7 @@ func TestMarkBoughtKeepsTheRest(t *testing.T) {
 		{"no quantity listed", oilEntry, 4000, 0, 0},
 	}
 	for _, tt := range tests {
-		left, err := s.MarkBought(ctx, tt.entry, &stock.MovementInput{Delta: tt.delta})
+		left, _, err := s.MarkBought(ctx, tt.entry, &stock.MovementInput{Delta: tt.delta})
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
@@ -744,7 +744,7 @@ func TestPurchaseSetsBestBefore(t *testing.T) {
 
 	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &id})
 	later := fresh.AddDate(1, 0, 0)
-	if _, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1000, ExpiresOn: &later}); err != nil {
+	if _, _, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1000, ExpiresOn: &later}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(later) {
@@ -871,7 +871,7 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v, svc := tt.setup()
-			if err := s.DeleteService(ctx, svc); err != nil {
+			if _, err := s.DeleteService(ctx, svc); err != nil {
 				t.Fatal(err)
 			}
 			got := odometer(v)
@@ -954,16 +954,16 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 500}); !errors.As(err, &short) || short.Have != 300 || short.Need != 3500 {
 		t.Errorf("shrink used-up purchase: want InsufficientStockError(300, 3500), got %v", err)
 	}
-	if _, err := s.DeleteMovement(ctx, purchase); !errors.As(err, &short) {
+	if _, _, err := s.DeleteMovement(ctx, purchase); !errors.As(err, &short) {
 		t.Errorf("delete used-up purchase: want InsufficientStockError, got %v", err)
 	}
 
 	// Deleting the use puts it back; then the purchase can go too.
 	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
-	if _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
+	if _, _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	m, err := s.DeleteMovement(ctx, purchase)
+	m, _, err := s.DeleteMovement(ctx, purchase)
 	if err != nil || m.ItemID != oil || m.Kind != stock.MovePurchase {
 		t.Fatalf("delete purchase = %+v, %v", m, err)
 	}
@@ -996,7 +996,7 @@ func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
 	if err := s.UpdateMovement(ctx, moves[0].ID, stock.MovementEdit{Amount: 2}); !errors.As(err, &conflict) {
 		t.Errorf("update: want ConflictError, got %v", err)
 	}
-	if _, err := s.DeleteMovement(ctx, moves[0].ID); !errors.As(err, &conflict) {
+	if _, _, err := s.DeleteMovement(ctx, moves[0].ID); !errors.As(err, &conflict) {
 		t.Errorf("delete: want ConflictError, got %v", err)
 	}
 	if it := mustGet(t, s, pads); it.Quantity != 1 {
@@ -1035,7 +1035,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 		t.Fatalf("usage = %+v, %v", u, err)
 	}
 	var conflict *store.ConflictError
-	if err := s.DeleteItem(ctx, filter); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Archive it instead") {
+	if _, err := s.DeleteItem(ctx, filter); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Archive it instead") {
 		t.Fatalf("delete used item: want ConflictError, got %v", err)
 	}
 
@@ -1079,7 +1079,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: spare, Kind: stock.MoveUse, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteItem(ctx, spare); err != nil {
+	if _, err := s.DeleteItem(ctx, spare); err != nil {
 		t.Fatalf("delete unused item: %v", err)
 	}
 	if err := s.RestoreItem(ctx, spare); !errors.Is(err, store.ErrNotFound) {
@@ -1268,7 +1268,7 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Deleting it now puts the odometer back to before the service.
-	if err := s.DeleteService(ctx, id); err != nil {
+	if _, err := s.DeleteService(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 10000 {
@@ -1376,7 +1376,7 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	var conflict *store.ConflictError
-	if err := s.DeleteVehicle(ctx, old); !errors.As(err, &conflict) {
+	if _, err := s.DeleteVehicle(ctx, old); !errors.As(err, &conflict) {
 		t.Fatalf("delete with history: want ConflictError, got %v", err)
 	}
 	if svc, kits, _ := s.VehicleUsage(ctx, old); svc != 1 || kits != 1 {
@@ -1400,7 +1400,7 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	if err := s.RestoreVehicle(ctx, old); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteVehicle(ctx, spare); err != nil {
+	if _, err := s.DeleteVehicle(ctx, spare); err != nil {
 		t.Errorf("delete without history: %v", err)
 	}
 }
@@ -1614,7 +1614,7 @@ func TestArchiveKitWithServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	var conflict *store.ConflictError
-	if err := s.DeleteKit(ctx, used); !errors.As(err, &conflict) {
+	if _, err := s.DeleteKit(ctx, used); !errors.As(err, &conflict) {
 		t.Fatalf("delete a used kit: want ConflictError, got %v", err)
 	}
 	if n, _ := s.KitServices(ctx, used); n != 1 {
@@ -1639,7 +1639,275 @@ func TestArchiveKitWithServices(t *testing.T) {
 	if err := s.RestoreKit(ctx, used); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteKit(ctx, unused); err != nil {
+	if _, err := s.DeleteKit(ctx, unused); err != nil {
 		t.Errorf("delete an unused kit: %v", err)
+	}
+}
+
+func mustRestore(t *testing.T, s *store.Store, trashID int64) store.Restored {
+	t.Helper()
+	res, err := s.RestoreTrash(context.Background(), trashID)
+	if err != nil {
+		t.Fatalf("restore %d: %v", trashID, err)
+	}
+	return res
+}
+
+func TestTrashRestoresAService(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	vin.Normalize()
+	v, _ := s.CreateVehicle(ctx, vin)
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
+	kit := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
+	kit.Normalize()
+	kitID, _ := s.CreateKit(ctx, kit)
+	reading := 12000
+	in := stock.ServiceInput{VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &reading,
+		LaborCost: ptr(80.0), Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
+	in.Normalize()
+	svc, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trashID, err := s.DeleteService(ctx, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := mustGet(t, s, oil).Quantity; got != 2000 {
+		t.Fatalf("oil after delete = %v", got)
+	}
+	entries, _ := s.ListTrash(ctx)
+	if len(entries) != 1 || entries[0].Kind != store.TrashService || !strings.Contains(entries[0].Label, "Oil service (KTM 390") {
+		t.Errorf("trash = %+v", entries)
+	}
+
+	res := mustRestore(t, s, trashID)
+	if res.Kind != store.TrashService || res.ID != svc {
+		t.Errorf("restored = %+v", res)
+	}
+	r, err := s.GetService(ctx, svc)
+	if err != nil || len(r.Parts) != 1 || r.KitID == nil || *r.KitID != kitID || *r.LaborCost != 80 {
+		t.Errorf("restored service = %+v, %v", r, err)
+	}
+	if got := mustGet(t, s, oil).Quantity; got != 300 {
+		t.Errorf("oil after restore = %v, want 300", got)
+	}
+	if veh, _ := s.GetVehicle(ctx, v); *veh.OdometerKm != 12000 {
+		t.Errorf("odometer = %d, want 12000", *veh.OdometerKm)
+	}
+	if n, _ := s.CountTrash(ctx); n != 0 {
+		t.Errorf("trash still has %d", n)
+	}
+	assertLedger(t, s)
+
+	// Deleted again, but the oil got used meanwhile: the restore is refused
+	// and nothing changes.
+	trashID, _ = s.DeleteService(ctx, svc)
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -1000}); err != nil {
+		t.Fatal(err)
+	}
+	var shorts *store.ShortPartsError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &shorts) {
+		t.Fatalf("restore with too little oil: want ShortPartsError, got %v", err)
+	}
+	if _, err := s.GetService(ctx, svc); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("service should still be deleted: %v", err)
+	}
+	if n, _ := s.CountTrash(ctx); n != 1 {
+		t.Errorf("trash = %d, want the entry kept", n)
+	}
+	assertLedger(t, s)
+}
+
+func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
+
+	// A deleted purchase comes back with its stock.
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(20.0)}); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := mustRestore(t, s, trashID); res.ID != oil {
+		t.Errorf("restored = %+v", res)
+	}
+	if got := mustGet(t, s, oil).Quantity; got != 1500 {
+		t.Errorf("oil = %v, want 1500", got)
+	}
+	if m, err := s.GetMovement(ctx, moves[0].ID); err != nil || *m.TotalPrice != 20 {
+		t.Errorf("movement = %+v, %v", m, err)
+	}
+
+	// A deleted (unused) kit comes back with its lines.
+	kit := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
+	kit.Normalize()
+	kitID, _ := s.CreateKit(ctx, kit)
+	trashID, err = s.DeleteKit(ctx, kitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	if k, err := s.GetKit(ctx, kitID); err != nil || len(k.Lines) != 1 {
+		t.Errorf("kit = %+v, %v", k, err)
+	}
+
+	// Shopping: a removed entry comes back, unless the item is listed again.
+	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(1000.0), Note: "4 L can"})
+	trashID, err = s.DeleteShopping(ctx, entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil}); err != nil {
+		t.Fatal(err)
+	}
+	var conflict *store.ConflictError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) {
+		t.Errorf("restoring onto a listed item: want conflict, got %v", err)
+	}
+	list, _ := s.ListShopping(ctx)
+	if _, err := s.DeleteShopping(ctx, list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	if e, err := s.GetShopping(ctx, entry); err != nil || e.Note != "4 L can" {
+		t.Errorf("entry = %+v, %v", e, err)
+	}
+	assertLedger(t, s)
+}
+
+func TestTrashUndoesBought(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0), Note: "sintered"})
+
+	// Bought in part: undo removes the purchase and puts the 3 back.
+	left, trashID, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1, TotalPrice: ptr(30.0)})
+	if err != nil || left != 2 {
+		t.Fatalf("bought = %v, %v", left, err)
+	}
+	if res := mustRestore(t, s, trashID); res.Kind != store.TrashBought {
+		t.Errorf("restored = %+v", res)
+	}
+	if e, _ := s.GetShopping(ctx, entry); *e.Quantity != 3 {
+		t.Errorf("entry = %+v", e)
+	}
+	if it := mustGet(t, s, pads); it.Quantity != 0 {
+		t.Errorf("pads = %v", it.Quantity)
+	}
+	if n, _ := s.CountPurchases(ctx, pads); n != 0 {
+		t.Errorf("purchases = %d", n)
+	}
+
+	// Bought in full: the entry comes back. Used since: refused.
+	_, trashID, _ = s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 3})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -2}); err != nil {
+		t.Fatal(err)
+	}
+	var short *store.InsufficientStockError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &short) {
+		t.Errorf("undo after using it: want InsufficientStockError, got %v", err)
+	}
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+	if _, _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	if e, err := s.GetShopping(ctx, entry); err != nil || *e.Quantity != 3 || e.Note != "sintered" {
+		t.Errorf("entry = %+v, %v", e, err)
+	}
+	assertLedger(t, s)
+}
+
+func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	id := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5, VehicleIDs: []int64{v},
+		SKUs: []stock.SKU{{Code: "M8", Kind: stock.SKUOther, Label: "M8x20"}}})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPhoto(ctx, id, "image/jpeg", []byte{0xff, 0xd8, 1, 2}, []byte{0xff, 0xd8}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The photo alone.
+	trashID, err := s.DeletePhoto(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	if ph, err := s.GetPhoto(ctx, id, false); err != nil || len(ph.Data) != 4 || ph.Data[2] != 1 {
+		t.Errorf("photo = %+v, %v", ph, err)
+	}
+
+	// The whole item: fields, SKUs, tags, photo and history.
+	trashID, err = s.DeleteItem(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	it := mustGet(t, s, id)
+	if it.Quantity != 3 || len(it.SKUs) != 1 || it.SKUs[0].Label != "M8x20" || len(it.VehicleIDs) != 1 || !it.HasPhoto {
+		t.Errorf("item = %+v", it)
+	}
+	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id}); len(moves) != 2 {
+		t.Errorf("history = %+v", moves)
+	}
+	assertLedger(t, s)
+
+	// A vehicle: its tags come back; a vehicle with its name meanwhile blocks it.
+	trashID, err = s.DeleteVehicle(ctx, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); len(it.VehicleIDs) != 0 {
+		t.Fatalf("tags after deleting the vehicle = %v", it.VehicleIDs)
+	}
+	other := mustVehicle(t, s, "KTM 390")
+	var conflict *store.ConflictError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "KTM 390") {
+		t.Errorf("name taken: want conflict, got %v", err)
+	}
+	if _, err := s.DeleteVehicle(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	if res := mustRestore(t, s, trashID); res.ID != v {
+		t.Errorf("restored = %+v", res)
+	}
+	if it := mustGet(t, s, id); len(it.VehicleIDs) != 1 || it.VehicleIDs[0] != v {
+		t.Errorf("tags = %v", it.VehicleIDs)
+	}
+}
+
+func TestTrashPurgeAndEmpty(t *testing.T) {
+	s, ctx := newStore(t)
+	for _, name := range []string{"A", "B", "C"} {
+		id := mustItem(t, s, stock.ItemInput{Name: name, Unit: stock.UnitPiece})
+		if _, err := s.DeleteItem(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, _ := s.ListTrash(ctx)
+	if len(entries) != 3 || entries[0].Label != "Item: C" {
+		t.Fatalf("trash = %+v", entries)
+	}
+	if err := s.PurgeTrash(ctx, entries[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, entries[0].ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("restore purged: want ErrNotFound, got %v", err)
+	}
+	if err := s.EmptyTrash(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.CountTrash(ctx); n != 0 {
+		t.Errorf("trash = %d", n)
 	}
 }

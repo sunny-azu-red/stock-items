@@ -46,6 +46,7 @@
         <li><span class="kbd">/</span> Search stock</li>
         <li><span class="kbd">n</span> New item</li>
       </ul>
+      {{if .TrashCount}}<p><a href="/trash">{{icon "trash-2"}} Recently deleted ({{.TrashCount}})</a></p>{{end}}
       <p>{{.Version}}</p>
     </div>
   </aside>
@@ -76,4 +77,4 @@
   <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Light theme" aria-label="Switch to the light theme">{{icon "sun"}}</button>
 </form>{{end}}
 
-{{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="status">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span></div>{{end}}{{end}}
+{{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="status">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span>{{with .Undo}}<form class="inline-form flash-undo" method="post" action="/trash/{{.}}/restore"><button class="btn btn-sm" type="submit">{{icon "undo-2"}} Undo</button></form>{{end}}</div>{{end}}{{end}}

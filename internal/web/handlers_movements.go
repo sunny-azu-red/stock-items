@@ -149,14 +149,14 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	back := postedBack(r, itemPath(m.ItemID))
-	deleted, err := s.store.DeleteMovement(r.Context(), m.ID)
+	deleted, trashID, err := s.store.DeleteMovement(r.Context(), m.ID)
 	if err == nil {
 		it, err := s.store.GetItem(r.Context(), deleted.ItemID)
 		if err != nil {
 			return err
 		}
-		s.redirect(w, r, back,
-			"Deleted the "+changeName(m.Kind)+". Stock is now "+stock.FormatQuantity(it.Quantity, it.Unit)+".")
+		s.redirectUndo(w, r, back,
+			"Deleted the "+changeName(m.Kind)+". Stock is now "+stock.FormatQuantity(it.Quantity, it.Unit)+".", trashID)
 		return nil
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),

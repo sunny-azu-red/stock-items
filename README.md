@@ -25,6 +25,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.
+- **Undo everything:** every delete (and Bought) has an Undo, and Recently deleted keeps it all until you empty it.
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Photos** of items (resized and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a phone in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).

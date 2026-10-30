@@ -183,8 +183,8 @@ func vehicleUsage(ctx context.Context, q queryRower, id int64) (services, kits i
 // stay but lose this tag. A vehicle with history fails with a
 // *ConflictError and should be archived instead, which keeps its services,
 // kits and labour costs.
-func (s *Store) DeleteVehicle(ctx context.Context, id int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+func (s *Store) DeleteVehicle(ctx context.Context, id int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var name string
 		if err := tx.QueryRow(ctx, `SELECT name FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&name); err != nil {
 			return notFound(err)
@@ -196,8 +196,16 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64) error {
 		if services+kits > 0 {
 			return &ConflictError{Field: "form", Message: name + " has services or kits. Archive it instead."}
 		}
+		p, err := snapshot(ctx, tx, id, [2]string{"vehicles", "id"}, [2]string{"item_vehicles", "vehicle_id"})
+		if err != nil {
+			return err
+		}
+		if trashID, err = putTrash(ctx, tx, TrashVehicle, trashLabel("Vehicle", name), p); err != nil {
+			return err
+		}
 		return checkAffected(tx.Exec(ctx, `DELETE FROM vehicles WHERE id = $1`, id))
 	})
+	return trashID, err
 }
 
 // ArchiveVehicle hides a vehicle from lists, pickers and reminders while

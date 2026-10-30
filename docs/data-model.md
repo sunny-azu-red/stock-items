@@ -45,6 +45,8 @@ items ─< shopping_entries (or free text)
 
 **service_records:** a performed job: date, odometer, title, notes, labour cost, optional kit. `odometer_moved` says whether logging it moved the vehicle's odometer forward (NULL for services logged before the column existed), and `odometer_before` is the reading it moved from (NULL if the vehicle had none).
 
+**trash:** what was deleted and can be restored: `kind` (`service`, `kit`, `movement`, `shopping`, `item`, `vehicle`, `photo`, `bought`), a `label`, and `payload`, a JSON snapshot of every row the delete removed (`{"table": [rows…]}`; for `bought` the entry as it was plus the purchase's `movement_id`). Written in the same transaction as the delete (`store/trash.go`), kept until the trash is emptied. `RestoreTrash` re-inserts the rows with their original ids (`jsonb_populate_recordset`) and redoes their stock effect under a lock, refusing to go below zero; references deleted for good since are dropped (tags, kit lines, a service's kit) or refuse the restore.
+
 **shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note. `unit` is the unit of a free-text entry's quantity (`stock.ParseAmountAnyUnit` picks it from the typed suffix); linked entries use the item's unit.
 - Marking a linked entry bought records a purchase. If less was bought than the entry's quantity, the entry stays with the rest (`store.MarkBought`).
 - A free-text entry can be linked to an existing item with the same name (`store.ItemsNamed`, `store.LinkShopping`): the item is restored if archived, and the entry is merged into the item's own entry if it has one.
@@ -52,7 +54,7 @@ items ─< shopping_entries (or free text)
 
 ## Invariants
 
-1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The exceptions change recorded movements together with their effect, so the sum still holds: deleting or editing a service (5), and editing or deleting a single movement (`store.UpdateMovement`/`DeleteMovement`, see 6).
+1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The exceptions change recorded movements together with their effect, so the sum still holds: deleting or editing a service (5), and editing or deleting a single movement (`store.UpdateMovement`/`DeleteMovement`, see 6), and restoring from the trash (rows come back together with their quantity change).
 2. A movement can never make a quantity negative. You get `InsufficientStockError` instead, and the transaction rolls back. A service with one missing part logs nothing.
 3. An item's unit cannot change once it has stock history, is used in a kit, or has a quantity on the shopping list.
 4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting a service that moved it (`odometer_moved`) puts it back to the highest of `odometer_before` and the vehicle's other services' readings, or to no reading if there are none, unless the odometer was changed since. Services that didn't move it, and services logged before `odometer_moved` existed, leave it alone. A vehicle's reading can't be changed to less than its highest service reading, and a service's reading must fit between the services logged on earlier and later days (`checkVehicleOdometer`, `checkServiceOdometer`).

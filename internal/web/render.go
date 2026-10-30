@@ -38,7 +38,8 @@ type View struct {
 	Today    time.Time
 	// Theme is "light", "dark" or "" to follow the system.
 	Theme string
-	// NavVehicles and ShoppingCount feed the sidebar.
+	// NavVehicles, ShoppingCount and TrashCount feed the sidebar.
+	TrashCount    int
 	NavVehicles   []stock.Vehicle
 	ShoppingCount int
 	// Data is the page specific payload.
@@ -49,6 +50,7 @@ type View struct {
 type Flash struct {
 	Kind    string `json:"k"` // "success" or "error"
 	Message string `json:"m"`
+	Undo    int64  `json:"u,omitempty"` // trash id: the message offers to undo it
 }
 
 type templates struct {
@@ -196,6 +198,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	if list, err := s.store.ListShopping(r.Context()); err == nil {
 		v.ShoppingCount = len(list)
 	}
+	if n, err := s.store.CountTrash(r.Context()); err == nil {
+		v.TrashCount = n
+	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", v); err != nil {
 		s.serverError(w, r, fmt.Errorf("render %s: %w", page, err))
@@ -244,7 +249,11 @@ type errorPage struct {
 const flashCookie = "flash"
 
 func (s *Server) setFlash(w http.ResponseWriter, kind, msg string) {
-	b, _ := json.Marshal(Flash{Kind: kind, Message: msg})
+	s.writeFlash(w, Flash{Kind: kind, Message: msg})
+}
+
+func (s *Server) writeFlash(w http.ResponseWriter, f Flash) {
+	b, _ := json.Marshal(f)
 	http.SetCookie(w, &http.Cookie{
 		Name: flashCookie, Value: base64.RawURLEncoding.EncodeToString(b), Path: "/",
 		MaxAge: 60, HttpOnly: true, SameSite: http.SameSiteLaxMode,
@@ -266,6 +275,13 @@ func (s *Server) popFlash(w http.ResponseWriter, r *http.Request) *Flash {
 		return nil
 	}
 	return &f
+}
+
+// redirectUndo is redirect with a success message that offers to undo
+// the deletion that went to trash entry trashID.
+func (s *Server) redirectUndo(w http.ResponseWriter, r *http.Request, url, msg string, trashID int64) {
+	s.writeFlash(w, Flash{Kind: "success", Message: msg, Undo: trashID})
+	s.redirect(w, r, url, "")
 }
 
 // redirect sends the browser to url with a flash message. htmx requests get

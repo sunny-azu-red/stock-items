@@ -260,14 +260,15 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteService(r.Context(), id); err != nil {
+	trashID, err := s.store.DeleteService(r.Context(), id)
+	if err != nil {
 		return err
 	}
 	msg := "Deleted " + rec.Title
 	if len(rec.Parts) > 0 {
 		msg += " and put its parts back on stock"
 	}
-	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", rec.VehicleID), msg)
+	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", rec.VehicleID), msg, trashID)
 	return nil
 }
 

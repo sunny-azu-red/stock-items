@@ -1132,7 +1132,7 @@ func TestShoppingListNeeds(t *testing.T) {
 	expectNot(t, a.get("/shopping"), "already listed") // fully covered: no suggestion
 
 	// Listed for less than needed: still suggested, with what's listed.
-	if err := a.store.DeleteShopping(ctx, list[0].ID); err != nil {
+	if _, err := a.store.DeleteShopping(ctx, list[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(oil)}, "quantity": {"1"}, "quantity_unit": {"ml"}}), http.StatusSeeOther)
@@ -1375,7 +1375,7 @@ func TestShoppingFlowsThatRaceOtherTabs(t *testing.T) {
 
 	// The entry is ticked off in another tab while the new-item form is open.
 	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube"})
-	if _, err := a.store.MarkBought(ctx, free, nil); err != nil {
+	if _, _, err := a.store.MarkBought(ctx, free, nil); err != nil {
 		t.Fatal(err)
 	}
 	form := url.Values{"shopping_id": {itoa(free)}, "name": {"Chain lube"}, "unit": {"piece"}, "quantity": {"1"}}
@@ -1449,4 +1449,61 @@ func TestArchiveKitFlow(t *testing.T) {
 	expectNot(t, page, "Do this service")
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service <span class=\"badge badge-muted\">Archived</span>")
 	expect(t, a.post(kit+"/restore", nil), http.StatusSeeOther)
+}
+
+func TestUndoAndRecentlyDeleted(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil)}, "part_qty": {"25"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+
+	// Deleting offers Undo in its message.
+	rec = a.post(svc+"/delete", nil)
+	f := flashOf(t, rec)
+	if f.Undo == 0 || !strings.Contains(f.Message, "Deleted Top up") {
+		t.Fatalf("flash = %+v", f)
+	}
+	expect(t, a.get("/"), http.StatusOK, `href="/trash">`, "Recently deleted (1)")
+	expect(t, a.get("/trash"), http.StatusOK, "Service: Top up (KTM 390, 29 Oct 2026)", `action="/trash/`+itoa(f.Undo)+`/restore"`)
+
+	// Undo brings the service back and takes the oil again.
+	rec = a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != svc {
+		t.Errorf("restore went to %q, want %q", l, svc)
+	}
+	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 500 {
+		t.Errorf("oil = %v, want 500", it.Quantity)
+	}
+	expect(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil), http.StatusSeeOther) // twice: a message, not a 500
+
+	// A restore that can't work explains why on the trash page.
+	f = flashOf(t, a.post(svc+"/delete", nil))
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"use"}, "amount": {"525"}}), http.StatusSeeOther)
+	rec = a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	if l := rec.Header().Get("Location"); l != "/trash" {
+		t.Errorf("failed restore went to %q", l)
+	}
+	if msg := flashOf(t, rec); msg.Kind != "error" || !strings.Contains(msg.Message, "Can't restore") {
+		t.Errorf("flash = %+v", msg)
+	}
+
+	// Ticking off and Bought offer Undo too; Empty clears the page.
+	pads := itemID(t, a.store, "Rear Brake")
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0)})
+	f = flashOf(t, a.post("/shopping/"+itoa(entry)+"/bought", url.Values{"amount": {"2"}}))
+	if f.Undo == 0 {
+		t.Fatalf("bought flash = %+v", f)
+	}
+	expect(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(ctx, pads); it.Quantity != 1 {
+		t.Errorf("pads = %v, want 1", it.Quantity)
+	}
+	expect(t, a.post("/trash/empty", nil), http.StatusSeeOther)
+	expect(t, a.get("/trash"), http.StatusOK, "Nothing deleted")
+	expectNot(t, a.get("/"), "Recently deleted (")
 }

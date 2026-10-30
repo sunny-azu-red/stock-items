@@ -137,6 +137,10 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /activity", h(s.activity))
 	mux.HandleFunc("GET /activity/export.csv", h(s.activityExportCSV))
+	mux.HandleFunc("GET /trash", h(s.trashList))
+	mux.HandleFunc("POST /trash/{id}/restore", h(s.trashRestore))
+	mux.HandleFunc("POST /trash/{id}/purge", h(s.trashPurge))
+	mux.HandleFunc("POST /trash/empty", h(s.trashEmpty))
 	mux.HandleFunc("POST /theme", h(s.setTheme))
 
 	mux.HandleFunc("/", h(func(w http.ResponseWriter, r *http.Request) error { return store.ErrNotFound }))

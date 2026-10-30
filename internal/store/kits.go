@@ -180,10 +180,12 @@ func (s *Store) KitServices(ctx context.Context, id int64) (int, error) {
 // DeleteKit removes a kit that was never used. A kit with logged services
 // fails with a *ConflictError and should be archived instead: deleting it
 // would cut the link from its services and lose its history.
-func (s *Store) DeleteKit(ctx context.Context, id int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		var name string
-		if err := tx.QueryRow(ctx, `SELECT name FROM service_kits WHERE id = $1 FOR UPDATE`, id).Scan(&name); err != nil {
+func (s *Store) DeleteKit(ctx context.Context, id int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var name, vehicle string
+		if err := tx.QueryRow(ctx, `
+			SELECT k.name, v.name FROM service_kits k JOIN vehicles v ON v.id = k.vehicle_id WHERE k.id = $1 FOR UPDATE OF k`, id).
+			Scan(&name, &vehicle); err != nil {
 			return notFound(err)
 		}
 		var used bool
@@ -193,8 +195,16 @@ func (s *Store) DeleteKit(ctx context.Context, id int64) error {
 		if used {
 			return &ConflictError{Field: "form", Message: name + " has logged services. Archive it instead."}
 		}
+		p, err := snapshot(ctx, tx, id, [2]string{"service_kits", "id"}, [2]string{"service_kit_lines", "kit_id"})
+		if err != nil {
+			return err
+		}
+		if trashID, err = putTrash(ctx, tx, TrashKit, trashLabel("Kit", name, vehicle), p); err != nil {
+			return err
+		}
 		return checkAffected(tx.Exec(ctx, `DELETE FROM service_kits WHERE id = $1`, id))
 	})
+	return trashID, err
 }
 
 // ArchiveKit hides a kit from lists, reminders and suggestions while its

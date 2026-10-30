@@ -320,8 +320,8 @@ func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, er
 // counts), SKUs, tags and photo. An item that other records refer to
 // (purchases, services, kits) is not deleted, as that would change them;
 // it fails with a *ConflictError and should be archived instead.
-func (s *Store) DeleteItem(ctx context.Context, id int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var name, brand string
 		if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand); err != nil {
 			return notFound(err)
@@ -333,8 +333,18 @@ func (s *Store) DeleteItem(ctx context.Context, id int64) error {
 		if u.InUse() {
 			return &ConflictError{Field: "form", Message: displayName(brand, name) + " is used in " + u.String() + ". Archive it instead."}
 		}
+		p, err := snapshot(ctx, tx, id, [2]string{"items", "id"}, [2]string{"item_skus", "item_id"},
+			[2]string{"item_vehicles", "item_id"}, [2]string{"item_photos", "item_id"},
+			[2]string{"stock_movements", "item_id"}, [2]string{"shopping_entries", "item_id"})
+		if err != nil {
+			return err
+		}
+		if trashID, err = putTrash(ctx, tx, TrashItem, trashLabel("Item", displayName(brand, name)), p); err != nil {
+			return err
+		}
 		return checkAffected(tx.Exec(ctx, `DELETE FROM items WHERE id = $1`, id))
 	})
+	return trashID, err
 }
 
 // ArchiveItem hides an item from stock, pickers and suggestions while

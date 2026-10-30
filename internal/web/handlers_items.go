@@ -415,7 +415,8 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var conflict *store.ConflictError
-	if err := s.store.DeleteItem(r.Context(), id); errors.As(err, &conflict) {
+	trashID, err := s.store.DeleteItem(r.Context(), id)
+	if errors.As(err, &conflict) {
 		// Used since the page was opened: keep it and say why.
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "")
@@ -423,7 +424,7 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, "/stock", "Deleted "+it.DisplayName())
+	s.redirectUndo(w, r, "/stock", "Deleted "+it.DisplayName(), trashID)
 	return nil
 }
 
@@ -849,7 +850,7 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	err = s.store.DeletePhoto(r.Context(), id)
+	trashID, err := s.store.DeletePhoto(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		// No photo: say so, unless the item is gone too (then 404).
 		if _, err := s.store.GetItem(r.Context(), id); err != nil {
@@ -861,7 +862,7 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Photo removed")
+	s.redirectUndo(w, r, fmt.Sprintf("/items/%d", id), "Photo removed", trashID)
 	return nil
 }
 

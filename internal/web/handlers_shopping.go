@@ -258,10 +258,11 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if e.ItemID == nil {
-		if _, err := s.store.MarkBought(r.Context(), id, nil); err != nil {
+		_, trashID, err := s.store.MarkBought(r.Context(), id, nil)
+		if err != nil {
 			return err
 		}
-		s.redirect(w, r, "/shopping", "Ticked off "+e.Title())
+		s.redirectUndo(w, r, "/shopping", "Ticked off "+e.Title(), trashID)
 		return nil
 	}
 	f := movementForm{
@@ -293,12 +294,12 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		in.ExpiresOn = d
 	}
 	if !f.Errors.Any() {
-		if left, err := s.store.MarkBought(r.Context(), id, &in); err == nil {
+		if left, trashID, err := s.store.MarkBought(r.Context(), id, &in); err == nil {
 			msg := "Added " + stock.FormatQuantity(in.Delta, e.ItemUnit) + " of " + e.Title() + " to stock"
 			if left > 0 {
 				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
 			}
-			s.redirect(w, r, "/shopping", msg)
+			s.redirectUndo(w, r, "/shopping", msg, trashID)
 			return nil
 		} else if !formConflict(f.Errors, err) {
 			return err
@@ -314,10 +315,11 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteShopping(r.Context(), id); err != nil {
+	trashID, err := s.store.DeleteShopping(r.Context(), id)
+	if err != nil {
 		return err
 	}
-	s.redirect(w, r, "/shopping", "Removed from the shopping list")
+	s.redirectUndo(w, r, "/shopping", "Removed from the shopping list", trashID)
 	return nil
 }
 

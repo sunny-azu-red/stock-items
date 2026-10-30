@@ -63,6 +63,12 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 - Vehicles work the same way: a vehicle with services or kits gets **Archive vehicle** (on its page) instead of Delete. It leaves the vehicle lists, pickers and reminders; its services, kits, labour costs and item tags stay. Archived vehicles are listed from the link under the vehicles; **Restore vehicle** brings one back.
 - The odometer can't be set lower than a logged service's reading, or cleared once services have readings: fix or delete that service first. Saving the vehicle's edit form keeps a reading entered elsewhere in the meantime, unless you changed the odometer field. A service's reading also has to fit between the services logged before and after it.
 
+## Undo and Recently deleted
+
+- Every delete keeps a copy: the message after deleting has an **Undo** button. That covers services, kits, stock changes, shopping-list entries (removed or ticked off), items, vehicles and photos. **Bought** on the shopping list can be undone the same way: the purchase is taken back and the entry is put back as it was.
+- **Recently deleted** (in the sidebar, on the Activity page and under the vehicles, whenever something is there) lists everything deleted, newest first, with **Restore** and **Delete for good**. Nothing is removed from it until you click **Empty**.
+- Restoring puts things back exactly, with their history and links, and redoes their effect on stock: a restored service takes its parts again and moves the odometer again. If that's no longer possible (the stock was used since, a vehicle with the same name exists now, or what it belonged to was deleted for good) nothing changes and you're told why.
+
 ## Tips
 
 - Photos help to recognise similar parts: open an item → Add photo. Phone photos are rotated and resized automatically.

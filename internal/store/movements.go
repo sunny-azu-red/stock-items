@@ -234,9 +234,9 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 // the stock. It fails with *InsufficientStockError when that would leave
 // less than nothing, e.g. for a purchase that has been used up since. A
 // best-before date the purchase set is kept.
-func (s *Store) DeleteMovement(ctx context.Context, id int64) (stock.Movement, error) {
+func (s *Store) DeleteMovement(ctx context.Context, id int64) (deleted stock.Movement, trashID int64, err error) {
 	var m lockedMovement
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		if m, err = lockMovement(ctx, tx, id); err != nil {
 			return err
@@ -244,10 +244,18 @@ func (s *Store) DeleteMovement(ctx context.Context, id int64) (stock.Movement, e
 		if err := reviseMovement(ctx, tx, m, 0); err != nil {
 			return err
 		}
+		p, err := snapshot(ctx, tx, id, [2]string{"stock_movements", "id"})
+		if err != nil {
+			return err
+		}
+		label := trashLabel(m.Kind.Label(), m.ItemName, stock.FormatDelta(m.Delta, m.ItemUnit), m.OccurredOn.Format("2 Jan 2006"))
+		if trashID, err = putTrash(ctx, tx, TrashMovement, label, p); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `DELETE FROM stock_movements WHERE id = $1`, id)
 		return err
 	})
-	return m.Movement, err
+	return m.Movement, trashID, err
 }
 
 // Stats are the money figures shown on the dashboard.

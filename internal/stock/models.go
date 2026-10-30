@@ -367,3 +367,11 @@ func DateOnly(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
+
+// TrashEntry is something deleted that can still be restored.
+type TrashEntry struct {
+	ID        int64
+	Kind      string
+	Label     string
+	DeletedAt time.Time
+}

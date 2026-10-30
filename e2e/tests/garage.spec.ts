@@ -311,6 +311,36 @@ test("fix a logged service", async ({ page }) => {
   await expect(page.locator("main")).toContainText("1.7 L");
 });
 
+test("undo a deleted service", async ({ page }) => {
+  page.on("dialog", (d) => d.accept());
+  await page.goto("/stock");
+  const before = await row(page, "15W50 PRO 4 XP").locator(".qty").textContent();
+  await page.goto("/activity?kind=service");
+  await page.locator('a[href^="/services/"]').first().click();
+  await page.getByRole("button", { name: /Delete/ }).click();
+  await expect(page.locator(".flash-success")).toContainText("Deleted Oil service");
+  await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Restored Service: Oil service");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await page.goto("/stock");
+  await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText(before as string);
+});
+
+test("restore a shopping entry from Recently deleted", async ({ page }) => {
+  await page.goto("/shopping");
+  await page.getByLabel("Something new").fill("Zip ties");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Remove Zip ties" }).click();
+  await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(0);
+  await page.goto("/activity");
+  await page.locator("main").getByRole("link", { name: /Recently deleted/ }).click();
+  const entry = page.locator(".list li").filter({ hasText: "Shopping list: Zip ties" });
+  await entry.getByRole("button", { name: "Restore" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Restored Shopping list: Zip ties");
+  await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove Zip ties" }).click();
+});
+
 test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
   await page.goto("/services/new");
   const items = page.locator('select[name="part_item"]');
@@ -388,7 +418,7 @@ test("switch between light and dark theme", async ({ page }) => {
 });
 
 test("no page scrolls sideways", async ({ page }) => {
-  const paths = ["/", "/stock", "/stock?view=list", "/vehicles", "/services", "/shopping", "/activity", "/items/new", "/kits/new", "/services/new"];
+  const paths = ["/", "/stock", "/stock?view=list", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new"];
   // Also every detail page linked from the stock list and vehicles.
   await page.goto("/stock");
   paths.push(await page.locator(".item-row a.item-name").first().getAttribute("href") as string);

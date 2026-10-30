@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -282,12 +283,22 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 // applyMovement": it undoes a mistaken entry by deleting its movements
 // together with their effect, so the ledger still adds up. The odometer
 // change it made is undone too (see restoreOdometer).
-func (s *Store) DeleteService(ctx context.Context, id int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		var vehicleID int64
+func (s *Store) DeleteService(ctx context.Context, id int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var title, vehicle string
+		var on time.Time
 		// Lock the service first, then its items, like UpdateService.
-		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1 FOR UPDATE`, id).Scan(&vehicleID); err != nil {
+		if err := tx.QueryRow(ctx, `
+			SELECT sr.title, sr.performed_on, v.name FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
+			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicle); err != nil {
 			return notFound(err)
+		}
+		p, err := snapshot(ctx, tx, id, [2]string{"service_records", "id"}, [2]string{"stock_movements", "service_record_id"})
+		if err != nil {
+			return err
+		}
+		if trashID, err = putTrash(ctx, tx, TrashService, trashLabel("Service", title, vehicle, day(on)), p); err != nil {
+			return err
 		}
 		// Lock the items in id order first, like CreateService.
 		if _, err := tx.Exec(ctx, `
@@ -303,4 +314,5 @@ func (s *Store) DeleteService(ctx context.Context, id int64) error {
 		}
 		return checkAffected(tx.Exec(ctx, `DELETE FROM service_records WHERE id = $1`, id))
 	})
+	return trashID, err
 }

@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Photo is a stored item image.
@@ -36,7 +38,24 @@ func (s *Store) GetPhoto(ctx context.Context, itemID int64, thumb bool) (Photo, 
 	return p, notFound(err)
 }
 
-// DeletePhoto removes an item's photo.
-func (s *Store) DeletePhoto(ctx context.Context, itemID int64) error {
-	return checkAffected(s.pool.Exec(ctx, `DELETE FROM item_photos WHERE item_id = $1`, itemID))
+// DeletePhoto removes an item's photo, keeping it in the trash.
+func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var name, brand string
+		err := tx.QueryRow(ctx, `
+			SELECT i.name, i.brand FROM item_photos p JOIN items i ON i.id = p.item_id WHERE p.item_id = $1 FOR UPDATE OF p`, itemID).
+			Scan(&name, &brand)
+		if err != nil {
+			return notFound(err)
+		}
+		p, err := snapshot(ctx, tx, itemID, [2]string{"item_photos", "item_id"})
+		if err != nil {
+			return err
+		}
+		if trashID, err = putTrash(ctx, tx, TrashPhoto, trashLabel("Photo", displayName(brand, name)), p); err != nil {
+			return err
+		}
+		return checkAffected(tx.Exec(ctx, `DELETE FROM item_photos WHERE item_id = $1`, itemID))
+	})
+	return trashID, err
 }

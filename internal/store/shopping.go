@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 
@@ -110,8 +111,31 @@ func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, n
 }
 
 // DeleteShopping removes an entry.
-func (s *Store) DeleteShopping(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id))
+func (s *Store) DeleteShopping(ctx context.Context, id int64) (trashID int64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		trashID, err = trashShopping(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		return checkAffected(tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id))
+	})
+	return trashID, err
+}
+
+// trashShopping puts a snapshot of a shopping entry in the trash.
+func trashShopping(ctx context.Context, tx pgx.Tx, id int64) (int64, error) {
+	var title string
+	err := tx.QueryRow(ctx, `
+		SELECT COALESCE(NULLIF(btrim(i.brand || ' ' || i.name), ''), e.free_text)
+		FROM shopping_entries e LEFT JOIN items i ON i.id = e.item_id WHERE e.id = $1`, id).Scan(&title)
+	if err != nil {
+		return 0, notFound(err)
+	}
+	p, err := snapshot(ctx, tx, id, [2]string{"shopping_entries", "id"})
+	if err != nil {
+		return 0, err
+	}
+	return putTrash(ctx, tx, TrashShopping, trashLabel("Shopping list", title), p)
 }
 
 // MarkBought ticks an entry off the list. For entries linked to an item,
@@ -119,12 +143,17 @@ func (s *Store) DeleteShopping(ctx context.Context, id int64) error {
 // (purchase.ItemID is filled in from the entry). When less was bought than
 // the entry asks for, the entry stays on the list with the rest; left is
 // that remaining quantity (0 when the entry was removed).
-func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) (left float64, err error) {
+func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) (left float64, trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var itemID *int64
 		var qty *float64
 		if err := tx.QueryRow(ctx, `SELECT item_id, quantity FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID, &qty); err != nil {
 			return notFound(err)
+		}
+		// The entry as it was, so ticking it off can be undone.
+		before, err := snapshotRows(ctx, tx, "shopping_entries", "id = $1", id)
+		if err != nil {
+			return err
 		}
 		if itemID != nil && purchase != nil {
 			in := *purchase
@@ -139,19 +168,42 @@ func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.Moveme
 			if qty != nil {
 				left = math.Round((*qty-in.Delta)*1000) / 1000
 			}
+			// The item is locked, so its newest movement is this purchase.
+			var movementID int64
+			if err := tx.QueryRow(ctx, `SELECT max(id) FROM stock_movements WHERE item_id = $1`, in.ItemID).Scan(&movementID); err != nil {
+				return err
+			}
+			if trashID, err = putBought(ctx, tx, id, before, movementID); err != nil {
+				return err
+			}
+		} else if trashID, err = trashShopping(ctx, tx, id); err != nil {
+			return err
 		}
 		if left > 0 {
 			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2 WHERE id = $1`, id, left)
 			return err
 		}
 		left = 0
-		_, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id)
+		_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id)
 		return err
 	})
 	if err != nil {
+		return 0, 0, err
+	}
+	return left, trashID, nil
+}
+
+// putBought records a purchase made by ticking an entry off, with the
+// entry as it was before, so it can be undone.
+func putBought(ctx context.Context, tx pgx.Tx, entryID int64, before json.RawMessage, movementID int64) (int64, error) {
+	var title string
+	err := tx.QueryRow(ctx, `
+		SELECT btrim(i.brand || ' ' || i.name) FROM shopping_entries e JOIN items i ON i.id = e.item_id WHERE e.id = $1`, entryID).Scan(&title)
+	if err != nil {
 		return 0, err
 	}
-	return left, nil
+	m, _ := json.Marshal(movementID)
+	return putTrash(ctx, tx, TrashBought, trashLabel("Bought", title), trashPayload{"shopping_entries": before, "movement_id": m})
 }
 
 // ItemsNamed returns the items, archived ones included, whose name or

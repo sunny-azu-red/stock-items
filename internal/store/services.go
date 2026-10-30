@@ -111,41 +111,62 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 				return err
 			}
 		}
-		if in.OdometerKm != nil {
-			var current *int
-			err := tx.QueryRow(ctx, `SELECT odometer_km FROM vehicles WHERE id = $1 FOR UPDATE`, in.VehicleID).Scan(&current)
-			if err != nil {
-				return notFound(err)
-			}
-			if current == nil || *current < *in.OdometerKm {
-				if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer_km = $2, updated_at = now() WHERE id = $1`,
-					in.VehicleID, *in.OdometerKm); err != nil {
-					return err
-				}
-				if _, err := tx.Exec(ctx, `UPDATE service_records SET odometer_before = $2 WHERE id = $1`, id, current); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return moveOdometer(ctx, tx, id, in.VehicleID, in.OdometerKm)
 	})
 	return id, err
+}
+
+// moveOdometer moves the vehicle's odometer forward to a service's
+// reading and records on the service whether it did, and from what.
+func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, reading *int) error {
+	var current *int
+	if reading != nil {
+		// NO KEY UPDATE: inserting the service already holds a KEY SHARE lock
+		// on the vehicle (the foreign key), which FOR UPDATE would conflict
+		// with, deadlocking two services logged at once.
+		err := tx.QueryRow(ctx, `SELECT odometer_km FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, vehicleID).Scan(&current)
+		if err != nil {
+			return notFound(err)
+		}
+	}
+	moved := reading != nil && (current == nil || *current < *reading)
+	if moved {
+		if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer_km = $2, updated_at = now() WHERE id = $1`, vehicleID, *reading); err != nil {
+			return err
+		}
+	} else {
+		current = nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE service_records SET odometer_moved = $2, odometer_before = $3 WHERE id = $1`, serviceID, moved, current)
+	return err
+}
+
+// restoreOdometer undoes moveOdometer for a service that is being deleted
+// or changed: if the service moved the odometer and nothing changed it
+// since, it goes back to the highest of its earlier reading and the
+// readings of the vehicle's other services (NULL if there are none).
+// Services logged before odometer_moved existed are left alone.
+func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE vehicles v SET odometer_km = back.km, updated_at = now()
+		FROM service_records sr,
+		     LATERAL (SELECT GREATEST(sr.odometer_before,
+		                              (SELECT max(o.odometer_km) FROM service_records o
+		                               WHERE o.vehicle_id = sr.vehicle_id AND o.id <> sr.id)) AS km) back
+		WHERE sr.id = $1 AND v.id = sr.vehicle_id AND sr.odometer_moved
+		  AND v.odometer_km = sr.odometer_km AND (back.km IS NULL OR back.km < sr.odometer_km)`, serviceID)
+	return err
 }
 
 // DeleteService removes a service record and puts its parts back on stock.
 // It is a deliberate exception to "every change goes through
 // applyMovement": it undoes a mistaken entry by deleting its movements
-// together with their effect, so the ledger still adds up. If the service
-// moved the vehicle's odometer and nothing changed it since, the odometer
-// goes back to the highest of its earlier reading and the remaining
-// services' readings.
+// together with their effect, so the ledger still adds up. The odometer
+// change it made is undone too (see restoreOdometer).
 func (s *Store) DeleteService(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var vehicleID int64
-		var reading, before *int
-		err := tx.QueryRow(ctx, `SELECT vehicle_id, odometer_km, odometer_before FROM service_records WHERE id = $1`, id).
-			Scan(&vehicleID, &reading, &before)
-		if err != nil {
+		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1`, id).Scan(&vehicleID); err != nil {
 			return notFound(err)
 		}
 		// Lock the items in id order first, like CreateService.
@@ -163,18 +184,9 @@ func (s *Store) DeleteService(ctx context.Context, id int64) error {
 		if _, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, id); err != nil {
 			return err
 		}
-		if err := checkAffected(tx.Exec(ctx, `DELETE FROM service_records WHERE id = $1`, id)); err != nil {
+		if err := restoreOdometer(ctx, tx, id); err != nil {
 			return err
 		}
-		if reading == nil {
-			return nil
-		}
-		// GREATEST skips NULLs: an old record without odometer_before falls
-		// back to the other services, and with neither nothing changes.
-		_, err = tx.Exec(ctx, `
-			UPDATE vehicles SET odometer_km = back.km, updated_at = now()
-			FROM (SELECT GREATEST($3::int, (SELECT max(odometer_km) FROM service_records WHERE vehicle_id = $1)) AS km) back
-			WHERE id = $1 AND odometer_km = $2 AND back.km < $2`, vehicleID, *reading, before)
-		return err
+		return checkAffected(tx.Exec(ctx, `DELETE FROM service_records WHERE id = $1`, id))
 	})
 }

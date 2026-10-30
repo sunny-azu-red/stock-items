@@ -39,7 +39,7 @@ items ─< shopping_entries (or free text)
 
 **service_kit_lines:** item and needed quantity. Each item appears at most once per kit.
 
-**service_records:** a performed job: date, odometer, title, notes, labour cost, optional kit.
+**service_records:** a performed job: date, odometer, title, notes, labour cost, optional kit. `odometer_before` is the vehicle's reading before this service moved it forward (NULL when it didn't, or for records older than the column).
 
 **shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note. `unit` is the unit of a free-text entry's quantity (`stock.ParseAmountAnyUnit` picks it from the typed suffix); linked entries use the item's unit.
 - Marking a linked entry bought records a purchase. If less was bought than the entry's quantity, the entry stays with the rest (`store.MarkBought`).
@@ -50,7 +50,7 @@ items ─< shopping_entries (or free text)
 1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The one exception is deleting a service (5), which removes movements together with their effect, so the sum still holds.
 2. A movement can never make a quantity negative. You get `InsufficientStockError` instead, and the transaction rolls back. A service with one missing part logs nothing.
 3. An item's unit cannot change once it has stock history, is used in a kit, or has a quantity on the shopping list.
-4. Logging a service moves the vehicle odometer forward. It never moves it backwards.
+4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting the service that moved it puts it back to the highest of `odometer_before` and the remaining services' readings, unless the odometer was changed since.
 5. Deleting a service deletes its `service` movements and puts the quantities back on stock.
 
 ## Derived values (not stored)

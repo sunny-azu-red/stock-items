@@ -74,7 +74,8 @@ func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, 
 
 // CreateService logs a performed service. Every part is taken from stock
 // (failing with *InsufficientStockError if there is not enough), and the
-// vehicle's odometer is moved forward to the service reading.
+// vehicle's odometer is moved forward to the service reading. The reading
+// it had before is kept, so DeleteService can put it back.
 func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
@@ -111,11 +112,19 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 			}
 		}
 		if in.OdometerKm != nil {
-			_, err := tx.Exec(ctx, `
-				UPDATE vehicles SET odometer_km = $2, updated_at = now()
-				WHERE id = $1 AND (odometer_km IS NULL OR odometer_km < $2)`, in.VehicleID, *in.OdometerKm)
+			var current *int
+			err := tx.QueryRow(ctx, `SELECT odometer_km FROM vehicles WHERE id = $1 FOR UPDATE`, in.VehicleID).Scan(&current)
 			if err != nil {
-				return err
+				return notFound(err)
+			}
+			if current == nil || *current < *in.OdometerKm {
+				if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer_km = $2, updated_at = now() WHERE id = $1`,
+					in.VehicleID, *in.OdometerKm); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE service_records SET odometer_before = $2 WHERE id = $1`, id, current); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -124,11 +133,21 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 }
 
 // DeleteService removes a service record and puts its parts back on stock.
-// It is the one deliberate exception to "every change goes through
+// It is a deliberate exception to "every change goes through
 // applyMovement": it undoes a mistaken entry by deleting its movements
-// together with their effect, so the ledger still adds up.
+// together with their effect, so the ledger still adds up. If the service
+// moved the vehicle's odometer and nothing changed it since, the odometer
+// goes back to the highest of its earlier reading and the remaining
+// services' readings.
 func (s *Store) DeleteService(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
+		var vehicleID int64
+		var reading, before *int
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, odometer_km, odometer_before FROM service_records WHERE id = $1`, id).
+			Scan(&vehicleID, &reading, &before)
+		if err != nil {
+			return notFound(err)
+		}
 		// Lock the items in id order first, like CreateService.
 		if _, err := tx.Exec(ctx, `
 			SELECT id FROM items WHERE id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
@@ -144,6 +163,18 @@ func (s *Store) DeleteService(ctx context.Context, id int64) error {
 		if _, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, id); err != nil {
 			return err
 		}
-		return checkAffected(tx.Exec(ctx, `DELETE FROM service_records WHERE id = $1`, id))
+		if err := checkAffected(tx.Exec(ctx, `DELETE FROM service_records WHERE id = $1`, id)); err != nil {
+			return err
+		}
+		if reading == nil {
+			return nil
+		}
+		// GREATEST skips NULLs: an old record without odometer_before falls
+		// back to the other services, and with neither nothing changes.
+		_, err = tx.Exec(ctx, `
+			UPDATE vehicles SET odometer_km = back.km, updated_at = now()
+			FROM (SELECT GREATEST($3::int, (SELECT max(odometer_km) FROM service_records WHERE vehicle_id = $1)) AS km) back
+			WHERE id = $1 AND odometer_km = $2 AND back.km < $2`, vehicleID, *reading, before)
+		return err
 	})
 }

@@ -791,3 +791,98 @@ func TestFreeTextShoppingKeepsItsUnit(t *testing.T) {
 		t.Errorf("export = %q, want 4 L", got)
 	}
 }
+
+func TestDeleteServicePutsOdometerBack(t *testing.T) {
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
+	odometer := func(id int64) int {
+		t.Helper()
+		v, err := s.GetVehicle(ctx, id)
+		if err != nil || v.OdometerKm == nil {
+			t.Fatalf("vehicle %d: %+v, %v", id, v, err)
+		}
+		return *v.OdometerKm
+	}
+	vehicle := func(name string, km int) int64 {
+		in := stock.VehicleInput{Name: name, OdometerKm: &km}
+		in.Normalize()
+		id, err := s.CreateVehicle(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	service := func(vehicleID int64, km int) int64 {
+		t.Helper()
+		in := stock.ServiceInput{VehicleID: vehicleID, Title: "Chain clean", PerformedOn: time.Now(), OdometerKm: &km}
+		in.Normalize()
+		id, err := s.CreateService(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	// A typo is undone.
+	typo := vehicle("Typo", 10000)
+	if err := s.DeleteService(ctx, service(typo, 120000)); err != nil {
+		t.Fatal(err)
+	}
+	if km := odometer(typo); km != 10000 {
+		t.Errorf("after deleting the typo: %d, want 10000", km)
+	}
+
+	// Deleting the newest of two goes back to the older service.
+	two := vehicle("Two", 10000)
+	service(two, 11000)
+	if err := s.DeleteService(ctx, service(two, 12000)); err != nil {
+		t.Fatal(err)
+	}
+	if km := odometer(two); km != 11000 {
+		t.Errorf("after deleting the newer service: %d, want 11000", km)
+	}
+
+	// An older service that never moved the odometer leaves it alone.
+	older := service(two, 10500)
+	if err := s.DeleteService(ctx, older); err != nil {
+		t.Fatal(err)
+	}
+	if km := odometer(two); km != 11000 {
+		t.Errorf("after deleting an older service: %d, want 11000", km)
+	}
+
+	// A reading entered by hand since then is kept.
+	manual := vehicle("Manual", 10000)
+	svc := service(manual, 12000)
+	if err := s.SetOdometer(ctx, manual, 12500); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if km := odometer(manual); km != 12500 {
+		t.Errorf("after a manual reading: %d, want 12500", km)
+	}
+
+	// Records from before odometer_before existed fall back to the other
+	// services, or stay put when there are none.
+	legacy := vehicle("Legacy", 10000)
+	service(legacy, 11000)
+	newest := service(legacy, 12000)
+	lone := vehicle("Lone", 10000)
+	loneSvc := service(lone, 12000)
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer_before = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{newest, loneSvc} {
+		if err := s.DeleteService(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if km := odometer(legacy); km != 11000 {
+		t.Errorf("legacy fallback: %d, want 11000", km)
+	}
+	if km := odometer(lone); km != 12000 {
+		t.Errorf("legacy without other services: %d, want 12000 (unchanged)", km)
+	}
+}

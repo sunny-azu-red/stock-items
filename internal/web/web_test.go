@@ -743,3 +743,13 @@ func TestFreeTextShoppingUnits(t *testing.T) {
 	rec := a.get("/items/new?shopping=" + itoa(list[0].ID))
 	expect(t, rec, http.StatusOK, `name="quantity" value="4"`, `value="ml" checked`, `value="l" data-base="ml" selected`)
 }
+
+func TestDeletingAServicePutsTheOdometerBack(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}, "odometer_km": {"120000"}})
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="120000"`)
+	expect(t, a.post(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="10000"`)
+}

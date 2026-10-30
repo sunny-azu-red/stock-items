@@ -21,7 +21,7 @@ It is built for one household on a home network: no login, one binary, one Postg
   CSV export is available too.
 - **Quick −/+** on every row, and a full **history** of every stock change (purchase, use, count, service) with prices and shops.
 - **Service kits.** For example, "KTM 390 – Oil service" lists the filter, 1.7 L oil and 2 O-rings. You see at once what is on the shelf and what is missing, and one click puts the shortfall on the shopping list.
-- **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. Deleting a logged service puts its parts back on stock.
+- **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. Deleting a logged service puts its parts back on stock and undoes its odometer change.
 - **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.

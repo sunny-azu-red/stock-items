@@ -151,8 +151,9 @@ func (it Item) IsLow() bool {
 func (it Item) IsOut() bool { return it.Quantity <= 0 }
 
 // ExpiryState returns "expired", "soon" (within days), or "" for an item.
+// An item with nothing left has nothing to expire.
 func (it Item) ExpiryState(today time.Time, days int) string {
-	if it.ExpiresOn == nil {
+	if it.ExpiresOn == nil || it.Quantity <= 0 {
 		return ""
 	}
 	t := DateOnly(today)

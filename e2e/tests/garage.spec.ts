@@ -197,6 +197,29 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true });
 });
 
+test("buy something new from the shopping list", async ({ page }) => {
+  await page.goto("/shopping");
+  await page.getByLabel("Something new").fill("Chain lube");
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.locator(".list li").filter({ hasText: "Chain lube" }).getByRole("link", { name: "Bought" }).click();
+  await page.getByRole("link", { name: "Add to stock as a new item" }).click();
+
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Chain lube");
+  await expect(page.getByLabel("On stock")).toHaveValue("2");
+  await page.getByLabel("Total price").fill("59,80");
+  await page.getByLabel("Shop").fill("Moto shop");
+  await page.getByRole("button", { name: "Save item" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Added Chain lube to stock");
+  await expect(page.locator(".list li").filter({ hasText: "Chain lube" })).toHaveCount(0);
+
+  await page.goto("/stock");
+  await row(page, "Chain lube").getByRole("link").first().click();
+  await expect(page.locator("#item-qty")).toHaveText("2x");
+  await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("29.90 EUR / piece");
+  await expect(page.locator('dt:text-is("Purchases") + dd')).toHaveText("1");
+});
+
 test("edit and delete items", async ({ page }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock?q=Fuel");

@@ -18,6 +18,7 @@ items ─< shopping_entries (or free text)
 **items:** name, brand, category, `unit` (`piece`/`ml`/`g`), `quantity`, `min_quantity` (low-stock threshold), `expires_on`, location, notes.
 - `quantity >= 0` is enforced by a check constraint.
 - Quantities are always in the base unit: 1.5 L is stored as `1500`.
+- `expires_on` is set on the item form, or replaced by a purchase that gives the new batch's best-before date (in the same transaction as the movement).
 
 **item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`ean`/`retailer`/`other`; `ean` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
 
@@ -28,9 +29,10 @@ items ─< shopping_entries (or free text)
 **item_photos:** one photo per item, stored as JPEG (`image` up to 1600 px, `thumb` 320 px square).
 
 **stock_movements:** the ledger.
-- `kind`: `initial` (stock when created), `purchase`, `use`, `correction` (count/edit/quick +), `service`.
+- `kind`: `initial` (stock already on the shelf when the item was created), `purchase`, `use`, `correction` (count/edit/quick +), `service`.
+- A new item's starting stock is a `purchase` when a price or shop is entered on the form (`stock.ItemInput.StartMovement`), otherwise `initial`. Only priced purchases feed the last price, stock value and spending.
 - `delta`: signed, in base units, rounded to three decimals before it is applied.
-- Optional `total_price`, `supplier`, `note`, `occurred_on`.
+- Optional `total_price`, `supplier`, `note`, `occurred_on`. `occurred_on` must be between 1990-01-01 and tomorrow (`stock.CheckEventDate`).
 - `service_record_id` is set for parts used by a service.
 
 **service_kits:** a named list of parts for a recurring job on one vehicle, with optional `interval_km` / `interval_months`.
@@ -40,6 +42,8 @@ items ─< shopping_entries (or free text)
 **service_records:** a performed job: date, odometer, title, notes, labour cost, optional kit.
 
 **shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note.
+- Marking a linked entry bought records a purchase. If less was bought than the entry's quantity, the entry stays with the rest (`store.MarkBought`).
+- A free-text entry can become a new item: `store.CreateItemFromShopping` creates the item with its starting purchase and deletes the entry in one transaction.
 
 ## Invariants
 
@@ -54,7 +58,10 @@ items ─< shopping_entries (or free text)
 | Value | Computed in |
 |---|---|
 | Low stock | `quantity < min_quantity` (`stock.Item.IsLow`) |
+| Expiring | stock left and `expires_on` past or within 60 days (`stock.Item.ExpiryState`, `store.ItemFilter.Expiring`) |
 | Kit readiness and shortfall | `stock.Kit.Readiness`, `KitLine.Short` |
 | Service due state (`never`/`ok`/`soon`/`overdue`) | `stock.Kit.Due`: last service with the kit + interval, compared to the current odometer and today. "Soon" means within 30 days or max(500 km, 10 % of the interval), but never more than half the interval. Month intervals end on the same day of the month, or the month's last day (31 Jan + 1 month = 28 Feb). History logged with the kit on another vehicle is ignored. |
 | Purchase suggestions | `stock.SuggestPurchases`: below minimum or short for any kit, and not already on the list |
 | Stock value | quantity × last purchase price per unit (`store.GetStats`) |
+| Purchase count (item page) | `store.CountPurchases` |
+| Spent in the last 12 months | priced purchases plus labour cost with a date in the last 12 months (`store.GetStats`) |

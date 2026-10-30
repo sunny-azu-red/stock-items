@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"math"
 
 	"github.com/jackc/pgx/v5"
 
@@ -77,13 +78,16 @@ func (s *Store) DeleteShopping(ctx context.Context, id int64) error {
 	return checkAffected(s.pool.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id))
 }
 
-// MarkBought removes an entry from the list. For entries linked to an
-// item, the purchase is recorded as a stock movement in the same
-// transaction (purchase.ItemID is filled in from the entry).
-func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+// MarkBought ticks an entry off the list. For entries linked to an item,
+// the purchase is recorded as a stock movement in the same transaction
+// (purchase.ItemID is filled in from the entry). When less was bought than
+// the entry asks for, the entry stays on the list with the rest; left is
+// that remaining quantity (0 when the entry was removed).
+func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) (left float64, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var itemID *int64
-		if err := tx.QueryRow(ctx, `SELECT item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID); err != nil {
+		var qty *float64
+		if err := tx.QueryRow(ctx, `SELECT item_id, quantity FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID, &qty); err != nil {
 			return notFound(err)
 		}
 		if itemID != nil && purchase != nil {
@@ -93,11 +97,23 @@ func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.Moveme
 			if errs := in.Validate(); errs.Any() {
 				return errs
 			}
-			if err := applyMovement(ctx, tx, in); err != nil {
+			if err := applyStockChange(ctx, tx, in); err != nil {
 				return err
 			}
+			if qty != nil {
+				left = math.Round((*qty-in.Delta)*1000) / 1000
+			}
 		}
+		if left > 0 {
+			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2 WHERE id = $1`, id, left)
+			return err
+		}
+		left = 0
 		_, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id)
 		return err
 	})
+	if err != nil {
+		return 0, err
+	}
+	return left, nil
 }

@@ -3,6 +3,7 @@ package stock
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestItemInputValidate(t *testing.T) {
@@ -38,6 +39,74 @@ func TestItemInputValidateErrors(t *testing.T) {
 	for _, f := range []string{"name", "unit", "quantity", "min_quantity", "sku_1", "sku_2"} {
 		if _, ok := errs[f]; !ok {
 			t.Errorf("expected error for %s, got %v", f, errs)
+		}
+	}
+}
+
+func TestItemInputStartMovement(t *testing.T) {
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		in       ItemInput
+		kind     MovementKind
+		errField string // expected validation error, if any
+	}{
+		{"nothing entered: already on the shelf", ItemInput{Quantity: 2}, MoveInitial, ""},
+		{"price: bought", ItemInput{Quantity: 2, TotalPrice: ptr(30.0)}, MovePurchase, ""},
+		{"shop only: bought", ItemInput{Quantity: 2, Supplier: "moto24"}, MovePurchase, ""},
+		{"blank shop: not bought", ItemInput{Quantity: 2, Supplier: "   "}, MoveInitial, ""},
+		{"date only: not bought", ItemInput{Quantity: 2, BoughtOn: &day}, MoveInitial, ""},
+		{"bought but no amount", ItemInput{TotalPrice: ptr(30.0)}, MovePurchase, "quantity"},
+		{"bad price", ItemInput{Quantity: 2, TotalPrice: ptr(-1.0)}, MovePurchase, "total_price"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := tt.in
+			in.Name, in.Unit = "Coolant", UnitML
+			in.Normalize()
+			errs := in.Validate()
+			if _, ok := errs[tt.errField]; tt.errField != "" && !ok {
+				t.Errorf("want error on %s, got %v", tt.errField, errs)
+			} else if tt.errField == "" && errs.Any() {
+				t.Errorf("unexpected errors: %v", errs)
+			}
+			m := in.StartMovement(7)
+			if m.Kind != tt.kind || m.ItemID != 7 || m.Delta != in.Quantity {
+				t.Errorf("movement = %+v, want kind %s", m, tt.kind)
+			}
+			if m.Kind == MoveInitial && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != nil) {
+				t.Errorf("initial stock should carry no purchase details: %+v", m)
+			}
+			if m.Kind == MovePurchase && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
+				t.Errorf("purchase details not carried over: %+v", m)
+			}
+		})
+	}
+}
+
+func TestCheckEventDate(t *testing.T) {
+	today := time.Date(2026, 10, 30, 15, 0, 0, 0, time.UTC)
+	date := func(y int, m time.Month, d int) *time.Time {
+		t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		return &t
+	}
+	tests := []struct {
+		name string
+		d    *time.Time
+		ok   bool
+	}{
+		{"not given", nil, true},
+		{"today", date(2026, 10, 30), true},
+		{"tomorrow (time zones)", date(2026, 10, 31), true},
+		{"day after tomorrow", date(2026, 11, 1), false},
+		{"year typo", date(2062, 10, 30), false},
+		{"years ago", date(2019, 3, 1), true},
+		{"first accepted day", date(1990, 1, 1), true},
+		{"too old", date(1989, 12, 31), false},
+	}
+	for _, tt := range tests {
+		if got := CheckEventDate(tt.d, today) == ""; got != tt.ok {
+			t.Errorf("%s: ok = %v, want %v", tt.name, got, tt.ok)
 		}
 	}
 }
@@ -118,6 +187,9 @@ func TestMovementInputValidate(t *testing.T) {
 		{"negative price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(-1.0)}, false},
 		{"NaN price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(math.NaN())}, false},
 		{"huge price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(1e12)}, false},
+		{"purchase sets best before", MovementInput{Kind: MovePurchase, Delta: 1, ExpiresOn: &time.Time{}}, true},
+		{"use cannot set best before", MovementInput{Kind: MoveUse, Delta: -1, ExpiresOn: &time.Time{}}, false},
+		{"correction cannot set best before", MovementInput{Kind: MoveCorrection, Delta: 1, ExpiresOn: &time.Time{}}, false},
 	}
 	for _, c := range cases {
 		if got := !c.in.Validate().Any(); got != c.ok {

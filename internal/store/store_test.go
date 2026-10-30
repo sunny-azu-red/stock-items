@@ -198,7 +198,7 @@ func TestListItemsFilters(t *testing.T) {
 		SKUs: []stock.SKU{{Code: "90313090000", Kind: stock.SKUOEM}}})
 	mustItem(t, s, stock.ItemInput{Name: "Oil Filter", Brand: "Hiflofiltro", Category: "Filters", Unit: stock.UnitPiece, Quantity: 1, VehicleIDs: []int64{k1290},
 		SKUs: []stock.SKU{{Code: "HF-650", Kind: stock.SKUManufacturer}}})
-	mustItem(t, s, stock.ItemInput{Name: "M3.0 Ready To Use", Brand: "Motorex", Unit: stock.UnitML, Quantity: 640, VehicleIDs: []int64{k390, k1290}})
+	mustItem(t, s, stock.ItemInput{Name: "M3.0 Ready To Use", Brand: "Motorex", Unit: stock.UnitML, Quantity: 640, VehicleIDs: []int64{k390, k1290}, ExpiresOn: &soon})
 	mustItem(t, s, stock.ItemInput{Name: "Brake cleaner", Unit: stock.UnitML, Quantity: 0, MinQuantity: ptr(500.0), ExpiresOn: &soon})
 	mustItem(t, s, stock.ItemInput{Name: "Wiper blades", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{car}})
 
@@ -220,7 +220,7 @@ func TestListItemsFilters(t *testing.T) {
 		{"search wildcard is literal", store.ItemFilter{Query: "%"}, []string{}},
 		{"category", store.ItemFilter{Category: "filters"}, []string{"Oil Filter"}},
 		{"low", store.ItemFilter{LowStock: true}, []string{"Brake cleaner"}},
-		{"expiring", store.ItemFilter{Expiring: true}, []string{"Brake cleaner"}},
+		{"expiring (with stock left)", store.ItemFilter{Expiring: true}, []string{"M3.0 Ready To Use"}},
 		{"in stock", store.ItemFilter{InStock: true, VehicleIDs: []int64{car}, General: true}, []string{"Wiper blades"}},
 	}
 	for _, tt := range tests {
@@ -344,7 +344,7 @@ func TestKitsAndServices(t *testing.T) {
 	if len(list) != 1 || *list[0].Quantity != 1175 || list[0].ItemName != "Silkolene 15W50" {
 		t.Fatalf("shopping = %+v", list)
 	}
-	if err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
+	if _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -441,13 +441,13 @@ func TestShoppingList(t *testing.T) {
 		t.Errorf("unknown item: want ErrNotFound, got %v", err)
 	}
 
-	if err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
+	if _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, pads); it.Quantity != 3 {
 		t.Errorf("pads after purchase = %v", it.Quantity)
 	}
-	if err := s.MarkBought(ctx, freeID, nil); err != nil {
+	if _, err := s.MarkBought(ctx, freeID, nil); err != nil {
 		t.Fatal(err)
 	}
 	if list, _ := s.ListShopping(ctx); len(list) != 0 {
@@ -602,5 +602,174 @@ func TestKitMovedToAnotherVehicle(t *testing.T) {
 	}
 	if k.LastService != nil {
 		t.Errorf("moved kit kept the other vehicle's last service: %+v", k.LastService)
+	}
+}
+
+func TestNewItemWithPriceIsAPurchase(t *testing.T) {
+	s, ctx := newStore(t)
+	today := stock.DateOnly(time.Now())
+	antifreeze := mustItem(t, s, stock.ItemInput{Name: "Antigel M3.0", Unit: stock.UnitML, Quantity: 1000,
+		TotalPrice: ptr(67.0), Supplier: " moto24 ", BoughtOn: &today})
+	longAgo := today.AddDate(-2, 0, 0)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Brake Pads", Unit: stock.UnitPiece, Quantity: 2,
+		TotalPrice: ptr(10.0), BoughtOn: &longAgo})
+	shelf := mustItem(t, s, stock.ItemInput{Name: "Old grease", Unit: stock.UnitGram, Quantity: 300})
+
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: antifreeze})
+	if len(moves) != 1 || moves[0].Kind != stock.MovePurchase || moves[0].Supplier != "moto24" ||
+		moves[0].TotalPrice == nil || *moves[0].TotalPrice != 67 {
+		t.Errorf("antifreeze movements = %+v", moves)
+	}
+	if p, err := s.LastUnitPrice(ctx, antifreeze); err != nil || p == nil || *p != 0.067 {
+		t.Errorf("last unit price = %v, %v", p, err)
+	}
+	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: shelf}); len(moves) != 1 || moves[0].Kind != stock.MoveInitial {
+		t.Errorf("stock already on the shelf should be initial: %+v", moves)
+	}
+	for _, c := range []struct {
+		id   int64
+		want int
+	}{{antifreeze, 1}, {pads, 1}, {shelf, 0}} {
+		if n, err := s.CountPurchases(ctx, c.id); err != nil || n != c.want {
+			t.Errorf("CountPurchases(%d) = %d, %v; want %d", c.id, n, err, c.want)
+		}
+	}
+
+	// Both priced items count in the stock value; only the recent purchase
+	// counts as spending.
+	st, err := s.GetStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(st.StockValue-77) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
+		t.Errorf("stats = %+v, want value 77 and spent 67", st)
+	}
+	assertLedger(t, s)
+}
+
+func TestCreateItemFromShopping(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Brake Pads", Unit: stock.UnitPiece})
+	linked, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube", Quantity: ptr(1.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	in := stock.ItemInput{Name: "Chain lube", Unit: stock.UnitPiece, Quantity: 1, TotalPrice: ptr(45.0), Supplier: "Shop"}
+	in.Normalize()
+	id, err := s.CreateItemFromShopping(ctx, free, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); it.Name != "Chain lube" || it.Quantity != 1 {
+		t.Errorf("created item = %+v", it)
+	}
+	if n, _ := s.CountPurchases(ctx, id); n != 1 {
+		t.Errorf("purchases = %d, want 1", n)
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 1 || list[0].ID != linked {
+		t.Errorf("only the linked entry should be left: %+v", list)
+	}
+
+	// A second submit of the same form, or an entry that is already an
+	// item, creates nothing.
+	for _, entry := range []int64{free, linked} {
+		if _, err := s.CreateItemFromShopping(ctx, entry, in); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("entry %d: want ErrNotFound, got %v", entry, err)
+		}
+	}
+	if items, _ := s.ListItems(ctx, store.ItemFilter{}); len(items) != 2 {
+		t.Errorf("items = %v, want Brake Pads and one Chain lube", ids(items))
+	}
+	assertLedger(t, s)
+}
+
+func TestMarkBoughtKeepsTheRest(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Brake Pads", Unit: stock.UnitPiece})
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+	padsEntry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0)})
+	oilEntry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil})
+
+	tests := []struct {
+		name  string
+		entry int64
+		delta float64
+		left  float64
+		count int // entries left on the list
+	}{
+		{"less than listed", padsEntry, 1, 2, 2},
+		{"the rest", padsEntry, 2, 0, 1},
+		{"no quantity listed", oilEntry, 4000, 0, 0},
+	}
+	for _, tt := range tests {
+		left, err := s.MarkBought(ctx, tt.entry, &stock.MovementInput{Delta: tt.delta})
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		list, _ := s.ListShopping(ctx)
+		if left != tt.left || len(list) != tt.count {
+			t.Errorf("%s: left %v with %d entries, want %v with %d", tt.name, left, len(list), tt.left, tt.count)
+		}
+		i := slices.IndexFunc(list, func(e stock.ShoppingEntry) bool { return e.ID == tt.entry })
+		if (i >= 0) != (tt.left > 0) || (i >= 0 && *list[i].Quantity != tt.left) {
+			t.Errorf("%s: list = %+v", tt.name, list)
+		}
+	}
+	if it := mustGet(t, s, pads); it.Quantity != 3 {
+		t.Errorf("pads = %v, want 3", it.Quantity)
+	}
+	assertLedger(t, s)
+}
+
+func TestPurchaseSetsBestBefore(t *testing.T) {
+	s, ctx := newStore(t)
+	expired := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	fresh := time.Date(2029, 6, 30, 0, 0, 0, 0, time.UTC)
+	id := mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 500, ExpiresOn: &expired})
+
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(expired) {
+		t.Errorf("a purchase without a date should keep the expiry, got %v", it.ExpiresOn)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, ExpiresOn: &fresh}); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(fresh) {
+		t.Errorf("expiry = %v, want %v", it.ExpiresOn, fresh)
+	}
+	var verrs stock.Errors
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -100, ExpiresOn: &expired}); !errors.As(err, &verrs) {
+		t.Errorf("use with a best-before date: want validation error, got %v", err)
+	}
+
+	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &id})
+	later := fresh.AddDate(1, 0, 0)
+	if _, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1000, ExpiresOn: &later}); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(later) {
+		t.Errorf("expiry after shopping = %v, want %v", it.ExpiresOn, later)
+	}
+	assertLedger(t, s)
+}
+
+func TestExpiringSkipsEmptyItems(t *testing.T) {
+	s, ctx := newStore(t)
+	expired := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	mustItem(t, s, stock.ItemInput{Name: "Used up", Unit: stock.UnitML, ExpiresOn: &expired})
+	mustItem(t, s, stock.ItemInput{Name: "Still here", Unit: stock.UnitML, Quantity: 100, ExpiresOn: &expired})
+	items, err := s.ListItems(ctx, store.ItemFilter{Expiring: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(items); !slices.Equal(got, []string{"Still here"}) {
+		t.Errorf("expiring = %v", got)
 	}
 }

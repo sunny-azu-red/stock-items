@@ -54,6 +54,27 @@ type ItemInput struct {
 	// QuantityWas is the quantity the edit form was opened with. When
 	// Quantity still equals it, an update leaves the stock alone.
 	QuantityWas *float64
+	// TotalPrice, Supplier and BoughtOn describe how a new item's starting
+	// stock was bought. They are only used on create; see StartMovement.
+	TotalPrice *float64
+	Supplier   string
+	BoughtOn   *time.Time
+}
+
+// Bought reports whether a price or shop was given for the starting stock.
+func (in ItemInput) Bought() bool { return in.TotalPrice != nil || in.Supplier != "" }
+
+// StartMovement is the movement recording a new item's starting stock: a
+// purchase when a price or shop was given, otherwise "initial" stock that
+// was already on the shelf.
+func (in ItemInput) StartMovement(itemID int64) MovementInput {
+	if !in.Bought() {
+		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity}
+	}
+	return MovementInput{
+		ItemID: itemID, Kind: MovePurchase, Delta: in.Quantity,
+		TotalPrice: in.TotalPrice, Supplier: in.Supplier, OccurredOn: in.BoughtOn,
+	}
 }
 
 // Normalize trims text fields and drops empty SKU rows / duplicate tags.
@@ -63,6 +84,7 @@ func (in *ItemInput) Normalize() {
 	in.Category = strings.TrimSpace(in.Category)
 	in.Location = strings.TrimSpace(in.Location)
 	in.Notes = strings.TrimSpace(in.Notes)
+	in.Supplier = strings.TrimSpace(in.Supplier)
 	skus := in.SKUs[:0]
 	for _, s := range in.SKUs {
 		s.Code = strings.TrimSpace(s.Code)
@@ -96,6 +118,11 @@ func (in ItemInput) Validate() Errors {
 	}
 	if in.Quantity < 0 {
 		errs.Add("quantity", "Quantity cannot be negative")
+	} else if in.Bought() && in.Quantity == 0 {
+		errs.Add("quantity", "Enter how much you bought")
+	}
+	if !validMoney(in.TotalPrice) {
+		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
 	}
 	if in.MinQuantity != nil && *in.MinQuantity < 0 {
 		errs.Add("min_quantity", "Minimum cannot be negative")
@@ -221,6 +248,9 @@ type MovementInput struct {
 	Note            string
 	OccurredOn      *time.Time
 	ServiceRecordID *int64
+	// ExpiresOn is the best-before date of a purchased batch. When set, it
+	// replaces the item's expiry date.
+	ExpiresOn *time.Time
 }
 
 // Validate checks the input.
@@ -245,7 +275,30 @@ func (in MovementInput) Validate() Errors {
 	if !validMoney(in.TotalPrice) {
 		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
 	}
+	if in.ExpiresOn != nil && in.Kind != MovePurchase {
+		errs.Add("expires_on", "Only a purchase can set the best-before date")
+	}
 	return errs
+}
+
+// earliestEventDate is the oldest date accepted for a purchase, stock
+// change or service. Anything earlier is almost certainly a typo.
+var earliestEventDate = time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// CheckEventDate returns a message when d is not a plausible date for
+// something that already happened: before 1990 or after tomorrow (one day
+// of slack for time zones). A nil date is fine; it means today.
+func CheckEventDate(d *time.Time, today time.Time) string {
+	if d == nil {
+		return ""
+	}
+	if d.Before(earliestEventDate) {
+		return "Date is too far in the past"
+	}
+	if d.After(DateOnly(today).AddDate(0, 0, 1)) {
+		return "Date cannot be in the future"
+	}
+	return ""
 }
 
 // KitInput is the data needed to create or update a service kit.

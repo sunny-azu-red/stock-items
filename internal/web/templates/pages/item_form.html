@@ -1,11 +1,12 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<a class="back" href="{{if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
+<a class="back" href="{{if $f.ShoppingID}}/shopping{{else if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
 <div class="page-head">
   <h1>{{if $d.IsNew}}New item{{else}}Edit {{$f.Name}}{{end}}</h1>
 </div>
 
 <form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}">{{end}}
+  {{if $f.ShoppingID}}<input type="hidden" name="shopping_id" value="{{$f.ShoppingID}}">{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
 
   <div class="form-section">
@@ -89,6 +90,29 @@
     </div>
   </div>
 
+  {{if $d.IsNew}}
+  <div class="form-section">
+    <h2>Bought it just now?</h2>
+    <p class="hint mb">Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
+    <div class="form-grid">
+      <div class="field{{if index $e "total_price"}} has-error{{end}}">
+        <label for="total_price">Total price ({{.Currency}})</label>
+        <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional">
+        {{template "err" (index $e "total_price")}}
+      </div>
+      <div class="field">
+        <label for="supplier">Shop</label>
+        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="optional">
+      </div>
+      <div class="field{{if index $e "bought_on"}} has-error{{end}}">
+        <label for="bought_on">Bought on</label>
+        <input class="input" type="date" id="bought_on" name="bought_on" value="{{$f.BoughtOn}}">
+        {{template "err" (index $e "bought_on")}}
+      </div>
+    </div>
+  </div>
+  {{end}}
+
   <div class="form-section">
     <h2>SKUs / part numbers</h2>
     <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
@@ -109,8 +133,8 @@
   </div>
 
   <div class="form-section form-actions">
-    <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
-    {{if $d.IsNew}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
+    <a class="btn btn-ghost spacer" href="{{if $f.ShoppingID}}/shopping{{else if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
+    {{if and $d.IsNew (not $f.ShoppingID)}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>
   </div>
 </form>

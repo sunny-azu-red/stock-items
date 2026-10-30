@@ -21,7 +21,7 @@ type ItemFilter struct {
 	Query    string
 	Category string
 	LowStock bool
-	Expiring bool // expired or expiring within ExpiringDays
+	Expiring bool // with stock left and expired or expiring within ExpiringDays
 	InStock  bool // quantity > 0
 	Sort     string
 }
@@ -94,7 +94,7 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 		where = append(where, "i.min_quantity IS NOT NULL AND i.quantity < i.min_quantity")
 	}
 	if f.Expiring {
-		where = append(where, "i.expires_on IS NOT NULL AND i.expires_on <= current_date + "+args.add(ExpiringDays)+"::int")
+		where = append(where, "i.quantity > 0 AND i.expires_on IS NOT NULL AND i.expires_on <= current_date + "+args.add(ExpiringDays)+"::int")
 	}
 	if f.InStock {
 		where = append(where, "i.quantity > 0")
@@ -135,27 +135,58 @@ func (s *Store) GetItem(ctx context.Context, id int64) (stock.Item, error) {
 	return items[0], nil
 }
 
-// CreateItem stores a new item. A starting quantity is recorded as an
-// "initial" stock movement.
+// CreateItem stores a new item. Its starting quantity is recorded as a
+// purchase or as "initial" stock (see stock.ItemInput.StartMovement).
 func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `
-			INSERT INTO items (name, brand, category, unit, min_quantity, expires_on, location, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-			in.Name, in.Brand, in.Category, in.Unit, in.MinQuantity, in.ExpiresOn, in.Location, in.Notes,
-		).Scan(&id)
-		if err != nil {
-			return err
-		}
-		if in.Quantity > 0 {
-			if err := applyMovement(ctx, tx, stock.MovementInput{ItemID: id, Kind: stock.MoveInitial, Delta: in.Quantity}); err != nil {
-				return err
-			}
-		}
-		return replaceSKUsAndTags(ctx, tx, id, in)
+		var err error
+		id, err = createItem(ctx, tx, in)
+		return err
 	})
 	return id, err
+}
+
+// CreateItemFromShopping stores a new item bought from a free-text shopping
+// list entry and removes that entry, in one transaction. It returns
+// ErrNotFound when the entry is gone or is linked to an existing item.
+func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, in stock.ItemInput) (int64, error) {
+	var id int64
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		var itemID *int64
+		if err := tx.QueryRow(ctx, `SELECT item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&itemID); err != nil {
+			return notFound(err)
+		}
+		if itemID != nil {
+			return ErrNotFound
+		}
+		var err error
+		if id, err = createItem(ctx, tx, in); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID)
+		return err
+	})
+	return id, err
+}
+
+// createItem inserts an item with its starting stock, SKUs and tags.
+func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO items (name, brand, category, unit, min_quantity, expires_on, location, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		in.Name, in.Brand, in.Category, in.Unit, in.MinQuantity, in.ExpiresOn, in.Location, in.Notes,
+	).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	if in.Quantity > 0 {
+		if err := applyMovement(ctx, tx, in.StartMovement(id)); err != nil {
+			return 0, err
+		}
+	}
+	return id, replaceSKUsAndTags(ctx, tx, id, in)
 }
 
 // UpdateItem replaces an item's fields, SKUs and tags. A changed quantity

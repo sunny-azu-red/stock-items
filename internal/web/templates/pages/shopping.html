@@ -2,7 +2,7 @@
 <div class="page-head">
   <div>
     <h1>Shopping list</h1>
-    <p class="sub">What to buy before the next job. Ticking an item off adds it to stock.</p>
+    <p class="sub">What to buy before the next job. Marking an entry bought adds it to stock.</p>
   </div>
   <div class="actions">
     {{if $d.Entries}}<button class="btn" type="button" data-copy-url="/shopping/export.txt">{{icon "copy"}} Copy as text</button>{{end}}
@@ -22,11 +22,7 @@
             {{with .Note}}<span class="meta">{{.}}</span>{{end}}
           </span>
           <span class="end qty">{{with .Quantity}}{{qty . $entry.ItemUnit}}{{end}}</span>
-          {{if .ItemID}}
-            <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "check"}} Bought</a>
-          {{else}}
-            <form class="inline-form" method="post" action="/shopping/{{.ID}}/bought"><button class="btn btn-sm btn-primary" type="submit">{{icon "check"}} Done</button></form>
-          {{end}}
+          <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "check"}} Bought</a>
           <form class="inline-form" method="post" action="/shopping/{{.ID}}/delete"><button class="icon-btn" type="submit" aria-label="Remove {{.Title}}" title="Remove">{{icon "x"}}</button></form>
         </li>
         {{end}}
@@ -73,7 +69,7 @@
     <div class="card-head"><h2>{{icon "triangle-alert"}} Suggestions</h2>
       {{if gt (len $d.Suggestions) 1}}
       <form class="inline-form" method="post" action="/shopping/suggestions">
-        {{range $d.Suggestions}}<input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}">{{end}}
+        {{range $d.Suggestions}}<input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}"><input type="hidden" name="note" value="{{join .Reasons "; "}}">{{end}}
         <button class="btn btn-sm" type="submit">Add all</button>
       </form>
       {{end}}
@@ -88,7 +84,7 @@
         </span>
         <span class="end qty">{{qty .Quantity .Item.Unit}}</span>
         <form class="inline-form" method="post" action="/shopping/suggestions">
-          <input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}">
+          <input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}"><input type="hidden" name="note" value="{{join .Reasons "; "}}">
           <button class="icon-btn" type="submit" aria-label="Add {{.Item.DisplayName}} to the list" title="Add to list">{{icon "plus"}}</button>
         </form>
       </li>

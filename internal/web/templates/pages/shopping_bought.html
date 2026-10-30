@@ -3,9 +3,20 @@
 <div class="page-head">
   <div>
     <h1>Bought {{$d.Entry.Title}}</h1>
-    <p class="sub">This adds the amount to stock and removes it from the list.</p>
+    {{if $d.Entry.ItemID}}<p class="sub">This adds the amount to stock and takes it off the list. If you bought less than listed, the rest stays on the list.</p>
+    {{else}}<p class="sub">This isn't an item on stock yet.</p>{{end}}
   </div>
 </div>
+{{if not $d.Entry.ItemID}}
+<div class="card card-body">
+  <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep on stock.</p>
+  <div class="form-actions">
+    <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>
+    <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
+    <a class="btn btn-primary" href="/items/new?shopping={{$d.Entry.ID}}">{{icon "package-plus"}} Add to stock as a new item</a>
+  </div>
+</div>
+{{else}}
 <form class="card form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
   {{template "error-summary" $e}}
   <div class="form-grid">
@@ -24,6 +35,12 @@
     </div>
     <div class="field"><label for="supplier">Shop</label><input class="input" id="supplier" name="supplier" value="{{$m.Supplier}}" placeholder="optional"></div>
     <div class="field{{if index $e "occurred_on"}} has-error{{end}}"><label for="occurred_on">Date</label><input class="input" type="date" id="occurred_on" name="occurred_on" value="{{$m.OccurredOn}}">{{template "err" (index $e "occurred_on")}}</div>
+    <div class="field{{if index $e "expires_on"}} has-error{{end}}">
+      <label for="expires_on">Best before</label>
+      <input class="input" type="date" id="expires_on" name="expires_on" value="{{$m.ExpiresOn}}">
+      <p class="hint">Optional. Replaces the item's date; leave empty to keep it.</p>
+      {{template "err" (index $e "expires_on")}}
+    </div>
   </div>
   <div class="field"><label for="note">Note</label><input class="input" id="note" name="note" value="{{$m.Note}}" placeholder="optional"></div>
   <div class="form-actions">
@@ -31,4 +48,5 @@
     <button class="btn btn-primary" type="submit">{{icon "package-plus"}} Add to stock</button>
   </div>
 </form>
+{{end}}
 {{end}}

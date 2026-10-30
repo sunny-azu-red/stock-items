@@ -15,7 +15,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 | `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown | everything |
 | `internal/config` | Reads env vars and the nearest `.env` file | `godotenv` |
 | `internal/db` | Opens the pgx pool (with optional `search_path`), runs goose migrations embedded from `migrations/`, guarded `DropSchema` for tests | `pgx`, `goose` |
-| `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export, kit readiness, service due dates, purchase suggestions | stdlib only |
+| `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export, kit readiness, service due dates, purchase suggestions, starting stock (purchase vs initial), date sanity checks | stdlib only |
 | `internal/store` | All SQL. Each method is one use case. Multi-row writes run in a single transaction (`inTx`) | `pgx`, `stock` |
 | `internal/web` | Routes, middleware, handlers, form parsing, template rendering, photo processing | `store`, `stock` |
 | `internal/testdb` | Creates a migrated throwaway schema per test | `db`, `config` |

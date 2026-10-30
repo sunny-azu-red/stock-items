@@ -123,6 +123,12 @@
       <label for="supplier">Shop</label>
       <input class="input" id="supplier" name="supplier" value="{{if $active}}{{$m.Supplier}}{{end}}" placeholder="optional">
     </div>
+    <div class="field{{if and $active (index $e "expires_on")}} has-error{{end}}">
+      <label for="expires-{{.Kind}}">Best before</label>
+      <input class="input" type="date" id="expires-{{.Kind}}" name="expires_on" value="{{if $active}}{{$m.ExpiresOn}}{{end}}">
+      <p class="hint">Optional. Replaces the item's date; leave empty to keep it.</p>
+      {{if $active}}{{template "err" (index $e "expires_on")}}{{end}}
+    </div>
     {{end}}
     {{if ne .Kind "correction"}}
     <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">

@@ -20,13 +20,16 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 ## Domain
 
 - Quantities are stored in base units (pieces, ml, g) and converted only at the edges (`stock.ParseAmount`, `stock.FormatQuantity`, `stock.SplitForInput`).
-- Pure rules (validation, grouping, due dates, suggestions, exports) live in `internal/stock`, have no I/O and are unit tested.
+- Pure rules (validation, grouping, due dates, suggestions, exports, how a new item's starting stock is recorded, plausible dates) live in `internal/stock`, have no I/O and are unit tested.
+- Money figures (last price, stock value, spending) read only `purchase` movements. Anything that adds stock the user paid for must be recorded as a purchase, not as `initial` or `correction`.
 - Inputs are cleaned with `Normalize()` and checked with `Validate()`, which returns `stock.Errors` (field → message).
 
 ## Web
 
 - Every page is server-rendered and every form works without JavaScript (POST, then a 303 redirect with a flash message). htmx and `static/app.js` are progressive enhancements only.
 - Invalid forms re-render with status **422**, keeping exactly what the user typed, with messages next to the fields.
+- Never turn a blank field into a destructive value: a blank quantity on the edit form is an error, not 0.
+- Parse dates of things that already happened (purchases, stock changes, services) with `parseEventDate`, which applies `stock.CheckEventDate`. Best-before dates use `parseOptDate`; they can be far in the future.
 - Templates: pages in `templates/pages`, reusable blocks in `templates/partials`, helpers in `render.go`. Use `withQuery` for URLs built from encoded query strings.
 - No external CDNs or fonts at runtime. Vendor assets under `static/vendor` with their licence files. (The Lucide icons are inlined as a sprite in `templates/partials/icons.html`; their licence is in `static/vendor`.)
 - The layout must work from 360 px phone width up. The e2e suite fails if any page scrolls sideways.

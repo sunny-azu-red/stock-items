@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -98,13 +99,13 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// shoppingAddSuggestions adds one or more suggestions (item_id + qty pairs,
-// qty in base units).
+// shoppingAddSuggestions adds one or more suggestions (item_id + qty + note
+// triples, qty in base units). The note keeps the reason for the suggestion.
 func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	ids, qtys := r.PostForm["item_id"], r.PostForm["qty"]
+	ids, qtys, notes := r.PostForm["item_id"], r.PostForm["qty"], r.PostForm["note"]
 	n := 0
 	for i, raw := range ids {
 		id, err := strconv.ParseInt(raw, 10, 64)
@@ -116,7 +117,11 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 		if err != nil || !(q > 0 && q <= stock.MaxQuantity) {
 			continue
 		}
-		err = s.store.EnsureShopping(r.Context(), id, q, "")
+		note := ""
+		if i < len(notes) {
+			note = strings.TrimSpace(notes[i])
+		}
+		err = s.store.EnsureShopping(r.Context(), id, q, note)
 		if errors.Is(err, store.ErrNotFound) {
 			continue // deleted in the meantime
 		}
@@ -168,7 +173,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if e.ItemID == nil {
-		if err := s.store.MarkBought(r.Context(), id, nil); err != nil {
+		if _, err := s.store.MarkBought(r.Context(), id, nil); err != nil {
 			return err
 		}
 		s.redirect(w, r, "/shopping", "Ticked off "+e.Title())
@@ -177,7 +182,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	f := movementForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		Errors: stock.Errors{},
+		ExpiresOn: formText(r, "expires_on"), Errors: stock.Errors{},
 	}
 	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note}
 	if q, err := stock.ParseAmount(f.Amount, e.ItemUnit, f.AmountUnit); err != nil || q <= 0 {
@@ -190,14 +195,23 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		in.TotalPrice = p
 	}
-	if d, err := parseOptDate(f.OccurredOn); err != nil {
+	if d, err := parseEventDate(f.OccurredOn, s.now()); err != nil {
 		f.Errors.Add("occurred_on", err.Error())
 	} else {
 		in.OccurredOn = d
 	}
+	if d, err := parseOptDate(f.ExpiresOn); err != nil {
+		f.Errors.Add("expires_on", err.Error())
+	} else {
+		in.ExpiresOn = d
+	}
 	if !f.Errors.Any() {
-		if err := s.store.MarkBought(r.Context(), id, &in); err == nil {
-			s.redirect(w, r, "/shopping", "Added "+stock.FormatQuantity(in.Delta, e.ItemUnit)+" of "+e.Title()+" to stock")
+		if left, err := s.store.MarkBought(r.Context(), id, &in); err == nil {
+			msg := "Added " + stock.FormatQuantity(in.Delta, e.ItemUnit) + " of " + e.Title() + " to stock"
+			if left > 0 {
+				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
+			}
+			s.redirect(w, r, "/shopping", msg)
 			return nil
 		} else if !formConflict(f.Errors, err) {
 			return err

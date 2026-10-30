@@ -550,3 +550,183 @@ func TestSKUErrorsLandOnTheirRow(t *testing.T) {
 		t.Errorf("barcode error is not on the row with the code (row at %d, message at %d)", row, msg)
 	}
 }
+
+func expectNot(t *testing.T, rec *httptest.ResponseRecorder, absent ...string) {
+	t.Helper()
+	for _, s := range absent {
+		if strings.Contains(rec.Body.String(), s) {
+			t.Errorf("response should not contain %q", s)
+		}
+	}
+}
+
+func TestNewItemBoughtJustNow(t *testing.T) {
+	a := newApp(t)
+	expect(t, a.get("/items/new"), http.StatusOK, "Bought it just now?", `name="bought_on" value="2026-10-29"`)
+
+	form := url.Values{"name": {"M3.0 Ready To Use"}, "brand": {"Motorex"}, "unit": {"ml"}, "quantity": {"1"}, "quantity_unit": {"l"},
+		"total_price": {"67"}, "supplier": {"moto24"}, "bought_on": {"2026-10-29"}}
+	rec := a.post("/items", form)
+	expect(t, rec, http.StatusSeeOther)
+	page := a.get(rec.Header().Get("Location"))
+	expect(t, page, http.StatusOK, "67.00 EUR / L", "<dt>Purchases</dt><dd>1</dd>", "moto24", "Purchase")
+	if st, _ := a.store.GetStats(context.Background()); st.StockValue != 67 || st.Spent12m != 67 {
+		t.Errorf("stats = %+v, want 67 value and spending", st)
+	}
+
+	// A price needs an amount, and a purchase can't be in the future.
+	bad := url.Values{"name": {"Coolant"}, "unit": {"ml"}, "total_price": {"20"}}
+	expect(t, a.post("/items", bad), http.StatusUnprocessableEntity, "Enter how much you bought", `value="20"`)
+	bad = url.Values{"name": {"Coolant"}, "unit": {"ml"}, "quantity": {"1"}, "supplier": {"Shop"}, "bought_on": {"2026-11-05"}}
+	expect(t, a.post("/items", bad), http.StatusUnprocessableEntity, "Date cannot be in the future")
+
+	// Without a price or shop it is stock that was already there.
+	expect(t, a.post("/items", url.Values{"name": {"Old grease"}, "unit": {"g"}, "quantity": {"300"}, "bought_on": {"2026-10-29"}}), http.StatusSeeOther)
+	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Old grease"))), http.StatusOK, "Initial stock", "<dt>Purchases</dt><dd>0</dd>")
+}
+
+func TestItemEditForm(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	id := itemID(t, a.store, "Silkolene")
+	path := "/items/" + itoa(id)
+	rec := a.get(path + "/edit")
+	expect(t, rec, http.StatusOK)
+	expectNot(t, rec, "Bought it just now?", `name="total_price"`)
+
+	// A blank quantity must not silently empty the stock.
+	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {""},
+		"quantity_unit": {"ml"}, "quantity_was": {"525"}}
+	expect(t, a.post(path, form), http.StatusUnprocessableEntity, "Enter the amount on stock (0 if none)")
+	form.Set("quantity", "0")
+	expect(t, a.post(path, form), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(context.Background(), id); it.Quantity != 0 {
+		t.Errorf("quantity = %v, want 0 after an explicit 0", it.Quantity)
+	}
+}
+
+func TestBuySomethingNewFromShoppingList(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	expect(t, a.post("/shopping", url.Values{"free_text": {"Chain lube"}, "quantity": {"2"}, "note": {"the white one"}}), http.StatusSeeOther)
+	list, _ := a.store.ListShopping(ctx)
+	if len(list) != 1 {
+		t.Fatalf("shopping = %+v", list)
+	}
+	entry := itoa(list[0].ID)
+	expect(t, a.get("/shopping"), http.StatusOK, `href="/shopping/`+entry+`/bought"`)
+	expect(t, a.get("/shopping/"+entry+"/bought"), http.StatusOK,
+		"Just tick it off", "Add to stock as a new item", `href="/items/new?shopping=`+entry+`"`)
+
+	rec := a.get("/items/new?shopping=" + entry)
+	expect(t, rec, http.StatusOK, `value="Chain lube"`, `name="shopping_id" value="`+entry+`"`, `name="quantity" value="2"`, "the white one")
+	expectNot(t, rec, "Save &amp; add another")
+
+	form := url.Values{"shopping_id": {entry}, "name": {"Chain lube"}, "unit": {"piece"}, "quantity": {"2"}, "quantity_unit": {"pcs"},
+		"total_price": {"60"}, "supplier": {"Moto shop"}, "bought_on": {"2026-10-29"}}
+	rec = a.post("/items", form)
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != "/shopping" {
+		t.Errorf("location = %q, want /shopping", l)
+	}
+	if list, _ := a.store.ListShopping(ctx); len(list) != 0 {
+		t.Errorf("entry should be gone: %+v", list)
+	}
+	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Chain lube"))), http.StatusOK, "30.00 EUR / piece", "<dt>Purchases</dt><dd>1</dd>")
+
+	// Submitting again creates no second item.
+	expect(t, a.post("/items", form), http.StatusUnprocessableEntity, "no longer exists")
+	expect(t, a.get("/items/new?shopping="+entry), http.StatusNotFound)
+
+	// An entry for an existing item keeps the purchase form.
+	pads := itemID(t, a.store, "Rear Brake")
+	linked, _ := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads})
+	expect(t, a.get("/items/new?shopping="+itoa(linked)), http.StatusNotFound)
+	expect(t, a.get("/shopping/"+itoa(linked)+"/bought"), http.StatusOK, `name="amount"`, `name="total_price"`)
+
+	// Or just tick a free-text entry off.
+	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Zip ties"})
+	expect(t, a.post("/shopping/"+itoa(free)+"/bought", nil), http.StatusSeeOther)
+	if _, err := a.store.GetShopping(ctx, free); err == nil {
+		t.Error("ticked-off entry should be gone")
+	}
+}
+
+func TestShoppingPartialPurchaseAndBestBefore(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(4000.0)})
+	path := "/shopping/" + itoa(entry) + "/bought"
+
+	expect(t, a.post(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "occurred_on": {"2062-10-29"}}),
+		http.StatusUnprocessableEntity, "Date cannot be in the future")
+	expect(t, a.post(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2029-06-30"}}), http.StatusSeeOther)
+	e, err := a.store.GetShopping(ctx, entry)
+	if err != nil || *e.Quantity != 3000 {
+		t.Errorf("entry = %+v, %v; want 3 L still on the list", e, err)
+	}
+	it, _ := a.store.GetItem(ctx, oil)
+	if it.Quantity != 1525 || it.ExpiresOn == nil || it.ExpiresOn.Format("2006-01-02") != "2029-06-30" {
+		t.Errorf("oil = %v expiring %v", it.Quantity, it.ExpiresOn)
+	}
+
+	// The same from the item page; a use can't move the date.
+	item := "/items/" + itoa(oil)
+	expect(t, a.get(item), http.StatusOK, `name="expires_on"`, "Best before")
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2030-01-31"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}, "expires_on": {"2020-01-01"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"1980-01-01"}}),
+		http.StatusUnprocessableEntity, "Date is too far in the past")
+	if it, _ := a.store.GetItem(ctx, oil); it.ExpiresOn.Format("2006-01-02") != "2030-01-31" {
+		t.Errorf("expiry = %v, want 2030-01-31", it.ExpiresOn)
+	}
+}
+
+func TestServiceDateIsChecked(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-12-01"}}),
+		http.StatusUnprocessableEntity, "Date cannot be in the future")
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}}),
+		http.StatusSeeOther)
+}
+
+func TestSuggestionKeepsItsReason(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	expect(t, a.post("/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"2"}, "note": {"Below minimum"}}), http.StatusSeeOther)
+	list, _ := a.store.ListShopping(context.Background())
+	if len(list) != 1 || list[0].Note != "Below minimum" {
+		t.Errorf("shopping = %+v", list)
+	}
+}
+
+func TestItemPageCountsAllPurchases(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	id := itemID(t, a.store, "Rear Brake")
+	// More purchases than the item page loads history rows for.
+	for range 101 {
+		if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expect(t, a.get("/items/"+itoa(id)), http.StatusOK, "<dt>Purchases</dt><dd>101</dd>")
+}
+
+func TestEmptyItemsAreNotExpiring(t *testing.T) {
+	a := newApp(t)
+	expired := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	in := stock.ItemInput{Name: "Used up coolant", Unit: stock.UnitML, ExpiresOn: &expired}
+	in.Normalize()
+	id, err := a.store.CreateItem(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect(t, a.get("/"), http.StatusOK, `Expiring</span><span class="value">0</span>`)
+	expectNot(t, a.get("/items/"+itoa(id)), "Expired")
+}

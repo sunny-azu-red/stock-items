@@ -28,9 +28,13 @@ type itemForm struct {
 	QuantityWas                 string // base units, as the edit form was opened
 	MinQuantity, MinUnit        string
 	ExpiresOn, Location, Notes  string
-	VehicleIDs                  []int64
-	SKUs                        []skuRow
-	Errors                      stock.Errors
+	// How the starting stock of a new item was bought (create only), and
+	// the free-text shopping entry it was bought from, if any.
+	TotalPrice, Supplier, BoughtOn string
+	ShoppingID                     int64
+	VehicleIDs                     []int64
+	SKUs                           []skuRow
+	Errors                         stock.Errors
 }
 
 type itemFormPage struct {
@@ -71,8 +75,10 @@ func itemFormFromItem(it stock.Item) itemForm {
 }
 
 // parseItemForm reads the posted item form. Problems are recorded in
-// form.Errors; the returned input is only meaningful without errors.
-func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
+// form.Errors; the returned input is only meaningful without errors. The
+// purchase fields are only read for a new item (isNew); dates are checked
+// against today.
+func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stock.ItemInput) {
 	f := itemForm{
 		Name: formText(r, "name"), Brand: formText(r, "brand"), Category: formText(r, "category"),
 		Unit: formText(r, "unit"), Quantity: formText(r, "quantity"), QuantityUnit: formText(r, "quantity_unit"),
@@ -90,6 +96,26 @@ func parseItemForm(r *http.Request) (itemForm, stock.ItemInput) {
 		f.Errors.Add("quantity", err.Error())
 	} else if q != nil {
 		in.Quantity = *q
+	} else if !isNew {
+		// Blank would mean 0 and silently empty the stock.
+		f.Errors.Add("quantity", "Enter the amount on stock (0 if none)")
+	}
+	if isNew {
+		f.TotalPrice, f.Supplier, f.BoughtOn = formText(r, "total_price"), formText(r, "supplier"), formText(r, "bought_on")
+		in.Supplier = f.Supplier
+		if id := parseOptID(formText(r, "shopping_id")); id != nil {
+			f.ShoppingID = *id
+		}
+		if p, err := parseOptMoney(f.TotalPrice); err != nil {
+			f.Errors.Add("total_price", err.Error())
+		} else {
+			in.TotalPrice = p
+		}
+		if d, err := parseEventDate(f.BoughtOn, today); err != nil {
+			f.Errors.Add("bought_on", err.Error())
+		} else {
+			in.BoughtOn = d
+		}
 	}
 	if was, err := strconv.ParseFloat(f.QuantityWas, 64); err == nil {
 		in.QuantityWas = &was
@@ -175,7 +201,10 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 
 func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
-	f := itemForm{Unit: string(stock.UnitPiece), QuantityUnit: "pcs", MinUnit: "pcs", VehicleIDs: parseIDs(q["vehicle"])}
+	f := itemForm{
+		Unit: string(stock.UnitPiece), QuantityUnit: "pcs", MinUnit: "pcs", VehicleIDs: parseIDs(q["vehicle"]),
+		BoughtOn: s.now().Format("2006-01-02"),
+	}
 	if u := stock.Unit(q.Get("unit")); u.Valid() {
 		f.Unit = string(u)
 		_, f.QuantityUnit = stock.SplitForInput(0, u)
@@ -183,6 +212,20 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	}
 	f.Category = q.Get("category")
 	f.Location = q.Get("location")
+	if id := parseOptID(q.Get("shopping")); id != nil {
+		// Something new bought from the shopping list.
+		e, err := s.store.GetShopping(r.Context(), *id)
+		if err != nil {
+			return err
+		}
+		if e.ItemID != nil {
+			return store.ErrNotFound
+		}
+		f.ShoppingID, f.Name, f.Notes = e.ID, e.FreeText, e.Note
+		if e.Quantity != nil {
+			f.Quantity, f.QuantityUnit = stock.SplitForInput(*e.Quantity, stock.UnitPiece)
+		}
+	}
 	page, err := s.itemFormPage(r, f, true)
 	if err != nil {
 		return err
@@ -195,10 +238,20 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	f, in := parseItemForm(r)
+	f, in := parseItemForm(r, true, s.now())
 	if !f.Errors.Any() {
-		id, err := s.store.CreateItem(r.Context(), in)
+		var id int64
+		var err error
+		if f.ShoppingID != 0 {
+			id, err = s.store.CreateItemFromShopping(r.Context(), f.ShoppingID, in)
+		} else {
+			id, err = s.store.CreateItem(r.Context(), in)
+		}
 		if err == nil {
+			if f.ShoppingID != 0 {
+				s.redirect(w, r, "/shopping", "Added "+displayInput(in)+" to stock")
+				return nil
+			}
 			if r.PostFormValue("next") == "new" {
 				q := url.Values{"unit": {string(in.Unit)}, "category": {in.Category}, "location": {in.Location}}
 				for _, v := range in.VehicleIDs {
@@ -247,7 +300,7 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	f, in := parseItemForm(r)
+	f, in := parseItemForm(r, false, s.now())
 	f.ID = id
 	if !f.Errors.Any() {
 		err := s.store.UpdateItem(r.Context(), id, in)
@@ -329,6 +382,7 @@ func (s *Server) itemDuplicate(w http.ResponseWriter, r *http.Request) error {
 
 type movementForm struct {
 	Kind, Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
+	ExpiresOn                                                        string // purchases only
 	Errors                                                           stock.Errors
 }
 
@@ -369,6 +423,10 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
+	purchases, err := s.store.CountPurchases(ctx, id)
+	if err != nil {
+		return itemPage{}, err
+	}
 	shopping, err := s.store.ListShopping(ctx)
 	if err != nil {
 		return itemPage{}, err
@@ -376,7 +434,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
-		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays),
+		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases,
 	}
 	if price != nil {
 		v := *price * it.Quantity
@@ -385,11 +443,6 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	for _, e := range shopping {
 		if e.ItemID != nil && *e.ItemID == id {
 			p.OnShopping = true
-		}
-	}
-	for _, m := range moves {
-		if m.Kind == stock.MovePurchase {
-			p.PurchaseCount++
 		}
 	}
 	if p.Move.Kind == "" {
@@ -433,7 +486,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	f := movementForm{
 		Kind: formText(r, "kind"), Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"),
 		TotalPrice: formText(r, "total_price"), Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"),
-		Note: formText(r, "note"), Errors: stock.Errors{},
+		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), Errors: stock.Errors{},
 	}
 	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Supplier: f.Supplier, Note: f.Note}
 	switch in.Kind {
@@ -463,10 +516,17 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		in.TotalPrice = p
 	}
-	if d, err := parseOptDate(f.OccurredOn); err != nil {
+	if d, err := parseEventDate(f.OccurredOn, s.now()); err != nil {
 		f.Errors.Add("occurred_on", err.Error())
 	} else {
 		in.OccurredOn = d
+	}
+	if in.Kind == stock.MovePurchase {
+		if d, err := parseOptDate(f.ExpiresOn); err != nil {
+			f.Errors.Add("expires_on", err.Error())
+		} else {
+			in.ExpiresOn = d
+		}
 	}
 	if !f.Errors.Any() {
 		var err error

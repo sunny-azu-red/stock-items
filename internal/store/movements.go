@@ -54,7 +54,20 @@ func (s *Store) AddMovement(ctx context.Context, in stock.MovementInput) error {
 	if errs := in.Validate(); errs.Any() {
 		return errs
 	}
-	return s.inTx(ctx, func(tx pgx.Tx) error { return applyMovement(ctx, tx, in) })
+	return s.inTx(ctx, func(tx pgx.Tx) error { return applyStockChange(ctx, tx, in) })
+}
+
+// applyStockChange applies a movement and, for a purchase with a
+// best-before date, sets the item's expiry to the new batch's date.
+func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error {
+	if err := applyMovement(ctx, tx, in); err != nil {
+		return err
+	}
+	if in.ExpiresOn == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now() WHERE id = $1`, in.ItemID, *in.ExpiresOn)
+	return err
 }
 
 // CorrectStock sets an item's quantity to a counted amount and records the
@@ -149,6 +162,13 @@ func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 		             WHERE performed_on > current_date - interval '12 months'), 0))::float8`).
 		Scan(&st.StockValue, &st.Spent12m)
 	return st, err
+}
+
+// CountPurchases returns how many purchases have been recorded for an item.
+func (s *Store) CountPurchases(ctx context.Context, itemID int64) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'purchase'`, itemID).Scan(&n)
+	return n, err
 }
 
 // LastUnitPrice returns the price per base unit of the item's most recent

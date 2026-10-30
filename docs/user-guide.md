@@ -8,6 +8,7 @@
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).
    - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded, or once the item is in a kit or on the shopping list with a quantity.
    - **On stock.** The amount you have right now, e.g. `525` ml or `1.5` L.
+   - **Bought it just now?** (new items only, optional). Enter the total price and/or the shop, and the date if it wasn't today. The starting stock is then recorded as a purchase, so the item shows a last price, a purchase count, and counts in the stock value and spending. Leave these empty for stock you already had; it is recorded as *Initial stock*.
    - **Keep at least** (optional). Below this the item shows as *low* and is suggested on the shopping list.
    - **SKUs.** Add every number you might search for: the OEM part number, the manufacturer number, one row per pack size.
    - Use **Save & add another** to enter many items in a row. It keeps the vehicles and unit you picked.
@@ -16,11 +17,14 @@
 
 - **Stock page.** Click vehicle chips to filter. With two or more vehicles selected, choose *fits any* or *fits all*. Search matches name, brand, location, notes and any SKU, with or without dashes and spaces.
 - **−/+ buttons** change stock by one step: 1 piece, 100 ml or 50 g. For exact amounts, open the item:
-  - **Bought**: amount, total price, shop and date. Prices give you a stock value and spending totals.
+  - **Bought**: amount, total price, shop and date. Prices give you a stock value and spending totals. **Best before** (optional) replaces the item's date with the new batch's, so an expired item stops showing as expired. Leave it empty to keep the current date.
   - **Used**: take an amount from stock.
   - **Count**: set the stock to what is actually on the shelf.
 - **Copy as text** copies the current view in the plain format from the original request. That's handy for chats and notes.
 - **CSV** downloads the current view for a spreadsheet.
+- **Expiring** (dashboard tile and stock filter) lists items with stock left that are past or within 60 days of their best-before date. Used-up items don't show there.
+- To edit an item's amount, type `0` if there is none left. A blank field is refused so the stock is never emptied by accident.
+- Dates of purchases, stock changes and services can't be in the future (tomorrow is allowed for time zones) or before 1990. That keeps a year typo from becoming the last price or counting in the spending.
 
 ## Service kits and reminders
 
@@ -38,7 +42,11 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 
 - Add items from your stock (with a quantity) or free text ("chain lube").
 - **Suggestions** list items below their minimum and parts missing for any kit. Add them one by one or all at once.
-- **Bought** on an entry records the purchase (amount, price, shop) and removes it from the list.
+- **Bought** on an entry for a stock item records the purchase (amount, price, shop, date, optional best before). If you bought less than listed, the rest stays on the list; otherwise the entry is removed.
+- **Bought** on a free-text entry asks what to do:
+  - **Add to stock as a new item** opens the new-item form with the name, quantity and note filled in. Add the price and shop under *Bought it just now?*. Saving creates the item with its purchase and removes the entry.
+  - **Just tick it off** removes the entry, for things you don't keep on stock.
+- Suggestions keep their reason ("Below minimum", "Short for KTM 390: Oil service") as the entry's note.
 - **Copy as text** gives you the list for the shop.
 
 ## Tips

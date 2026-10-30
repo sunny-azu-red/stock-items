@@ -88,6 +88,20 @@ func parseOptDate(s string) (*time.Time, error) {
 	return &t, nil
 }
 
+// parseEventDate parses an optional date of something that already
+// happened (a purchase, stock change or service), refusing dates that are
+// surely typos; see stock.CheckEventDate.
+func parseEventDate(s string, today time.Time) (*time.Time, error) {
+	d, err := parseOptDate(s)
+	if err != nil {
+		return nil, err
+	}
+	if msg := stock.CheckEventDate(d, today); msg != "" {
+		return nil, errors.New(msg)
+	}
+	return d, nil
+}
+
 // parseOptAmount parses an optional quantity in the given unit.
 func parseOptAmount(s string, u stock.Unit, sub string) (*float64, error) {
 	v, err := stock.ParseAmount(s, u, sub)

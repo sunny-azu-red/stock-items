@@ -102,7 +102,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if id := parseOptID(formText(r, "kit_id")); id != nil {
 		f.KitID, in.KitID = *id, id
 	}
-	if d, err := parseOptDate(f.PerformedOn); err != nil {
+	if d, err := parseEventDate(f.PerformedOn, s.now()); err != nil {
 		f.Errors.Add("performed_on", err.Error())
 	} else if d != nil {
 		in.PerformedOn = *d

@@ -28,8 +28,12 @@ type movementPage struct {
 	Units    []stock.SubUnit
 }
 
+// errItemArchived means the stock change belongs to an archived item, whose
+// stock can't change until it is restored.
+var errItemArchived = errors.New("item is archived")
+
 // loadMovement returns an editable stock change; parts used by a service
-// are not edited here.
+// are not edited here, nor are an archived item's changes.
 func (s *Server) loadMovement(r *http.Request) (stock.Movement, error) {
 	id, err := pathID(r, "id")
 	if err != nil {
@@ -42,7 +46,25 @@ func (s *Server) loadMovement(r *http.Request) (stock.Movement, error) {
 	if !m.Editable() {
 		return m, store.ErrNotFound
 	}
+	it, err := s.store.GetItem(r.Context(), m.ItemID)
+	if err != nil {
+		return m, err
+	}
+	if it.Archived() {
+		return m, errItemArchived
+	}
 	return m, nil
+}
+
+// movementRefused sends an archived item's stock change back to the item
+// page with a message; it reports whether it did.
+func (s *Server) movementRefused(w http.ResponseWriter, r *http.Request, m stock.Movement, err error) bool {
+	if !errors.Is(err, errItemArchived) {
+		return false
+	}
+	s.setFlash(w, "error", "Restore "+m.ItemName+" to change its stock history")
+	s.redirect(w, r, itemPath(m.ItemID), "")
+	return true
 }
 
 func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) {
@@ -53,6 +75,9 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 
 func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 	m, err := s.loadMovement(r)
+	if s.movementRefused(w, r, m, err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -68,6 +93,9 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	m, err := s.loadMovement(r)
+	if s.movementRefused(w, r, m, err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -111,6 +139,9 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 	m, err := s.loadMovement(r)
+	if s.movementRefused(w, r, m, err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

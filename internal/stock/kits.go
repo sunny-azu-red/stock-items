@@ -158,9 +158,12 @@ func addMonths(t time.Time, n int) time.Time {
 func (d Due) Summary() string {
 	var parts []string
 	if d.KmLeft != nil {
-		if *d.KmLeft <= 0 {
+		switch {
+		case *d.KmLeft < 0:
 			parts = append(parts, FormatKm(-*d.KmLeft)+" over")
-		} else {
+		case *d.KmLeft == 0:
+			parts = append(parts, "due now")
+		default:
 			parts = append(parts, "in "+FormatKm(*d.KmLeft))
 		}
 	}

@@ -196,6 +196,9 @@ type VehicleInput struct {
 	Color      string
 	OdometerKm *int
 	Notes      string
+	// KeepOdometer says the edit form's odometer was left as it was opened,
+	// so an update keeps the current reading (it may have changed since).
+	KeepOdometer bool
 }
 
 // Normalize trims text fields and applies defaults.

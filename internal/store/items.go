@@ -225,9 +225,15 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
 		var unit stock.Unit
-		err := tx.QueryRow(ctx, `SELECT quantity, unit FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&qty, &unit)
+		var archived bool
+		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR UPDATE`, id).
+			Scan(&qty, &unit, &archived)
 		if err != nil {
 			return notFound(err)
+		}
+		quantityEdited := in.QuantityWas == nil || in.Quantity != *in.QuantityWas
+		if archived && quantityEdited {
+			return &ConflictError{Field: "quantity", Message: "Restore this item to change its stock"}
 		}
 		if unit != in.Unit {
 			var used bool
@@ -250,7 +256,7 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 		if err != nil {
 			return err
 		}
-		if in.QuantityWas == nil || in.Quantity != *in.QuantityWas {
+		if quantityEdited {
 			if _, err := correctTo(ctx, tx, id, qty, in.Quantity, "Edited quantity"); err != nil {
 				return err
 			}

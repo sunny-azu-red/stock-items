@@ -14,6 +14,8 @@ type KitFilter struct {
 	IDs       []int64
 	VehicleID int64
 	ItemID    int64 // kits that contain this item
+	// IncludeArchived also lists kits of archived vehicles.
+	IncludeArchived bool
 }
 
 // ListKits returns service kits with their lines (and current stock) and
@@ -37,7 +39,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		WHERE true`
 	if len(f.IDs) > 0 {
 		sql += " AND k.id = ANY(" + args.add(f.IDs) + ")"
-	} else if f.VehicleID == 0 {
+	} else if f.VehicleID == 0 && !f.IncludeArchived {
 		sql += " AND v.archived_at IS NULL"
 	}
 	if f.VehicleID != 0 {

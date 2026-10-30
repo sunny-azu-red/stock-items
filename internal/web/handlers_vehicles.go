@@ -19,6 +19,7 @@ type vehicleForm struct {
 	ID                                   int64
 	Name, Kind, Make, Model, Year        string
 	Plate, VIN, Color, OdometerKm, Notes string
+	OdometerWas                          string // as the edit form was opened
 	Errors                               stock.Errors
 }
 
@@ -33,6 +34,7 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
 		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm), Notes: v.Notes,
+		OdometerWas: optIntString(v.OdometerKm),
 	}
 }
 
@@ -40,7 +42,8 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		OdometerKm: formText(r, "odometer_km"), Notes: formText(r, "notes"), Errors: stock.Errors{},
+		OdometerKm: formText(r, "odometer_km"), Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
+		Errors: stock.Errors{},
 	}
 	in := stock.VehicleInput{
 		Name: f.Name, Kind: stock.VehicleKind(f.Kind), Make: f.Make, Model: f.Model, Plate: f.Plate, VIN: f.VIN,
@@ -52,6 +55,9 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	}
 	if in.OdometerKm, err = parseOptInt(f.OdometerKm); err != nil {
 		f.Errors.Add("odometer_km", err.Error())
+	}
+	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
+		in.KeepOdometer = optIntString(was) == optIntString(in.OdometerKm)
 	}
 	in.Normalize()
 	for k, v := range in.Validate() {
@@ -101,7 +107,7 @@ func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 			vehicles = append(vehicles, v)
 		}
 	}
-	kits, err := s.store.ListKits(ctx, store.KitFilter{})
+	kits, err := s.store.ListKits(ctx, store.KitFilter{IncludeArchived: showArchived})
 	if err != nil {
 		return err
 	}

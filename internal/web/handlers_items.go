@@ -477,7 +477,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
-	kits, err := s.store.ListKits(ctx, store.KitFilter{ItemID: id})
+	kits, err := s.store.ListKits(ctx, store.KitFilter{ItemID: id, IncludeArchived: true})
 	if err != nil {
 		return itemPage{}, err
 	}

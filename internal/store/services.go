@@ -121,11 +121,17 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 // still adds up.
 func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1 FOR UPDATE`, id).Scan(&in.VehicleID); err != nil {
+		var kitWas *int64
+		if err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&in.VehicleID, &kitWas); err != nil {
 			return notFound(err)
 		}
-		if err := checkServiceKit(ctx, tx, in); err != nil {
-			return err
+		// The service keeps its kit even if the kit has moved to another
+		// vehicle since; only a newly chosen kit must fit the vehicle.
+		if in.KitID == nil || kitWas == nil || *in.KitID != *kitWas {
+			if err := checkServiceKit(ctx, tx, in); err != nil {
+				return err
+			}
 		}
 		if err := checkServiceOdometer(ctx, tx, in, id); err != nil {
 			return err

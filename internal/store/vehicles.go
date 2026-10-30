@@ -63,14 +63,16 @@ func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64
 // lower than a service's reading (see checkVehicleOdometer).
 func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		if err := checkVehicleOdometer(ctx, tx, id, in.OdometerKm); err != nil {
-			return err
+		if !in.KeepOdometer {
+			if err := checkVehicleOdometer(ctx, tx, id, in.OdometerKm); err != nil {
+				return err
+			}
 		}
 		tag, err := tx.Exec(ctx, `
 			UPDATE vehicles SET name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
-			       color = $9, odometer_km = $10, notes = $11, updated_at = now()
+			       color = $9, odometer_km = CASE WHEN $12 THEN odometer_km ELSE $10 END, notes = $11, updated_at = now()
 			WHERE id = $1`,
-			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes)
+			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes, in.KeepOdometer)
 		return checkAffected(tag, vehicleConflict(err))
 	})
 }
@@ -95,7 +97,20 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, km *int) err
 	if err := tx.QueryRow(ctx, `SELECT odometer_km FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&current); err != nil {
 		return notFound(err)
 	}
-	if km == nil || (current != nil && *current == *km) {
+	if km == nil {
+		// Clearing the reading would leave logged services' readings with
+		// nothing to compare against, and km reminders unknown.
+		var logged bool
+		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_records WHERE vehicle_id = $1 AND odometer_km IS NOT NULL)`, id).Scan(&logged)
+		if err != nil {
+			return err
+		}
+		if current != nil && logged {
+			return &ConflictError{Field: "odometer_km", Message: "Services logged with a reading need one here too"}
+		}
+		return nil
+	}
+	if current != nil && *current == *km {
 		return nil
 	}
 	var top int

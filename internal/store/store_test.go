@@ -1504,3 +1504,82 @@ func TestSortByQuantityGroupsUnits(t *testing.T) {
 		t.Errorf("sorted = %v, want %v", got, want)
 	}
 }
+
+func TestArchivedItemQuantityCantBeEdited(t *testing.T) {
+	s, ctx := newStore(t)
+	id := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 3})
+	if _, err := s.ArchiveItem(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	upd := stock.ItemInput{Name: "Pads (old)", Unit: stock.UnitPiece, Quantity: 3, QuantityWas: ptr(3.0)}
+	if err := s.UpdateItem(ctx, id, upd); err != nil {
+		t.Errorf("renaming an archived item: %v", err)
+	}
+	upd.Quantity = 5
+	var conflict *store.ConflictError
+	if err := s.UpdateItem(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "quantity" {
+		t.Errorf("changing an archived item's quantity: want conflict, got %v", err)
+	}
+	if it := mustGet(t, s, id); it.Quantity != 3 {
+		t.Errorf("quantity = %v", it.Quantity)
+	}
+	assertLedger(t, s)
+}
+
+func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	in := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	in.Normalize()
+	id, err := s.CreateVehicle(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The edit form was opened at 10,000; meanwhile the reading went to 12,000.
+	if err := s.SetOdometer(ctx, id, 12000); err != nil {
+		t.Fatal(err)
+	}
+	in.Plate, in.KeepOdometer = "B-123", true
+	if err := s.UpdateVehicle(ctx, id, in); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.GetVehicle(ctx, id); *v.OdometerKm != 12000 || v.Plate != "B-123" {
+		t.Errorf("vehicle = %+v", v)
+	}
+	// Clearing the reading is refused once services have readings.
+	svc := stock.ServiceInput{VehicleID: id, Title: "Chain", PerformedOn: time.Now(), OdometerKm: ptr(12000)}
+	svc.Normalize()
+	if _, err := s.CreateService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	in.KeepOdometer, in.OdometerKm = false, nil
+	var conflict *store.ConflictError
+	if err := s.UpdateVehicle(ctx, id, in); !errors.As(err, &conflict) || conflict.Field != "odometer_km" {
+		t.Errorf("clearing: want conflict, got %v", err)
+	}
+}
+
+func TestEditAServiceWhoseKitMoved(t *testing.T) {
+	s, ctx := newStore(t)
+	a, b := mustVehicle(t, s, "Bike A"), mustVehicle(t, s, "Bike B")
+	kit := stock.KitInput{VehicleID: a, Name: "Oil service"}
+	kit.Normalize()
+	kitID, err := s.CreateKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stock.ServiceInput{VehicleID: a, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now()}
+	in.Normalize()
+	id, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit.VehicleID = b
+	if err := s.UpdateKit(ctx, kitID, kit); err != nil {
+		t.Fatal(err)
+	}
+	in.Notes = "fixed a typo"
+	if err := s.UpdateService(ctx, id, in); err != nil {
+		t.Errorf("editing the service: %v", err)
+	}
+}

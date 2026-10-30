@@ -32,7 +32,7 @@
       <div class="field"><label for="make">Make</label><input class="input" id="make" name="make" value="{{$f.Make}}" placeholder="e.g. KTM"></div>
       <div class="field"><label for="model">Model</label><input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke"></div>
       <div class="field{{if index $e "year"}} has-error{{end}}"><label for="year">Year</label><input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021">{{template "err" (index $e "year")}}</div>
-      <div class="field{{if index $e "odometer_km"}} has-error{{end}}"><label for="odometer_km">Odometer (km)</label><input class="input" id="odometer_km" name="odometer_km" value="{{$f.OdometerKm}}" inputmode="numeric" placeholder="e.g. 12500">{{template "err" (index $e "odometer_km")}}</div>
+      {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}<div class="field{{if index $e "odometer_km"}} has-error{{end}}"><label for="odometer_km">Odometer (km)</label><input class="input" id="odometer_km" name="odometer_km" value="{{$f.OdometerKm}}" inputmode="numeric" placeholder="e.g. 12500">{{template "err" (index $e "odometer_km")}}</div>
       <div class="field"><label for="plate">Plate</label><input class="input" id="plate" name="plate" value="{{$f.Plate}}"></div>
       <div class="field"><label for="vin">VIN</label><input class="input mono" id="vin" name="vin" value="{{$f.VIN}}"></div>
     </div>

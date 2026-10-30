@@ -22,11 +22,11 @@
       <tbody>
       {{range $k.Lines}}
       <tr>
-        <td style="width:40px">{{if .Short}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
+        <td style="width:40px">{{if and .Short (not .Archived)}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
         <td><a href="/items/{{.ItemID}}">{{.ItemName}}</a>{{if .Archived}} <span class="badge badge-muted" title="This item is archived. Edit the kit to replace or remove it.">Archived</span>{{end}}<div class="meter{{if .Short}} short{{end}}" style="margin-top:.35rem"><span style="width:{{pct .Have .Need}}%"></span></div></td>
         <td class="num">{{qty .Need .Unit}}</td>
         <td class="num">{{qty .Have .Unit}}</td>
-        <td class="num">{{if .Short}}<span class="delta-neg">{{qty .Short .Unit}}</span>{{else}}—{{end}}</td>
+        <td class="num">{{if and .Short (not .Archived)}}<span class="delta-neg">{{qty .Short .Unit}}</span>{{else}}—{{end}}</td>
       </tr>
       {{end}}
       </tbody>

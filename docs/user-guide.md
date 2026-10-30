@@ -57,10 +57,10 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 ## Removing items and vehicles
 
 - An item that nothing else refers to can be **deleted** (on its page), together with its own history.
-- An item that has purchases, was used in a service, or is part of a kit gets **Archive** instead. Deleting it would change those records: your spending, the parts of past services, the kit. An archived item disappears from the stock list, dashboard, item pickers and suggestions, and comes off the shopping list. Its history, services and kits stay as they were. Archived kit lines are marked so you can edit the kit; they don't make the kit "short" and aren't taken when you do the service. An archived item takes no purchases, uses or counts until you restore it.
+- An item that has purchases, was used in a service, or is part of a kit gets **Archive** instead. Deleting it would change those records: your spending, the parts of past services, the kit. An archived item disappears from the stock list, dashboard, item pickers and suggestions, and comes off the shopping list. Its history, services and kits stay as they were. Archived kit lines are marked so you can edit the kit; they don't make the kit "short" and aren't taken when you do the service. An archived item takes no purchases, uses or counts, and its stock and history can't be edited, until you restore it.
 - Find archived items with the **Archived** filter on the stock page, and bring one back with **Restore**.
 - Vehicles work the same way: a vehicle with services or kits gets **Archive vehicle** (on its page) instead of Delete. It leaves the vehicle lists, pickers and reminders; its services, kits, labour costs and item tags stay. Archived vehicles are listed from the link under the vehicles; **Restore vehicle** brings one back.
-- The odometer can't be set lower than a logged service's reading: fix or delete that service first. A service's reading also has to fit between the services logged before and after it.
+- The odometer can't be set lower than a logged service's reading, or cleared once services have readings: fix or delete that service first. Saving the vehicle's edit form keeps a reading entered elsewhere in the meantime, unless you changed the odometer field. A service's reading also has to fit between the services logged before and after it.
 
 ## Tips
 

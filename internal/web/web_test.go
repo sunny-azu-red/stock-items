@@ -1301,3 +1301,47 @@ func TestPolish(t *testing.T) {
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "<th>Item</th>")
 }
+
+func TestArchivedItemHistoryAndExports(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake")
+	moves, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: pads})
+	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+	rec := a.get("/movements/" + itoa(moves[0].ID) + "/edit")
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.post("/movements/"+itoa(moves[0].ID)+"/delete", nil), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(ctx, pads); it.Quantity != 1 {
+		t.Errorf("quantity = %v", it.Quantity)
+	}
+
+	// An archived vehicle keeps its name in the exports.
+	if err := a.store.ArchiveVehicle(ctx, k390); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, a.get("/stock/export.csv"), http.StatusOK, "KTM 390; KTM 1290")
+	expect(t, a.get("/stock/export.txt?view=list"), http.StatusOK, "KTM 390 + KTM 1290")
+}
+
+func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	path := "/vehicles/" + itoa(k390)
+	expect(t, a.get(path+"/edit"), http.StatusOK, `name="odometer_was" value="10000"`)
+	expect(t, a.post(path+"/odometer", url.Values{"odometer_km": {"12000"}}), http.StatusSeeOther)
+	expect(t, a.post(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
+		"odometer_km": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}}), http.StatusSeeOther)
+	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.OdometerKm != 12000 || v.Plate != "B-123" {
+		t.Errorf("vehicle = %+v", v)
+	}
+	// Archived vehicles still show their kits.
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}}), http.StatusSeeOther)
+	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, "<strong>1</strong> kit")
+}

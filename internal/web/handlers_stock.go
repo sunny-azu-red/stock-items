@@ -130,13 +130,14 @@ func (f stockFilter) Cleared() string {
 func (f stockFilter) IsCategory(c string) bool { return strings.EqualFold(c, f.Category) }
 
 type stockPage struct {
-	Filter     stockFilter
-	Vehicles   []stock.Vehicle
-	VehicleMap map[int64]stock.Vehicle
-	Sections   []stock.Section
-	Items      []stock.Item
-	Categories []string
-	Selected   []stock.Vehicle
+	Filter      stockFilter
+	Vehicles    []stock.Vehicle // active ones, for the filter chips
+	AllVehicles []stock.Vehicle // archived too, for grouping and exports
+	VehicleMap  map[int64]stock.Vehicle
+	Sections    []stock.Section
+	Items       []stock.Item
+	Categories  []string
+	Selected    []stock.Vehicle
 }
 
 func (s *Server) loadStock(r *http.Request) (stockPage, error) {
@@ -152,7 +153,7 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	if err != nil {
 		return stockPage{}, err
 	}
-	p := stockPage{Filter: f, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), VehicleMap: vehicleMap(vehicles), Items: items}
+	p := stockPage{Filter: f, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), AllVehicles: vehicles, VehicleMap: vehicleMap(vehicles), Items: items}
 	for _, v := range vehicles {
 		if f.HasVehicle(v.ID) {
 			p.Selected = append(p.Selected, v)
@@ -187,7 +188,7 @@ func (s *Server) stockExportText(w http.ResponseWriter, r *http.Request) error {
 	}
 	sections := p.Sections
 	if sections == nil {
-		sections = stock.GroupByVehicles(p.Items, p.Vehicles)
+		sections = stock.GroupByVehicles(p.Items, p.AllVehicles)
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -209,7 +210,7 @@ func (s *Server) stockExportCSV(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var buf bytes.Buffer
-	if err := stock.WriteCSV(&buf, p.Items, p.Vehicles, last); err != nil {
+	if err := stock.WriteCSV(&buf, p.Items, p.AllVehicles, last); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

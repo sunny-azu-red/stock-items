@@ -121,3 +121,11 @@ func TestReadinessIgnoresArchivedLines(t *testing.T) {
 		}
 	}
 }
+
+func TestDueSummaryAtTheDueKm(t *testing.T) {
+	for left, want := range map[int]string{-300: "300 km over", 0: "due now", 1200: "in 1,200 km"} {
+		if got := (Due{KmLeft: &left}).Summary(); got != want {
+			t.Errorf("%d km left: %q, want %q", left, got, want)
+		}
+	}
+}

@@ -151,9 +151,14 @@ func (s *Server) funcs() template.FuncMap {
 			}
 			return template.URL(path + "?" + query)
 		},
-		// skuSearch links a part number to a Google search limited to .ro sites.
+		// skuSearch links a part number to the configured search engine,
+		// with the configured prefix (e.g. "site:ro") added to the query.
 		"skuSearch": func(code string) template.URL {
-			return template.URL("https://www.google.com/search?q=" + url.QueryEscape(code+" site:ro"))
+			q := code
+			if s.skuPrefix != "" {
+				q += " " + s.skuPrefix
+			}
+			return template.URL(s.skuSearch + url.QueryEscape(q))
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
 		"subUnits":  func() []stock.SubUnit { return stock.SubUnits },

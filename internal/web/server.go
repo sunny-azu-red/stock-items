@@ -18,8 +18,12 @@ import (
 // Options configure the web server.
 type Options struct {
 	Currency string
-	Version  string
-	Logger   *slog.Logger
+	// SKUSearchURL is the search URL a part number is appended to
+	// (default Google); SKUPrefix is added to every such search.
+	SKUSearchURL string
+	SKUPrefix    string
+	Version      string
+	Logger       *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -30,6 +34,8 @@ type Server struct {
 	log         *slog.Logger
 	tmpl        *templates
 	currency    string
+	skuSearch   string
+	skuPrefix   string
 	version     string
 	assetHashes map[string]string
 	now         func() time.Time
@@ -39,11 +45,13 @@ type Server struct {
 // New builds a Server and parses all templates.
 func New(st *store.Store, opts Options) (*Server, error) {
 	s := &Server{
-		store:    st,
-		log:      opts.Logger,
-		currency: opts.Currency,
-		version:  opts.Version,
-		now:      opts.Now,
+		store:     st,
+		log:       opts.Logger,
+		currency:  opts.Currency,
+		skuSearch: opts.SKUSearchURL,
+		skuPrefix: strings.TrimSpace(opts.SKUPrefix),
+		version:   opts.Version,
+		now:       opts.Now,
 	}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -53,6 +61,9 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	}
 	if s.currency == "" {
 		s.currency = "EUR"
+	}
+	if s.skuSearch == "" {
+		s.skuSearch = "https://www.google.com/search?q="
 	}
 	var err error
 	if s.assetHashes, err = hashAssets(); err != nil {

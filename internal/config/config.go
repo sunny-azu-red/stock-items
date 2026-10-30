@@ -30,6 +30,11 @@ type Config struct {
 	Host     string
 	Port     string
 	Currency string
+	// SKUSearchURL is the search engine URL that a part number is appended
+	// to, e.g. "https://www.google.com/search?q=".
+	SKUSearchURL string
+	// SKUPrefix is added to every part number search, e.g. "site:ro".
+	SKUPrefix string
 }
 
 // Addr is the HTTP listen address.
@@ -64,9 +69,11 @@ func Load() (Config, error) {
 			Username: env("DB_USERNAME", "postgres"),
 			Password: os.Getenv("DB_PASSWORD"),
 		},
-		Host:     env("HOST", "0.0.0.0"),
-		Port:     env("PORT", "8080"),
-		Currency: env("APP_CURRENCY", "EUR"),
+		Host:         env("HOST", "0.0.0.0"),
+		Port:         env("PORT", "8080"),
+		Currency:     env("APP_CURRENCY", "EUR"),
+		SKUSearchURL: env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
+		SKUPrefix:    envOrEmpty("APP_SKU_PREFIX", "site:ro"),
 	}
 	return cfg, nil
 }
@@ -84,6 +91,14 @@ func schema(v string) string {
 func env(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
+	}
+	return def
+}
+
+// envOrEmpty is like env, but a variable set to an empty value stays empty.
+func envOrEmpty(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return strings.TrimSpace(v)
 	}
 	return def
 }

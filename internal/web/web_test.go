@@ -31,6 +31,7 @@ func newApp(t *testing.T) *testApp {
 	st := store.New(testdb.New(t))
 	srv, err := New(st, Options{
 		Currency: "EUR", Version: "test",
+		SKUSearchURL: "https://duckduckgo.com/?q=", SKUPrefix: "site:ro",
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now:    func() time.Time { return time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC) },
 	})
@@ -198,7 +199,7 @@ func TestItemFormFlow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	loc := rec.Header().Get("Location")
 	expect(t, a.get(loc), http.StatusOK, "Motul 7100 10W50", "4 L", "104100", "keep at least 1 L",
-		`href="https://www.google.com/search?q=104100&#43;site%3Aro" target="_blank"`)
+		`href="https://duckduckgo.com/?q=104100&#43;site%3Aro" target="_blank"`)
 
 	it, err := a.store.GetItem(context.Background(), itemID(t, a.store, "104098"))
 	if err != nil {

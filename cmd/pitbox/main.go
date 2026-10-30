@@ -74,7 +74,13 @@ func run() error {
 		return nil
 	}
 
-	srv, err := web.New(store.New(pool), web.Options{Currency: cfg.Currency, Version: buildVersion(), Logger: logger})
+	srv, err := web.New(store.New(pool), web.Options{
+		Currency:     cfg.Currency,
+		SKUSearchURL: cfg.SKUSearchURL,
+		SKUPrefix:    cfg.SKUPrefix,
+		Version:      buildVersion(),
+		Logger:       logger,
+	})
 	if err != nil {
 		return err
 	}

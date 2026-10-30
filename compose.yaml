@@ -19,6 +19,8 @@ services:
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
       APP_CURRENCY: ${APP_CURRENCY:-EUR}
+      APP_SKU_SEARCH_URL: ${APP_SKU_SEARCH_URL:-https://www.google.com/search?q=}
+      APP_SKU_PREFIX: ${APP_SKU_PREFIX-site:ro}
       # Your time zone (e.g. Europe/Bucharest), so "today" for reminders,
       # date checks and spending turns over at your midnight, not UTC's.
       TZ: ${TZ:-UTC}

@@ -35,6 +35,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - No external CDNs or fonts at runtime. Vendor assets under `static/vendor` with their licence files. (The Lucide icons are inlined as a sprite in `templates/partials/icons.html`; their licence is in `static/vendor`.)
 - The layout must work from 360 px phone width up. The e2e suite fails if any page scrolls sideways.
 - Accessibility: real `<label>`s for inputs, buttons for actions, links for navigation, `aria-label` on icon-only buttons.
+- Form hints: a hint about one field goes behind a "?" next to its label (`{{template "tip"}}` inside a `.label-row`, with the input's `aria-describedby` pointing at the tip's ID). A hint about a whole section stays visible as `<p class="hint">` under the section heading. Never put a "?" on a heading.
 
 ## Code style
 

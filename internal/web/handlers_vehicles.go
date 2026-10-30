@@ -11,7 +11,7 @@ import (
 )
 
 // palette are the suggested chip colours for new vehicles.
-var palette = []string{"#f26b0f", "#2563eb", "#16a34a", "#9333ea", "#dc2626", "#0891b2", "#ca8a04", "#db2777"}
+var palette = []string{"#f26b0f", "#2563eb", "#16a34a", "#84cc16", "#dc2626", "#0891b2", "#ca8a04", "#db2777"}
 
 type vehicleForm struct {
 	ID                                   int64

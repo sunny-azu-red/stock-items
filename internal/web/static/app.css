@@ -12,10 +12,10 @@
   --border: light-dark(#e3e0da, #2b2f37);
   --text: light-dark(#1c1b19, #ecebe8);
   --muted: light-dark(#6b6760, #9b9a96);
-  --accent: light-dark(#f26b0f, #ff7a1f);
-  --accent-strong: light-dark(#d55a05, #ff9447);
-  --accent-soft: light-dark(#fde7d6, #3a2414);
-  --on-accent: light-dark(#ffffff, #1a0d03);
+  --accent: light-dark(#77498a, #c39bd3);
+  --accent-strong: light-dark(#613a72, #d5b5e1);
+  --accent-soft: light-dark(#efe6f3, #2c2132);
+  --on-accent: light-dark(#ffffff, #1a0f1f);
   --ok: light-dark(#15803d, #4ade80);
   --ok-soft: light-dark(#dcfce7, #12301d);
   --warn: light-dark(#b45309, #fbbf24);

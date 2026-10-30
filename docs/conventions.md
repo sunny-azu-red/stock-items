@@ -23,7 +23,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Quantities are stored in base units (pieces, ml, g) and converted only at the edges (`stock.ParseAmount`, `stock.FormatQuantity`, `stock.SplitForInput`).
 - Pure rules (validation, grouping, due dates, suggestions, exports, how a new item's starting stock is recorded, plausible dates) live in `internal/stock`, have no I/O and are unit tested.
 - Money figures (last price, stock value, spending) read only `purchase` movements. Anything that adds stock the user paid for must be recorded as a purchase, not as `initial` or `correction`.
-- Inputs are cleaned with `Normalize()` and checked with `Validate()`, which returns `stock.Errors` (field → message).
+- Inputs are cleaned with `Normalize()` and checked with `Validate()`, which returns `stock.Errors` (field → message). Text is limited to 200 characters (4,000 for notes on items, vehicles, kits and services); an over-long field without its own error slot reports on the form's summary (`limitText`).
 
 ## Web
 

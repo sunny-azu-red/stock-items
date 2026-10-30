@@ -2,6 +2,7 @@ package stock
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -295,5 +296,34 @@ func TestApplyEdit(t *testing.T) {
 	m := Movement{Kind: MovePurchase, Delta: 1, OccurredOn: day}
 	if in, _ := ApplyEdit(m, MovementEdit{Amount: 1, OccurredOn: &other}); !in.OccurredOn.Equal(other) {
 		t.Errorf("date = %v, want %v", in.OccurredOn, other)
+	}
+}
+
+func TestTextAndNumberLimits(t *testing.T) {
+	long, longer := strings.Repeat("x", 201), strings.Repeat("x", 4001)
+	tests := []struct {
+		name  string
+		errs  Errors
+		field string
+	}{
+		{"item brand", ItemInput{Name: "A", Unit: UnitPiece, Brand: long}.Validate(), "form"},
+		{"item notes", ItemInput{Name: "A", Unit: UnitPiece, Notes: longer}.Validate(), "form"},
+		{"sku code", ItemInput{Name: "A", Unit: UnitPiece, SKUs: []SKU{{Code: long, Kind: SKUOther}}}.Validate(), "sku_0"},
+		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(MaxOdometerKm + 1)}.Validate(), "odometer_km"},
+		{"vehicle plate", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Plate: long}.Validate(), "form"},
+		{"shop on a purchase", MovementInput{Kind: MovePurchase, Delta: 1, Supplier: long}.Validate(), "form"},
+		{"kit months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(241)}.Validate(), "interval_months"},
+		{"kit km", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(1_000_001)}.Validate(), "interval_km"},
+		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
+		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "free_text"},
+	}
+	for _, tt := range tests {
+		if _, ok := tt.errs[tt.field]; !ok {
+			t.Errorf("%s: want an error on %s, got %v", tt.name, tt.field, tt.errs)
+		}
+	}
+	ok := ItemInput{Name: "A", Unit: UnitPiece, Brand: strings.Repeat("x", 200), Notes: strings.Repeat("x", 4000)}
+	if errs := ok.Validate(); errs.Any() {
+		t.Errorf("at the limits: %v", errs)
 	}
 }

@@ -12,6 +12,24 @@ import (
 // the numeric(12,2) columns.
 const MaxMoney = 100_000_000
 
+// Text and number limits keep fields readable and values sane.
+const (
+	maxShortText = 200  // names, brands, shops, notes on a stock change…
+	maxLongText  = 4000 // notes on items, vehicles, kits and services
+	// MaxOdometerKm is the largest odometer reading accepted.
+	MaxOdometerKm  = 10_000_000
+	maxIntervalKm  = 1_000_000
+	maxIntervalMon = 240
+)
+
+// limitText records an error on the form's summary when value is longer
+// than max characters (most text fields have no error slot of their own).
+func limitText(errs Errors, max int, label, value string) {
+	if utf8.RuneCountInString(value) > max {
+		errs.Add("form", fmt.Sprintf("%s is too long (max %s characters).", label, FormatInt(max)))
+	}
+}
+
 // validMoney reports whether an optional amount of money is in range. NaN
 // fails both comparisons, so it is rejected too.
 func validMoney(p *float64) bool { return p == nil || (*p >= 0 && *p <= MaxMoney) }
@@ -146,6 +164,16 @@ func (in ItemInput) Validate() Errors {
 			errs.Add(field, "Pack size must be greater than zero")
 		}
 	}
+	limitText(errs, maxShortText, "Brand", in.Brand)
+	limitText(errs, maxShortText, "Category", in.Category)
+	limitText(errs, maxShortText, "Location", in.Location)
+	limitText(errs, maxShortText, "Shop", in.Supplier)
+	limitText(errs, maxLongText, "Notes", in.Notes)
+	for i, sku := range in.SKUs {
+		if utf8.RuneCountInString(sku.Code) > maxShortText || utf8.RuneCountInString(sku.Label) > maxShortText {
+			errs.Add(fmt.Sprintf("sku_%d", i), "Code and label can have at most 200 characters")
+		}
+	}
 	return errs
 }
 
@@ -238,6 +266,14 @@ func (in VehicleInput) Validate() Errors {
 	if in.OdometerKm != nil && *in.OdometerKm < 0 {
 		errs.Add("odometer_km", "Odometer cannot be negative")
 	}
+	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
+		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))
+	}
+	limitText(errs, maxShortText, "Make", in.Make)
+	limitText(errs, maxShortText, "Model", in.Model)
+	limitText(errs, maxShortText, "Plate", in.Plate)
+	limitText(errs, maxShortText, "VIN", in.VIN)
+	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs
 }
 
@@ -281,6 +317,8 @@ func (in MovementInput) Validate() Errors {
 	if in.ExpiresOn != nil && in.Kind != MovePurchase {
 		errs.Add("expires_on", "Only a purchase can set the best-before date")
 	}
+	limitText(errs, maxShortText, "Shop", in.Supplier)
+	limitText(errs, maxShortText, "Note", in.Note)
 	return errs
 }
 
@@ -403,6 +441,16 @@ func (in KitInput) Validate() Errors {
 			errs.Add(fmt.Sprintf("line_%d", i), "Quantity must be greater than zero")
 		}
 	}
+	if utf8.RuneCountInString(in.Name) > maxShortText {
+		errs.Add("name", "Name is too long (max 200 characters)")
+	}
+	if in.IntervalKm != nil && *in.IntervalKm > maxIntervalKm {
+		errs.Add("interval_km", "That is more than "+FormatKm(maxIntervalKm))
+	}
+	if in.IntervalMonths != nil && *in.IntervalMonths > maxIntervalMon {
+		errs.Add("interval_months", "That is more than 20 years")
+	}
+	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs
 }
 
@@ -448,6 +496,13 @@ func (in ServiceInput) Validate() Errors {
 			errs.Add(fmt.Sprintf("line_%d", i), "Quantity must be greater than zero")
 		}
 	}
+	if utf8.RuneCountInString(in.Title) > maxShortText {
+		errs.Add("title", "Title is too long (max 200 characters)")
+	}
+	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
+		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))
+	}
+	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs
 }
 
@@ -481,6 +536,10 @@ func (in ShoppingInput) Validate() Errors {
 	if in.Unit != "" && !in.Unit.Valid() {
 		errs.Add("quantity", "Unknown unit")
 	}
+	if utf8.RuneCountInString(in.FreeText) > maxShortText {
+		errs.Add("free_text", "That is too long (max 200 characters)")
+	}
+	limitText(errs, maxShortText, "Note", in.Note)
 	return errs
 }
 

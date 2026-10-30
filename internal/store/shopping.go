@@ -49,22 +49,31 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		in.Unit = stock.UnitPiece
 	}
 	var id int64
-	err := s.pool.QueryRow(ctx, `
-		INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit)
-		SELECT $1, $2, $3, $4, $6
-		WHERE $1::bigint IS NULL OR EXISTS (SELECT 1 FROM items WHERE id = $1 AND archived_at IS NULL)
-		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
-		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
-		                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
-		    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
-		                WHEN shopping_entries.note = '' THEN excluded.note
-		                ELSE shopping_entries.note || '; ' || excluded.note END
-		RETURNING id`,
-		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
-	if isForeignKeyViolation(err) || errors.Is(err, pgx.ErrNoRows) {
-		return 0, ErrNotFound
-	}
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if in.ItemID != nil {
+			// FOR SHARE: an item being archived right now waits, or is seen
+			// archived, so it can't end up back on the list.
+			var archived bool
+			err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, *in.ItemID).Scan(&archived)
+			if err != nil {
+				return notFound(err)
+			}
+			if archived {
+				return ErrNotFound
+			}
+		}
+		return tx.QueryRow(ctx, `
+			INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit) VALUES ($1, $2, $3, $4, $6)
+			ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
+			SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
+			                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
+			                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
+			    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
+			                WHEN shopping_entries.note = '' THEN excluded.note
+			                ELSE shopping_entries.note || '; ' || excluded.note END
+			RETURNING id`,
+			in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
+	})
 	return id, err
 }
 

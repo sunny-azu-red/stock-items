@@ -1429,3 +1429,24 @@ func TestServicesPaging(t *testing.T) {
 	expect(t, a.get("/services?page=99999999999999999999"), http.StatusOK)
 	expect(t, a.get("/activity?page=9223372036854775807"), http.StatusOK)
 }
+
+func TestArchiveKitFlow(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_months": {"12"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	expect(t, a.get(kit), http.StatusOK, `action="`+kit+`/delete"`)
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {kit[len("/kits/"):]}, "title": {"Oil service"},
+		"performed_on": {"2026-10-29"}}), http.StatusSeeOther)
+	page := a.get(kit)
+	expect(t, page, http.StatusOK, `action="`+kit+`/archive"`, "1 logged service")
+	expectNot(t, page, `action="`+kit+`/delete"`)
+
+	expect(t, a.post(kit+"/archive", nil), http.StatusSeeOther)
+	page = a.get(kit)
+	expect(t, page, http.StatusOK, "Archived", `action="`+kit+`/restore"`)
+	expectNot(t, page, "Do this service")
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service <span class=\"badge badge-muted\">Archived</span>")
+	expect(t, a.post(kit+"/restore", nil), http.StatusSeeOther)
+}

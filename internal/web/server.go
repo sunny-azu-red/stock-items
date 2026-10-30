@@ -110,6 +110,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /kits/{id}/edit", h(s.kitEdit))
 	mux.HandleFunc("POST /kits/{id}", h(s.kitUpdate))
 	mux.HandleFunc("POST /kits/{id}/delete", h(s.kitDelete))
+	mux.HandleFunc("POST /kits/{id}/archive", h(s.kitArchive))
+	mux.HandleFunc("POST /kits/{id}/restore", h(s.kitRestore))
 	mux.HandleFunc("POST /kits/{id}/shortfall", h(s.kitShortfall))
 
 	mux.HandleFunc("GET /services", h(s.serviceList))

@@ -302,17 +302,56 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteKit(r.Context(), id); err != nil {
+	var conflict *store.ConflictError
+	if err := s.store.DeleteKit(r.Context(), id); errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted kit "+k.Name)
 	return nil
 }
 
+// kitArchive hides a kit that has logged services.
+func (s *Server) kitArchive(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	k, err := s.store.GetKit(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if err := s.store.ArchiveKit(r.Context(), id); err != nil {
+		return err
+	}
+	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Archived "+k.Name+". Its services keep it; restore it any time.")
+	return nil
+}
+
+func (s *Server) kitRestore(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	k, err := s.store.GetKit(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if err := s.store.RestoreKit(r.Context(), id); err != nil {
+		return err
+	}
+	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Restored "+k.Name)
+	return nil
+}
+
 type kitPage struct {
-	View     kitView
-	Vehicle  stock.Vehicle
-	Services []stock.ServiceRecord
+	View         kitView
+	Vehicle      stock.Vehicle
+	Services     []stock.ServiceRecord
+	ServiceCount int // all services logged with the kit, on any vehicle
 }
 
 func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
@@ -339,7 +378,11 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 			done = append(done, sr)
 		}
 	}
-	p := kitPage{View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done}
+	count, err := s.store.KitServices(ctx, id)
+	if err != nil {
+		return err
+	}
+	p := kitPage{View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count}
 	s.render(w, r, http.StatusOK, "kit_show", View{Title: k.Name + " · " + v.Name, Nav: "services", Data: p})
 	return nil
 }

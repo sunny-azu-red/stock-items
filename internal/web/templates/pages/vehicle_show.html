@@ -19,7 +19,8 @@
   <div class="stack">
     <section class="card">
       <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2><a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} New kit</a></div>
-      {{if $d.Kits}}{{range $d.Kits}}{{template "kit-row" .}}{{end}}
+      {{if $d.Kits}}{{range $d.Kits}}{{if not .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}
+      {{range $d.Kits}}{{if .Kit.Archived}}<a class="kit-row muted" href="/kits/{{.Kit.ID}}"><span class="status-icon">{{icon "archive"}}</span><span class="grow">{{.Kit.Name}} <span class="badge badge-muted">Archived</span></span></a>{{end}}{{end}}
       {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
     </section>
 

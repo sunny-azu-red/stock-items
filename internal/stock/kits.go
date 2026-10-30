@@ -94,7 +94,7 @@ const DueSoonDays = 30
 // Due computes when the kit's service is next due, given the vehicle's
 // current odometer reading and today's date.
 func (k Kit) Due(currentKm *int, today time.Time) Due {
-	if k.IntervalKm == nil && k.IntervalMonths == nil {
+	if (k.IntervalKm == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
 	}
 	if k.LastService == nil {

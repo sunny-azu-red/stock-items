@@ -39,7 +39,7 @@ items ─< shopping_entries (or free text)
 - Optional `total_price`, `supplier`, `note`, `occurred_on`. `occurred_on` must be between 1990-01-01 and tomorrow (`stock.CheckEventDate`).
 - `service_record_id` is set for parts used by a service.
 
-**service_kits:** a named list of parts for a recurring job on one vehicle, with optional `interval_km` / `interval_months`.
+**service_kits:** a named list of parts for a recurring job on one vehicle, with optional `interval_km` / `interval_months`, and `archived_at`. A kit with logged services can't be deleted (that would set their `kit_id` to NULL and lose the kit's history); it is archived instead, which takes it out of `ListKits` (unless `IncludeArchived`), reminders (`Kit.Due` is `none`) and suggestions.
 
 **service_kit_lines:** item and needed quantity. Each item appears at most once per kit.
 

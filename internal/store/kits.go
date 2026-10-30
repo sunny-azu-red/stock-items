@@ -14,17 +14,19 @@ type KitFilter struct {
 	IDs       []int64
 	VehicleID int64
 	ItemID    int64 // kits that contain this item
-	// IncludeArchived also lists kits of archived vehicles.
+	// IncludeArchived also lists archived kits and kits of archived
+	// vehicles.
 	IncludeArchived bool
 }
 
 // ListKits returns service kits with their lines (and current stock) and
-// the last service performed with each kit. Kits of archived vehicles are
-// left out unless they are asked for by id or vehicle.
+// the last service performed with each kit. Archived kits are left out
+// unless asked for by id or IncludeArchived, and so are kits of archived
+// vehicles unless also asked for by vehicle.
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
-		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes,
+		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at,
 		       ls.id, ls.performed_on, ls.odometer_km,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
@@ -39,8 +41,11 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		WHERE true`
 	if len(f.IDs) > 0 {
 		sql += " AND k.id = ANY(" + args.add(f.IDs) + ")"
-	} else if f.VehicleID == 0 && !f.IncludeArchived {
-		sql += " AND v.archived_at IS NULL"
+	} else if !f.IncludeArchived {
+		sql += " AND k.archived_at IS NULL"
+		if f.VehicleID == 0 {
+			sql += " AND v.archived_at IS NULL"
+		}
 	}
 	if f.VehicleID != 0 {
 		sql += " AND k.vehicle_id = " + args.add(f.VehicleID)
@@ -60,7 +65,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsDate *time.Time
 		var ls stock.ServiceRef
 		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.Notes, &lsID, &lsDate, &ls.OdometerKm, &k.LastOdometerKm)
+			&k.Notes, &k.ArchivedAt, &lsID, &lsDate, &ls.OdometerKm, &k.LastOdometerKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			k.LastService = &ls
@@ -165,7 +170,40 @@ func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines []stock.
 	return nil
 }
 
-// DeleteKit removes a kit. Services performed with it are kept.
+// KitServices counts the services logged with a kit.
+func (s *Store) KitServices(ctx context.Context, id int64) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM service_records WHERE kit_id = $1`, id).Scan(&n)
+	return n, err
+}
+
+// DeleteKit removes a kit that was never used. A kit with logged services
+// fails with a *ConflictError and should be archived instead: deleting it
+// would cut the link from its services and lose its history.
 func (s *Store) DeleteKit(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `DELETE FROM service_kits WHERE id = $1`, id))
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM service_kits WHERE id = $1 FOR UPDATE`, id).Scan(&name); err != nil {
+			return notFound(err)
+		}
+		var used bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_records WHERE kit_id = $1)`, id).Scan(&used); err != nil {
+			return err
+		}
+		if used {
+			return &ConflictError{Field: "form", Message: name + " has logged services. Archive it instead."}
+		}
+		return checkAffected(tx.Exec(ctx, `DELETE FROM service_kits WHERE id = $1`, id))
+	})
+}
+
+// ArchiveKit hides a kit from lists, reminders and suggestions while its
+// services keep it.
+func (s *Store) ArchiveKit(ctx context.Context, id int64) error {
+	return checkAffected(s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id))
+}
+
+// RestoreKit brings an archived kit back.
+func (s *Store) RestoreKit(ctx context.Context, id int64) error {
+	return checkAffected(s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL WHERE id = $1`, id))
 }

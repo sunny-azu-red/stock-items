@@ -282,7 +282,13 @@ type Kit struct {
 	// that has one; km reminders count from it when the last service was
 	// logged without a reading.
 	LastOdometerKm *int
+	// ArchivedAt is set for kits no longer used: they leave lists and
+	// reminders, but their services keep them.
+	ArchivedAt *time.Time
 }
+
+// Archived reports whether the kit has been archived.
+func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 
 // ServiceRef is the minimal information about a past service.
 type ServiceRef struct {

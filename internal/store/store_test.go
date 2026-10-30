@@ -1592,3 +1592,54 @@ func mustShoppingEntry(t *testing.T, s *store.Store) stock.ShoppingEntry {
 	}
 	return list[0]
 }
+
+func TestArchiveKitWithServices(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	kit := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalMonths: ptr(12)}
+	kit.Normalize()
+	used, err := s.CreateKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit.Name = "Never used"
+	unused, err := s.CreateKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stock.ServiceInput{VehicleID: v, KitID: &used, Title: "Oil service", PerformedOn: time.Now()}
+	in.Normalize()
+	svc, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var conflict *store.ConflictError
+	if err := s.DeleteKit(ctx, used); !errors.As(err, &conflict) {
+		t.Fatalf("delete a used kit: want ConflictError, got %v", err)
+	}
+	if n, _ := s.KitServices(ctx, used); n != 1 {
+		t.Errorf("services = %d", n)
+	}
+	if err := s.ArchiveKit(ctx, used); err != nil {
+		t.Fatal(err)
+	}
+	if kits, _ := s.ListKits(ctx, store.KitFilter{}); len(kits) != 1 || kits[0].ID != unused {
+		t.Errorf("active kits = %+v", kits)
+	}
+	if kits, _ := s.ListKits(ctx, store.KitFilter{VehicleID: v}); len(kits) != 1 {
+		t.Errorf("a vehicle's active kits = %+v", kits)
+	}
+	k, _ := s.GetKit(ctx, used)
+	if !k.Archived() || k.Due(nil, time.Now()).State != stock.DueNone {
+		t.Errorf("archived kit = %+v", k)
+	}
+	if r, _ := s.GetService(ctx, svc); r.KitID == nil || *r.KitID != used {
+		t.Errorf("service lost its kit: %+v", r)
+	}
+	if err := s.RestoreKit(ctx, used); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteKit(ctx, unused); err != nil {
+		t.Errorf("delete an unused kit: %v", err)
+	}
+}

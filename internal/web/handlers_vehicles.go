@@ -305,7 +305,7 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	kits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: id})
+	kits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: id, IncludeArchived: true})
 	if err != nil {
 		return err
 	}

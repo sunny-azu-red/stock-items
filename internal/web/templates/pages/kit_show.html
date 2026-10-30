@@ -3,12 +3,16 @@
 <div class="page-head">
   <div>
     <h1>{{$k.Name}}</h1>
-    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{template "due-badge" $due}}{{template "ready-badge" $r}}</div>
+    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $k.ArchivedAt}}</span>{{else}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{end}}</div>
   </div>
   <div class="actions">
     <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
+    {{if $k.Archived}}
+    <form class="inline-form" method="post" action="/kits/{{$k.ID}}/restore"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore kit</button></form>
+    {{else}}
     {{if not $r.Ready}}{{if $r.Lines}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}{{end}}
     <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Do this service</a>
+    {{end}}
   </div>
 </div>
 
@@ -56,9 +60,15 @@
       {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">Not done yet.</div>{{end}}
     </section>
 
-    <form method="post" action="/kits/{{$k.ID}}/delete" data-confirm="Delete the kit {{$k.Name}}? Logged services are kept.">
+    {{if $k.Archived}}{{else if $d.ServiceCount}}
+    <form method="post" action="/kits/{{$k.ID}}/archive" data-confirm="Archive the kit {{$k.Name}}? It leaves the lists and reminders; its {{plural $d.ServiceCount "logged service"}} keep it, and you can restore it.">
+      <button class="btn btn-danger btn-block" type="submit">{{icon "archive"}} Archive kit</button>
+    </form>
+    {{else}}
+    <form method="post" action="/kits/{{$k.ID}}/delete" data-confirm="Delete the kit {{$k.Name}}?">
       <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete kit</button>
     </form>
+    {{end}}
   </div>
 </div>
 {{end}}

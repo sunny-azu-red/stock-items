@@ -158,7 +158,7 @@ func (in ItemInput) Validate() Errors {
 		if !validSKUKind(s.Kind) {
 			errs.Add(field, "Unknown SKU type")
 		} else if s.Kind == SKUBarcode && s.Code != "" && !ValidGTIN(s.Code) {
-			errs.Add(field, "Not a valid barcode (8, 12, 13 or 14 digits with a correct check digit)")
+			errs.Add(field, "Not a valid barcode (8, 12, 13 or 14 digits with a correct check digit). For a part number, pick OEM or Manufacturer.")
 		}
 		if s.PackSize != nil && *s.PackSize <= 0 {
 			errs.Add(field, "Pack size must be greater than zero")

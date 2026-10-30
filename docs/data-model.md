@@ -62,10 +62,10 @@ items ─< shopping_entries (or free text)
 | Value | Computed in |
 |---|---|
 | Low stock | `quantity < min_quantity` (`stock.Item.IsLow`) |
-| Expiring | stock left and `expires_on` past or within 60 days (`stock.Item.ExpiryState`, `store.ItemFilter.Expiring`) |
+| Expiring | stock left and `expires_on` past or within 60 days of the app's date (`stock.Item.ExpiryState`, `store.ItemFilter.Expiring` with `Today`) |
 | Kit readiness and shortfall | `stock.Kit.Readiness`, `KitLine.Short` |
-| Service due state (`never`/`ok`/`soon`/`overdue`) | `stock.Kit.Due`: last service with the kit + interval, compared to the current odometer and today. "Soon" means within 30 days or max(500 km, 10 % of the interval), but never more than half the interval. Month intervals end on the same day of the month, or the month's last day (31 Jan + 1 month = 28 Feb). History logged with the kit on another vehicle is ignored. |
+| Service due state (`never`/`ok`/`soon`/`overdue`) | `stock.Kit.Due`: last service with the kit + interval, compared to the current odometer and today. Km count from the latest service with the kit that has a reading. "Soon" means within 30 days or max(500 km, 10 % of the interval), but never more than half the interval (for days as for km); exactly at the due date or km is still "soon", one day or km past it is "overdue". Month intervals end on the same day of the month, or the month's last day (31 Jan + 1 month = 28 Feb). History logged with the kit on another vehicle is ignored. |
 | Purchase suggestions | `stock.SuggestPurchases`: below minimum or short for any kit, and not already on the list |
 | Stock value | quantity × last purchase price per unit, for items that aren't archived (`store.GetStats`) |
 | Purchase count (item page) | `store.CountPurchases` |
-| Spent in the last 12 months | priced purchases plus labour cost with a date in the last 12 months (`store.GetStats`) |
+| Spent in the last 12 months | priced purchases plus labour cost with a date in the 12 months before the app's date (`store.GetStats`) |

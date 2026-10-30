@@ -129,7 +129,9 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	if err != nil {
 		return stockPage{}, err
 	}
-	items, err := s.store.ListItems(ctx, f.store())
+	sf := f.store()
+	sf.Today = s.now()
+	items, err := s.store.ListItems(ctx, sf)
 	if err != nil {
 		return stockPage{}, err
 	}

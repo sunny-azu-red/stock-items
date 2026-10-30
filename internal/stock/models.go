@@ -272,6 +272,10 @@ type Kit struct {
 	Notes          string
 	Lines          []KitLine
 	LastService    *ServiceRef
+	// LastOdometerKm is the reading of the latest service with this kit
+	// that has one; km reminders count from it when the last service was
+	// logged without a reading.
+	LastOdometerKm *int
 }
 
 // ServiceRef is the minimal information about a past service.

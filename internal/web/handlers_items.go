@@ -116,6 +116,10 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		} else {
 			in.BoughtOn = d
 		}
+		if f.ShoppingID != 0 && in.Quantity == 0 && f.Errors["quantity"] == "" {
+			// Ticking the entry off with nothing on stock would lose it.
+			f.Errors.Add("quantity", "Enter how much you bought")
+		}
 	}
 	if was, err := strconv.ParseFloat(f.QuantityWas, 64); err == nil {
 		in.QuantityWas = &was
@@ -574,8 +578,10 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	}
 	if d, err := parseEventDate(f.OccurredOn, s.now()); err != nil {
 		f.Errors.Add("occurred_on", err.Error())
-	} else {
+	} else if d != nil {
 		in.OccurredOn = d
+	} else {
+		in.OccurredOn = s.today()
 	}
 	if in.Kind == stock.MovePurchase {
 		if d, err := parseOptDate(f.ExpiresOn); err != nil {
@@ -668,6 +674,7 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		in = stock.MovementInput{ItemID: id, Kind: stock.MoveCorrection, Delta: step, Note: "Quick adjust"}
 	}
+	in.OccurredOn = s.today()
 	if err := s.store.AddMovement(ctx, in); err != nil {
 		var short *store.InsufficientStockError
 		var verrs stock.Errors

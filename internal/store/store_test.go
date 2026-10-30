@@ -283,7 +283,7 @@ func TestMovements(t *testing.T) {
 	if err != nil || price == nil || *price != 0.015 {
 		t.Errorf("last unit price = %v, %v", price, err)
 	}
-	st, err := s.GetStats(ctx)
+	st, err := s.GetStats(ctx, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,7 +639,7 @@ func TestNewItemWithPriceIsAPurchase(t *testing.T) {
 
 	// Both priced items count in the stock value; only the recent purchase
 	// counts as spending.
-	st, err := s.GetStats(ctx)
+	st, err := s.GetStats(ctx, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -943,7 +943,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	if p, _ := s.LastUnitPrice(ctx, oil); p == nil || *p != 0.067 {
 		t.Errorf("last unit price = %v, want 0.067", p)
 	}
-	if st, _ := s.GetStats(ctx); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
+	if st, _ := s.GetStats(ctx, time.Now()); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
 		t.Errorf("stats = %+v, want value 100.5 and spent 67", st)
 	}
 
@@ -1037,7 +1037,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &filter}); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := s.GetStats(ctx)
+	before, _ := s.GetStats(ctx, time.Now())
 
 	u, err := s.ItemUsage(ctx, filter)
 	if err != nil || u != (stock.ItemUsage{Purchases: 1, Services: 1, Kits: 1}) {
@@ -1072,7 +1072,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if kit, _ := s.GetKit(ctx, kitID); len(kit.Lines) != 1 || !kit.Lines[0].Archived {
 		t.Errorf("kit lines = %+v", kit.Lines)
 	}
-	after, _ := s.GetStats(ctx)
+	after, _ := s.GetStats(ctx, time.Now())
 	if after.Spent12m != before.Spent12m || after.StockValue != 0 || before.StockValue != 40 {
 		t.Errorf("stats before %+v, after %+v: spending kept, archived stock not valued", before, after)
 	}
@@ -1182,4 +1182,40 @@ func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
 		t.Errorf("quantity = %v, want 500", it.Quantity)
 	}
 	assertLedger(t, s)
+}
+
+func TestSearchIgnoresCodesOfJustOneCharacter(t *testing.T) {
+	s, _ := newStore(t)
+	mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, SKUs: []stock.SKU{{Code: "M8-125", Kind: stock.SKUOther}}})
+	mustItem(t, s, stock.ItemInput{Name: "Washer Ø8", Unit: stock.UnitPiece})
+	for q, want := range map[string][]string{
+		"Ø8":     {"Washer Ø8"}, // matched by name, not every code with an 8
+		"m8 125": {"Bolt"},
+		"m8.125": {"Bolt"},
+	} {
+		if got := ids(mustList(t, s, store.ItemFilter{Query: q})); !slices.Equal(got, want) {
+			t.Errorf("search %q = %v, want %v", q, got, want)
+		}
+	}
+}
+
+func TestDatesComeFromTheAppClock(t *testing.T) {
+	s, ctx := newStore(t)
+	expires := time.Date(2030, 3, 1, 0, 0, 0, 0, time.UTC)
+	mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 1, ExpiresOn: &expires})
+	bought := time.Date(2029, 6, 1, 0, 0, 0, 0, time.UTC)
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: mustList(t, s, store.ItemFilter{})[0].ID, Kind: stock.MovePurchase,
+		Delta: 1, TotalPrice: ptr(10.0), OccurredOn: &bought}); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Date(2030, 2, 1, 0, 0, 0, 0, time.UTC)
+	if got := mustList(t, s, store.ItemFilter{Expiring: true, Today: later}); len(got) != 1 {
+		t.Errorf("expiring on %s = %v", later.Format("2006-01-02"), ids(got))
+	}
+	if got := mustList(t, s, store.ItemFilter{Expiring: true}); len(got) != 0 {
+		t.Errorf("expiring today = %v", ids(got))
+	}
+	if st, _ := s.GetStats(ctx, later); st.Spent12m != 10 {
+		t.Errorf("spent in the 12 months before %s = %v, want 10", later.Format("2006-01-02"), st.Spent12m)
+	}
 }

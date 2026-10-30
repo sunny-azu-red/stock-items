@@ -41,7 +41,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	stats, err := s.store.GetStats(ctx)
+	stats, err := s.store.GetStats(ctx, s.now())
 	if err != nil {
 		return err
 	}

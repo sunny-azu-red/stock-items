@@ -8,7 +8,7 @@
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).
    - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded, or once the item is in a kit or on the shopping list with a quantity.
    - **On stock.** The amount you have right now, e.g. `525` ml or `1.5` L.
-   - **Bought it just now?** (new items only, optional). Enter the total price and/or the shop, and the date if it wasn't today. The starting stock is then recorded as a purchase, so the item shows a last price, a purchase count, and counts in the stock value and spending. Leave these empty for stock you already had; it is recorded as *Initial stock*.
+   - **Bought it just now?** (new items only, optional). Enter the total price and/or the shop, and the date if it wasn't today. The starting stock is then recorded as a purchase, so the item shows a last price, a purchase count, and counts in the stock value and spending. Leave price and shop empty for stock you already had; it is recorded as *Initial stock* on the date given.
    - **Keep at least** (optional). Below this the item shows as *low* and is suggested on the shopping list.
    - **SKUs.** Add every number you might search for: the OEM part number, the manufacturer number, one row per pack size.
    - Use **Save & add another** to enter many items in a row. It keeps the vehicles and unit you picked.

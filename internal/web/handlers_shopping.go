@@ -212,8 +212,10 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	}
 	if d, err := parseEventDate(f.OccurredOn, s.now()); err != nil {
 		f.Errors.Add("occurred_on", err.Error())
-	} else {
+	} else if d != nil {
 		in.OccurredOn = d
+	} else {
+		in.OccurredOn = s.today()
 	}
 	if d, err := parseOptDate(f.ExpiresOn); err != nil {
 		f.Errors.Add("expires_on", err.Error())

@@ -74,8 +74,8 @@ func TestItemInputStartMovement(t *testing.T) {
 			if m.Kind != tt.kind || m.ItemID != 7 || m.Delta != in.Quantity {
 				t.Errorf("movement = %+v, want kind %s", m, tt.kind)
 			}
-			if m.Kind == MoveInitial && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != nil) {
-				t.Errorf("initial stock should carry no purchase details: %+v", m)
+			if m.Kind == MoveInitial && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != in.BoughtOn) {
+				t.Errorf("initial stock should carry only its date: %+v", m)
 			}
 			if m.Kind == MovePurchase && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
 				t.Errorf("purchase details not carried over: %+v", m)

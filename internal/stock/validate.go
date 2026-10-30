@@ -69,7 +69,7 @@ func (in ItemInput) Bought() bool { return in.TotalPrice != nil || in.Supplier !
 // was already on the shelf.
 func (in ItemInput) StartMovement(itemID int64) MovementInput {
 	if !in.Bought() {
-		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity}
+		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity, OccurredOn: in.BoughtOn}
 	}
 	return MovementInput{
 		ItemID: itemID, Kind: MovePurchase, Delta: in.Quantity,

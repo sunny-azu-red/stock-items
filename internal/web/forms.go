@@ -88,6 +88,13 @@ func parseOptDate(s string) (*time.Time, error) {
 	return &t, nil
 }
 
+// today is the app's current date, the default for stock changes made
+// without one (the database and server clock may disagree with it).
+func (s *Server) today() *time.Time {
+	d := stock.DateOnly(s.now())
+	return &d
+}
+
 // parseEventDate parses an optional date of something that already
 // happened (a purchase, stock change or service), refusing dates that are
 // surely typos; see stock.CheckEventDate.

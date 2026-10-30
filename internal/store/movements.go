@@ -256,8 +256,9 @@ type Stats struct {
 	Spent12m float64
 }
 
-// GetStats computes the dashboard money figures.
-func (s *Store) GetStats(ctx context.Context) (Stats, error) {
+// GetStats computes the dashboard money figures, with the last 12 months
+// counted back from today.
+func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 	var st Stats
 	err := s.pool.QueryRow(ctx, `
 		SELECT
@@ -267,9 +268,9 @@ func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
 		            WHERE i.archived_at IS NULL), 0)::float8,
 		  (COALESCE((SELECT sum(total_price) FROM stock_movements
-		             WHERE kind = 'purchase' AND occurred_on > current_date - interval '12 months'), 0)
+		             WHERE kind = 'purchase' AND occurred_on > $1::date - interval '12 months'), 0)
 		 + COALESCE((SELECT sum(labor_cost) FROM service_records
-		             WHERE performed_on > current_date - interval '12 months'), 0))::float8`).
+		             WHERE performed_on > $1::date - interval '12 months'), 0))::float8`, stock.DateOnly(today)).
 		Scan(&st.StockValue, &st.Spent12m)
 	return st, err
 }

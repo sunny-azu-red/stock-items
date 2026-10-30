@@ -40,13 +40,18 @@ func TestKitDue(t *testing.T) {
 		{"never done", Kit{IntervalKm: ptr(6000)}, ptr(1000), DueNever},
 		{"ok by km", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, ptr(11000), DueOK},
 		{"soon by km (threshold 600)", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, ptr(15500), DueSoon},
-		{"overdue by km", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, ptr(16000), DueOverdue},
+		{"due exactly at the km is not over yet", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, ptr(16000), DueSoon},
+		{"overdue by km", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, ptr(16001), DueOverdue},
 		{"ok by date", Kit{IntervalMonths: ptr(12), LastService: last(100, 0)}, nil, DueOK},
 		{"soon by date", Kit{IntervalMonths: ptr(12), LastService: last(350, 0)}, nil, DueSoon},
 		{"overdue by date", Kit{IntervalMonths: ptr(12), LastService: last(400, 0)}, nil, DueOverdue},
 		{"date overdue wins over km ok", Kit{IntervalKm: ptr(6000), IntervalMonths: ptr(12), LastService: last(400, 10000)}, ptr(10100), DueOverdue},
 		{"km interval but no odometer", Kit{IntervalKm: ptr(6000), LastService: last(10, 10000)}, nil, DueUnknown},
 		{"short interval is not soon right after", Kit{IntervalKm: ptr(300), LastService: last(1, 10000)}, ptr(10010), DueOK},
+		{"monthly is not soon right after", Kit{IntervalMonths: ptr(1), LastService: last(0, 0)}, nil, DueOK},
+		{"monthly is soon in its second half", Kit{IntervalMonths: ptr(1), LastService: last(20, 0)}, nil, DueSoon},
+		{"km from an earlier reading when the last service has none",
+			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today}, LastOdometerKm: ptr(10000)}, ptr(16500), DueOverdue},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

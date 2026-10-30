@@ -102,8 +102,12 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 	}
 	var d Due
 	soon, overdue, known := false, false, false
-	if k.IntervalKm != nil && k.LastService.OdometerKm != nil {
-		dueKm := *k.LastService.OdometerKm + *k.IntervalKm
+	lastKm := k.LastService.OdometerKm
+	if lastKm == nil {
+		lastKm = k.LastOdometerKm
+	}
+	if k.IntervalKm != nil && lastKm != nil {
+		dueKm := *lastKm + *k.IntervalKm
 		d.DueKm = &dueKm
 		if currentKm != nil {
 			left := dueKm - *currentKm
@@ -112,7 +116,7 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 			// 10% of the interval, at least 500 km, but never more than
 			// half of it (or a short interval is "soon" right away).
 			threshold := min(max(500, *k.IntervalKm/10), *k.IntervalKm/2)
-			overdue = overdue || left <= 0
+			overdue = overdue || left < 0
 			soon = soon || left <= threshold
 		}
 	}
@@ -122,8 +126,11 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 		days := int(dueDate.Sub(DateOnly(today)).Hours() / 24)
 		d.DaysLeft = &days
 		known = true
+		// DueSoonDays, but never more than half the interval, or a monthly
+		// service would be "soon" right after it was done.
+		intervalDays := int(dueDate.Sub(DateOnly(k.LastService.PerformedOn)).Hours() / 24)
 		overdue = overdue || days < 0
-		soon = soon || days <= DueSoonDays
+		soon = soon || days <= min(DueSoonDays, intervalDays/2)
 	}
 	switch {
 	case !known:

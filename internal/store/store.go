@@ -95,12 +95,23 @@ func likePattern(q string) string {
 
 // normalizeCode keeps only letters and digits, so "77-038-005-044" finds
 // "77038005044" (handy for barcode scanners and copy/paste).
+//
+// It returns "" (no code search) when that would drop more than
+// separators, or leave fewer than three characters: "Ø8" would become "8"
+// and match every code with an 8 in it.
 func normalizeCode(q string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(q) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
 			b.WriteRune(r)
+		case strings.ContainsRune(" -./_", r):
+		default:
+			return ""
 		}
+	}
+	if b.Len() < 3 {
+		return ""
 	}
 	return b.String()
 }

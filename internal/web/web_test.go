@@ -576,7 +576,7 @@ func TestNewItemBoughtJustNow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	page := a.get(rec.Header().Get("Location"))
 	expect(t, page, http.StatusOK, "67.00 EUR / L", "<dt>Purchases</dt><dd>1</dd>", "moto24", "Purchase")
-	if st, _ := a.store.GetStats(context.Background()); st.StockValue != 67 || st.Spent12m != 67 {
+	if st, _ := a.store.GetStats(context.Background(), time.Now()); st.StockValue != 67 || st.Spent12m != 67 {
 		t.Errorf("stats = %+v, want 67 value and spending", st)
 	}
 
@@ -1017,4 +1017,29 @@ func TestAmountErrorsSayWhy(t *testing.T) {
 		http.StatusUnprocessableEntity, "Pieces must be a whole number")
 	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {""}}),
 		http.StatusUnprocessableEntity, "Enter an amount, e.g. 2")
+}
+
+func TestNewItemFromShoppingNeedsAnAmount(t *testing.T) {
+	a := newApp(t)
+	ctx := context.Background()
+	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube"})
+	expect(t, a.post("/items", url.Values{"shopping_id": {itoa(free)}, "name": {"Chain lube"}, "unit": {"piece"}}),
+		http.StatusUnprocessableEntity, "Enter how much you bought")
+	if _, err := a.store.GetShopping(ctx, free); err != nil {
+		t.Errorf("entry should still be on the list: %v", err)
+	}
+}
+
+func TestStockChangesDefaultToTheAppDate(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {"1"}}), http.StatusSeeOther)
+	expect(t, a.post("/items/"+itoa(pads)+"/adjust", url.Values{"dir": {"up"}}), http.StatusSeeOther)
+	moves, _ := a.store.ListMovements(context.Background(), store.MovementFilter{ItemID: pads})
+	for _, m := range moves {
+		if m.Kind != stock.MoveInitial && m.OccurredOn.Format("2006-01-02") != "2026-10-29" {
+			t.Errorf("%s dated %s, want the app's 2026-10-29", m.Kind, m.OccurredOn.Format("2006-01-02"))
+		}
+	}
 }

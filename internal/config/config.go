@@ -73,7 +73,7 @@ func Load() (Config, error) {
 		Port:            env("PORT", "8080"),
 		Currency:        env("APP_CURRENCY", "EUR"),
 		SKUSearchURL:    env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
-		SKUSearchPrefix: envOrEmpty("APP_SKU_SEARCH_PREFIX", "site:ro"),
+		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
 	}
 	return cfg, nil
 }
@@ -91,14 +91,6 @@ func schema(v string) string {
 func env(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
-	}
-	return def
-}
-
-// envOrEmpty is like env, but a variable set to an empty value stays empty.
-func envOrEmpty(key, def string) string {
-	if v, ok := os.LookupEnv(key); ok {
-		return strings.TrimSpace(v)
 	}
 	return def
 }

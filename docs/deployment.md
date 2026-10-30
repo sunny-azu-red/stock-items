@@ -76,7 +76,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
    | `DB_PORT`, `DB_DATABASE`, `DB_SCHEMA`, `DB_USERNAME` | | default `5432`, `stock_items`, `public`, `postgres` |
    | `APP_CURRENCY` | `LEI` | default `EUR` |
    | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q=` | default Google; part number links append the number to it |
-   | `APP_SKU_SEARCH_PREFIX` | `site:de` | default `site:ro`; added to every part number search, empty for none |
+   | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
    | `TZ` | `Europe/Bucharest` | default `UTC`; sets when "today" starts for reminders, date checks and spending |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`; pin a tag to stay on a version |

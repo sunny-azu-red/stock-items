@@ -30,8 +30,13 @@
       {{template "err" (index $e "amount")}}
     </div>
     <div class="field{{if index $e "total_price"}} has-error{{end}}">
+      {{if eq $d.Entry.ItemUnit "piece"}}
+      <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</div>
+      <input class="input" id="total_price" name="total_price" value="{{$m.TotalPrice}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
+      {{else}}
       <label for="total_price">Total price ({{.Currency}})</label>
       <input class="input" id="total_price" name="total_price" value="{{$m.TotalPrice}}" inputmode="decimal" placeholder="optional">
+      {{end}}
       {{template "err" (index $e "total_price")}}
     </div>
     <div class="field"><label for="supplier">Shop</label><input class="input" id="supplier" name="supplier" value="{{$m.Supplier}}" placeholder="optional"></div>

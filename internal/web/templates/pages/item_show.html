@@ -126,8 +126,13 @@
     </div>
     {{if eq .Kind "purchase"}}
     <div class="field{{if and $active (index $e "total_price")}} has-error{{end}}">
+      {{if eq .Item.Unit "piece"}}
+      <div class="label-row"><label for="price-{{.Kind}}">Total price</label>{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</div>
+      <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
+      {{else}}
       <label for="price-{{.Kind}}">Total price</label>
       <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional">
+      {{end}}
       {{if $active}}{{template "err" (index $e "total_price")}}{{end}}
     </div>
     <div class="field">

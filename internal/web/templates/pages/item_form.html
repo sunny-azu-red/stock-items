@@ -96,7 +96,7 @@
     <p class="hint mb">Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
-        <label for="total_price">Total price ({{.Currency}})</label>
+        <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label><span class="pieces-only">{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</span></div>
         <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional">
         {{template "err" (index $e "total_price")}}
       </div>

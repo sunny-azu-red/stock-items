@@ -209,6 +209,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .tip-text code { font-size: .95em; }
 .tip-btn:hover + .tip-text, .tip-btn:focus-visible + .tip-text, .tip.open .tip-text { display: block; }
 .tip.dismissed .tip-text { display: none; }
+/* Hints that only apply while the form's "Counted in" is pieces. */
+.pieces-only { display: inline-flex; }
+form:not(:has(input[name="unit"][value="piece"]:checked)) .pieces-only { display: none; }
 .hint { color: var(--muted); font-size: .8rem; margin: 0; }
 .field-error { color: var(--danger); font-size: .8rem; margin: 0; }
 .input, select.input, textarea.input {

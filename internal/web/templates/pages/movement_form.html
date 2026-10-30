@@ -32,8 +32,11 @@
     </div>
     {{if $m.TakesPrice}}
     <div class="field{{if index $e "total_price"}} has-error{{end}}">
-      {{if eq $m.Kind "initial"}}
-      <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" "With a price or shop, this becomes a purchase.")}}</div>
+      {{if or (eq $m.Kind "initial") (eq $m.ItemUnit "piece")}}
+      {{$tip := "With a price or shop, this becomes a purchase."}}
+      {{if and (eq $m.ItemUnit "piece") (eq $m.Kind "initial")}}{{$tip = "For all the pieces together, not the price of one. With a price or shop, this becomes a purchase."}}
+      {{else if eq $m.ItemUnit "piece"}}{{$tip = "For all the pieces together, not the price of one."}}{{end}}
+      <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" $tip)}}</div>
       <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
       {{else}}
       <label for="total_price">Total price ({{.Currency}})</label>

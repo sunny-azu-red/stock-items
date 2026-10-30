@@ -36,7 +36,7 @@ A **kit** is the parts list of a recurring job on one vehicle, e.g. *KTM 390 –
 - **Add missing to shopping list** puts exactly the shortfall on the list.
 - Set **Repeat every** km and/or months to get reminders on the dashboard: *On track*, *Due soon* or *Overdue*.
 - **Do this service** opens the service form with the kit's parts filled in. Adjust quantities, remove what you didn't use, enter the odometer and save. The parts are taken from stock and the vehicle's odometer is updated.
-- Made a mistake? Delete the service (on its page). Its parts go back on stock, and if it moved the vehicle's odometer (and you haven't changed the odometer since), the odometer goes back too.
+- Made a mistake? **Edit** the service (on its page): change the date, odometer, title, labour, notes or parts. The old parts go back on stock and the new ones are taken; if a part is short, nothing changes. Or delete the service. Its parts go back on stock, and if it moved the vehicle's odometer (and you haven't changed the odometer since), the odometer goes back too.
 
 You can also log a service without a kit (Services → Log service), e.g. for a one-off repair.
 

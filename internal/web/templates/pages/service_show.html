@@ -9,6 +9,7 @@
     </div>
   </div>
   <div class="actions">
+    <a class="btn" href="/services/{{$s.ID}}/edit">{{icon "pencil"}} Edit</a>
     <form class="inline-form" method="post" action="/services/{{$s.ID}}/delete" data-confirm="Delete this service? Its parts go back on stock.">
       <button class="btn btn-danger" type="submit">{{icon "undo-2"}} Delete &amp; return parts</button>
     </form>

@@ -1043,3 +1043,35 @@ func TestStockChangesDefaultToTheAppDate(t *testing.T) {
 		}
 	}
 }
+
+func TestEditService(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+		"odometer_km": {"11000"}, "labor_cost": {"1000"}, "part_item": {itoa(oil)}, "part_qty": {"100"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+
+	expect(t, a.get(svc), http.StatusOK, `href="`+svc+`/edit"`)
+	expect(t, a.get(svc+"/edit"), http.StatusOK, "Edit service", `value="Oil top-up"`, `value="1000.00"`, `value="11000"`,
+		`action="`+svc+`"`, "Save changes")
+
+	expect(t, a.post(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),
+		http.StatusUnprocessableEntity, "Only 525 ml on stock")
+	rec = a.post(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"200"}})
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != svc {
+		t.Errorf("location = %q", l)
+	}
+	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 325 {
+		t.Errorf("oil = %v, want 325", it.Quantity)
+	}
+	got, _ := a.store.GetService(ctx, mustID(t, svc))
+	if got.VehicleID != k390 || *got.LaborCost != 100 {
+		t.Errorf("service = %+v", got)
+	}
+}

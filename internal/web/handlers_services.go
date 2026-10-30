@@ -10,6 +10,7 @@ import (
 )
 
 type serviceForm struct {
+	ID          int64 // set when editing a logged service
 	VehicleID   int64
 	KitID       int64
 	KitName     string
@@ -50,7 +51,11 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	}
 	p.Form = f
 	p.ItemGroups = itemOptions(items, p.Vehicle)
-	s.render(w, r, status, "service_form", View{Title: "Log service", Nav: "services", Data: p})
+	title := "Log service"
+	if f.ID != 0 {
+		title = "Edit " + f.Title
+	}
+	s.render(w, r, status, "service_form", View{Title: title, Nav: "services", Data: p})
 	return nil
 }
 
@@ -84,14 +89,12 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	return s.renderServiceForm(w, r, http.StatusOK, f)
 }
 
-func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
-	if err := parseForm(w, r); err != nil {
-		return err
-	}
-	ctx := r.Context()
-	items, err := s.store.ListItems(ctx, store.ItemFilter{Archived: store.ArchivedAll})
+// parseServiceForm reads the posted service form. Problems are recorded in
+// form.Errors; the returned input is only meaningful without errors.
+func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceInput, error) {
+	items, err := s.store.ListItems(r.Context(), store.ItemFilter{Archived: store.ArchivedAll})
 	if err != nil {
-		return err
+		return serviceForm{}, stock.ServiceInput{}, err
 	}
 	f := serviceForm{
 		PerformedOn: formText(r, "performed_on"), OdometerKm: formText(r, "odometer_km"), Title: formText(r, "title"),
@@ -116,27 +119,97 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if in.LaborCost, err = parseOptMoney(f.LaborCost); err != nil {
 		f.Errors.Add("labor_cost", err.Error())
 	}
-	byID := itemsByID(items)
-	f.Parts, in.Parts = parseLines(r, "part", byID, f.Errors)
+	f.Parts, in.Parts = parseLines(r, "part", itemsByID(items), f.Errors)
 	in.Normalize()
 	for k, v := range in.Validate() {
 		f.Errors.Add(k, v)
 	}
+	return f, in, nil
+}
+
+// serviceConflict maps a store error onto the service form.
+func serviceConflict(f serviceForm, err error) bool {
+	var short *store.InsufficientStockError
+	if errors.As(err, &short) {
+		for i := range f.Parts {
+			if f.Parts[i].ItemID == short.ItemID {
+				f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " on stock"
+			}
+		}
+	}
+	return formConflict(f.Errors, err)
+}
+
+func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	f, in, err := s.parseServiceForm(r)
+	if err != nil {
+		return err
+	}
 	if !f.Errors.Any() {
-		id, err := s.store.CreateService(ctx, in)
+		id, err := s.store.CreateService(r.Context(), in)
 		if err == nil {
 			s.redirect(w, r, fmt.Sprintf("/services/%d", id), "Logged "+in.Title)
 			return nil
 		}
-		var short *store.InsufficientStockError
-		if errors.As(err, &short) {
-			for i := range f.Parts {
-				if f.Parts[i].ItemID == short.ItemID {
-					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " on stock"
-				}
-			}
+		if !serviceConflict(f, err) {
+			return err
 		}
-		if !formConflict(f.Errors, err) {
+	}
+	return s.renderServiceForm(w, r, http.StatusUnprocessableEntity, f)
+}
+
+func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	rec, err := s.store.GetService(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	f := serviceForm{
+		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, PerformedOn: rec.PerformedOn.Format("2006-01-02"),
+		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes,
+	}
+	if rec.KitID != nil {
+		f.KitID = *rec.KitID
+	}
+	if rec.LaborCost != nil {
+		f.LaborCost = stock.FormatMoney(*rec.LaborCost)
+	}
+	for _, p := range rec.Parts {
+		f.Parts = append(f.Parts, lineRow{ItemID: p.ItemID, Qty: stock.FormatQuantity(p.Quantity, p.Unit)})
+	}
+	return s.renderServiceForm(w, r, http.StatusOK, f)
+}
+
+func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	rec, err := s.store.GetService(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	f, in, err := s.parseServiceForm(r)
+	if err != nil {
+		return err
+	}
+	f.ID, f.VehicleID = id, rec.VehicleID // the vehicle can't change
+	if !f.Errors.Any() {
+		err := s.store.UpdateService(r.Context(), id, in)
+		if err == nil {
+			s.redirect(w, r, fmt.Sprintf("/services/%d", id), "Saved "+in.Title)
+			return nil
+		}
+		if !serviceConflict(f, err) {
 			return err
 		}
 	}

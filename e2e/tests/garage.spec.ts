@@ -298,6 +298,19 @@ test("archive an item that a service still refers to", async ({ page }) => {
   await expect(filterRow()).toHaveCount(1);
 });
 
+test("fix a logged service", async ({ page }) => {
+  await page.goto("/activity?kind=service");
+  await page.locator('a[href^="/services/"]').first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
+  await page.getByLabel("Labour / workshop cost").fill("120");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Saved Oil service");
+  await expect(page.locator('dt:text-is("Labour") + dd')).toHaveText("120.00 EUR");
+  await expect(page.locator("main")).toContainText("1.7 L");
+});
+
 test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
   await page.goto("/services/new");
   const items = page.locator('select[name="part_item"]');

@@ -115,6 +115,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /services/new", h(s.serviceNew))
 	mux.HandleFunc("POST /services", h(s.serviceCreate))
 	mux.HandleFunc("GET /services/{id}", h(s.serviceShow))
+	mux.HandleFunc("GET /services/{id}/edit", h(s.serviceEdit))
+	mux.HandleFunc("POST /services/{id}", h(s.serviceUpdate))
 	mux.HandleFunc("POST /services/{id}/delete", h(s.serviceDelete))
 
 	mux.HandleFunc("GET /shopping", h(s.shoppingList))

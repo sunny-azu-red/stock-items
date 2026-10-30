@@ -1,25 +1,25 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<a class="back" href="{{if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">{{icon "arrow-left"}} Back</a>
+<a class="back" href="{{if $f.ID}}/services/{{$f.ID}}{{else if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">{{icon "arrow-left"}} Back</a>
 <div class="page-head">
   <div>
-    <h1>Log service{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
-    <p class="sub">The parts below are taken from stock when you save.</p>
+    <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
+    <p class="sub">{{if $f.ID}}Saving puts the old parts back on stock and takes the ones below.{{else}}The parts below are taken from stock when you save.{{end}}</p>
   </div>
 </div>
 
 {{if not $d.Vehicles}}
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
 {{else}}
-<form class="card" method="post" action="/services" novalidate>
+<form class="card" method="post" action="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}" novalidate>
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}{{with index $e "parts"}}<p class="field-error mt">{{.}}</p>{{end}}</div>{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
         <label for="vehicle_id">Vehicle</label>
-        {{if $f.KitID}}
+        {{if or $f.KitID $f.ID}}
           <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
-          <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}} <span class="muted small">kit: {{$f.KitName}}</span></div>
+          <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{if $f.KitID}} <span class="muted small">kit: {{$f.KitName}}</span>{{end}}</div>
         {{else}}
         <select class="input" id="vehicle_id" name="vehicle_id">
           <option value="">Choose…</option>
@@ -65,8 +65,8 @@
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
-    <a class="btn btn-ghost spacer" href="/services">Cancel</a>
-    <button class="btn btn-primary" type="submit">{{icon "check"}} Save &amp; take parts from stock</button>
+    <a class="btn btn-ghost spacer" href="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} {{if $f.ID}}Save changes{{else}}Save &amp; take parts from stock{{end}}</button>
   </div>
 </form>
 {{end}}

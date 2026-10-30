@@ -1219,3 +1219,69 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 		t.Errorf("spent in the 12 months before %s = %v, want 10", later.Format("2006-01-02"), st.Spent12m)
 	}
 }
+
+func TestUpdateService(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	vin.Normalize()
+	k390, err := s.CreateVehicle(ctx, vin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 4000})
+	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 2})
+	ring := mustItem(t, s, stock.ItemInput{Name: "O-ring", Unit: stock.UnitPiece, Quantity: 1})
+	typo := 120000
+	in := stock.ServiceInput{VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &typo, LaborCost: ptr(500.0),
+		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}}}
+	in.Normalize()
+	id, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fix the odometer typo and the labour, use less oil, swap the filter for an O-ring.
+	fixed := 12000
+	upd := stock.ServiceInput{VehicleID: 999, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &fixed, LaborCost: ptr(50.0),
+		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1500}, {ItemID: ring, Quantity: 1}}}
+	upd.Normalize()
+	if err := s.UpdateService(ctx, id, upd); err != nil {
+		t.Fatal(err)
+	}
+	for item, want := range map[int64]float64{oil: 2500, filter: 2, ring: 0} {
+		if got := mustGet(t, s, item).Quantity; got != want {
+			t.Errorf("item %d = %v, want %v", item, got, want)
+		}
+	}
+	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 12000 {
+		t.Errorf("odometer = %d, want 12000", *v.OdometerKm)
+	}
+	svc, _ := s.GetService(ctx, id)
+	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || *svc.OdometerKm != 12000 {
+		t.Errorf("service = %+v", svc)
+	}
+
+	// A part that is short leaves the service as it was.
+	short := upd
+	short.Parts = []stock.KitLineInput{{ItemID: oil, Quantity: 9000}}
+	var insufficient *store.InsufficientStockError
+	if err := s.UpdateService(ctx, id, short); !errors.As(err, &insufficient) || insufficient.ItemID != oil {
+		t.Fatalf("want InsufficientStockError for oil, got %v", err)
+	}
+	if got := mustGet(t, s, oil).Quantity; got != 2500 {
+		t.Errorf("oil after failed update = %v, want 2500", got)
+	}
+
+	// Deleting it now puts the odometer back to before the service.
+	if err := s.DeleteService(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 10000 {
+		t.Errorf("odometer after delete = %d, want 10000", *v.OdometerKm)
+	}
+	if err := s.UpdateService(ctx, id, upd); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("update deleted service: want ErrNotFound, got %v", err)
+	}
+	assertLedger(t, s)
+}

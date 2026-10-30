@@ -79,15 +79,8 @@ func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, 
 func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
-		if in.KitID != nil {
-			var kitVehicle int64
-			err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1`, *in.KitID).Scan(&kitVehicle)
-			if err != nil {
-				return notFound(err)
-			}
-			if kitVehicle != in.VehicleID {
-				return &ConflictError{Field: "kit_id", Message: "This kit belongs to another vehicle"}
-			}
+		if err := checkServiceKit(ctx, tx, in); err != nil {
+			return err
 		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost)
@@ -99,21 +92,104 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err != nil {
 			return err
 		}
-		// Lock items in id order, so two services sharing parts cannot deadlock.
-		parts := slices.Clone(in.Parts)
-		slices.SortFunc(parts, func(a, b stock.KitLineInput) int { return cmp.Compare(a.ItemID, b.ItemID) })
-		for _, p := range parts {
-			err := applyMovement(ctx, tx, stock.MovementInput{
-				ItemID: p.ItemID, Kind: stock.MoveService, Delta: -p.Quantity,
-				Note: in.Title, OccurredOn: &in.PerformedOn, ServiceRecordID: &id,
-			})
-			if err != nil {
-				return err
-			}
+		if err := takeServiceParts(ctx, tx, id, in); err != nil {
+			return err
 		}
 		return moveOdometer(ctx, tx, id, in.VehicleID, in.OdometerKm)
 	})
 	return id, err
+}
+
+// UpdateService changes a logged service. Its vehicle stays; everything
+// else may change. The old parts go back on stock and the new ones are
+// taken, and the odometer change is redone, all in one transaction, so a
+// part that is short leaves the service as it was. Like DeleteService it
+// rewrites recorded movements together with their effect, so the ledger
+// still adds up.
+func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1 FOR UPDATE`, id).Scan(&in.VehicleID); err != nil {
+			return notFound(err)
+		}
+		if err := checkServiceKit(ctx, tx, in); err != nil {
+			return err
+		}
+		// Lock the old and new parts together in id order, like CreateService.
+		ids := make([]int64, 0, len(in.Parts))
+		for _, p := range in.Parts {
+			ids = append(ids, p.ItemID)
+		}
+		if _, err := tx.Exec(ctx, `
+			SELECT id FROM items
+			WHERE id = ANY($2) OR id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
+			ORDER BY id FOR UPDATE`, id, ids); err != nil {
+			return err
+		}
+		if err := returnServiceParts(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := restoreOdometer(ctx, tx, id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7
+			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
+		if isForeignKeyViolation(err) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := takeServiceParts(ctx, tx, id, in); err != nil {
+			return err
+		}
+		return moveOdometer(ctx, tx, id, in.VehicleID, in.OdometerKm)
+	})
+}
+
+// checkServiceKit refuses a kit that belongs to another vehicle.
+func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) error {
+	if in.KitID == nil {
+		return nil
+	}
+	var kitVehicle int64
+	if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1`, *in.KitID).Scan(&kitVehicle); err != nil {
+		return notFound(err)
+	}
+	if kitVehicle != in.VehicleID {
+		return &ConflictError{Field: "kit_id", Message: "This kit belongs to another vehicle"}
+	}
+	return nil
+}
+
+// takeServiceParts takes a service's parts from stock, in item id order
+// so two services sharing parts cannot deadlock.
+func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.ServiceInput) error {
+	parts := slices.Clone(in.Parts)
+	slices.SortFunc(parts, func(a, b stock.KitLineInput) int { return cmp.Compare(a.ItemID, b.ItemID) })
+	for _, p := range parts {
+		err := applyMovement(ctx, tx, stock.MovementInput{
+			ItemID: p.ItemID, Kind: stock.MoveService, Delta: -p.Quantity,
+			Note: in.Title, OccurredOn: &in.PerformedOn, ServiceRecordID: &serviceID,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// returnServiceParts puts a service's parts back on stock and deletes
+// their movements. The caller holds the item locks.
+func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
+		FROM (SELECT item_id, sum(delta) AS total FROM stock_movements WHERE service_record_id = $1 GROUP BY item_id) m
+		WHERE i.id = m.item_id`, serviceID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, serviceID)
+	return err
 }
 
 // moveOdometer moves the vehicle's odometer forward to a service's
@@ -166,7 +242,8 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 func (s *Store) DeleteService(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var vehicleID int64
-		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1`, id).Scan(&vehicleID); err != nil {
+		// Lock the service first, then its items, like UpdateService.
+		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_records WHERE id = $1 FOR UPDATE`, id).Scan(&vehicleID); err != nil {
 			return notFound(err)
 		}
 		// Lock the items in id order first, like CreateService.
@@ -175,13 +252,7 @@ func (s *Store) DeleteService(ctx context.Context, id int64) error {
 			ORDER BY id FOR UPDATE`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `
-			UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
-			FROM (SELECT item_id, sum(delta) AS total FROM stock_movements WHERE service_record_id = $1 GROUP BY item_id) m
-			WHERE i.id = m.item_id`, id); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, id); err != nil {
+		if err := returnServiceParts(ctx, tx, id); err != nil {
 			return err
 		}
 		if err := restoreOdometer(ctx, tx, id); err != nil {

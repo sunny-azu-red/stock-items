@@ -221,9 +221,11 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		if e.ItemID != nil {
 			return store.ErrNotFound
 		}
-		f.ShoppingID, f.Name, f.Notes = e.ID, e.FreeText, e.Note
+		f.ShoppingID, f.Name, f.Notes, f.Unit = e.ID, e.FreeText, e.Note, string(e.ItemUnit)
+		_, f.MinUnit = stock.SplitForInput(0, e.ItemUnit)
+		f.QuantityUnit = f.MinUnit
 		if e.Quantity != nil {
-			f.Quantity, f.QuantityUnit = stock.SplitForInput(*e.Quantity, stock.UnitPiece)
+			f.Quantity, f.QuantityUnit = stock.SplitForInput(*e.Quantity, e.ItemUnit)
 		}
 	}
 	page, err := s.itemFormPage(r, f, true)

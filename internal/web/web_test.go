@@ -730,3 +730,16 @@ func TestEmptyItemsAreNotExpiring(t *testing.T) {
 	expect(t, a.get("/"), http.StatusOK, `Expiring</span><span class="value">0</span>`)
 	expectNot(t, a.get("/items/"+itoa(id)), "Expired")
 }
+
+func TestFreeTextShoppingUnits(t *testing.T) {
+	a := newApp(t)
+	expect(t, a.post("/shopping", url.Values{"free_text": {"Coolant"}, "quantity": {"4 L"}}), http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{"free_text": {"Grease"}, "quantity": {"2 bananas"}}), http.StatusUnprocessableEntity, "unknown unit")
+	list, _ := a.store.ListShopping(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("shopping = %+v", list)
+	}
+	expect(t, a.get("/shopping"), http.StatusOK, "4 L")
+	rec := a.get("/items/new?shopping=" + itoa(list[0].ID))
+	expect(t, rec, http.StatusOK, `name="quantity" value="4"`, `value="ml" checked`, `value="l" data-base="ml" selected`)
+}

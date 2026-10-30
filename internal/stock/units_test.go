@@ -135,3 +135,33 @@ func TestSubUnitsFor(t *testing.T) {
 		t.Errorf("SubUnitsFor(piece) = %+v", got)
 	}
 }
+
+func TestParseAmountAnyUnit(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    float64
+		unit    Unit
+		wantErr bool
+	}{
+		{"2", 2, UnitPiece, false},
+		{"3x", 3, UnitPiece, false},
+		{"4 L", 4000, UnitML, false},
+		{"1,5 l", 1500, UnitML, false},
+		{"250 ml", 250, UnitML, false},
+		{"500g", 500, UnitGram, false},
+		{"2 kg", 2000, UnitGram, false},
+		{"1.5", 0, UnitPiece, true}, // pieces are whole
+		{"3 bananas", 0, UnitPiece, true},
+		{"", 0, UnitPiece, true},
+	}
+	for _, tt := range tests {
+		got, u, err := ParseAmountAnyUnit(tt.in)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%q: err = %v, want error %v", tt.in, err, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr && (got != tt.want || u != tt.unit) {
+			t.Errorf("%q = %v %s, want %v %s", tt.in, got, u, tt.want, tt.unit)
+		}
+	}
+}

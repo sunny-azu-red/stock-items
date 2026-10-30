@@ -10,7 +10,7 @@ import (
 )
 
 const shoppingSelect = `
-SELECT e.id, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, 'piece'), e.free_text,
+SELECT e.id, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit), e.free_text,
        e.quantity, e.note, e.created_at
 FROM shopping_entries e
 LEFT JOIN items i ON i.id = e.item_id`
@@ -43,16 +43,19 @@ func (s *Store) GetShopping(ctx context.Context, id int64) (stock.ShoppingEntry,
 // AddShopping adds an entry. Adding an item that is already on the list
 // increases the quantity of the existing entry instead.
 func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64, error) {
+	if in.Unit == "" {
+		in.Unit = stock.UnitPiece
+	}
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO shopping_entries (item_id, free_text, quantity, note) VALUES ($1, $2, $3, $4)
+		INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit) VALUES ($1, $2, $3, $4, $6)
 		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
 		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
 		                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
 		    note = CASE WHEN excluded.note <> '' THEN excluded.note ELSE shopping_entries.note END
 		RETURNING id`,
-		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity).Scan(&id)
+		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
 	if isForeignKeyViolation(err) {
 		return 0, ErrNotFound
 	}

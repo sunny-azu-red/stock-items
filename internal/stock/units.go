@@ -138,6 +138,21 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	return v, nil
 }
 
+// ParseAmountAnyUnit parses an amount for something that is not an item
+// yet, taking the unit from the text itself: "4 L" is 4000 ml, "500g" is
+// 500 g, and a plain number counts pieces.
+func ParseAmountAnyUnit(s string) (float64, Unit, error) {
+	u := UnitPiece
+	clean := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(s)), ",", ".")
+	if m := amountRe.FindStringSubmatch(clean); m != nil {
+		if su, ok := findSubUnit(suffixes[m[2]]); ok {
+			u = su.Base
+		}
+	}
+	v, err := ParseAmount(s, u, "")
+	return v, u, err
+}
+
 // FormatQuantity renders a base unit quantity for people:
 // "6x", "525 ml", "1.5 L", "400 g", "1.2 kg".
 func FormatQuantity(q float64, u Unit) string {

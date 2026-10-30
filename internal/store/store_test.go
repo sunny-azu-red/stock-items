@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -771,5 +772,22 @@ func TestExpiringSkipsEmptyItems(t *testing.T) {
 	}
 	if got := ids(items); !slices.Equal(got, []string{"Still here"}) {
 		t.Errorf("expiring = %v", got)
+	}
+}
+
+func TestFreeTextShoppingKeepsItsUnit(t *testing.T) {
+	s, ctx := newStore(t)
+	in := stock.ShoppingInput{FreeText: "Coolant", Quantity: ptr(4000.0), Unit: stock.UnitML}
+	in.Normalize()
+	id, err := s.AddShopping(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.GetShopping(ctx, id)
+	if err != nil || e.ItemUnit != stock.UnitML || *e.Quantity != 4000 {
+		t.Errorf("entry = %+v, %v", e, err)
+	}
+	if got := stock.ExportShoppingText([]stock.ShoppingEntry{e}); !strings.Contains(got, "4 L") {
+		t.Errorf("export = %q, want 4 L", got)
 	}
 }

@@ -397,13 +397,17 @@ type ShoppingInput struct {
 	ItemID   *int64
 	FreeText string
 	Quantity *float64
+	Unit     Unit // of Quantity; for a linked item, the item's unit
 	Note     string
 }
 
-// Normalize trims text fields.
+// Normalize trims text fields and defaults the unit to pieces.
 func (in *ShoppingInput) Normalize() {
 	in.FreeText = strings.TrimSpace(in.FreeText)
 	in.Note = strings.TrimSpace(in.Note)
+	if in.Unit == "" {
+		in.Unit = UnitPiece
+	}
 }
 
 // Validate checks the input. Call Normalize first.
@@ -414,6 +418,9 @@ func (in ShoppingInput) Validate() Errors {
 	}
 	if in.Quantity != nil && *in.Quantity <= 0 {
 		errs.Add("quantity", "Quantity must be greater than zero")
+	}
+	if in.Unit != "" && !in.Unit.Valid() {
+		errs.Add("quantity", "Unknown unit")
 	}
 	return errs
 }

@@ -41,7 +41,7 @@ items ─< shopping_entries (or free text)
 
 **service_records:** a performed job: date, odometer, title, notes, labour cost, optional kit.
 
-**shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note.
+**shopping_entries:** linked to an item (at most one entry per item) or free text, with an optional quantity and note. `unit` is the unit of a free-text entry's quantity (`stock.ParseAmountAnyUnit` picks it from the typed suffix); linked entries use the item's unit.
 - Marking a linked entry bought records a purchase. If less was bought than the entry's quantity, the entry stays with the rest (`store.MarkBought`).
 - A free-text entry can become a new item: `store.CreateItemFromShopping` creates the item with its starting purchase and deletes the entry in one transaction.
 

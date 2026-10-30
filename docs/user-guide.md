@@ -40,7 +40,7 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 
 ## Shopping list
 
-- Add items from your stock (with a quantity) or free text ("chain lube").
+- Add items from your stock (with a quantity) or free text ("chain lube"). For free text, the quantity's unit comes from what you type: `2` is pieces, `4 L` is volume, `500 g` is weight. Adding it to stock later starts the new item in that unit.
 - **Suggestions** list items below their minimum and parts missing for any kit. Add them one by one or all at once.
 - **Bought** on an entry for a stock item records the purchase (amount, price, shop, date, optional best before). If you bought less than listed, the rest stays on the list; otherwise the entry is removed.
 - **Bought** on a free-text entry asks what to do:

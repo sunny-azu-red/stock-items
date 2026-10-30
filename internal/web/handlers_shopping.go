@@ -65,20 +65,29 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Note: formText(r, "note"), Errors: stock.Errors{}}
 	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note}
-	unit := stock.UnitPiece
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		it, err := s.store.GetItem(r.Context(), *id)
 		if err != nil {
 			f.Errors.Add("item_id", "That item no longer exists")
 		} else {
-			f.ItemID, in.ItemID, unit = *id, id, it.Unit
+			f.ItemID, in.ItemID, in.Unit = *id, id, it.Unit
 			in.FreeText = ""
 		}
 	}
-	if q, err := parseOptAmount(f.Quantity, unit, ""); err != nil {
-		f.Errors.Add("quantity", err.Error())
-	} else {
-		in.Quantity = q
+	switch {
+	case in.ItemID != nil:
+		if q, err := parseOptAmount(f.Quantity, in.Unit, ""); err != nil {
+			f.Errors.Add("quantity", err.Error())
+		} else {
+			in.Quantity = q
+		}
+	case f.Quantity != "":
+		// Something new: the typed suffix decides the unit ("4 L").
+		if q, u, err := stock.ParseAmountAnyUnit(f.Quantity); err != nil {
+			f.Errors.Add("quantity", err.Error())
+		} else {
+			in.Quantity, in.Unit = &q, u
+		}
 	}
 	in.Normalize()
 	for k, v := range in.Validate() {

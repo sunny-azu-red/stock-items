@@ -1,6 +1,6 @@
 # Architecture
 
-Stock Items is a classic server-rendered web application. The browser asks for HTML pages and submits forms. There is no separate JSON API and no single-page app. A small amount of [htmx](https://htmx.org) makes a few interactions feel instant: live filtering, and quick −/+ on stock rows.
+Pitbox is a classic server-rendered web application. The browser asks for HTML pages and submits forms. There is no separate JSON API and no single-page app. A small amount of [htmx](https://htmx.org) makes a few interactions feel instant: live filtering, and quick −/+ on stock rows.
 
 ```
 browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL──▶ PostgreSQL
@@ -12,7 +12,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 | Package | Responsibility | Depends on |
 |---|---|---|
-| `cmd/stock-items` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown | everything |
+| `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown | everything |
 | `internal/config` | Reads env vars and the nearest `.env` file | `godotenv` |
 | `internal/db` | Opens the pgx pool (with optional `search_path`), runs goose migrations embedded from `migrations/`, guarded `DropSchema` for tests | `pgx`, `goose` |
 | `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export, kit readiness, service due dates, purchase suggestions | stdlib only |

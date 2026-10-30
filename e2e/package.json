@@ -1,7 +1,7 @@
 {
-  "name": "stock-items-e2e",
+  "name": "pitbox-e2e",
   "private": true,
-  "description": "End-to-end tests for Stock Items (Playwright)",
+  "description": "End-to-end tests for Pitbox (Playwright)",
   "scripts": {
     "test": "playwright test",
     "report": "playwright show-report"

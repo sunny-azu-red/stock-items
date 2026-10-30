@@ -1,4 +1,4 @@
-// Command stock-items runs the Stock Items web app.
+// Command pitbox runs the Pitbox web app.
 package main
 
 import (

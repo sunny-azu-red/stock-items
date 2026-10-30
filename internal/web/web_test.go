@@ -126,7 +126,7 @@ func TestEmptyPagesRender(t *testing.T) {
 		"/services", "/services/new", "/kits/new", "/shopping", "/activity"} {
 		t.Run(p, func(t *testing.T) { expect(t, a.get(p), http.StatusOK, "</html>") })
 	}
-	expect(t, a.get("/"), http.StatusOK, "Welcome to Stock Items")
+	expect(t, a.get("/"), http.StatusOK, "Welcome to Pitbox")
 }
 
 func TestPagesRenderWithData(t *testing.T) {

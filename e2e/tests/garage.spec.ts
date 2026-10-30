@@ -52,7 +52,7 @@ function row(page: Page, name: string) {
 
 test("set up vehicles and the example inventory", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Welcome to Stock Items")).toBeVisible();
+  await expect(page.getByText("Welcome to Pitbox")).toBeVisible();
 
   await addVehicle(page, "KTM 390", "11200");
   await addVehicle(page, "KTM 1290", "24500");

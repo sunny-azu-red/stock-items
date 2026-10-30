@@ -9,7 +9,7 @@ A server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdl
 ## Layout
 
 ```
-cmd/stock-items/      main: config → db → migrations → HTTP server
+cmd/pitbox/      main: config → db → migrations → HTTP server
 internal/config/      env + .env loading
 internal/db/          pgx pool, goose migrations (migrations/*.sql, embedded)
 internal/stock/       pure domain logic: units, validation, grouping, exports, kits, suggestions
@@ -26,7 +26,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 
 | Task | Command |
 |---|---|
-| Run the app | `go run ./cmd/stock-items` |
+| Run the app | `go run ./cmd/pitbox` |
 | All checks (fmt, vet, staticcheck, tests) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |

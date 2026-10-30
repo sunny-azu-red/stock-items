@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="{{or .Theme "light dark"}}">
   <meta name="theme-color" content="#77498a">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "historyCacheSize": 0, "scrollIntoViewOnBoost": false}'>
-  <title>{{.Title}} · Stock Items</title>
+  <title>{{.Title}} · Pitbox</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
   <link rel="stylesheet" href="{{asset "app.css"}}">
   <script src="{{asset "vendor/htmx.min.js"}}" defer></script>
@@ -19,7 +19,7 @@
 <div class="shell">
   <aside class="sidebar">
     <div class="sidebar-head">
-      <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Stock Items</a>
+      <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
       {{template "theme-toggle" ""}}
     </div>
     <nav class="nav" aria-label="Main">

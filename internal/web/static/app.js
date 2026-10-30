@@ -1,4 +1,4 @@
-// Stock Items — small progressive enhancements. Every page works without
+// Pitbox — small progressive enhancements. Every page works without
 // this file; it only adds convenience (confirmations, dynamic form rows,
 // suggestion dropdowns, clipboard, toasts and keyboard shortcuts).
 (function () {

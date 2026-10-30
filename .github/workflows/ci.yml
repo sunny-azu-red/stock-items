@@ -37,7 +37,7 @@ jobs:
       - name: Lint and test
         run: scripts/check.sh
       - name: Docker image builds
-        run: docker build -t stock-items:ci .
+        run: docker build -t pitbox:ci .
 
       - uses: actions/setup-node@v7
         with:

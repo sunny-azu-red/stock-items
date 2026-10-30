@@ -8,7 +8,7 @@ The app is a single static binary. Templates, CSS, JavaScript and migrations are
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe --always --dirty)" \
-  -o bin/stock-items ./cmd/stock-items
+  -o bin/pitbox ./cmd/pitbox
 ```
 
 Cross-compile for a Raspberry Pi or another ARM server with `GOOS=linux GOARCH=arm64`.
@@ -16,26 +16,26 @@ Cross-compile for a Raspberry Pi or another ARM server with `GOOS=linux GOARCH=a
 ## Run with systemd
 
 ```bash
-sudo useradd --system --home /opt/stock-items stock-items
-sudo mkdir -p /opt/stock-items
-sudo cp bin/stock-items /opt/stock-items/
-sudo cp .env /opt/stock-items/.env && sudo chmod 600 /opt/stock-items/.env
-sudo chown -R stock-items: /opt/stock-items
+sudo useradd --system --home /opt/pitbox pitbox
+sudo mkdir -p /opt/pitbox
+sudo cp bin/pitbox /opt/pitbox/
+sudo cp .env /opt/pitbox/.env && sudo chmod 600 /opt/pitbox/.env
+sudo chown -R pitbox: /opt/pitbox
 ```
 
-`/etc/systemd/system/stock-items.service`:
+`/etc/systemd/system/pitbox.service`:
 
 ```ini
 [Unit]
-Description=Stock Items
+Description=Pitbox
 # Drop postgresql.service from both lines if the database is on another machine.
 After=network-online.target postgresql.service
 Wants=network-online.target postgresql.service
 
 [Service]
-User=stock-items
-WorkingDirectory=/opt/stock-items
-ExecStart=/opt/stock-items/stock-items
+User=pitbox
+WorkingDirectory=/opt/pitbox
+ExecStart=/opt/pitbox/pitbox
 Restart=on-failure
 # The app gives up when the database is not reachable at start; retry slowly
 # rather than hitting systemd's start limit while Postgres boots.
@@ -51,15 +51,15 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now stock-items
-journalctl -u stock-items -f
+sudo systemctl enable --now pitbox
+journalctl -u pitbox -f
 ```
 
 ## Run with Docker
 
 ```bash
-docker build -t stock-items --build-arg VERSION=$(git describe --always) .
-docker run -d --name stock-items --restart unless-stopped -p 8080:8080 --env-file .env stock-items
+docker build -t pitbox --build-arg VERSION=$(git describe --always) .
+docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env pitbox
 ```
 
 Inside the container, `127.0.0.1` is the container itself. If Postgres runs on the Docker host, set `DB_HOST` to the host's LAN address, or use `--network host` (then drop `-p`). Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=secret`, not `DB_PASSWORD="secret"`.
@@ -68,7 +68,7 @@ The image is distroless and runs as a non-root user (~27 MB).
 
 ## Upgrades
 
-Stop the service, replace the binary and start it again. New migrations are applied automatically on start. To apply them separately, run `stock-items -migrate-only`.
+Stop the service, replace the binary and start it again. New migrations are applied automatically on start. To apply them separately, run `pitbox -migrate-only`.
 
 ## Health check
 

@@ -4,7 +4,7 @@
 
 1. Install Go 1.27.3 or newer (the version in `go.mod`). Without root access, unpack the official tarball into `~/.local/go` and add `~/.local/go/bin` to `PATH`.
 2. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases.
-3. `go run ./cmd/stock-items` starts the app on `http://localhost:8080`.
+3. `go run ./cmd/pitbox` starts the app on `http://localhost:8080`.
 
 Useful flags:
 
@@ -17,7 +17,7 @@ Useful flags:
 To experiment without touching your real data, run with a separate schema:
 
 ```bash
-DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/stock-items
+DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 ```
 
 ## Tests

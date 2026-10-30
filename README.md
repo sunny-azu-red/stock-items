@@ -1,6 +1,6 @@
-# Stock Items
+# Pitbox
 
-A small, private web app for keeping track of the parts and fluids you keep on the shelf for your vehicles. Know what you already have before the next service, and what you still need to buy.
+A small, private garage app for your vehicles: the parts and fluids on the shelf, the service jobs they need and when they are due, and what to buy before the next one.
 
 It is built for one household on a home network: no login, one binary, one Postgres database.
 
@@ -37,7 +37,7 @@ Requirements: [Go](https://go.dev/dl/) 1.27.3+ and a PostgreSQL database (tested
 
 ```bash
 cp .env.example .env     # then fill in your database credentials
-go run ./cmd/stock-items # migrates the database and serves http://0.0.0.0:8080
+go run ./cmd/pitbox # migrates the database and serves http://0.0.0.0:8080
 ```
 
 Open `http://<this-machine>:8080` from any device on your network. Start by adding your vehicles, then your items.
@@ -45,8 +45,8 @@ Open `http://<this-machine>:8080` from any device on your network. Start by addi
 ### Build a binary
 
 ```bash
-CGO_ENABLED=0 go build -o bin/stock-items ./cmd/stock-items
-./bin/stock-items            # reads .env from the working directory
+CGO_ENABLED=0 go build -o bin/pitbox ./cmd/pitbox
+./bin/pitbox            # reads .env from the working directory
 ```
 
 See [docs/deployment.md](docs/deployment.md) for running it as a systemd service or with Docker.

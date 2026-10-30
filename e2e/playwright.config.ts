@@ -7,9 +7,9 @@ import * as path from "node:path";
 // come from ../.env or the environment, exactly like the app.
 const goBin = path.join(os.homedir(), ".local", "go", "bin");
 function server(port: number, schema: string) {
-  const binary = path.join("bin", `stock-items-${schema}`);
+  const binary = path.join("bin", `pitbox-${schema}`);
   return {
-    command: `go build -o ${binary} ./cmd/stock-items && ./${binary} -reset-schema`,
+    command: `go build -o ${binary} ./cmd/pitbox && ./${binary} -reset-schema`,
     cwd: "..",
     url: `http://127.0.0.1:${port}/healthz`,
     reuseExistingServer: false,

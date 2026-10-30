@@ -1056,7 +1056,7 @@ func TestEditService(t *testing.T) {
 
 	expect(t, a.get(svc), http.StatusOK, `href="`+svc+`/edit"`)
 	expect(t, a.get(svc+"/edit"), http.StatusOK, "Edit service", `value="Oil top-up"`, `value="1000.00"`, `value="11000"`,
-		`action="`+svc+`"`, "Save changes")
+		`action="`+svc+`"`, "Save changes", "on stock: 525 ml") // 425 ml left + the 100 ml this service returns
 
 	expect(t, a.post(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),

@@ -40,6 +40,20 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	if err != nil {
 		return err
 	}
+	if f.ID != 0 {
+		// Saving returns this service's parts first: count them as available.
+		rec, err := s.store.GetService(ctx, f.ID)
+		if err != nil {
+			return err
+		}
+		for _, p := range rec.Parts {
+			for i := range items {
+				if items[i].ID == p.ItemID {
+					items[i].Quantity += p.Quantity
+				}
+			}
+		}
+	}
 	describeRows(f.Parts, items)
 	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID)}
 	for i := range vehicles {

@@ -12,6 +12,7 @@ type ItemSpec = {
   qtyUnit?: "pcs" | "ml" | "l";
   min?: string;
   vehicles: string[];
+  category?: string;
   skus?: { code: string; kind?: string; label?: string }[];
 };
 
@@ -33,6 +34,7 @@ async function addItem(page: Page, it: ItemSpec) {
   await page.getByLabel("On stock").fill(it.qty);
   if (it.qtyUnit) await page.locator('select[name="quantity_unit"]').selectOption(it.qtyUnit);
   if (it.min) await page.getByLabel("Keep at least").fill(it.min);
+  if (it.category) await page.getByLabel("Category").fill(it.category);
   for (const v of it.vehicles) {
     await page.locator("label.chip-toggle").filter({ hasText: exact(v) }).click();
   }
@@ -65,8 +67,12 @@ test("set up vehicles and the example inventory", async ({ page }) => {
     { brand: "OEM", name: "Oil Screen 1 O-Ring", qty: "2", vehicles: ["KTM 390"] },
     { brand: "OEM", name: "Oil Screen 2 O-Ring", qty: "3", vehicles: ["KTM 390"] },
     {
-      brand: "Silkolene", name: "15W50 PRO 4 XP", volume: true, qty: "525", qtyUnit: "ml", vehicles: ["KTM 390"],
-      skus: [{ code: "SK-80085", kind: "manufacturer", label: "1 L" }, { code: "SK-80086", kind: "manufacturer", label: "4 L" }],
+      brand: "Silkolene", name: "15W50 PRO 4 XP", volume: true, qty: "525", qtyUnit: "ml", vehicles: ["KTM 390"], category: "Oil & fluids",
+      skus: [
+        { code: "SK-80085", kind: "manufacturer", label: "1 L" },
+        { code: "SK-80086", kind: "manufacturer", label: "4 L" },
+        { code: "SK-80087", kind: "manufacturer", label: "20 L" },
+      ],
     },
   ];
   const ktm1290: ItemSpec[] = [
@@ -119,6 +125,21 @@ test("filter stock by vehicle and copy it as text", async ({ page }, testInfo) =
   await page.locator("#q").fill("hf650");
   await expect(page.locator(".item-row")).toHaveCount(1);
   await expect(page.locator(".item-row")).toContainText("Hiflofiltro");
+
+  // Only two part numbers show in a row; "+1 more" reveals the rest in place.
+  const silk = page.locator(".item-row").filter({ hasText: "Silkolene" });
+  await page.goto("/stock");
+  await expect(silk.locator(".sku:visible")).toHaveCount(2);
+  await silk.getByRole("link", { name: "Show 1 more part number" }).click();
+  await expect(page).toHaveURL(/\/stock$/);
+  await expect(silk.locator(".sku:visible")).toHaveCount(3);
+  await expect(silk.getByRole("link", { name: "SK-80087" })).toBeFocused();
+
+  // The category heads the item page and links back to the filtered stock.
+  await silk.locator(".item-name").click();
+  await page.locator(".eyebrow").click();
+  await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)fluids/);
+  await expect(page.locator(".item-row")).toHaveCount(1);
 });
 
 test("quick adjust and record a purchase", async ({ page }) => {

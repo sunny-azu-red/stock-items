@@ -95,6 +95,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .page-head .sub { color: var(--muted); margin: .25rem 0 0; }
+.eyebrow { display: inline-flex; align-items: center; gap: .3rem; margin-bottom: .3rem; color: var(--accent); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; text-decoration: none; }
+.eyebrow:hover { text-decoration: underline; text-underline-offset: 3px; }
 .page-head .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .back { display: inline-flex; align-items: center; gap: .3rem; color: var(--muted); text-decoration: none; font-size: .9rem; margin-bottom: .5rem; }
 .back:hover { color: var(--text); }
@@ -429,6 +431,8 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .sku-table td:first-child { font-family: var(--mono); }
 .sku-link { text-decoration: underline dotted; text-underline-offset: 3px; }
 .sku-link:hover { color: var(--accent); text-decoration-style: solid; }
+.sku-more { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.sku-more:hover { text-decoration: underline; text-underline-offset: 3px; }
 .tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); padding: 0 1.2rem; }
 .tabs button { font: inherit; font-weight: 600; font-size: .9rem; background: none; border: 0; padding: .8rem .6rem; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
 .tabs button[aria-selected="true"] { color: var(--accent-strong); border-bottom-color: var(--accent); }

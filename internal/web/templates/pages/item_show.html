@@ -2,10 +2,10 @@
 <a class="back" href="/stock">{{icon "arrow-left"}} Stock</a>
 <div class="page-head">
   <div>
+    {{with $it.Category}}<a class="eyebrow" href="/stock?cat={{.}}" title="Show all {{.}} on stock">{{icon "tag"}} {{.}}</a>{{end}}
     <h1>{{$it.DisplayName}}</h1>
     <div class="flex mt">
       {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
-      {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}">{{.}}</a>{{end}}
       {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">Low stock</span>{{end}}
       {{if eq $d.ExpiryState "expired"}}<span class="badge badge-danger">Expired</span>{{else if eq $d.ExpiryState "soon"}}<span class="badge badge-warn">Expires soon</span>{{end}}
       {{if $it.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $it.ArchivedAt}}</span>{{end}}

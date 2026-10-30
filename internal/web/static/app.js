@@ -303,6 +303,19 @@
       .catch(function () { window.open(url, "_blank"); });
   });
 
+  // ---- More part numbers --------------------------------------------------
+  // "+3 more" in a stock row links to the item page; with JS it shows the
+  // hidden part numbers in place instead.
+  document.addEventListener("click", function (e) {
+    var more = e.target.closest("[data-reveal-skus]");
+    if (!more) return;
+    e.preventDefault();
+    var extra = more.parentNode.querySelectorAll(".sku[hidden]");
+    extra.forEach(function (s) { s.hidden = false; });
+    more.remove();
+    if (extra.length) extra[0].focus();
+  });
+
   // ---- Tabs ---------------------------------------------------------------
   document.addEventListener("click", function (e) {
     var tab = e.target.closest('[role="tab"]');

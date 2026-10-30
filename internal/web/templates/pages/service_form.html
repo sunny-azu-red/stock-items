@@ -8,7 +8,7 @@
 </div>
 
 {{if not $d.Vehicles}}
-<div class="card">{{template "empty" (dict "Icon" "bike" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
+<div class="card">{{template "empty" (dict "Icon" "square-parking" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
 {{else}}
 <form class="card" method="post" action="/services" novalidate>
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}{{with index $e "parts"}}<p class="field-error mt">{{.}}</p>{{end}}</div>{{end}}

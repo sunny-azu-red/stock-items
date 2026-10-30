@@ -1448,7 +1448,7 @@ func TestOdometerGuards(t *testing.T) {
 
 	// The vehicle's reading can't go below a service's, but other edits
 	// still save while it stays as it is.
-	if err := s.SetOdometer(ctx, v, 12500); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "13,000 km") {
+	if err := s.SetOdometer(ctx, v, 12500); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "13\u202f000 km") {
 		t.Errorf("lower than a service: want conflict naming 13,000 km, got %v", err)
 	}
 	if err := s.SetOdometer(ctx, v, 13500); err != nil {

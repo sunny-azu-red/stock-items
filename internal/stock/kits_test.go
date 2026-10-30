@@ -65,7 +65,7 @@ func TestKitDue(t *testing.T) {
 
 func TestDueSummary(t *testing.T) {
 	d := Due{KmLeft: ptr(1200), DaysLeft: ptr(45)}
-	if got := d.Summary(); got != "in 1,200 km · in 45 days" {
+	if got := d.Summary(); got != "in 1 200 km · in 45 days" {
 		t.Errorf("got %q", got)
 	}
 	d = Due{KmLeft: ptr(-300), DaysLeft: ptr(-1)}
@@ -78,7 +78,7 @@ func TestDueSummary(t *testing.T) {
 }
 
 func TestFormatInt(t *testing.T) {
-	for in, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 1234567: "1,234,567", -4500: "-4,500"} {
+	for in, want := range map[int]string{0: "0", 999: "999", 1000: "1 000", 1234567: "1 234 567", -4500: "-4 500"} {
 		if got := FormatInt(in); got != want {
 			t.Errorf("FormatInt(%d) = %q, want %q", in, got, want)
 		}
@@ -123,7 +123,7 @@ func TestReadinessIgnoresArchivedLines(t *testing.T) {
 }
 
 func TestDueSummaryAtTheDueKm(t *testing.T) {
-	for left, want := range map[int]string{-300: "300 km over", 0: "due now", 1200: "in 1,200 km"} {
+	for left, want := range map[int]string{-300: "300 km over", 0: "due now", 1200: "in 1 200 km"} {
 		if got := (Due{KmLeft: &left}).Summary(); got != want {
 			t.Errorf("%d km left: %q, want %q", left, got, want)
 		}

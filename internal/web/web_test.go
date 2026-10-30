@@ -305,8 +305,8 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	rec = a.post("/services", svc)
 	expect(t, rec, http.StatusSeeOther)
 	svcPath := rec.Header().Get("Location")
-	expect(t, a.get(svcPath), http.StatusOK, "1.7 L", "12,000 km")
-	expect(t, a.get(kitPath), http.StatusOK, "Last done", "19,500 km")
+	expect(t, a.get(svcPath), http.StatusOK, "1.7 L", "12\u202f000 km")
+	expect(t, a.get(kitPath), http.StatusOK, "Last done", "19\u202f500 km")
 	expect(t, a.get("/services"), http.StatusOK, "Oil service")
 
 	v, _ := a.store.GetVehicle(context.Background(), k390)
@@ -419,6 +419,8 @@ func TestHostileInput(t *testing.T) {
 		{"NaN price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"NaN"}}, 422},
 		{"Inf price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"Inf"}}, 422},
 		{"huge price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"1e20"}}, 422},
+		{"grouped price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"1.500"}}, 422},
+		{"grouped amount", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1,500"}, "amount_unit": {"ml"}}, 422},
 		{"huge amount", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"99999999999"}}, 422},
 		{"forged kind", item + "/movements", url.Values{"kind": {"initial"}, "amount": {"1"}}, 422},
 		{"huge item quantity", "/items", url.Values{"name": {"X"}, "unit": {"piece"}, "quantity": {"1"}, "min_quantity": {"9999999999"}}, 422},
@@ -493,7 +495,7 @@ func TestSafeBackRejectsOffSiteTargets(t *testing.T) {
 }
 
 func TestParseOptInt(t *testing.T) {
-	for in, want := range map[string]int{"12 345": 12345, "12,345": 12345, "12.345": 12345, "1_000_000": 1000000, "7500": 7500, "-5": -5} {
+	for in, want := range map[string]int{"12 345": 12345, "12\u202f345": 12345, "12,345": 12345, "12.345": 12345, "1_000_000": 1000000, "7500": 7500, "-5": -5} {
 		got, err := parseOptInt(in)
 		if err != nil || *got != want {
 			t.Errorf("parseOptInt(%q) = %v, %v; want %d", in, got, err, want)
@@ -506,8 +508,26 @@ func TestParseOptInt(t *testing.T) {
 	}
 }
 
+func TestParseOptMoney(t *testing.T) {
+	for in, want := range map[string]float64{"12,50": 12.5, "12.5": 12.5, "1500": 1500, "1500,00": 1500, ".5": 0.5, "0,500": 0.5, "1.5000": 1.5} {
+		got, err := parseOptMoney(in)
+		if err != nil || *got != want {
+			t.Errorf("parseOptMoney(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	// "1.500" from a shop that groups thousands with a point is not 1.50.
+	for _, in := range []string{"1.500", "1,500", "12.000", "1.234,56", "NaN", "1e3", "-5"} {
+		if got, err := parseOptMoney(in); err == nil {
+			t.Errorf("parseOptMoney(%q) = %v, want an error", in, *got)
+		}
+	}
+	if got, err := parseOptMoney("  "); got != nil || err != nil {
+		t.Errorf("blank: %v, %v", got, err)
+	}
+}
+
 func TestFormatDecimal(t *testing.T) {
-	for in, want := range map[float64]string{0: "0.00", 2.995: "3.00", 1234.5: "1,234.50", -0.001: "0.00", -12.5: "-12.50"} {
+	for in, want := range map[float64]string{0: "0.00", 2.995: "3.00", 1234.5: "1\u202f234.50", -0.001: "0.00", -12.5: "-12.50"} {
 		if got := formatDecimal(in); got != want {
 			t.Errorf("formatDecimal(%v) = %q, want %q", in, got, want)
 		}
@@ -1232,7 +1252,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	// The odometer can't go below the service's reading.
 	rec := a.post(path+"/odometer", url.Values{"odometer_km": {"11000"}})
 	expect(t, rec, http.StatusSeeOther)
-	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "12,000 km") {
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "12\u202f000 km") {
 		t.Errorf("flash = %+v", f)
 	}
 	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)

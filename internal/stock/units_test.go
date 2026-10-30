@@ -26,6 +26,12 @@ func TestParseAmount(t *testing.T) {
 		{"1.2 kg", UnitGram, "", 1200},
 		{"0", UnitPiece, "", 0},
 		{"  4 litres ", UnitML, "", 4000},
+		{"1,500 L", UnitML, "", 1500}, // in L "1,500" can only be 1.5
+		{"2.500", UnitGram, "kg", 2500},
+		{"0,250 ml", UnitML, "", 0.25}, // a leading zero is no thousands group
+		{"12.25 ml", UnitML, "", 12.25},
+		{"1500.5 g", UnitGram, "", 1500.5},
+		{"1000", UnitPiece, "", 1000},
 	}
 	for _, tt := range tests {
 		got, err := ParseAmount(tt.in, tt.unit, tt.sub)
@@ -56,6 +62,13 @@ func TestParseAmountErrors(t *testing.T) {
 		{"100001 l", UnitML, ""}, // above MaxQuantity
 		{"NaN", UnitML, ""},
 		{"1e3", UnitML, ""},
+		{"1,500 ml", UnitML, ""}, // 1500 or 1.5?
+		{"1.500", UnitML, "ml"},
+		{"1,500", UnitML, ""},
+		{"2.500 g", UnitGram, ""},
+		{"1.000", UnitPiece, ""},
+		{"12,000 pcs", UnitPiece, ""},
+		{"12.125 ml", UnitML, ""},
 	}
 	for _, tt := range tests {
 		if _, err := ParseAmount(tt.in, tt.unit, tt.sub); err == nil {
@@ -64,6 +77,29 @@ func TestParseAmountErrors(t *testing.T) {
 	}
 	if _, err := ParseAmount("  ", UnitML, ""); !errors.Is(err, ErrEmpty) {
 		t.Errorf("blank input: want ErrEmpty, got %v", err)
+	}
+}
+
+func TestCheckAmbiguous(t *testing.T) {
+	tests := map[string]string{
+		"1,500":    "could mean 1500 or 1.5: type one of those",
+		"12.000":   "could mean 12000 or 12: type one of those",
+		"999,999":  "could mean 999999 or 999.999: type one of those",
+		"1.5":      "",
+		"1.50":     "",
+		"0.500":    "",
+		"1500":     "",
+		"1234.567": "",
+		"1.5000":   "",
+	}
+	for in, want := range tests {
+		got := ""
+		if err := CheckAmbiguous(in); err != nil {
+			got = err.Error()
+		}
+		if got != want {
+			t.Errorf("CheckAmbiguous(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

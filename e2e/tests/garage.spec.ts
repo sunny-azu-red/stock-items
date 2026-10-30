@@ -222,14 +222,14 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
   await expect(page.locator("main")).toContainText("1.7 L");
-  await expect(page.locator("main")).toContainText("12,000 km");
+  await expect(page.locator("main")).toContainText("12\u202f000 km");
 
   await page.goto("/stock");
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("3.825 L");
   await expect(row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0x");
 
   await page.goto("/");
-  await expect(page.locator("main")).toContainText("in 7,500 km");
+  await expect(page.locator("main")).toContainText("in 7\u202f500 km");
   await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true });
 });
 

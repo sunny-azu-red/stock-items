@@ -180,8 +180,12 @@ func (d Due) Summary() string {
 	return strings.Join(parts, " · ")
 }
 
-// FormatKm renders a distance with thousands separators: "12,345 km".
+// FormatKm renders a distance with thousands separators: "12 345 km".
 func FormatKm(km int) string { return FormatInt(km) + " km" }
+
+// thousandsSep is a narrow no-break space. Unlike a comma or point it reads
+// the same with decimal points and decimal commas: "1 500" is never 1.5.
+const thousandsSep = ' '
 
 // FormatInt renders an integer with thousands separators.
 func FormatInt(n int) string {
@@ -193,7 +197,7 @@ func FormatInt(n int) string {
 	var b strings.Builder
 	for i, r := range s {
 		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteByte(',')
+			b.WriteRune(thousandsSep)
 		}
 		b.WriteRune(r)
 	}

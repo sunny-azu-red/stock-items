@@ -37,17 +37,18 @@ func parseForm(w http.ResponseWriter, r *http.Request) error {
 func formText(r *http.Request, key string) string { return strings.TrimSpace(r.PostFormValue(key)) }
 
 // groupedIntRe matches whole numbers written with thousands separators.
-var groupedIntRe = regexp.MustCompile(`^-?[0-9]{1,3}(?:[ ,._][0-9]{3})+$`)
+var groupedIntRe = regexp.MustCompile(`^-?[0-9]{1,3}(?:[ ,._\x{00a0}\x{202f}][0-9]{3})+$`)
 
 // parseOptInt parses an optional whole number. Thousands separators are
-// fine ("12 345", "12,345", "12.345"), but "1.5" is not read as 15.
+// fine ("12 345", "12,345", "12.345", or the narrow space the app prints),
+// but "1.5" is not read as 15.
 func parseOptInt(s string) (*int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil
 	}
 	if groupedIntRe.MatchString(s) {
-		s = strings.NewReplacer(" ", "", ",", "", ".", "", "_", "").Replace(s)
+		s = strings.NewReplacer(" ", "", ",", "", ".", "", "_", "", "\u00a0", "", "\u202f", "").Replace(s)
 	}
 	n, err := strconv.Atoi(s)
 	if err != nil {
@@ -61,12 +62,18 @@ func parseOptInt(s string) (*int, error) {
 
 var moneyRe = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$`)
 
-// parseOptMoney parses an optional decimal amount, accepting a decimal comma.
+// parseOptMoney parses an optional decimal amount, accepting a decimal
+// comma. "1.500" is refused: a price copied from a shop that groups
+// thousands with a point would otherwise be saved 1000 times too small.
 func parseOptMoney(s string) (*float64, error) {
-	s = strings.ReplaceAll(strings.TrimSpace(s), ",", ".")
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil
 	}
+	if err := stock.CheckAmbiguous(s); err != nil {
+		return nil, err
+	}
+	s = strings.ReplaceAll(s, ",", ".")
 	// Plain digits only: ParseFloat would also take "NaN", "Inf" and "1e9".
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil || !moneyRe.MatchString(s) {

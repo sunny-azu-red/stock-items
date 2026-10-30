@@ -95,7 +95,9 @@ var amountRe = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?
 // ParseAmount parses a user typed amount such as "2", "525 ml", "1,5 L" or
 // "400g" into the base unit of u. A suffix in the text wins over subUnit
 // (the value of a unit selector next to the input); with neither, the base
-// unit is assumed. Pieces must be whole numbers.
+// unit is assumed. Pieces must be whole numbers. In pieces, ml and g a
+// number like "1,500" is refused as ambiguous (see CheckAmbiguous); in L
+// and kg it is read as a decimal.
 func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" {
@@ -128,6 +130,11 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 		}
 		factor = su.Factor
 	}
+	if factor == 1 {
+		if err := CheckAmbiguous(m[1]); err != nil {
+			return 0, err
+		}
+	}
 	v := round3(n * factor)
 	if v > MaxQuantity {
 		return 0, errors.New("that amount is too large")
@@ -136,6 +143,23 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 		return 0, errors.New("pieces must be a whole number")
 	}
 	return v, nil
+}
+
+// groupedRe matches a number that reads as a whole number with a thousands
+// separator as well as a decimal: one to three digits without a leading
+// zero, a comma or point, then exactly three digits ("1,500", "12.000").
+var groupedRe = regexp.MustCompile(`^[1-9][0-9]{0,2}[.,][0-9]{3}$`)
+
+// CheckAmbiguous returns an error when num could be a whole number written
+// with a thousands separator as well as a decimal, so that "1.500" copied
+// from a Romanian price is not silently read as 1.5.
+func CheckAmbiguous(num string) error {
+	if !groupedRe.MatchString(num) {
+		return nil
+	}
+	whole := num[:len(num)-4] + num[len(num)-3:]
+	n, _ := strconv.ParseFloat(strings.Replace(num, ",", ".", 1), 64)
+	return fmt.Errorf("could mean %s or %s: type one of those", whole, FormatNumber(n))
 }
 
 // ParseAmountAnyUnit parses an amount for something that is not an item

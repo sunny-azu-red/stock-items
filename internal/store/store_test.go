@@ -1911,3 +1911,128 @@ func TestTrashPurgeAndEmpty(t *testing.T) {
 		t.Errorf("trash = %d", n)
 	}
 }
+
+func TestTrashRestoreOrderLosesNothing(t *testing.T) {
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
+	v := mustVehicle(t, s, "KTM 390")
+	other := mustVehicle(t, s, "KTM 1290")
+	ring := mustItem(t, s, stock.ItemInput{Name: "O-ring", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{v}})
+	var conflict *store.ConflictError
+
+	// A kit, then the item on it: restoring the kit first is held up until
+	// the item is back, so its line isn't dropped.
+	kit := stock.KitInput{VehicleID: other, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: ring, Quantity: 1}}}
+	kit.Normalize()
+	kitID, _ := s.CreateKit(ctx, kit)
+	kitTrash, err := s.DeleteKit(ctx, kitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemTrash, err := s.DeleteItem(ctx, ring)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, kitTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Restore Item: O-ring first") {
+		t.Fatalf("kit before its item: want conflict naming the item, got %v", err)
+	}
+	mustRestore(t, s, itemTrash)
+	mustRestore(t, s, kitTrash)
+	if k, _ := s.GetKit(ctx, kitID); len(k.Lines) != 1 {
+		t.Errorf("kit lines = %+v", k.Lines)
+	}
+
+	// A vehicle, then an item tagged with it: both orders keep the tag.
+	vehicleTrash, err := s.DeleteVehicle(ctx, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DeleteKit(ctx, kitID); err != nil { // so the O-ring can be deleted
+		t.Fatal(err)
+	}
+	itemTrash, err = s.DeleteItem(ctx, ring)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, vehicleTrash); !errors.As(err, &conflict) {
+		t.Fatalf("vehicle before its tagged item: want conflict, got %v", err)
+	}
+	mustRestore(t, s, itemTrash)
+	mustRestore(t, s, vehicleTrash)
+	if it := mustGet(t, s, ring); len(it.VehicleIDs) != 1 || it.VehicleIDs[0] != v {
+		t.Errorf("tags = %v", it.VehicleIDs)
+	}
+
+	// A service, then its kit: the service waits for its kit.
+	kit.VehicleID, kit.Lines = v, nil
+	kitID, _ = s.CreateKit(ctx, kit)
+	in := stock.ServiceInput{VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(),
+		Parts: []stock.KitLineInput{{ItemID: ring, Quantity: 1}}}
+	in.Normalize()
+	svc, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcTrash, _ := s.DeleteService(ctx, svc)
+	kitTrash, err = s.DeleteKit(ctx, kitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, svcTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Kit: Oil service") {
+		t.Fatalf("service before its kit: want conflict, got %v", err)
+	}
+	mustRestore(t, s, kitTrash)
+	mustRestore(t, s, svcTrash)
+	if r, _ := s.GetService(ctx, svc); r.KitID == nil || *r.KitID != kitID {
+		t.Errorf("service kit = %v", r.KitID)
+	}
+
+	// A service whose part item is in the trash says which one.
+	svcTrash, _ = s.DeleteService(ctx, svc)
+	if _, err := s.DeleteItem(ctx, ring); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, svcTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "O-ring") {
+		t.Errorf("service with a trashed part: want conflict naming it, got %v", err)
+	}
+	assertLedger(t, s)
+}
+
+func TestTrashUndoesTwoPartialBoughts(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0)})
+	_, first, _ := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1})
+	_, second, _ := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 2})
+	// Oldest first: the list asks for 1, then for all 3 again.
+	mustRestore(t, s, first)
+	if e := mustShoppingEntry(t, s); *e.Quantity != 1 {
+		t.Errorf("after undoing the first = %v, want 1", *e.Quantity)
+	}
+	mustRestore(t, s, second)
+	if e := mustShoppingEntry(t, s); *e.Quantity != 3 {
+		t.Errorf("after undoing both = %v, want 3", *e.Quantity)
+	}
+	if it := mustGet(t, s, pads); it.Quantity != 0 {
+		t.Errorf("pads = %v", it.Quantity)
+	}
+	assertLedger(t, s)
+}
+
+func TestTrashSnapshotsSurviveNewColumns(t *testing.T) {
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
+	id := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 1})
+	trashID, err := s.DeleteItem(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A snapshot taken before a column existed lacks its key.
+	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{items,0}', (payload #> '{items,0}') - 'archived_at' - 'updated_at')`); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	if it := mustGet(t, s, id); it.Quantity != 1 || it.UpdatedAt.IsZero() {
+		t.Errorf("item = %+v", it)
+	}
+}

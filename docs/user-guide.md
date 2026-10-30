@@ -67,7 +67,7 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 
 - Every delete keeps a copy: the message after deleting has an **Undo** button. That covers services, kits, stock changes, shopping-list entries (removed or ticked off), items, vehicles and photos. **Bought** on the shopping list can be undone the same way: the purchase is taken back and the entry is put back as it was.
 - **Recently deleted** (in the sidebar, on the Activity page and under the vehicles, whenever something is there) lists everything deleted, newest first, with **Restore** and **Delete for good**. Nothing is removed from it until you click **Empty**.
-- Restoring puts things back exactly, with their history and links, and redoes their effect on stock: a restored service takes its parts again and moves the odometer again. If that's no longer possible (the stock was used since, a vehicle with the same name exists now, or what it belonged to was deleted for good) nothing changes and you're told why.
+- Restoring puts things back exactly, with their history and links, and redoes their effect on stock: a restored service takes its parts again and moves the odometer again. If something it belongs to is in Recently deleted too, restore that first (you're told which). If it's no longer possible (the stock was used since, a vehicle with the same name exists now, or what it belonged to was deleted for good) nothing changes and you're told why. Undoing Bought puts back the amount that purchase covered.
 
 ## Tips
 

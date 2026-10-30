@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,12 +75,25 @@ func putTrash(ctx context.Context, tx pgx.Tx, kind, label string, p trashPayload
 	return id, err
 }
 
-// restoreRows inserts snapshot rows back into table with their ids.
+// restoreRows inserts snapshot rows back into table with their ids. Only
+// the columns in the snapshot are set, so columns added since get their
+// defaults.
 func restoreRows(ctx context.Context, tx pgx.Tx, table string, rows json.RawMessage) error {
-	if len(bytes.TrimSpace(rows)) == 0 || string(rows) == "[]" || string(rows) == "null" {
-		return nil
+	decoded, err := decodeRows(rows)
+	if err != nil || len(decoded) == 0 {
+		return err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO `+table+` OVERRIDING SYSTEM VALUE SELECT * FROM jsonb_populate_recordset(NULL::`+table+`, $1::jsonb)`, string(rows))
+	var cols []string
+	for _, r := range decoded {
+		for k := range r {
+			if c := (pgx.Identifier{k}).Sanitize(); !slices.Contains(cols, c) {
+				cols = append(cols, c)
+			}
+		}
+	}
+	list := strings.Join(cols, ", ")
+	_, err = tx.Exec(ctx, `INSERT INTO `+table+` (`+list+`) OVERRIDING SYSTEM VALUE
+		SELECT `+list+` FROM jsonb_populate_recordset(NULL::`+table+`, $1::jsonb)`, string(rows))
 	return err
 }
 
@@ -115,27 +129,58 @@ func (r snapshotRow) float(col string) float64 {
 	return f
 }
 
-// existing keeps the rows whose col refers to a row of table that still
-// exists (e.g. tags of vehicles that were deleted for good are dropped).
-func existing(ctx context.Context, tx pgx.Tx, rows []snapshotRow, col, table string) ([]snapshotRow, error) {
-	var ids []int64
-	for _, r := range rows {
-		ids = append(ids, r.int64(col))
+// needRow checks that row id of table (items, vehicles or service_kits)
+// exists. One that is in the trash must be restored first, so nothing is
+// lost by restoring in the "wrong" order: that is a *ConflictError naming
+// it. One deleted for good reports gone, for the caller to drop the link
+// or refuse.
+func needRow(ctx context.Context, tx pgx.Tx, table string, id int64) (gone bool, err error) {
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+table+` WHERE id = $1)`, id).Scan(&exists); err != nil {
+		return false, err
 	}
-	if len(ids) == 0 {
-		return rows, nil
+	if exists {
+		return false, nil
 	}
-	found, err := tx.Query(ctx, `SELECT id FROM `+table+` WHERE id = ANY($1)`, ids)
+	var label string
+	err = tx.QueryRow(ctx, `
+		SELECT label FROM trash WHERE payload -> $1 @> jsonb_build_array(jsonb_build_object('id', $2::bigint))
+		ORDER BY id DESC LIMIT 1`, table, id).Scan(&label)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true, nil
+	}
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	have, err := pgx.CollectRows(found, pgx.RowTo[int64])
-	if err != nil {
-		return nil, err
+	return false, &ConflictError{Field: "form", Message: "Restore " + label + " first."}
+}
+
+// needRows is needRow for a row everything else depends on: gone for good
+// is a *ConflictError too.
+func needRows(ctx context.Context, tx pgx.Tx, table string, ids []int64, what string) error {
+	for _, id := range ids {
+		gone, err := needRow(ctx, tx, table, id)
+		if err != nil {
+			return err
+		}
+		if gone {
+			return &ConflictError{Field: "form", Message: what + " has been deleted for good."}
+		}
 	}
+	return nil
+}
+
+// linked keeps the rows whose col refers to a row of table. Links to rows
+// deleted for good are dropped; one to a row in the trash stops the
+// restore until that row is restored (see needRow).
+func linked(ctx context.Context, tx pgx.Tx, rows []snapshotRow, col, table string) ([]snapshotRow, error) {
 	var out []snapshotRow
 	for _, r := range rows {
-		if slices.Contains(have, r.int64(col)) {
+		gone, err := needRow(ctx, tx, table, r.int64(col))
+		if err != nil {
+			return nil, err
+		}
+		if !gone {
 			out = append(out, r)
 		}
 	}
@@ -179,6 +224,10 @@ func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow) error {
 		ids = append(ids, m.int64("item_id"))
 	}
 	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	if err := needRows(ctx, tx, "items", ids, "An item it used"); err != nil {
+		return err
+	}
 	if err := lockItems(ctx, tx, ids); err != nil {
 		return err
 	}
@@ -289,7 +338,7 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 func restoreConflict(label string, err error) error {
 	switch {
 	case isForeignKeyViolation(err):
-		return &ConflictError{Field: "form", Message: label + ": something it belonged to has been deleted for good."}
+		return &ConflictError{Field: "form", Message: label + ": something it belonged to is gone."}
 	case isUniqueViolation(err):
 		return &ConflictError{Field: "form", Message: label + ": something with the same name or place exists now."}
 	}
@@ -312,13 +361,16 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 	if err != nil {
 		return 0, err
 	}
+	if err := needRows(ctx, tx, "vehicles", []int64{rec.int64("vehicle_id")}, "Its vehicle"); err != nil {
+		return 0, err
+	}
 	// A kit deleted for good since: keep the service without it.
-	if kit, ok := rec["kit_id"].(json.Number); ok {
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_kits WHERE id = $1)`, kit.String()).Scan(&exists); err != nil {
+	if _, ok := rec["kit_id"].(json.Number); ok {
+		gone, err := needRow(ctx, tx, "service_kits", rec.int64("kit_id"))
+		if err != nil {
 			return 0, err
 		}
-		if !exists {
+		if gone {
 			rec["kit_id"] = nil
 		}
 	}
@@ -347,6 +399,9 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if err := needRows(ctx, tx, "vehicles", []int64{kit.int64("vehicle_id")}, "Its vehicle"); err != nil {
+		return 0, err
+	}
 	if err := restoreRows(ctx, tx, "service_kits", encodeRows([]snapshotRow{kit})); err != nil {
 		return 0, err
 	}
@@ -354,7 +409,7 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if lines, err = existing(ctx, tx, lines, "item_id", "items"); err != nil {
+	if lines, err = linked(ctx, tx, lines, "item_id", "items"); err != nil {
 		return 0, err
 	}
 	return kit.int64("id"), restoreRows(ctx, tx, "service_kit_lines", encodeRows(lines))
@@ -366,9 +421,12 @@ func restoreMovement(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 		return 0, err
 	}
 	itemID := m.int64("item_id")
+	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
+		return 0, err
+	}
 	var archived bool
 	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1`, itemID).Scan(&archived); err != nil {
-		return 0, &ConflictError{Field: "form", Message: "Its item has been deleted for good."}
+		return 0, err
 	}
 	if archived {
 		return 0, &ConflictError{Field: "form", Message: "Restore its item first."}
@@ -382,9 +440,12 @@ func restoreShopping(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 		return 0, err
 	}
 	if item, ok := e["item_id"].(json.Number); ok {
+		if err := needRows(ctx, tx, "items", []int64{e.int64("item_id")}, "Its item"); err != nil {
+			return 0, err
+		}
 		var archived bool
 		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, item.String()).Scan(&archived); err != nil {
-			return 0, &ConflictError{Field: "form", Message: "Its item has been deleted for good."}
+			return 0, err
 		}
 		if archived {
 			return 0, &ConflictError{Field: "form", Message: "Its item is archived; restore it first."}
@@ -416,7 +477,7 @@ func restoreItem(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	if tags, err = existing(ctx, tx, tags, "vehicle_id", "vehicles"); err != nil {
+	if tags, err = linked(ctx, tx, tags, "vehicle_id", "vehicles"); err != nil {
 		return 0, err
 	}
 	if err := restoreRows(ctx, tx, "item_vehicles", encodeRows(tags)); err != nil {
@@ -440,7 +501,7 @@ func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	if tags, err = existing(ctx, tx, tags, "item_id", "items"); err != nil {
+	if tags, err = linked(ctx, tx, tags, "item_id", "items"); err != nil {
 		return 0, err
 	}
 	return v.int64("id"), restoreRows(ctx, tx, "item_vehicles", encodeRows(tags))
@@ -452,6 +513,9 @@ func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error)
 		return 0, err
 	}
 	itemID := ph.int64("item_id")
+	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
+		return 0, err
+	}
 	var has bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM item_photos WHERE item_id = $1)`, itemID).Scan(&has); err != nil {
 		return 0, err
@@ -463,8 +527,8 @@ func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error)
 }
 
 // undoBought takes back a purchase made by ticking an entry off: the
-// purchase is removed (refused if that stock was used since) and the entry
-// is put back as it was.
+// purchase is removed (refused if that stock was used since) and the
+// entry asks for that amount again.
 func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	e, err := one(p["shopping_entries"])
 	if err != nil {
@@ -474,6 +538,27 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	if err := json.Unmarshal(p["movement_id"], &movementID); err != nil {
 		return 0, err
 	}
+	entryID, itemID := e.int64("id"), e.int64("item_id")
+	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
+		return 0, err
+	}
+	// The entry before the item, like MarkBought, so the two can't deadlock.
+	var current int64
+	var listed *float64
+	err = tx.QueryRow(ctx, `SELECT id, quantity FROM shopping_entries WHERE id = $1 OR item_id = $2 FOR UPDATE`, entryID, itemID).
+		Scan(&current, &listed)
+	onList := err == nil
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, err
+	}
+	var archived bool
+	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&archived); err != nil {
+		return 0, err
+	}
+	if archived {
+		return 0, &ConflictError{Field: "form", Message: "Its item is archived; restore it first."}
+	}
+	var undone *float64 // how much the purchase added, if it still exists
 	m, err := lockMovement(ctx, tx, movementID)
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -487,22 +572,29 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 		if _, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE id = $1`, movementID); err != nil {
 			return 0, err
 		}
+		undone = &m.Delta
 	}
-	// Bought in part, the entry is still there; otherwise it comes back.
-	var qty *float64
+	var before *float64
 	if _, ok := e["quantity"].(json.Number); ok {
 		q := e.float("quantity")
-		qty = &q
+		before = &q
 	}
-	tag, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2, note = $3 WHERE id = $1 OR item_id = $4`,
-		e.int64("id"), qty, e["note"], e.int64("item_id"))
-	if err != nil {
-		return 0, err
+	if onList {
+		// Still listed (bought in part, or listed again): it needs what the
+		// purchase covered once more.
+		if listed != nil && undone != nil {
+			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = LEAST(quantity + $2, $3) WHERE id = $1`,
+				current, *undone, stock.MaxQuantity)
+			return current, err
+		}
+		return current, nil
 	}
-	if tag.RowsAffected() > 0 {
-		return e.int64("id"), nil
+	// Gone from the list: it comes back asking for what this purchase
+	// covered (no more than it asked for then).
+	if before != nil && undone != nil && *undone < *before {
+		e["quantity"] = json.Number(strconv.FormatFloat(*undone, 'f', -1, 64))
 	}
-	return e.int64("id"), restoreRows(ctx, tx, "shopping_entries", encodeRows([]snapshotRow{e}))
+	return entryID, restoreRows(ctx, tx, "shopping_entries", encodeRows([]snapshotRow{e}))
 }
 
 // trashLabel formats labels like "Service: Oil service (KTM 390, 30 Oct 2026)".

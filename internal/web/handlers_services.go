@@ -68,6 +68,9 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 		}
 		f.KitID, f.KitName, f.VehicleID, f.Title = k.ID, k.Name, k.VehicleID, k.Name
 		for _, l := range k.Lines {
+			if l.Archived {
+				continue // no longer kept; the kit should be edited
+			}
 			f.Parts = append(f.Parts, lineRow{ItemID: l.ItemID, Qty: stock.FormatQuantity(l.Need, l.Unit)})
 		}
 	}

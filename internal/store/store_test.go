@@ -337,7 +337,7 @@ func TestKitsAndServices(t *testing.T) {
 	// Shortfall goes to the shopping list.
 	for _, l := range kit.Lines {
 		if short := l.Short(); short > 0 {
-			if err := s.EnsureShopping(ctx, l.ItemID, short, "For "+kit.Name); err != nil {
+			if _, err := s.EnsureShopping(ctx, l.ItemID, short, "For "+kit.Name); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -428,7 +428,7 @@ func TestShoppingList(t *testing.T) {
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "sintered"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EnsureShopping(ctx, pads, 2, ""); err != nil {
+	if _, err := s.EnsureShopping(ctx, pads, 2, ""); err != nil {
 		t.Fatal(err)
 	}
 	freeID, err := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube"})
@@ -1107,4 +1107,79 @@ func mustList(t *testing.T, s *store.Store, f store.ItemFilter) []stock.Item {
 		t.Fatal(err)
 	}
 	return items
+}
+
+func TestShoppingRefusesArchivedAndReportsChanges(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	old := mustItem(t, s, stock.ItemInput{Name: "Old pads", Unit: stock.UnitPiece})
+	if _, err := s.ArchiveItem(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	steps := []struct {
+		name    string
+		qty     float64
+		changed bool
+	}{
+		{"new entry", 2, true},
+		{"same amount again", 2, false},
+		{"less", 1, false},
+		{"more", 3, true},
+	}
+	for _, st := range steps {
+		changed, err := s.EnsureShopping(ctx, pads, st.qty, "")
+		if err != nil || changed != st.changed {
+			t.Errorf("%s: changed = %v, %v; want %v", st.name, changed, err, st.changed)
+		}
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 1 || *list[0].Quantity != 3 {
+		t.Errorf("list = %+v", list)
+	}
+	if _, err := s.EnsureShopping(ctx, old, 1, ""); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("EnsureShopping archived: want ErrNotFound, got %v", err)
+	}
+	if _, err := s.EnsureShopping(ctx, 424242, 1, ""); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("EnsureShopping missing: want ErrNotFound, got %v", err)
+	}
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &old}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("AddShopping archived: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestVehicleCountsActiveItems(t *testing.T) {
+	s, ctx := newStore(t)
+	k390 := mustVehicle(t, s, "KTM 390")
+	mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, VehicleIDs: []int64{k390}})
+	old := mustItem(t, s, stock.ItemInput{Name: "Old pads", Unit: stock.UnitPiece, VehicleIDs: []int64{k390}})
+	if _, err := s.ArchiveItem(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.GetVehicle(ctx, k390); v.ItemCount != 1 {
+		t.Errorf("item count = %d, want 1", v.ItemCount)
+	}
+}
+
+func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
+	s, ctx := newStore(t)
+	k390 := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
+	in := stock.ServiceInput{VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
+	in.Normalize()
+	if _, err := s.CreateService(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteVehicle(ctx, k390); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
+	if len(moves) != 1 || !moves[0].Editable() {
+		t.Fatalf("orphaned service movement = %+v", moves)
+	}
+	if err := s.UpdateMovement(ctx, moves[0].ID, stock.MovementEdit{Amount: 1500}); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, oil); it.Quantity != 500 {
+		t.Errorf("quantity = %v, want 500", it.Quantity)
+	}
+	assertLedger(t, s)
 }

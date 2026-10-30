@@ -97,3 +97,22 @@ func TestAddMonthsClampsToMonthEnd(t *testing.T) {
 		}
 	}
 }
+
+func TestReadinessIgnoresArchivedLines(t *testing.T) {
+	tests := []struct {
+		name         string
+		lines        []KitLine
+		lines2       int
+		short, ready bool
+	}{
+		{"archived short line", []KitLine{{Need: 1, Have: 0, Archived: true}, {Need: 1, Have: 1}}, 1, false, true},
+		{"only archived lines", []KitLine{{Need: 1, Have: 5, Archived: true}}, 0, false, false},
+		{"active short line", []KitLine{{Need: 2, Have: 1}, {Need: 1, Have: 0, Archived: true}}, 1, true, false},
+	}
+	for _, tt := range tests {
+		r := Kit{Lines: tt.lines}.Readiness()
+		if r.Lines != tt.lines2 || (r.ShortLines > 0) != tt.short || r.Ready() != tt.ready {
+			t.Errorf("%s: %+v ready=%v", tt.name, r, r.Ready())
+		}
+	}
+}

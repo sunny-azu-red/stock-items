@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -895,4 +897,124 @@ func mustID(t *testing.T, path string) int64 {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// flashOf decodes the flash message a response sets.
+func flashOf(t *testing.T, rec *httptest.ResponseRecorder) Flash {
+	t.Helper()
+	for _, c := range rec.Result().Cookies() {
+		if c.Name != flashCookie || c.MaxAge < 0 {
+			continue
+		}
+		b, err := base64.RawURLEncoding.DecodeString(c.Value)
+		var f Flash
+		if err == nil {
+			err = json.Unmarshal(b, &f)
+		}
+		if err != nil {
+			t.Fatalf("flash cookie %q: %v", c.Value, err)
+		}
+		return f
+	}
+	return Flash{}
+}
+
+func TestBackSkipsPostOnlyPages(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	item := "/items/" + itoa(pads)
+	// A failed form re-renders at /items/{id}/movements; going back there would 404.
+	for _, ref := range []string{"http://example.com" + item + "/movements", "http://example.com/items"} {
+		rec := a.post(item+"/shopping", nil, "Referer", ref)
+		expect(t, rec, http.StatusSeeOther)
+		if l := rec.Header().Get("Location"); l != item {
+			t.Errorf("from %s: location = %q, want %q", ref, l, item)
+		}
+		rec = a.post("/theme", url.Values{"theme": {"dark"}}, "Referer", ref)
+		if l := rec.Header().Get("Location"); l != "/" {
+			t.Errorf("theme from %s: location = %q, want /", ref, l)
+		}
+	}
+	rec := a.post(item+"/shopping", nil, "Referer", "http://example.com/stock?low=1")
+	if l := rec.Header().Get("Location"); l != "/stock?low=1" {
+		t.Errorf("location = %q, want /stock?low=1", l)
+	}
+}
+
+func TestFlashesCountRealChanges(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	add := url.Values{"item_id": {itoa(pads)}, "qty": {"2"}}
+	if f := flashOf(t, a.post("/shopping/suggestions", add)); f.Message != "Added 1 item to the shopping list" {
+		t.Errorf("first add: %+v", f)
+	}
+	if f := flashOf(t, a.post("/shopping/suggestions", add)); !strings.Contains(f.Message, "already has it") {
+		t.Errorf("second add: %+v", f)
+	}
+}
+
+func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake")
+	item := "/items/" + itoa(pads)
+	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+	page := a.get(item)
+	expect(t, page, http.StatusOK, "Restore this item to record purchases")
+	expectNot(t, page, `id="panel-purchase"`)
+	expectNot(t, a.get("/stock?archived=1"), `action="`+item+`/adjust"`)
+
+	rec := a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" {
+		t.Errorf("flash = %+v", f)
+	}
+	rec = a.post(item+"/adjust", url.Values{"dir": {"up"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusOK)
+	if !strings.Contains(rec.Header().Get("HX-Trigger"), "Restore") {
+		t.Errorf("toast = %q", rec.Header().Get("HX-Trigger"))
+	}
+	if it, _ := a.store.GetItem(ctx, pads); it.Quantity != 1 {
+		t.Errorf("quantity = %v, want 1", it.Quantity)
+	}
+
+	// A kit that only misses the archived part is ready, and logging it
+	// from the kit leaves that part out.
+	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
+		"line_item": {itoa(pads), itoa(itemID(t, a.store, "O-Ring"))}, "line_qty": {"4", "1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	kitPage := a.get(kit)
+	expect(t, kitPage, http.StatusOK, "Parts ready")
+	expectNot(t, kitPage, "Add missing to shopping list")
+	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
+	ring := itoa(itemID(t, a.store, "O-Ring"))
+	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6x" data-placeholder="e.g. 2" selected>`)
+	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1x" data-placeholder="e.g. 2" selected>`)
+}
+
+func TestQuickAdjustRowKeepsChipsHidden(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	rec := a.post("/items/"+itoa(pads)+"/adjust", url.Values{"dir": {"up"}, "hide_chips": {"1"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusOK, `name="hide_chips" value="1"`)
+	expectNot(t, rec, `class="chip`)
+	rec = a.post("/items/"+itoa(pads)+"/adjust", url.Values{"dir": {"up"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusOK, `class="chip`)
+}
+
+func TestAmountErrorsSayWhy(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {"1.5"}}),
+		http.StatusUnprocessableEntity, "Pieces must be a whole number")
+	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {""}}),
+		http.StatusUnprocessableEntity, "Enter an amount, e.g. 2")
 }

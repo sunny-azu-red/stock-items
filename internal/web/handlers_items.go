@@ -534,6 +534,11 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if it.Archived() {
+		s.setFlash(w, "error", "Restore "+it.DisplayName()+" to record stock changes")
+		s.redirect(w, r, itemPath(id), "")
+		return nil
+	}
 	f := movementForm{
 		Kind: formText(r, "kind"), Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"),
 		TotalPrice: formText(r, "total_price"), Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"),
@@ -550,7 +555,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	}
 	amount, err := stock.ParseAmount(f.Amount, it.Unit, f.AmountUnit)
 	if err != nil {
-		f.Errors.Add("amount", "Enter an amount, e.g. "+examplesFor(it.Unit))
+		f.Errors.Add("amount", amountError(err, it.Unit, "Enter an amount"))
 	}
 	switch in.Kind {
 	case stock.MoveUse:
@@ -615,6 +620,17 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// amountError explains why an amount was refused: the parser's reason
+// ("pieces must be a whole number"), or for a blank or zero amount, the
+// prompt with an example of what to type.
+func amountError(err error, u stock.Unit, prompt string) string {
+	if err == nil || errors.Is(err, stock.ErrEmpty) {
+		return prompt + ", e.g. " + examplesFor(u)
+	}
+	msg := err.Error()
+	return strings.ToUpper(msg[:1]) + msg[1:]
+}
+
 func examplesFor(u stock.Unit) string {
 	switch u {
 	case stock.UnitML:
@@ -638,6 +654,9 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	it, err := s.store.GetItem(ctx, id)
 	if err != nil {
 		return err
+	}
+	if it.Archived() {
+		return s.adjustDone(w, r, it, "error", "Restore "+it.DisplayName()+" to record stock changes")
 	}
 	step := stock.DefaultStep(it.Unit)
 	var in stock.MovementInput
@@ -669,7 +688,7 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Item, kind, msg string) error {
 	if !isHTMX(r) {
 		s.setFlash(w, kind, msg)
-		http.Redirect(w, r, safeBack(r, "/stock"), http.StatusSeeOther)
+		http.Redirect(w, r, s.back(r, "/stock"), http.StatusSeeOther)
 		return nil
 	}
 	vehicles, err := s.store.ListVehicles(r.Context())
@@ -677,7 +696,8 @@ func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Ite
 		return err
 	}
 	toast(w, kind, msg)
-	s.renderPartial(w, r, "item-row", rowData{Item: it, Vehicles: vehicleMap(vehicles), Flash: kind == "success"})
+	s.renderPartial(w, r, "item-row", rowData{Item: it, Vehicles: vehicleMap(vehicles), Flash: kind == "success",
+		HideChips: r.PostFormValue("hide_chips") == "1"})
 	return nil
 }
 
@@ -704,7 +724,7 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	if _, err := s.store.AddShopping(r.Context(), in); err != nil {
 		return err
 	}
-	s.redirect(w, r, safeBack(r, fmt.Sprintf("/items/%d", id)), it.DisplayName()+" is on the shopping list")
+	s.redirect(w, r, s.back(r, fmt.Sprintf("/items/%d", id)), it.DisplayName()+" is on the shopping list")
 	return nil
 }
 

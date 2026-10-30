@@ -39,6 +39,9 @@
           {{end}}
         </div>
       </div>
+      {{if $it.Archived}}
+      <div class="card-body muted small">Restore this item to record purchases, uses or counts.</div>
+      {{else}}
       <div class="tabs" role="tablist">
         <button type="button" role="tab" id="tab-purchase" aria-controls="panel-purchase" aria-selected="{{if or (eq $m.Kind "purchase") (eq $m.Kind "")}}true{{else}}false{{end}}">{{icon "package-plus"}} Bought</button>
         <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true{{else}}false{{end}}">{{icon "minus"}} Used</button>
@@ -47,6 +50,7 @@
       {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
       {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "use"))}}
       {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Hidden" (ne $m.Kind "correction"))}}
+      {{end}}
     </section>
 
     <section class="card">

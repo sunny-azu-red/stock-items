@@ -139,6 +139,24 @@ func optIntString(v *int) string {
 	return strconv.Itoa(*v)
 }
 
+// back is safeBack limited to pages that can be shown. A form that failed
+// re-renders at its POST-only URL (e.g. /items/5/movements), and going
+// back there would land on a 404.
+func (s *Server) back(r *http.Request, fallback string) string {
+	target := safeBack(r, fallback)
+	if target == fallback || s.mux == nil {
+		return target
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return fallback
+	}
+	if _, pattern := s.mux.Handler(&http.Request{Method: http.MethodGet, URL: u, Host: r.Host}); pattern == "" || pattern == "/" {
+		return fallback
+	}
+	return target
+}
+
 // safeBack returns the Referer path when it points to this site, so
 // non-htmx form posts can return to where the user was.
 func safeBack(r *http.Request, fallback string) string {

@@ -37,6 +37,6 @@ func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) error {
 		w.WriteHeader(http.StatusNoContent)
 		return nil
 	}
-	http.Redirect(w, r, safeBack(r, "/"), http.StatusSeeOther)
+	http.Redirect(w, r, s.back(r, "/"), http.StatusSeeOther)
 	return nil
 }

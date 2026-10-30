@@ -331,20 +331,27 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	n := 0
+	n, missing := 0, 0
 	for _, l := range k.Lines {
 		if short := l.Short(); short > 0 && !l.Archived {
-			if err := s.store.EnsureShopping(ctx, l.ItemID, short, "For "+k.VehicleName+": "+k.Name); err != nil {
+			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "For "+k.VehicleName+": "+k.Name)
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return err
 			}
-			n++
+			if changed {
+				n++
+			}
+			missing++
 		}
 	}
 	msg := "Nothing is missing for this kit"
+	if missing > 0 && n == 0 {
+		msg = "Everything missing is already on the shopping list"
+	}
 	if n > 0 {
 		msg = fmt.Sprintf("Added %d missing %s to the shopping list", n, pluralWord(n, "part", "parts"))
 	}
-	s.redirect(w, r, safeBack(r, fmt.Sprintf("/kits/%d", id)), msg)
+	s.redirect(w, r, s.back(r, fmt.Sprintf("/kits/%d", id)), msg)
 	return nil
 }
 

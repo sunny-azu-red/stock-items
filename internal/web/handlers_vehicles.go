@@ -202,7 +202,7 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.SetOdometer(r.Context(), id, *km); err != nil {
 		return err
 	}
-	s.redirect(w, r, safeBack(r, fmt.Sprintf("/vehicles/%d", id)), "Odometer set to "+stock.FormatKm(*km))
+	s.redirect(w, r, s.back(r, fmt.Sprintf("/vehicles/%d", id)), "Odometer set to "+stock.FormatKm(*km))
 	return nil
 }
 

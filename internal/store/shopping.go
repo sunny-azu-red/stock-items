@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"math"
 
 	"github.com/jackc/pgx/v5"
@@ -41,14 +42,17 @@ func (s *Store) GetShopping(ctx context.Context, id int64) (stock.ShoppingEntry,
 }
 
 // AddShopping adds an entry. Adding an item that is already on the list
-// increases the quantity of the existing entry instead.
+// increases the quantity of the existing entry instead. Missing and
+// archived items are refused with ErrNotFound.
 func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64, error) {
 	if in.Unit == "" {
 		in.Unit = stock.UnitPiece
 	}
 	var id int64
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit) VALUES ($1, $2, $3, $4, $6)
+		INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit)
+		SELECT $1, $2, $3, $4, $6
+		WHERE $1::bigint IS NULL OR EXISTS (SELECT 1 FROM items WHERE id = $1 AND archived_at IS NULL)
 		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
 		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
@@ -56,24 +60,39 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		    note = CASE WHEN excluded.note <> '' THEN excluded.note ELSE shopping_entries.note END
 		RETURNING id`,
 		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
-	if isForeignKeyViolation(err) {
+	if isForeignKeyViolation(err) || errors.Is(err, pgx.ErrNoRows) {
 		return 0, ErrNotFound
 	}
 	return id, err
 }
 
 // EnsureShopping puts an item on the list with at least qty, without
-// adding up (used for kit shortfalls and low stock suggestions).
-func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, note string) error {
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO shopping_entries (item_id, quantity, note) VALUES ($1, $2, $3)
+// adding up (used for kit shortfalls and low stock suggestions). changed
+// reports whether the list changed: it doesn't when the entry already
+// asks for as much. Missing and archived items are refused with
+// ErrNotFound.
+func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, note string) (changed bool, err error) {
+	tag, err := s.pool.Exec(ctx, `
+		INSERT INTO shopping_entries (item_id, quantity, note)
+		SELECT id, $2, $3 FROM items WHERE id = $1 AND archived_at IS NULL
 		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-		SET quantity = GREATEST(COALESCE(shopping_entries.quantity, 0), excluded.quantity)`,
+		SET quantity = excluded.quantity
+		WHERE shopping_entries.quantity IS NULL OR shopping_entries.quantity < excluded.quantity`,
 		itemID, qty, note)
-	if isForeignKeyViolation(err) {
-		return ErrNotFound
+	if err != nil {
+		return false, err
 	}
-	return err
+	if tag.RowsAffected() > 0 {
+		return true, nil
+	}
+	// Nothing written: either the entry already covers it, or the item
+	// can't go on the list.
+	var active bool
+	err = s.pool.QueryRow(ctx, `SELECT archived_at IS NULL FROM items WHERE id = $1`, itemID).Scan(&active)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !active) {
+		return false, ErrNotFound
+	}
+	return false, err
 }
 
 // DeleteShopping removes an entry.

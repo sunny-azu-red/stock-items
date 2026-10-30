@@ -282,14 +282,15 @@ func (in MovementInput) Validate() Errors {
 }
 
 // Editable reports whether a stock change can be edited or deleted on
-// its own. Parts used by a service are changed through the service.
-func (m Movement) Editable() bool { return m.Kind != MoveService }
+// its own. Parts used by a service are changed through the service, unless
+// the service is gone (its vehicle was deleted).
+func (m Movement) Editable() bool { return m.Kind != MoveService || m.ServiceRecordID == nil }
 
 // AmountEditable reports whether the amount of a stock change can be
 // edited. A count's change follows from what was on the shelf then, so a
 // wrong count is deleted or followed by a new count instead.
 func (m Movement) AmountEditable() bool {
-	return m.Kind == MovePurchase || m.Kind == MoveUse || m.Kind == MoveInitial
+	return m.Editable() && m.Kind != MoveCorrection
 }
 
 // TakesPrice reports whether a stock change can carry a price and shop.
@@ -327,7 +328,7 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 			errs.Add("amount", "Amount must be greater than zero")
 		}
 		in.Delta = e.Amount
-		if m.Kind == MoveUse {
+		if m.Kind == MoveUse || m.Kind == MoveService {
 			in.Delta = -e.Amount
 		}
 	}

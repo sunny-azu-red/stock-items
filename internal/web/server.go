@@ -33,6 +33,7 @@ type Server struct {
 	version     string
 	assetHashes map[string]string
 	now         func() time.Time
+	mux         *http.ServeMux // set by Handler; used by back
 }
 
 // New builds a Server and parses all templates.
@@ -66,6 +67,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 // Handler returns the root handler with all middleware applied.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	s.mux = mux
 	h := s.wrap
 
 	mux.HandleFunc("GET /{$}", h(s.dashboard))

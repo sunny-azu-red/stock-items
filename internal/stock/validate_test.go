@@ -262,8 +262,10 @@ func TestApplyEdit(t *testing.T) {
 			MovementEdit{}, MovePurchase, 0, nil, "amount"},
 		{"bad price", Movement{Kind: MovePurchase, Delta: 1},
 			MovementEdit{Amount: 1, TotalPrice: ptr(-1.0)}, MovePurchase, 1, ptr(-1.0), "total_price"},
-		{"service parts are not edited here", Movement{Kind: MoveService, Delta: -1},
+		{"service parts are not edited here", Movement{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))},
 			MovementEdit{Amount: 1}, "", 0, nil, "form"},
+		{"parts of a deleted vehicle's service can be fixed", Movement{Kind: MoveService, Delta: -1},
+			MovementEdit{Amount: 2}, MoveService, -2, nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -130,16 +130,22 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 		if i < len(notes) {
 			note = strings.TrimSpace(notes[i])
 		}
-		err = s.store.EnsureShopping(r.Context(), id, q, note)
+		changed, err := s.store.EnsureShopping(r.Context(), id, q, note)
 		if errors.Is(err, store.ErrNotFound) {
-			continue // deleted in the meantime
+			continue // deleted or archived in the meantime
 		}
 		if err != nil {
 			return err
 		}
-		n++
+		if changed {
+			n++
+		}
 	}
-	s.redirect(w, r, "/shopping", fmt.Sprintf("Added %d %s to the shopping list", n, pluralWord(n, "item", "items")))
+	msg := fmt.Sprintf("Added %d %s to the shopping list", n, pluralWord(n, "item", "items"))
+	if n == 0 {
+		msg = "Nothing to add: the shopping list already has it"
+	}
+	s.redirect(w, r, "/shopping", msg)
 	return nil
 }
 
@@ -195,7 +201,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	}
 	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note}
 	if q, err := stock.ParseAmount(f.Amount, e.ItemUnit, f.AmountUnit); err != nil || q <= 0 {
-		f.Errors.Add("amount", "Enter how much you bought, e.g. "+examplesFor(e.ItemUnit))
+		f.Errors.Add("amount", amountError(err, e.ItemUnit, "Enter how much you bought"))
 	} else {
 		in.Delta = q
 	}

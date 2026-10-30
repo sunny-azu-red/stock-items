@@ -11,7 +11,8 @@ import (
 const vehicleSelect = `
 SELECT v.id, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer_km, v.notes,
        v.created_at, v.updated_at,
-       (SELECT count(*) FROM item_vehicles iv WHERE iv.vehicle_id = v.id)
+       (SELECT count(*) FROM item_vehicles iv JOIN items i ON i.id = iv.item_id
+        WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL)
 FROM vehicles v`
 
 func scanVehicle(row pgx.Row) (stock.Vehicle, error) {

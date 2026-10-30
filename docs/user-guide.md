@@ -20,7 +20,7 @@
   - **Bought**: amount, total price, shop and date. Prices give you a stock value and spending totals. **Best before** (optional) replaces the item's date with the new batch's, so an expired item stops showing as expired. Leave it empty to keep the current date.
   - **Used**: take an amount from stock.
   - **Count**: set the stock to what is actually on the shelf.
-- **Fix a mistake in the history.** Every row in an item's history (and on the Activity page) has a pencil: change the amount, price, shop, date or note, or delete the entry. The stock moves by the difference, so a wrong price no longer sticks in the last price, stock value and spending. If the stock was used in the meantime, a change that would take away more than is left is refused; record the use or do a count first. Parts used by a service are fixed by deleting the service. A count's amount can't be edited; delete it or count again.
+- **Fix a mistake in the history.** Every row in an item's history (and on the Activity page) has a pencil: change the amount, price, shop, date or note, or delete the entry. The stock moves by the difference, so a wrong price no longer sticks in the last price, stock value and spending. If the stock was used in the meantime, a change that would take away more than is left is refused; record the use or do a count first. Parts used by a service are fixed by deleting the service (or, if the vehicle and so the service are gone, directly). A count's amount can't be edited; delete it or count again.
 - **Copy as text** copies the current view in the plain format from the original request. That's handy for chats and notes.
 - **CSV** downloads the current view for a spreadsheet: quantities, SKUs (with label and pack size), and for items bought with a price the last price (per piece, L or kg), the stock value at that price, and the date and shop of that purchase.
 - **Activity → CSV** downloads every stock change (or only the kind you filtered on) with amounts, prices, shops and services, e.g. for your own spending overview.
@@ -54,7 +54,7 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 ## Removing items
 
 - An item that nothing else refers to can be **deleted** (on its page), together with its own history.
-- An item that has purchases, was used in a service, or is part of a kit gets **Archive** instead. Deleting it would change those records: your spending, the parts of past services, the kit. An archived item disappears from the stock list, dashboard, item pickers and suggestions, and comes off the shopping list. Its history, services and kits stay as they were, and archived kit lines are marked so you can edit the kit.
+- An item that has purchases, was used in a service, or is part of a kit gets **Archive** instead. Deleting it would change those records: your spending, the parts of past services, the kit. An archived item disappears from the stock list, dashboard, item pickers and suggestions, and comes off the shopping list. Its history, services and kits stay as they were. Archived kit lines are marked so you can edit the kit; they don't make the kit "short" and aren't taken when you do the service. An archived item takes no purchases, uses or counts until you restore it.
 - Find archived items with the **Archived** filter on the stock page, and bring one back with **Restore**.
 
 ## Tips

@@ -16,10 +16,16 @@ type Readiness struct {
 // Ready reports whether every line is covered (and the kit is not empty).
 func (r Readiness) Ready() bool { return r.Lines > 0 && r.ShortLines == 0 }
 
-// Readiness checks every line of the kit against the current stock.
+// Readiness checks every line of the kit against the current stock. Lines
+// for archived items don't count: they are no longer kept, and the kit
+// should be edited.
 func (k Kit) Readiness() Readiness {
-	r := Readiness{Lines: len(k.Lines)}
+	var r Readiness
 	for _, l := range k.Lines {
+		if l.Archived {
+			continue
+		}
+		r.Lines++
 		if l.Short() > 0 {
 			r.ShortLines++
 		}

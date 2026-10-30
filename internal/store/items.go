@@ -24,7 +24,17 @@ type ItemFilter struct {
 	Expiring bool // with stock left and expired or expiring within ExpiringDays
 	InStock  bool // quantity > 0
 	Sort     string
+	// Archived chooses between active items ("", the default), archived
+	// ones (ArchivedOnly) or both (ArchivedAll). Lookups by IDs always
+	// include archived items.
+	Archived string
 }
+
+// Values of ItemFilter.Archived.
+const (
+	ArchivedOnly = "only"
+	ArchivedAll  = "all"
+)
 
 // ExpiringDays is the look-ahead used for the "expiring soon" filter.
 const ExpiringDays = 60
@@ -39,7 +49,7 @@ const (
 
 const itemSelect = `
 SELECT i.id, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.expires_on, i.location,
-       i.notes, i.created_at, i.updated_at,
+       i.notes, i.created_at, i.updated_at, i.archived_at,
        COALESCE((SELECT array_agg(iv.vehicle_id ORDER BY iv.vehicle_id) FROM item_vehicles iv WHERE iv.item_id = i.id), '{}'),
        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'code', s.code, 'kind', s.kind, 'label', s.label,
                                                    'pack_size', s.pack_size) ORDER BY s.id)
@@ -50,7 +60,7 @@ FROM items i`
 func scanItem(row pgx.Row) (stock.Item, error) {
 	var it stock.Item
 	err := row.Scan(&it.ID, &it.Name, &it.Brand, &it.Category, &it.Unit, &it.Quantity, &it.MinQuantity,
-		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
+		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
 	return it, err
 }
 
@@ -98,6 +108,13 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 	}
 	if f.InStock {
 		where = append(where, "i.quantity > 0")
+	}
+	switch {
+	case f.Archived == ArchivedOnly:
+		where = append(where, "i.archived_at IS NOT NULL")
+	case f.Archived == ArchivedAll || len(f.IDs) > 0:
+	default:
+		where = append(where, "i.archived_at IS NULL")
 	}
 
 	sql := itemSelect
@@ -261,9 +278,65 @@ func replaceSKUsAndTags(ctx context.Context, tx pgx.Tx, id int64, in stock.ItemI
 	return nil
 }
 
-// DeleteItem removes an item with its SKUs, tags, photo and history.
+// ItemUsage counts the records that refer to an item.
+func (s *Store) ItemUsage(ctx context.Context, id int64) (stock.ItemUsage, error) {
+	return itemUsage(ctx, s.pool, id)
+}
+
+type queryRower interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, error) {
+	var u stock.ItemUsage
+	err := q.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'purchase'),
+		       (SELECT count(DISTINCT service_record_id) FROM stock_movements WHERE item_id = $1 AND kind = 'service'),
+		       (SELECT count(*) FROM service_kit_lines WHERE item_id = $1)`, id).
+		Scan(&u.Purchases, &u.Services, &u.Kits)
+	return u, err
+}
+
+// DeleteItem removes an item with its own history (initial stock, uses,
+// counts), SKUs, tags and photo. An item that other records refer to
+// (purchases, services, kits) is not deleted, as that would change them;
+// it fails with a *ConflictError and should be archived instead.
 func (s *Store) DeleteItem(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `DELETE FROM items WHERE id = $1`, id))
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		var name, brand string
+		if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand); err != nil {
+			return notFound(err)
+		}
+		u, err := itemUsage(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if u.InUse() {
+			return &ConflictError{Field: "form", Message: displayName(brand, name) + " is used in " + u.String() + ". Archive it instead."}
+		}
+		return checkAffected(tx.Exec(ctx, `DELETE FROM items WHERE id = $1`, id))
+	})
+}
+
+// ArchiveItem hides an item from stock, pickers and suggestions while
+// keeping its history, services, kits and spending. It also takes the
+// item off the shopping list; removed reports whether it was on it.
+func (s *Store) ArchiveItem(ctx context.Context, id int64) (removed bool, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		err := checkAffected(tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id))
+		if err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE item_id = $1`, id)
+		removed = tag.RowsAffected() > 0
+		return err
+	})
+	return removed, err
+}
+
+// RestoreItem brings an archived item back.
+func (s *Store) RestoreItem(ctx context.Context, id int64) error {
+	return checkAffected(s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, id))
 }
 
 // DuplicateItem copies an item (fields, SKUs and tags, but no stock) and

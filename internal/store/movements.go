@@ -249,7 +249,8 @@ func (s *Store) DeleteMovement(ctx context.Context, id int64) (stock.Movement, e
 // Stats are the money figures shown on the dashboard.
 type Stats struct {
 	// StockValue is the value of current stock at the last purchase price
-	// of each item (items never bought with a price are not counted).
+	// of each item (archived items and items never bought with a price
+	// are not counted).
 	StockValue float64
 	// Spent12m is purchases plus labour over the last 12 months.
 	Spent12m float64
@@ -263,7 +264,8 @@ func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 		  COALESCE((SELECT sum(i.quantity * lp.unit_price) FROM items i
 		            JOIN LATERAL (SELECT m.total_price / m.delta AS unit_price FROM stock_movements m
 		                          WHERE m.item_id = i.id AND m.kind = 'purchase' AND m.total_price IS NOT NULL AND m.delta > 0
-		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true), 0)::float8,
+		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
+		            WHERE i.archived_at IS NULL), 0)::float8,
 		  (COALESCE((SELECT sum(total_price) FROM stock_movements
 		             WHERE kind = 'purchase' AND occurred_on > current_date - interval '12 months'), 0)
 		 + COALESCE((SELECT sum(labor_cost) FROM service_records

@@ -22,6 +22,7 @@ type stockFilter struct {
 	Low        bool
 	Expiring   bool
 	InStock    bool
+	Archived   bool   // show archived items instead of active ones
 	View       string // "grouped" (default) or "list"
 	Sort       string
 }
@@ -36,16 +37,21 @@ func parseStockFilter(q url.Values) stockFilter {
 		Low:        q.Get("low") == "1",
 		Expiring:   q.Get("exp") == "1",
 		InStock:    q.Get("instock") == "1",
+		Archived:   q.Get("archived") == "1",
 		View:       q.Get("view"),
 		Sort:       q.Get("sort"),
 	}
 }
 
 func (f stockFilter) store() store.ItemFilter {
-	return store.ItemFilter{
+	sf := store.ItemFilter{
 		VehicleIDs: f.VehicleIDs, MatchAll: f.MatchAll, General: f.General, Query: f.Query, Category: f.Category,
 		LowStock: f.Low, Expiring: f.Expiring, InStock: f.InStock, Sort: f.Sort,
 	}
+	if f.Archived {
+		sf.Archived = store.ArchivedOnly
+	}
+	return sf
 }
 
 // Values encodes the filter as query parameters.
@@ -66,6 +72,7 @@ func (f stockFilter) Values() url.Values {
 	set("low", f.Low)
 	set("exp", f.Expiring)
 	set("instock", f.InStock)
+	set("archived", f.Archived)
 	if f.Query != "" {
 		q.Set("q", f.Query)
 	}
@@ -86,7 +93,7 @@ func (f stockFilter) Encode() string { return f.Values().Encode() }
 
 // Active reports whether any narrowing filter is applied.
 func (f stockFilter) Active() bool {
-	return len(f.VehicleIDs) > 0 || f.General || f.Query != "" || f.Category != "" || f.Low || f.Expiring || f.InStock
+	return len(f.VehicleIDs) > 0 || f.General || f.Query != "" || f.Category != "" || f.Low || f.Expiring || f.InStock || f.Archived
 }
 
 // HasVehicle reports whether vehicle id is selected.

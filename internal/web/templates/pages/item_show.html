@@ -8,12 +8,21 @@
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}">{{.}}</a>{{end}}
       {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">Low stock</span>{{end}}
       {{if eq $d.ExpiryState "expired"}}<span class="badge badge-danger">Expired</span>{{else if eq $d.ExpiryState "soon"}}<span class="badge badge-warn">Expires soon</span>{{end}}
+      {{if $it.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $it.ArchivedAt}}</span>{{end}}
     </div>
+    {{if $it.Archived}}<p class="sub mt">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
   </div>
   <div class="actions">
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/duplicate"><button class="btn" type="submit" title="Create a similar item">{{icon "copy"}} Duplicate</button></form>
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete" data-confirm="Delete {{$it.DisplayName}} and its whole history?"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+    {{if $it.Archived}}
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><button class="btn" type="submit">{{icon "archive-restore"}} Restore</button></form>
+    {{else if $d.Usage.InUse}}
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/archive" data-confirm="Archive {{$it.DisplayName}}? It leaves the stock list{{if $d.OnShopping}} and the shopping list{{end}}, but stays in {{$d.Usage}}. You can restore it."><button class="btn btn-danger" type="submit" title="It is used in {{$d.Usage}}, so it is archived instead of deleted">{{icon "archive"}} Archive</button></form>
+    {{end}}
+    {{if not $d.Usage.InUse}}
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete" data-confirm="Delete {{$it.DisplayName}} and its history?"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+    {{end}}
   </div>
 </div>
 
@@ -27,7 +36,7 @@
             <div class="big-qty {{if $it.IsOut}}qty zero{{else if $it.IsLow}}qty low{{end}}" id="item-qty">{{qty $it.Quantity $it.Unit}}</div>
             <div class="muted small">{{with $it.MinQuantity}}keep at least {{qty . $it.Unit}}{{else}}no minimum set{{end}}{{with $d.StockValue}} · worth about {{money .}}{{end}}</div>
           </div>
-          {{if not $d.OnShopping}}
+          {{if not (or $d.OnShopping $it.Archived)}}
           <form method="post" action="/items/{{$it.ID}}/shopping"><button class="btn" type="submit">{{icon "shopping-cart"}} Add to shopping list</button></form>
           {{end}}
         </div>

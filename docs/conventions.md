@@ -12,6 +12,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 
 - Migrations are append-only: `internal/db/migrations/0000N_short_description.sql` in goose format with `Up` and `Down` sections.
 - Use constraints for invariants that must never break: non-negative quantity, valid enums, foreign keys.
+- Never hard-delete a row that other records depend on through a cascade. Refuse it and offer an archive instead, as `DeleteItem` does, so history, services and spending don't change behind the user's back.
 - Write all SQL in `internal/store`. Use positional parameters (`$1`), never string-concatenated values. Dynamic filters go through the `sqlArgs` helper.
 - Writes that touch more than one row run in `Store.inTx`.
 - Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The exceptions fix mistakes by changing a recorded entry together with its effect: `DeleteService` (deletes a service's movements), and `UpdateMovement`/`DeleteMovement` (revise one movement through `reviseMovement`, which moves the stock by the difference under the item's row lock and refuses to go below zero).

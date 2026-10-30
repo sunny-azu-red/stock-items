@@ -35,7 +35,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	if err != nil {
 		return err
 	}
-	items, err := s.store.ListItems(ctx, store.ItemFilter{})
+	items, err := s.pickerItems(ctx, f.Parts)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	ctx := r.Context()
-	items, err := s.store.ListItems(ctx, store.ItemFilter{})
+	items, err := s.store.ListItems(ctx, store.ItemFilter{Archived: store.ArchivedAll})
 	if err != nil {
 		return err
 	}

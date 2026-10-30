@@ -40,6 +40,9 @@ func SuggestPurchases(items []Item, kits []Kit, onList map[int64]bool) []Suggest
 	}
 	for _, k := range kits {
 		for _, l := range k.Lines {
+			if l.Archived {
+				continue // no longer kept, so not bought again
+			}
 			if short := l.Short(); short > 0 {
 				it, ok := byID[l.ItemID]
 				if !ok {

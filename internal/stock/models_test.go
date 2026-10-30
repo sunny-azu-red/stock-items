@@ -29,3 +29,21 @@ func TestExpiryState(t *testing.T) {
 		}
 	}
 }
+
+func TestItemUsage(t *testing.T) {
+	tests := []struct {
+		u     ItemUsage
+		inUse bool
+		want  string
+	}{
+		{ItemUsage{}, false, ""},
+		{ItemUsage{Purchases: 1}, true, "1 purchase"},
+		{ItemUsage{Services: 2, Kits: 1}, true, "2 services and 1 kit"},
+		{ItemUsage{Purchases: 5, Services: 3, Kits: 2}, true, "3 services, 2 kits and 5 purchases"},
+	}
+	for _, tt := range tests {
+		if got := tt.u.String(); got != tt.want || tt.u.InUse() != tt.inUse {
+			t.Errorf("%+v: %q in use %v, want %q %v", tt.u, got, tt.u.InUse(), tt.want, tt.inUse)
+		}
+	}
+}

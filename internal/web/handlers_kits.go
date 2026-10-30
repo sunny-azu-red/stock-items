@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,6 +22,28 @@ type lineRow struct {
 type itemGroup struct {
 	Label string
 	Items []stock.Item
+}
+
+// pickerItems lists the items to choose from in kit and service forms:
+// the active ones, plus archived items already chosen in rows, so saving
+// the form never drops a line.
+func (s *Server) pickerItems(ctx context.Context, rows []lineRow) ([]stock.Item, error) {
+	items, err := s.store.ListItems(ctx, store.ItemFilter{})
+	if err != nil {
+		return nil, err
+	}
+	have := itemsByID(items)
+	var missing []int64
+	for _, r := range rows {
+		if _, ok := have[r.ItemID]; r.ItemID != 0 && !ok {
+			missing = append(missing, r.ItemID)
+		}
+	}
+	if len(missing) == 0 {
+		return items, nil
+	}
+	more, err := s.store.ListItems(ctx, store.ItemFilter{IDs: missing})
+	return append(items, more...), err
 }
 
 // itemOptions splits items into those for vehicleID and the rest.
@@ -117,7 +140,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if err != nil {
 		return err
 	}
-	items, err := s.store.ListItems(ctx, store.ItemFilter{})
+	items, err := s.pickerItems(ctx, f.Lines)
 	if err != nil {
 		return err
 	}
@@ -142,7 +165,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 }
 
 func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) {
-	items, err := s.store.ListItems(r.Context(), store.ItemFilter{})
+	items, err := s.store.ListItems(r.Context(), store.ItemFilter{Archived: store.ArchivedAll})
 	if err != nil {
 		return kitForm{}, stock.KitInput{}, err
 	}
@@ -310,7 +333,7 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	}
 	n := 0
 	for _, l := range k.Lines {
-		if short := l.Short(); short > 0 {
+		if short := l.Short(); short > 0 && !l.Archived {
 			if err := s.store.EnsureShopping(ctx, l.ItemID, short, "For "+k.VehicleName+": "+k.Name); err != nil {
 				return err
 			}

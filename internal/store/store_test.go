@@ -1002,3 +1002,98 @@ func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+func TestArchiveInsteadOfDelete(t *testing.T) {
+	s, ctx := newStore(t)
+	k390 := mustVehicle(t, s, "KTM 390")
+	filter := mustItem(t, s, stock.ItemInput{Name: "Old filter", Unit: stock.UnitPiece, Quantity: 3})
+	spare := mustItem(t, s, stock.ItemInput{Name: "Spare bolt", Unit: stock.UnitPiece, Quantity: 3})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 2, TotalPrice: ptr(20.0)}); err != nil {
+		t.Fatal(err)
+	}
+	kitIn := stock.KitInput{VehicleID: k390, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: filter, Quantity: 1}}}
+	kitIn.Normalize()
+	kitID, err := s.CreateKit(ctx, kitIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcIn := stock.ServiceInput{VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: filter, Quantity: 1}}}
+	svcIn.Normalize()
+	svcID, err := s.CreateService(ctx, svcIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &filter}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.GetStats(ctx)
+
+	u, err := s.ItemUsage(ctx, filter)
+	if err != nil || u != (stock.ItemUsage{Purchases: 1, Services: 1, Kits: 1}) {
+		t.Fatalf("usage = %+v, %v", u, err)
+	}
+	var conflict *store.ConflictError
+	if err := s.DeleteItem(ctx, filter); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Archive it instead") {
+		t.Fatalf("delete used item: want ConflictError, got %v", err)
+	}
+
+	removed, err := s.ArchiveItem(ctx, filter)
+	if err != nil || !removed {
+		t.Fatalf("archive = %v, %v; want it taken off the shopping list", removed, err)
+	}
+	if got := ids(mustList(t, s, store.ItemFilter{})); !slices.Equal(got, []string{"Spare bolt"}) {
+		t.Errorf("active items = %v", got)
+	}
+	if got := ids(mustList(t, s, store.ItemFilter{Archived: store.ArchivedOnly})); !slices.Equal(got, []string{"Old filter"}) {
+		t.Errorf("archived items = %v", got)
+	}
+	if it := mustGet(t, s, filter); !it.Archived() {
+		t.Error("GetItem should find the archived item")
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 0 {
+		t.Errorf("shopping = %+v", list)
+	}
+
+	// Everything that referred to it is unchanged.
+	if svc, _ := s.GetService(ctx, svcID); svc.PartCount != 1 || len(svc.Parts) != 1 {
+		t.Errorf("service parts = %+v", svc.Parts)
+	}
+	if kit, _ := s.GetKit(ctx, kitID); len(kit.Lines) != 1 || !kit.Lines[0].Archived {
+		t.Errorf("kit lines = %+v", kit.Lines)
+	}
+	after, _ := s.GetStats(ctx)
+	if after.Spent12m != before.Spent12m || after.StockValue != 0 || before.StockValue != 40 {
+		t.Errorf("stats before %+v, after %+v: spending kept, archived stock not valued", before, after)
+	}
+
+	if err := s.RestoreItem(ctx, filter); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(mustList(t, s, store.ItemFilter{})); len(got) != 2 {
+		t.Errorf("after restore = %v", got)
+	}
+
+	// An item nothing refers to is deleted with its own history.
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: spare, Kind: stock.MoveUse, Delta: -1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteItem(ctx, spare); err != nil {
+		t.Fatalf("delete unused item: %v", err)
+	}
+	if err := s.RestoreItem(ctx, spare); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("restore deleted: want ErrNotFound, got %v", err)
+	}
+	if _, err := s.ArchiveItem(ctx, spare); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("archive deleted: want ErrNotFound, got %v", err)
+	}
+	assertLedger(t, s)
+}
+
+func mustList(t *testing.T, s *store.Store, f store.ItemFilter) []stock.Item {
+	t.Helper()
+	items, err := s.ListItems(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items
+}

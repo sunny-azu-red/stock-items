@@ -821,3 +821,66 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	}
 	expect(t, a.get(edit+"/edit"), http.StatusNotFound)
 }
+
+func TestArchiveItemFlow(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	ring := itemID(t, a.store, "O-Ring")
+	path := "/items/" + itoa(oil)
+
+	// Unused: Delete, no Archive.
+	page := a.get(path)
+	expect(t, page, http.StatusOK, `action="`+path+`/delete"`)
+	expectNot(t, page, `action="`+path+`/archive"`)
+
+	// In a kit: Archive instead of Delete.
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
+		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	page = a.get(path)
+	expect(t, page, http.StatusOK, `action="`+path+`/archive"`, "stays in 1 kit")
+	expectNot(t, page, `action="`+path+`/delete"`)
+	rec = a.post(path+"/delete", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != path {
+		t.Errorf("refused delete went to %q", l)
+	}
+	if _, err := a.store.GetItem(ctx, oil); err != nil {
+		t.Fatalf("item in a kit was deleted: %v", err)
+	}
+
+	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Archived", `action="`+path+`/restore"`)
+	stockPage := a.get("/stock")
+	expectNot(t, stockPage, "15W50 PRO 4 XP")
+	expect(t, a.get("/stock?archived=1"), http.StatusOK, "15W50 PRO 4 XP")
+	expect(t, a.get(kit), http.StatusOK, "15W50 PRO 4 XP", "badge-muted\" title=\"This item is archived")
+
+	// Saving the kit keeps the archived line.
+	expect(t, a.get(kit+"/edit"), http.StatusOK, `value="`+itoa(oil)+`" `)
+	expect(t, a.post(kit, url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
+		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"}}), http.StatusSeeOther)
+	if k, _ := a.store.GetKit(ctx, mustID(t, kit)); len(k.Lines) != 2 {
+		t.Errorf("kit lines after save = %+v", k.Lines)
+	}
+	// Its shortfall is not bought again.
+	expect(t, a.post(kit+"/shortfall", nil), http.StatusSeeOther)
+	if list, _ := a.store.ListShopping(ctx); len(list) != 0 {
+		t.Errorf("shopping = %+v", list)
+	}
+
+	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.get("/stock"), http.StatusOK, "15W50 PRO 4 XP")
+}
+
+func mustID(t *testing.T, path string) int64 {
+	t.Helper()
+	id, err := strconv.ParseInt(path[strings.LastIndex(path, "/")+1:], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}

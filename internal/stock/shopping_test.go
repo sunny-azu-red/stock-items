@@ -29,3 +29,14 @@ func TestSuggestPurchases(t *testing.T) {
 		t.Errorf("filter suggestion = %+v", got[1])
 	}
 }
+
+func TestSuggestPurchasesSkipsArchivedKitLines(t *testing.T) {
+	kits := []Kit{{VehicleName: "KTM 390", Name: "Oil service", Lines: []KitLine{
+		{ItemID: 1, ItemName: "Old filter", Need: 1, Have: 0, Unit: UnitPiece, Archived: true},
+		{ItemID: 2, ItemName: "New filter", Need: 1, Have: 0, Unit: UnitPiece},
+	}}}
+	got := SuggestPurchases(nil, kits, nil)
+	if len(got) != 1 || got[0].Item.ID != 2 {
+		t.Errorf("suggestions = %+v, want only the active item", got)
+	}
+}

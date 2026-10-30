@@ -360,10 +360,54 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteItem(r.Context(), id); err != nil {
+	var conflict *store.ConflictError
+	if err := s.store.DeleteItem(r.Context(), id); errors.As(err, &conflict) {
+		// Used since the page was opened: keep it and say why.
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, "/stock", "Deleted "+it.DisplayName())
+	return nil
+}
+
+// itemArchive hides an item that other records refer to.
+func (s *Server) itemArchive(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	it, err := s.store.GetItem(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	removed, err := s.store.ArchiveItem(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	msg := "Archived " + it.DisplayName() + ". Its history stays; restore it any time."
+	if removed {
+		msg = "Archived " + it.DisplayName() + " and took it off the shopping list. Its history stays; restore it any time."
+	}
+	s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
+	return nil
+}
+
+func (s *Server) itemRestore(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	it, err := s.store.GetItem(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if err := s.store.RestoreItem(r.Context(), id); err != nil {
+		return err
+	}
+	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Restored "+it.DisplayName())
 	return nil
 }
 
@@ -401,6 +445,7 @@ type itemPage struct {
 	SubUnits      []stock.SubUnit
 	ExpiryState   string
 	PurchaseCount int
+	Usage         stock.ItemUsage
 }
 
 func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (itemPage, error) {
@@ -429,6 +474,10 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
+	usage, err := s.store.ItemUsage(ctx, id)
+	if err != nil {
+		return itemPage{}, err
+	}
 	shopping, err := s.store.ListShopping(ctx)
 	if err != nil {
 		return itemPage{}, err
@@ -436,7 +485,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
-		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases,
+		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 	}
 	if price != nil {
 		v := *price * it.Quantity

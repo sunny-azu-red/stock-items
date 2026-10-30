@@ -18,6 +18,7 @@ items ─< shopping_entries (or free text)
 **items:** name, brand, category, `unit` (`piece`/`ml`/`g`), `quantity`, `min_quantity` (low-stock threshold), `expires_on`, location, notes.
 - `quantity >= 0` is enforced by a check constraint.
 - Quantities are always in the base unit: 1.5 L is stored as `1500`.
+- `archived_at` is set when an item that other records refer to is archived instead of deleted (see below).
 - `expires_on` is set on the item form, or replaced by a purchase that gives the new batch's best-before date (in the same transaction as the movement).
 
 **item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`ean`/`retailer`/`other`; `ean` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
@@ -25,6 +26,8 @@ items ─< shopping_entries (or free text)
 **item_vehicles:** many-to-many tags.
 - Deleting a vehicle removes its tags, but its items stay. Its kits and service records are deleted too. The parts those services used stay used: their `service` movements remain in the ledger (with `service_record_id` cleared and the service title as note).
 - An item with no tags is "General" stock.
+
+**Deleting an item:** the foreign keys on `item_id` cascade, so a delete would also remove its movements, kit lines and shopping entry. `store.DeleteItem` therefore refuses an item with purchases, service movements or kit lines (`store.ItemUsage`) with a `ConflictError`. Such items are archived instead (`ArchiveItem` sets `archived_at` and removes the shopping entry). `ListItems` hides archived items unless `ItemFilter.Archived` asks for them; lookups by id (`GetItem`) always find them. Kit lines carry `Archived`, and `SuggestPurchases` and the kit shortfall skip them.
 
 **item_photos:** one photo per item, stored as JPEG (`image` up to 1600 px, `thumb` 320 px square).
 
@@ -63,6 +66,6 @@ items ─< shopping_entries (or free text)
 | Kit readiness and shortfall | `stock.Kit.Readiness`, `KitLine.Short` |
 | Service due state (`never`/`ok`/`soon`/`overdue`) | `stock.Kit.Due`: last service with the kit + interval, compared to the current odometer and today. "Soon" means within 30 days or max(500 km, 10 % of the interval), but never more than half the interval. Month intervals end on the same day of the month, or the month's last day (31 Jan + 1 month = 28 Feb). History logged with the kit on another vehicle is ignored. |
 | Purchase suggestions | `stock.SuggestPurchases`: below minimum or short for any kit, and not already on the list |
-| Stock value | quantity × last purchase price per unit (`store.GetStats`) |
+| Stock value | quantity × last purchase price per unit, for items that aren't archived (`store.GetStats`) |
 | Purchase count (item page) | `store.CountPurchases` |
 | Spent in the last 12 months | priced purchases plus labour cost with a date in the last 12 months (`store.GetStats`) |

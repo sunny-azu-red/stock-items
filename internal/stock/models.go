@@ -4,6 +4,7 @@
 package stock
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -131,6 +132,43 @@ type Item struct {
 	HasPhoto    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// ArchivedAt is set for items no longer kept: they are hidden from
+	// stock, pickers and suggestions, but their history stays.
+	ArchivedAt *time.Time
+}
+
+// Archived reports whether the item has been archived.
+func (it Item) Archived() bool { return it.ArchivedAt != nil }
+
+// ItemUsage counts the records that refer to an item. An item in use is
+// archived instead of deleted, so those records stay intact.
+type ItemUsage struct {
+	Purchases int // its purchases count in the spending figures
+	Services  int // services that used it
+	Kits      int // kits that list it
+}
+
+// InUse reports whether anything refers to the item.
+func (u ItemUsage) InUse() bool { return u.Purchases+u.Services+u.Kits > 0 }
+
+// String lists the references, e.g. "2 services, 1 kit and 5 purchases".
+func (u ItemUsage) String() string {
+	var parts []string
+	add := func(n int, one, many string) {
+		switch {
+		case n == 1:
+			parts = append(parts, "1 "+one)
+		case n > 1:
+			parts = append(parts, strconv.Itoa(n)+" "+many)
+		}
+	}
+	add(u.Services, "service", "services")
+	add(u.Kits, "kit", "kits")
+	add(u.Purchases, "purchase", "purchases")
+	if len(parts) <= 1 {
+		return strings.Join(parts, "")
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 }
 
 // DisplayName is "Brand Name", unless the name already starts with the brand.
@@ -250,6 +288,7 @@ type KitLine struct {
 	Unit     Unit
 	Need     float64
 	Have     float64
+	Archived bool // the item is archived; the kit should be edited
 }
 
 // Short is how much is missing to cover this line.

@@ -51,6 +51,12 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 - Suggestions keep their reason ("Below minimum", "Short for KTM 390: Oil service") as the entry's note.
 - **Copy as text** gives you the list for the shop.
 
+## Removing items
+
+- An item that nothing else refers to can be **deleted** (on its page), together with its own history.
+- An item that has purchases, was used in a service, or is part of a kit gets **Archive** instead. Deleting it would change those records: your spending, the parts of past services, the kit. An archived item disappears from the stock list, dashboard, item pickers and suggestions, and comes off the shopping list. Its history, services and kits stay as they were, and archived kit lines are marked so you can edit the kit.
+- Find archived items with the **Archived** filter on the stock page, and bring one back with **Restore**.
+
 ## Tips
 
 - Photos help to recognise similar parts: open an item → Add photo. Phone photos are rotated and resized automatically.

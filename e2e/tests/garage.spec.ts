@@ -250,6 +250,32 @@ test("edit and delete items", async ({ page }) => {
   await expect(page.locator("#results")).not.toContainText("Fuel Filter");
 });
 
+test("archive an item that a service still refers to", async ({ page }) => {
+  page.on("dialog", (d) => d.accept());
+  const filterRow = () => row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" });
+  await page.goto("/stock");
+  await filterRow().getByRole("link").first().click();
+  const itemURL = page.url();
+  await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Archive" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Archived OEM Oil Filter");
+  await expect(page.locator(".page-head")).toContainText("Archived");
+
+  await page.goto("/stock");
+  await expect(filterRow()).toHaveCount(0);
+
+  // The logged oil service still lists it.
+  await page.goto(itemURL);
+  await page.locator('a[href^="/services/"]').first().click();
+  await expect(page.locator("main")).toContainText("OEM Oil Filter");
+
+  await page.goto(itemURL);
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Restored OEM Oil Filter");
+  await page.goto("/stock");
+  await expect(filterRow()).toHaveCount(1);
+});
+
 test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
   await page.goto("/services/new");
   const items = page.locator('select[name="part_item"]');

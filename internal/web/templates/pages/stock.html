@@ -41,6 +41,7 @@
     <label class="toggle"><input type="checkbox" name="low" value="1" {{if $f.Low}}checked{{end}}> Low stock</label>
     <label class="toggle"><input type="checkbox" name="exp" value="1" {{if $f.Expiring}}checked{{end}}> Expiring</label>
     <label class="toggle"><input type="checkbox" name="instock" value="1" {{if $f.InStock}}checked{{end}}> In stock only</label>
+    <label class="toggle"><input type="checkbox" name="archived" value="1" {{if $f.Archived}}checked{{end}}> Archived</label>
     {{if eq $f.View "list"}}<input type="hidden" name="view" value="list">{{end}}
   </div>
 </form>

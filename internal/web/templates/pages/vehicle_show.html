@@ -59,7 +59,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><a class="more" href="/services?v={{$v.ID}}">All →</a></div>
+      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="flex">{{if $d.Labor}}<span class="muted small">{{money $d.Labor}} labour</span>{{end}}<a class="more" href="/services?v={{$v.ID}}">All →</a></span></div>
       {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
     </section>
 

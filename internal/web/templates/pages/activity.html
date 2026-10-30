@@ -1,19 +1,26 @@
 {{define "content"}}{{$d := .Data}}
+{{with $d.Item}}<a class="back" href="/items/{{.ID}}">{{icon "arrow-left"}} {{.DisplayName}}</a>{{end}}
 <div class="page-head">
   <div>
-    <h1>Activity</h1>
-    <p class="sub">Every change to your stock, newest first.</p>
+    <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}Activity{{end}}</h1>
+    <p class="sub">{{if $d.Item}}Every change to this item's stock{{else}}Every change to your stock{{end}}, newest first.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="/activity/export.csv{{with $d.Kind}}?kind={{.}}{{end}}" title="Download as CSV">{{icon "download"}} CSV</a>
+    <a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
   </div>
 </div>
 <div class="chips mb" role="group" aria-label="Filter">
-  <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="/activity">Everything</a>
-  {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="/activity?kind={{.}}">{{.Label}}</a>{{end}}
+  <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">Everything</a>
+  {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
 </div>
 <section class="card">
-  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" true)}}
+  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item))}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}
 </section>
+{{if or $d.More (gt $d.Page 1)}}
+<p class="mt flex">
+  {{if gt $d.Page 1}}<a class="btn btn-ghost" href="{{withQuery "/activity" ($d.PageQuery (add $d.Page -1))}}">{{icon "arrow-left"}} Newer</a>{{end}}
+  {{if $d.More}}<a class="btn btn-ghost" href="{{withQuery "/activity" ($d.PageQuery (add $d.Page 1))}}">Older {{icon "chevron-right"}}</a>{{end}}
+</p>
+{{end}}
 {{end}}

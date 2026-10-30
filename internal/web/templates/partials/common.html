@@ -135,7 +135,7 @@
     <span class="status-icon status-ok">{{icon "wrench"}}</span>
     <span class="grow">
       <a class="title" href="/services/{{.ID}}">{{.Title}}</a>
-      <span class="meta">{{date .PerformedOn}}{{with .OdometerKm}} · {{km .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}</span>
+      <span class="meta">{{date .PerformedOn}}{{with .OdometerKm}} · {{km .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
     </span>
     <span class="chip" style="{{chipStyle .VehicleColor}}"><span class="dot"></span>{{.VehicleName}}</span>
   </li>

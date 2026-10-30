@@ -50,6 +50,15 @@ func (s *Store) ListServices(ctx context.Context, f ServiceFilter) ([]stock.Serv
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.ServiceRecord, error) { return scanService(r) })
 }
 
+// LaborTotal sums the labour cost of a vehicle's services (all vehicles
+// for 0).
+func (s *Store) LaborTotal(ctx context.Context, vehicleID int64) (float64, error) {
+	var total float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(sum(labor_cost), 0)::float8 FROM service_records WHERE $1 = 0 OR vehicle_id = $1`, vehicleID).Scan(&total)
+	return total, err
+}
+
 // GetService returns one service record with the parts it used.
 func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, error) {
 	r, err := scanService(s.pool.QueryRow(ctx, serviceSelect+" WHERE sr.id = $1", id))

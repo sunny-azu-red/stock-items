@@ -348,20 +348,21 @@ func (s *Store) RestoreItem(ctx context.Context, id int64) error {
 }
 
 // DuplicateItem copies an item (fields, SKUs and tags, but no stock) and
-// returns the new id.
+// returns the new id. Barcodes stay with the original, so a scan finds one
+// item, and the copy has no best-before date, as it has no stock yet.
 func (s *Store) DuplicateItem(ctx context.Context, id int64) (int64, error) {
 	var newID int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			INSERT INTO items (name, brand, category, unit, min_quantity, expires_on, location, notes)
-			SELECT left(name, 193) || ' (copy)', brand, category, unit, min_quantity, expires_on, location, notes
+			SELECT left(name, 193) || ' (copy)', brand, category, unit, min_quantity, NULL, location, notes
 			FROM items WHERE id = $1 RETURNING id`, id).Scan(&newID)
 		if err != nil {
 			return notFound(err)
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO item_skus (item_id, code, kind, label, pack_size)
-			SELECT $2, code, kind, label, pack_size FROM item_skus WHERE item_id = $1 ORDER BY id`, id, newID); err != nil {
+			SELECT $2, code, kind, label, pack_size FROM item_skus WHERE item_id = $1 AND kind <> 'ean' ORDER BY id`, id, newID); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `

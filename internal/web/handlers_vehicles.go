@@ -282,6 +282,7 @@ type vehiclePage struct {
 	StockQuery string
 	// What refers to the vehicle: with any, it is archived, not deleted.
 	ServiceCount, KitCount int
+	Labor                  float64 // labour cost of all its services
 }
 
 func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
@@ -314,8 +315,12 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	labor, err := s.store.LaborTotal(ctx, id)
+	if err != nil {
+		return err
+	}
 	p := vehiclePage{
-		ServiceCount: serviceCount, KitCount: kitCount,
+		ServiceCount: serviceCount, KitCount: kitCount, Labor: labor,
 		Vehicle: v, Kits: s.kitViews(kits, vehicles), Sections: stock.GroupByVehicles(items, vehicles),
 		VehicleMap: vehicleMap(vehicles), Services: services, ItemCount: len(items),
 		StockQuery: "v=" + strconv.FormatInt(id, 10),

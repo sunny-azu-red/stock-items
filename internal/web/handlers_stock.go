@@ -112,6 +112,23 @@ func (f stockFilter) WithView(view string) string {
 	return f.Encode()
 }
 
+// AllVehicles returns the query string without the vehicle filter, keeping
+// the search, category, toggles, view and sort.
+func (f stockFilter) AllVehicles() string {
+	f.VehicleIDs, f.General, f.MatchAll = nil, false, false
+	return f.Encode()
+}
+
+// Cleared returns the query string without any filter, keeping only how
+// the stock is shown (view and sort).
+func (f stockFilter) Cleared() string {
+	return stockFilter{View: f.View, Sort: f.Sort}.Encode()
+}
+
+// IsCategory reports whether c is the selected category. The store
+// matches categories case-insensitively, and so does this.
+func (f stockFilter) IsCategory(c string) bool { return strings.EqualFold(c, f.Category) }
+
 type stockPage struct {
 	Filter     stockFilter
 	Vehicles   []stock.Vehicle

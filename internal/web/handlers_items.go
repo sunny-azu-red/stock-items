@@ -456,7 +456,11 @@ type itemPage struct {
 	ExpiryState   string
 	PurchaseCount int
 	Usage         stock.ItemUsage
+	HistoryCapped bool // Movements holds only the newest itemHistory entries
 }
+
+// itemHistory is how many stock changes the item page shows.
+const itemHistory = 100
 
 func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (itemPage, error) {
 	ctx := r.Context()
@@ -468,7 +472,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
-	moves, err := s.store.ListMovements(ctx, store.MovementFilter{ItemID: id, Limit: 100})
+	moves, err := s.store.ListMovements(ctx, store.MovementFilter{ItemID: id, Limit: itemHistory + 1})
 	if err != nil {
 		return itemPage{}, err
 	}
@@ -496,6 +500,10 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
+		HistoryCapped: len(moves) > itemHistory,
+	}
+	if p.HistoryCapped {
+		p.Movements = moves[:itemHistory]
 	}
 	if price != nil {
 		v := *price * it.Quantity

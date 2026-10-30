@@ -1474,3 +1474,21 @@ func TestOdometerGuards(t *testing.T) {
 		t.Errorf("lowering through the form: want conflict, got %v", err)
 	}
 }
+
+func TestDuplicateItemLeavesBarcodesAndExpiry(t *testing.T) {
+	s, ctx := newStore(t)
+	exp := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	id := mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 1000, ExpiresOn: &exp,
+		SKUs: []stock.SKU{{Code: "7611197108900", Kind: stock.SKUBarcode}, {Code: "M30", Kind: stock.SKUManufacturer}}})
+	dupID, err := s.DuplicateItem(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dup := mustGet(t, s, dupID)
+	if len(dup.SKUs) != 1 || dup.SKUs[0].Code != "M30" || dup.ExpiresOn != nil {
+		t.Errorf("duplicate = %+v", dup)
+	}
+	if got := mustList(t, s, store.ItemFilter{Query: "7611197108900"}); len(got) != 1 || got[0].ID != id {
+		t.Errorf("barcode search = %v", ids(got))
+	}
+}

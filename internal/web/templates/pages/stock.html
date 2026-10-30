@@ -19,12 +19,12 @@
     </label>
     <select class="input" name="cat" aria-label="Category">
       <option value="">All categories</option>
-      {{range $d.Categories}}<option {{if eq . $f.Category}}selected{{end}}>{{.}}</option>{{end}}
+      {{range $d.Categories}}<option {{if $f.IsCategory .}}selected{{end}}>{{.}}</option>{{end}}
     </select>
     <noscript><button class="btn" type="submit">Apply</button></noscript>
   </div>
   <div class="filters-row" role="group" aria-label="Vehicles">
-    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="/stock">All</a>
+    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="{{withQuery "/stock" $f.AllVehicles}}">All</a>
     {{range $d.Vehicles}}
     <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="v" value="{{.ID}}" {{if $f.HasVehicle .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
     {{end}}
@@ -43,12 +43,13 @@
     <label class="toggle"><input type="checkbox" name="instock" value="1" {{if $f.InStock}}checked{{end}}> In stock only</label>
     <label class="toggle"><input type="checkbox" name="archived" value="1" {{if $f.Archived}}checked{{end}}> Archived</label>
     {{if eq $f.View "list"}}<input type="hidden" name="view" value="list">{{end}}
+    {{with $f.Sort}}<input type="hidden" name="sort" value="{{.}}">{{end}}
   </div>
 </form>
 
 <div id="results" class="loading-dim">
   <div class="results-head">
-    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="/stock">clear filters</a>{{end}}</span>
+    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="{{withQuery "/stock" $f.Cleared}}">clear filters</a>{{end}}</span>
     <div class="flex">
       <span class="segmented" role="group" aria-label="View">
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>

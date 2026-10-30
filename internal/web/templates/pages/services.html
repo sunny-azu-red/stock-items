@@ -19,7 +19,7 @@
 
 <div class="split">
   <section class="card">
-    <div class="card-head"><h2>{{icon "history"}} Service log</h2><span class="muted small">{{len $d.Services}}</span></div>
+    <div class="card-head"><h2>{{icon "history"}} Service log</h2><span class="muted small">{{len $d.Services}}{{if $d.Labor}} · {{money $d.Labor}} labour in total{{end}}</span></div>
     {{if $d.Services}}{{template "service-list" $d.Services}}
     {{else}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log a service")}}{{end}}
   </section>

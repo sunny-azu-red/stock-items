@@ -103,6 +103,7 @@ type MovementFilter struct {
 	ItemID int64
 	Kind   stock.MovementKind
 	Limit  int
+	Offset int // skip this many, for paging
 }
 
 // ListMovements returns ledger entries, newest first.
@@ -127,6 +128,9 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	sql += " ORDER BY m.occurred_on DESC, m.id DESC"
 	if f.Limit > 0 {
 		sql += " LIMIT " + args.add(f.Limit)
+	}
+	if f.Offset > 0 {
+		sql += " OFFSET " + args.add(f.Offset)
 	}
 	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {

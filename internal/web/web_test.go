@@ -1230,3 +1230,47 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles"), http.StatusOK, `href="`+path+`"`)
 }
+
+func TestStockFilterLinksKeepTheView(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.get("/stock?v=" + itoa(k390) + "&q=oil&view=list&sort=quantity&cat=FILTERS")
+	expect(t, rec, http.StatusOK,
+		`id="filter-all" href="/stock?cat=FILTERS&amp;q=oil&amp;sort=quantity&amp;view=list"`,
+		`href="/stock?sort=quantity&amp;view=list">clear filters</a>`,
+		`name="sort" value="quantity"`, "<option selected>Filters</option>")
+}
+
+func TestActivityPagesAndItemHistory(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake")
+	for range 205 {
+		if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
+			if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MovePurchase, Delta: 1}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	item := "/items/" + itoa(pads)
+	expect(t, a.get(item), http.StatusOK, `href="/activity?item=`+itoa(pads)+`">All entries →</a>`)
+	page := a.get("/activity?item=" + itoa(pads))
+	expect(t, page, http.StatusOK, "History of OEM Rear Brake Pads", `href="/activity?item=`+itoa(pads)+`&amp;page=2"`,
+		`href="/activity/export.csv?item=`+itoa(pads)+`"`)
+	expectNot(t, page, "Newer")
+	expect(t, a.get("/activity?item="+itoa(pads)+"&page=2"), http.StatusOK, "Newer")
+	csv := a.get("/activity/export.csv?item=" + itoa(pads))
+	if n := strings.Count(csv.Body.String(), "\n"); n != 207 { // header + 205 + initial stock
+		t.Errorf("csv lines = %d, want 207", n)
+	}
+}
+
+func TestServicesShowLabour(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"},
+		"labor_cost": {"350"}}), http.StatusSeeOther)
+	expect(t, a.get("/services"), http.StatusOK, "350.00 EUR labour", "350.00 EUR labour in total")
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "350.00 EUR labour")
+}

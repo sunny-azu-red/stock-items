@@ -260,6 +260,7 @@ type servicesPage struct {
 	Services  []stock.ServiceRecord
 	Vehicles  []stock.Vehicle
 	VehicleID int64
+	Labor     float64 // labour cost of all logged services shown
 }
 
 func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
@@ -279,6 +280,9 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	}
 	p.Kits = s.kitViews(kits, p.Vehicles)
 	if p.Services, err = s.store.ListServices(ctx, store.ServiceFilter{VehicleID: p.VehicleID, Limit: 200}); err != nil {
+		return err
+	}
+	if p.Labor, err = s.store.LaborTotal(ctx, p.VehicleID); err != nil {
 		return err
 	}
 	s.render(w, r, http.StatusOK, "services", View{Title: "Services", Nav: "services", Data: p})

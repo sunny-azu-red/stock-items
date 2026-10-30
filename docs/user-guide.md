@@ -12,6 +12,7 @@
    - **Keep at least** (optional). Below this the item shows as *low* and is suggested on the shopping list.
    - **SKUs.** Add every number you might search for: the OEM part number, the manufacturer number, one row per pack size.
    - Use **Save & add another** to enter many items in a row. It keeps the vehicles and unit you picked.
+   - **Duplicate** (on an item's page) starts a similar item with the same fields, part numbers and vehicles, but no stock, no best-before date and no barcodes, so scanning still finds the original.
 
 ## Daily use
 
@@ -67,4 +68,5 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 - A USB or Bluetooth barcode scanner "types" into the search box. Put EAN codes in the SKU list and scanning finds the item.
 - Shortcuts: `/` searches stock from any page, `n` opens a new item.
 - The app follows your system's light or dark mode. The sun / moon button (top of the sidebar; on a phone, top of the dashboard) overrides it on that device. Switch back to what your system shows to follow it again.
-- The *Activity* page lists every stock change across all items.
+- The *Activity* page lists every stock change across all items, 200 per page (**Older** / **Newer**), filtered by kind if you like. An item's page shows its newest 100 changes; **All entries →** opens its whole history there. The CSV button downloads what the page is filtered on.
+- The services list and each vehicle show the labour cost of every service and the total.

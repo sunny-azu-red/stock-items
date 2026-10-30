@@ -3,7 +3,9 @@ package web
 import (
 	"bytes"
 	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -77,6 +79,34 @@ type activityPage struct {
 	Movements []stock.Movement
 	Kind      string
 	Kinds     []stock.MovementKind
+	Item      *stock.Item // set when showing one item's history
+	Page      int         // 1 is the newest
+	More      bool        // there are older entries
+}
+
+// activityPageSize is how many stock changes one Activity page shows.
+const activityPageSize = 200
+
+// KindQuery is the query string for the given kind ("" for all), keeping
+// the item filter and starting at the newest page.
+func (p activityPage) KindQuery(kind string) string {
+	q := url.Values{}
+	if kind != "" {
+		q.Set("kind", kind)
+	}
+	if p.Item != nil {
+		q.Set("item", strconv.FormatInt(p.Item.ID, 10))
+	}
+	return q.Encode()
+}
+
+// PageQuery is the query string for page n with the current filters.
+func (p activityPage) PageQuery(n int) string {
+	q, _ := url.ParseQuery(p.KindQuery(p.Kind))
+	if n > 1 {
+		q.Set("page", strconv.Itoa(n))
+	}
+	return q.Encode()
 }
 
 var activityKinds = []stock.MovementKind{stock.MovePurchase, stock.MoveUse, stock.MoveService, stock.MoveCorrection, stock.MoveInitial}
@@ -90,21 +120,58 @@ func activityKind(r *http.Request) stock.MovementKind {
 	return ""
 }
 
+// activityItem reads the ?item= filter; nil for all items.
+func (s *Server) activityItem(r *http.Request) (*stock.Item, error) {
+	id := parseOptID(r.URL.Query().Get("item"))
+	if id == nil {
+		return nil, nil
+	}
+	it, err := s.store.GetItem(r.Context(), *id)
+	if err != nil {
+		return nil, err
+	}
+	return &it, nil
+}
+
 func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
-	kind, kinds := activityKind(r), activityKinds
-	moves, err := s.store.ListMovements(r.Context(), store.MovementFilter{Kind: kind, Limit: 300})
+	item, err := s.activityItem(r)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "activity", View{Title: "Activity", Nav: "activity", Data: activityPage{
-		Movements: moves, Kind: string(kind), Kinds: kinds,
-	}})
+	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: 1}
+	if n, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && n > 1 {
+		p.Page = n
+	}
+	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize}
+	if item != nil {
+		f.ItemID = item.ID
+	}
+	if p.Movements, err = s.store.ListMovements(r.Context(), f); err != nil {
+		return err
+	}
+	if len(p.Movements) > activityPageSize {
+		p.Movements, p.More = p.Movements[:activityPageSize], true
+	}
+	title := "Activity"
+	if item != nil {
+		title = "History of " + item.DisplayName()
+	}
+	s.render(w, r, http.StatusOK, "activity", View{Title: title, Nav: "activity", Data: p})
 	return nil
 }
 
-// activityExportCSV downloads every stock change (of the chosen kind).
+// activityExportCSV downloads every stock change (of the chosen kind and
+// item).
 func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error {
-	moves, err := s.store.ListMovements(r.Context(), store.MovementFilter{Kind: activityKind(r)})
+	item, err := s.activityItem(r)
+	if err != nil {
+		return err
+	}
+	f := store.MovementFilter{Kind: activityKind(r)}
+	if item != nil {
+		f.ItemID = item.ID
+	}
+	moves, err := s.store.ListMovements(r.Context(), f)
 	if err != nil {
 		return err
 	}

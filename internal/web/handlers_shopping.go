@@ -39,15 +39,21 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm) (shoppingPage, er
 	if err != nil {
 		return shoppingPage{}, err
 	}
-	onList := map[int64]bool{}
+	return shoppingPage{
+		Entries: entries, Items: items, Form: f, Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries)),
+	}, nil
+}
+
+// listedQuantities maps each item on the shopping list to its listed
+// quantity (nil when the entry has none), for stock.SuggestPurchases.
+func listedQuantities(entries []stock.ShoppingEntry) map[int64]*float64 {
+	listed := map[int64]*float64{}
 	for _, e := range entries {
 		if e.ItemID != nil {
-			onList[*e.ItemID] = true
+			listed[*e.ItemID] = e.Quantity
 		}
 	}
-	return shoppingPage{
-		Entries: entries, Items: items, Form: f, Suggestions: stock.SuggestPurchases(items, kits, onList),
-	}, nil
+	return listed
 }
 
 func (s *Server) shoppingList(w http.ResponseWriter, r *http.Request) error {
@@ -63,7 +69,8 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Note: formText(r, "note"), Errors: stock.Errors{}}
+	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Unit: formText(r, "quantity_unit"),
+		Note: formText(r, "note"), Errors: stock.Errors{}}
 	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note}
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		it, err := s.store.GetItem(r.Context(), *id)
@@ -71,19 +78,27 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 			f.Errors.Add("item_id", "That item no longer exists")
 		} else {
 			f.ItemID, in.ItemID, in.Unit = *id, id, it.Unit
+			if in.FreeText != "" {
+				// Both filled in: keep the text as a note rather than drop it.
+				if in.Note == "" {
+					in.Note = in.FreeText
+				} else {
+					in.Note = in.FreeText + "; " + in.Note
+				}
+			}
 			in.FreeText = ""
 		}
 	}
 	switch {
 	case in.ItemID != nil:
-		if q, err := parseOptAmount(f.Quantity, in.Unit, ""); err != nil {
+		if q, err := parseOptAmount(f.Quantity, in.Unit, f.Unit); err != nil {
 			f.Errors.Add("quantity", err.Error())
 		} else {
 			in.Quantity = q
 		}
 	case f.Quantity != "":
-		// Something new: the typed suffix decides the unit ("4 L").
-		if q, u, err := stock.ParseAmountAnyUnit(f.Quantity); err != nil {
+		// Something new: a typed suffix ("4 L") or the unit select decides.
+		if q, u, err := stock.ParseAmountAnyUnit(f.Quantity, f.Unit); err != nil {
 			f.Errors.Add("quantity", err.Error())
 		} else {
 			in.Quantity, in.Unit = &q, u

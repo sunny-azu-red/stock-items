@@ -125,6 +125,7 @@
   document.addEventListener("change", function (e) {
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
+    if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-autosubmit]")) {
       var f = e.target.form;
       if (f.requestSubmit) f.requestSubmit(); else f.submit();
@@ -137,27 +138,33 @@
     if (!row) return;
     var note = row.querySelector(".stock-note");
     var opt = sel.options[sel.selectedIndex];
-    var qty = row.querySelector("input[data-part-qty]");
     if (note) note.textContent = opt && opt.getAttribute("data-have") ? "on stock: " + opt.getAttribute("data-have") : "";
+    followItemUnits(sel, row);
+  }
+
+  // Next to an item select, the quantity's hint and unit select follow the
+  // chosen item: only its units are offered, preferring the larger one (L, kg).
+  function followItemUnits(sel, scope) {
+    if (!scope) return;
+    var opt = sel.options[sel.selectedIndex];
+    var qty = scope.querySelector("input[data-part-qty]");
     if (qty) {
-      // Keep the generic hint for rows with no item chosen yet.
+      // Keep the generic hint while no item is chosen.
       if (qty.dataset.defaultPlaceholder === undefined) qty.dataset.defaultPlaceholder = qty.placeholder;
       qty.placeholder = (opt && opt.getAttribute("data-placeholder")) || qty.dataset.defaultPlaceholder;
     }
-    // Offer only the chosen item's units, preferring the larger one (L, kg).
-    var unit = row.querySelector("select[data-part-unit]");
-    if (unit) {
-      var base = (opt && opt.getAttribute("data-unit")) || "";
-      var last = null;
-      Array.prototype.forEach.call(unit.options, function (o) {
-        var ok = base ? o.getAttribute("data-base") === base : true;
-        o.hidden = !ok;
-        o.disabled = !ok;
-        if (ok && o.value) last = o;
-      });
-      var cur = unit.options[unit.selectedIndex];
-      if (base && (!cur || cur.disabled || !cur.value)) unit.value = last ? last.value : "";
-    }
+    var unit = scope.querySelector("select[data-part-unit]");
+    if (!unit) return;
+    var base = (opt && opt.getAttribute("data-unit")) || "";
+    var last = null;
+    Array.prototype.forEach.call(unit.options, function (o) {
+      var ok = base ? o.getAttribute("data-base") === base : true;
+      o.hidden = !ok;
+      o.disabled = !ok;
+      if (ok && o.value) last = o;
+    });
+    var cur = unit.options[unit.selectedIndex];
+    if (base && (!cur || cur.disabled || !cur.value)) unit.value = last ? last.value : "";
   }
 
   // ---- Suggestion lists ---------------------------------------------------

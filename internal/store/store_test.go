@@ -1309,3 +1309,16 @@ func TestServiceReportsEveryShortPart(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+func TestAddShoppingKeepsBothNotes(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	for _, note := range []string{"sintered", "", "from the dealer", "sintered"} {
+		if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Note: note}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 1 || list[0].Note != "sintered; from the dealer" {
+		t.Errorf("note = %q", list[0].Note)
+	}
+}

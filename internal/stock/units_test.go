@@ -136,6 +136,25 @@ func TestSubUnitsFor(t *testing.T) {
 	}
 }
 
+func TestParseAmountAnyUnitWithSelect(t *testing.T) {
+	tests := []struct {
+		in, sub string
+		want    float64
+		unit    Unit
+	}{
+		{"4", "l", 4000, UnitML},
+		{"500", "g", 500, UnitGram},
+		{"500 g", "l", 500, UnitGram}, // the typed suffix wins
+		{"2", "pcs", 2, UnitPiece},
+	}
+	for _, tt := range tests {
+		got, u, err := ParseAmountAnyUnit(tt.in, tt.sub)
+		if err != nil || got != tt.want || u != tt.unit {
+			t.Errorf("%q with %q = %v %s, %v; want %v %s", tt.in, tt.sub, got, u, err, tt.want, tt.unit)
+		}
+	}
+}
+
 func TestParseAmountAnyUnit(t *testing.T) {
 	tests := []struct {
 		in      string
@@ -155,7 +174,7 @@ func TestParseAmountAnyUnit(t *testing.T) {
 		{"", 0, UnitPiece, true},
 	}
 	for _, tt := range tests {
-		got, u, err := ParseAmountAnyUnit(tt.in)
+		got, u, err := ParseAmountAnyUnit(tt.in, "")
 		if (err != nil) != tt.wantErr {
 			t.Errorf("%q: err = %v, want error %v", tt.in, err, tt.wantErr)
 			continue

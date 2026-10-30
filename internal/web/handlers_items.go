@@ -724,9 +724,15 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	if q, err := parseOptAmount(formText(r, "quantity"), it.Unit, formText(r, "quantity_unit")); err == nil && q != nil && *q > 0 {
 		in.Quantity = q
 	}
-	if in.Quantity == nil && it.MinQuantity != nil && *it.MinQuantity > it.Quantity {
-		need := *it.MinQuantity - it.Quantity
-		in.Quantity = &need
+	if in.Quantity == nil {
+		// What the item needs, for its minimum or any kit, like the suggestions.
+		kits, err := s.store.ListKits(r.Context(), store.KitFilter{ItemID: id})
+		if err != nil {
+			return err
+		}
+		if sugg := stock.SuggestPurchases([]stock.Item{it}, kits, nil); len(sugg) == 1 {
+			in.Quantity, in.Note = &sugg[0].Quantity, strings.Join(sugg[0].Reasons, "; ")
+		}
 	}
 	if _, err := s.store.AddShopping(r.Context(), in); err != nil {
 		return err

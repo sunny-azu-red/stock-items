@@ -139,17 +139,21 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 }
 
 // ParseAmountAnyUnit parses an amount for something that is not an item
-// yet, taking the unit from the text itself: "4 L" is 4000 ml, "500g" is
-// 500 g, and a plain number counts pieces.
-func ParseAmountAnyUnit(s string) (float64, Unit, error) {
+// yet, taking the unit from the text itself ("4 L" is 4000 ml, "500g" is
+// 500 g), else from subUnit (the unit select next to the input), else
+// counting pieces.
+func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 	u := UnitPiece
+	if su, ok := findSubUnit(strings.ToLower(strings.TrimSpace(subUnit))); ok {
+		u = su.Base
+	}
 	clean := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(s)), ",", ".")
 	if m := amountRe.FindStringSubmatch(clean); m != nil {
 		if su, ok := findSubUnit(suffixes[m[2]]); ok {
 			u = su.Base
 		}
 	}
-	v, err := ParseAmount(s, u, "")
+	v, err := ParseAmount(s, u, subUnit) // a typed suffix wins over subUnit
 	return v, u, err
 }
 

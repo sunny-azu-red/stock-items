@@ -57,7 +57,9 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 		                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
 		                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
-		    note = CASE WHEN excluded.note <> '' THEN excluded.note ELSE shopping_entries.note END
+		    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
+		                WHEN shopping_entries.note = '' THEN excluded.note
+		                ELSE shopping_entries.note || '; ' || excluded.note END
 		RETURNING id`,
 		in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
 	if isForeignKeyViolation(err) || errors.Is(err, pgx.ErrNoRows) {

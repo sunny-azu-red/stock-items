@@ -39,9 +39,9 @@
         <div class="form-grid">
           <div class="field">
             <label for="item_id">Item on stock</label>
-            <select class="input" id="item_id" name="item_id">
+            <select class="input" id="item_id" name="item_id" data-unit-source>
               <option value="">— or describe it below —</option>
-              {{range $d.Items}}<option value="{{.ID}}" {{if eq .ID $f.ItemID}}selected{{end}}>{{.DisplayName}} ({{qty .Quantity .Unit}})</option>{{end}}
+              {{range $d.Items}}<option value="{{.ID}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" {{if eq .ID $f.ItemID}}selected{{end}}>{{.DisplayName}} ({{qty .Quantity .Unit}})</option>{{end}}
             </select>
             {{template "err" (index $e "item_id")}}
           </div>
@@ -52,7 +52,13 @@
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">
             <label for="quantity">Quantity</label>
-            <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" placeholder="e.g. 2 or 4 L">
+            <div class="qty-input">
+              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" placeholder="e.g. 2 or 4 L" data-part-qty>
+              <select class="input" name="quantity_unit" aria-label="Unit" data-part-unit>
+                <option value="" data-base="">unit</option>
+                {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
+              </select>
+            </div>
             {{template "err" (index $e "quantity")}}
           </div>
           <div class="field">
@@ -80,7 +86,7 @@
       <li>
         <span class="grow">
           <a class="title" href="/items/{{.Item.ID}}">{{.Item.DisplayName}}</a>
-          <span class="meta">{{join .Reasons " · "}} · have {{qty .Item.Quantity .Item.Unit}}</span>
+          <span class="meta">{{join .Reasons " · "}} · have {{qty .Item.Quantity .Item.Unit}}{{if .Listed}} · {{qty .Listed .Item.Unit}} already listed{{end}}</span>
         </span>
         <span class="end qty">{{qty .Quantity .Item.Unit}}</span>
         <form class="inline-form" method="post" action="/shopping/suggestions">

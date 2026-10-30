@@ -1105,3 +1105,55 @@ func TestPartRowsHaveUnits(t *testing.T) {
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"2", "3"}, "part_unit": {"l", ""}}
 	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are short", "Only 525 ml on stock", "Only 1x on stock")
 }
+
+func TestShoppingListNeeds(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	pads := itemID(t, a.store, "Rear Brake")
+	// The kit needs 1.7 L of oil; 525 ml is on stock.
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
+		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"}}), http.StatusSeeOther)
+
+	// The item page's button lists what the kit is short of.
+	expect(t, a.post("/items/"+itoa(oil)+"/shopping", nil), http.StatusSeeOther)
+	list, _ := a.store.ListShopping(ctx)
+	if len(list) != 1 || *list[0].Quantity != 1175 || !strings.Contains(list[0].Note, "Short for KTM 390") {
+		t.Fatalf("shopping = %+v", list)
+	}
+	expectNot(t, a.get("/shopping"), "already listed") // fully covered: no suggestion
+
+	// Listed for less than needed: still suggested, with what's listed.
+	if err := a.store.DeleteShopping(ctx, list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(oil)}, "quantity": {"1"}, "quantity_unit": {"ml"}}), http.StatusSeeOther)
+	expect(t, a.get("/shopping"), http.StatusOK, "1 ml already listed")
+
+	// A bare number takes the unit select; text typed next to an item becomes its note.
+	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(pads)}, "free_text": {"sintered ones"}, "quantity": {"2"}, "quantity_unit": {"pcs"}}),
+		http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{"free_text": {"Coolant"}, "quantity": {"4"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
+	for _, e := range mustShopping(t, a) {
+		switch e.Title() {
+		case "OEM Rear Brake Pads":
+			if e.Note != "sintered ones" || *e.Quantity != 2 {
+				t.Errorf("pads entry = %+v", e)
+			}
+		case "Coolant":
+			if e.ItemUnit != stock.UnitML || *e.Quantity != 4000 {
+				t.Errorf("coolant entry = %+v", e)
+			}
+		}
+	}
+}
+
+func mustShopping(t *testing.T, a *testApp) []stock.ShoppingEntry {
+	t.Helper()
+	list, err := a.store.ListShopping(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
+}

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,6 +35,7 @@ func run() error {
 	migrateOnly := flag.Bool("migrate-only", false, "apply database migrations and exit")
 	reset := flag.Bool("reset-schema", false, "drop DB_SCHEMA before starting (only for test_* / e2e_* schemas)")
 	debugLog := flag.Bool("debug", false, "verbose logging")
+	healthcheck := flag.Bool("healthcheck", false, "check /healthz of the server on HOST:PORT and exit (for Docker)")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -46,6 +48,9 @@ func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
+	}
+	if *healthcheck {
+		return checkHealth(cfg)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -117,6 +122,25 @@ func resetSchema(ctx context.Context, cfg config.DB) error {
 	}
 	defer pool.Close()
 	return db.DropSchema(ctx, pool, cfg.Schema)
+}
+
+// checkHealth asks a running server for /healthz. The distroless image has
+// no shell or curl, so its Docker HEALTHCHECK runs the binary itself.
+func checkHealth(cfg config.Config) error {
+	host := cfg.Host
+	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, cfg.Port) + "/healthz")
+	if err != nil {
+		return fmt.Errorf("healthcheck: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck: %s", resp.Status)
+	}
+	return nil
 }
 
 func schemaName(cfg config.DB) string {

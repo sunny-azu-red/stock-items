@@ -52,7 +52,7 @@ CGO_ENABLED=0 go build -o bin/pitbox ./cmd/pitbox
 ./bin/pitbox            # reads .env from the working directory
 ```
 
-See [docs/deployment.md](docs/deployment.md) for running it as a systemd service or with Docker.
+Or run the published image, e.g. as a Portainer stack from [compose.yaml](compose.yaml). See [docs/deployment.md](docs/deployment.md) for that, systemd and plain Docker.
 
 ## Configuration
 
@@ -66,6 +66,7 @@ All settings come from environment variables or a `.env` file (real environment 
 | `DB_SCHEMA` | `public` | Postgres schema (tests use throwaway schemas) |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices |
+| `TZ` | system zone | When "today" starts (reminders, date checks, spending). Set it in Docker, whose default is UTC |
 
 `.env` is git-ignored. Never commit it.
 
@@ -84,7 +85,7 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 - [Architecture](docs/architecture.md): how the code is organised
 - [Data model](docs/data-model.md): tables and rules
 - [Development](docs/development.md): setup, tests, adding features
-- [Deployment](docs/deployment.md): systemd, Docker, backups
+- [Deployment](docs/deployment.md): Portainer, Docker, systemd, backups
 - [Conventions](docs/conventions.md): rules for contributors and coding agents (see also [AGENTS.md](AGENTS.md))
 
 ## License

@@ -9,6 +9,7 @@ vehicles ─┬─< item_vehicles >─┬─ items ─┬─< item_skus
           ├─< service_kits ─< service_kit_lines >─┘                   │
           └─< service_records ────────────────────────────────────────┘
 items ─< shopping_entries (or free text)
+trash (JSON snapshots of deleted rows; no foreign keys)
 ```
 
 ## Tables

@@ -6,7 +6,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 
 - `.env` holds real credentials and is git-ignored. Never commit it, paste it into issues, or print it in logs. `.env.example` contains placeholders only.
 - Tests and experiments never use the `public` schema. Use `internal/testdb` or `DB_SCHEMA=e2e_*` / `test_*`. `db.DropSchema` refuses other names on purpose.
-- Destructive UI actions (delete item, vehicle, kit or service) ask for confirmation.
+- Deletes ask for confirmation (items, vehicles, kits, services, stock changes, photos, archiving) and then offer Undo. Deleting from *Recently deleted* for good always asks. Removing a shopping-list entry doesn't ask; Undo covers it.
 
 ## Database
 

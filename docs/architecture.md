@@ -12,7 +12,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 | Package | Responsibility | Depends on |
 |---|---|---|
-| `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown | everything |
+| `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown, `-healthcheck` probe for Docker | everything |
 | `internal/config` | Reads env vars and the nearest `.env` file | `godotenv` |
 | `internal/db` | Opens the pgx pool (with optional `search_path`), runs goose migrations embedded from `migrations/`, guarded `DropSchema` for tests | `pgx`, `goose` |
 | `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export (stock and history), kit readiness, service due dates, purchase suggestions, starting stock (purchase vs initial), editing recorded stock changes, item usage (archive vs delete), date sanity checks | stdlib only |
@@ -45,4 +45,6 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 - **Quantities in base units** (pieces, ml, g) stored as `numeric(12,3)`. Conversion happens only at the edges.
 - **Stock ledger.** Every quantity change is a row in `stock_movements`, written in the same transaction as the quantity update. History, prices, stock value and "undo a service" all come from this.
 - **Items are grouped by their exact vehicle set.** "KTM 390 + KTM 1290" is one section and "KTM 390" another, which matches how people think about shared parts.
+- **Archive instead of delete** for items, vehicles and kits that other records refer to, so history and spending never change behind the user's back.
+- **Deletes go to a trash.** Each delete stores a JSON snapshot of the rows it removes in `trash`, in the same transaction, which gives every delete an Undo and a *Recently deleted* page. Restoring re-inserts the rows with their ids and redoes their stock effect (`store/trash.go`).
 - **Photos in Postgres** (`bytea`, resized to 1600 px plus a 320 px thumbnail). A `pg_dump` is a complete backup.

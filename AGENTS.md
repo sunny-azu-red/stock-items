@@ -9,7 +9,7 @@ A server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdl
 ## Layout
 
 ```
-cmd/pitbox/      main: config → db → migrations → HTTP server
+cmd/pitbox/           main: config → db → migrations → HTTP server (+ -healthcheck for Docker)
 internal/config/      env + .env loading
 internal/db/          pgx pool, goose migrations (migrations/*.sql, embedded)
 internal/stock/       pure domain logic: units, validation, grouping, exports, kits, suggestions
@@ -18,6 +18,8 @@ internal/web/         routes, middleware, handlers, templates/, static/
 internal/testdb/      throwaway schema helper for integration tests
 e2e/                  Playwright tests (Node is only used here)
 docs/                 documentation
+.github/workflows/    CI: checks, Docker smoke test, e2e; publishes the image to GHCR
+Dockerfile            distroless image; compose.yaml runs it (Portainer stack)
 ```
 
 ## Commands
@@ -30,6 +32,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | All checks (fmt, vet, staticcheck, tests) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |
+| Docker image | `docker build -t pitbox .` |
 | E2E screenshots | see [docs/development.md](docs/development.md#screenshots) |
 
 ## Hard rules

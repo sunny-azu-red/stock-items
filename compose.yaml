@@ -1,0 +1,23 @@
+# Pitbox for Docker Compose or a Portainer stack (see docs/deployment.md).
+#
+# Settings come from the environment: in Portainer, the stack's
+# "Environment variables"; with `docker compose`, a .env file next to this one.
+# DB_HOST and DB_PASSWORD are required; the rest have defaults.
+name: pitbox
+services:
+  pitbox:
+    image: ghcr.io/sunny-azu-red/pitbox:${PITBOX_TAG:-latest}
+    container_name: pitbox
+    restart: unless-stopped
+    ports:
+      - "${PITBOX_PORT:-8080}:8080"
+    environment:
+      DB_HOST: ${DB_HOST:?set DB_HOST to the Postgres server's LAN address}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stock_items}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      APP_CURRENCY: ${APP_CURRENCY:-EUR}
+      # Your time zone (e.g. Europe/Bucharest), so "today" for reminders,
+      # date checks and spending turns over at your midnight, not UTC's.
+      TZ: ${TZ:-UTC}

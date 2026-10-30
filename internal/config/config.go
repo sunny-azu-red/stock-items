@@ -62,13 +62,23 @@ func Load() (Config, error) {
 			Database: env("DB_DATABASE", "stock_items"),
 			Username: env("DB_USERNAME", "postgres"),
 			Password: os.Getenv("DB_PASSWORD"),
-			Schema:   strings.TrimSpace(os.Getenv("DB_SCHEMA")),
+			Schema:   schema(os.Getenv("DB_SCHEMA")),
 		},
 		Host:     env("HOST", "0.0.0.0"),
 		Port:     env("PORT", "8080"),
 		Currency: env("APP_CURRENCY", "EUR"),
 	}
 	return cfg, nil
+}
+
+// schema treats "public" as no schema: the database's own search_path then
+// applies, and nothing tries to create public (which needs CREATE on the
+// database even though it exists).
+func schema(v string) string {
+	if v = strings.TrimSpace(v); v == "public" {
+		return ""
+	}
+	return v
 }
 
 func env(key, def string) string {

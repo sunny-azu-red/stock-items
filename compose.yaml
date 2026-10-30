@@ -17,6 +17,7 @@ services:
       DB_DATABASE: ${DB_DATABASE:-stock_items}
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      DB_SCHEMA: ${DB_SCHEMA:-public}
       APP_CURRENCY: ${APP_CURRENCY:-EUR}
       # Your time zone (e.g. Europe/Bucharest), so "today" for reminders,
       # date checks and spending turns over at your midnight, not UTC's.

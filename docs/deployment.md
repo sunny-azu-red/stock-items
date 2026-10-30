@@ -73,7 +73,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
    |---|---|---|
    | `DB_HOST` | `192.168.1.10` | required: the Postgres server's LAN address |
    | `DB_PASSWORD` | | required |
-   | `DB_USERNAME`, `DB_DATABASE`, `DB_PORT` | | default `postgres`, `stock_items`, `5432` |
+   | `DB_USERNAME`, `DB_DATABASE`, `DB_PORT`, `DB_SCHEMA` | | default `postgres`, `stock_items`, `5432`, `public` |
    | `APP_CURRENCY` | `LEI` | default `EUR` |
    | `TZ` | `Europe/Bucharest` | default `UTC`; sets when "today" starts for reminders, date checks and spending |
    | `PITBOX_PORT` | `8080` | port on the Docker host |

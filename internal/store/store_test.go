@@ -886,3 +886,31 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		t.Errorf("legacy without other services: %d, want 12000 (unchanged)", km)
 	}
 }
+
+func TestLastPurchases(t *testing.T) {
+	s, ctx := newStore(t)
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 2})
+	older := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	newer := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	for _, in := range []stock.MovementInput{
+		{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(20.0), Supplier: "A", OccurredOn: &newer},
+		{ItemID: oil, Kind: stock.MovePurchase, Delta: 4000, TotalPrice: ptr(60.0), Supplier: "B", OccurredOn: &older},
+		{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, OccurredOn: &newer}, // no price: ignored
+	} {
+		if err := s.AddMovement(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.LastPurchases(ctx, []int64{oil, pads})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lp, ok := got[oil]
+	if len(got) != 1 || !ok || lp.UnitPrice != 0.02 || lp.Supplier != "A" || !lp.On.Equal(newer) {
+		t.Errorf("last purchases = %+v", got)
+	}
+	if empty, err := s.LastPurchases(ctx, nil); err != nil || len(empty) != 0 {
+		t.Errorf("no ids: %v, %v", empty, err)
+	}
+}

@@ -21,7 +21,8 @@
   - **Used**: take an amount from stock.
   - **Count**: set the stock to what is actually on the shelf.
 - **Copy as text** copies the current view in the plain format from the original request. That's handy for chats and notes.
-- **CSV** downloads the current view for a spreadsheet.
+- **CSV** downloads the current view for a spreadsheet: quantities, SKUs (with label and pack size), and for items bought with a price the last price (per piece, L or kg), the stock value at that price, and the date and shop of that purchase.
+- **Activity → CSV** downloads every stock change (or only the kind you filtered on) with amounts, prices, shops and services, e.g. for your own spending overview.
 - **Expiring** (dashboard tile and stock filter) lists items with stock left that are past or within 60 days of their best-before date. Used-up items don't show there.
 - To edit an item's amount, type `0` if there is none left. A blank field is refused so the stock is never emptied by accident.
 - Dates of purchases, stock changes and services can't be in the future (tomorrow is allowed for time zones) or before 1990. That keeps a year typo from becoming the last price or counting in the spending.

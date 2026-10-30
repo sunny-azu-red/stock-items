@@ -174,8 +174,16 @@ func (s *Server) stockExportCSV(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	ids := make([]int64, len(p.Items))
+	for i, it := range p.Items {
+		ids[i] = it.ID
+	}
+	last, err := s.store.LastPurchases(r.Context(), ids)
+	if err != nil {
+		return err
+	}
 	var buf bytes.Buffer
-	if err := stock.WriteCSV(&buf, p.Items, p.Vehicles); err != nil {
+	if err := stock.WriteCSV(&buf, p.Items, p.Vehicles, last); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

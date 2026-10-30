@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 // exampleInventory is the inventory from the original request.
@@ -130,18 +131,65 @@ func TestExportShoppingText(t *testing.T) {
 
 func TestWriteCSV(t *testing.T) {
 	min := 2.0
-	items := []Item{{ID: 7, Brand: "OEM", Name: "Oil Filter", Unit: UnitPiece, Quantity: 1, MinQuantity: &min,
-		VehicleIDs: []int64{1}, SKUs: []SKU{{Code: "77038005044", Kind: SKUOEM}}, Notes: "=HYPERLINK()"}}
+	pack := 1000.0
+	bought := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	items := []Item{
+		{ID: 7, Brand: "OEM", Name: "Oil Filter", Unit: UnitPiece, Quantity: 1, MinQuantity: &min,
+			VehicleIDs: []int64{1}, SKUs: []SKU{{Code: "77038005044", Kind: SKUOEM}}, Notes: "=HYPERLINK()"},
+		{ID: 8, Brand: "Motorex", Name: "Coolant", Unit: UnitML, Quantity: 1500,
+			SKUs: []SKU{{Code: "M30", Kind: SKUManufacturer, Label: "1 L bottle", PackSize: &pack}}},
+	}
+	last := map[int64]LastPurchase{8: {UnitPrice: 0.067, On: bought, Supplier: "moto24"}}
 	var buf bytes.Buffer
-	if err := WriteCSV(&buf, items, []Vehicle{{ID: 1, Name: "KTM 390"}}); err != nil {
+	if err := WriteCSV(&buf, items, []Vehicle{{ID: 1, Name: "KTM 390"}}, last); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("want header + 1 row, got %q", buf.String())
+	want := []string{
+		"id,brand,name,category,unit,quantity,quantity_display,min_quantity,expires_on,location,vehicles,skus,notes," +
+			"last_price,price_per,stock_value,last_bought_on,last_shop",
+		// Never bought with a price: empty money columns.
+		`7,OEM,Oil Filter,,piece,1,1x,2,,,KTM 390,OEM:77038005044,'=HYPERLINK(),,,,,`,
+		// Priced per litre, valued at the last price.
+		`8,Motorex,Coolant,,ml,1500,1.5 L,,,,,"Manufacturer:M30 (1 L bottle, pack 1 L)",,67.00,L,100.50,2026-10-01,moto24`,
 	}
-	wantRow := `7,OEM,Oil Filter,,piece,1,1x,2,,,KTM 390,OEM:77038005044,'=HYPERLINK()`
-	if lines[1] != wantRow {
-		t.Errorf("row = %q\nwant  %q", lines[1], wantRow)
+	if len(lines) != len(want) {
+		t.Fatalf("got %d lines, want %d:\n%s", len(lines), len(want), buf.String())
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("line %d = %q\nwant     %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestWriteMovementsCSV(t *testing.T) {
+	day := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
+	svc := int64(3)
+	moves := []Movement{
+		{ItemID: 8, ItemName: "Motorex Coolant", ItemUnit: UnitML, Kind: MovePurchase, Delta: 1000,
+			TotalPrice: ptr(67.0), Supplier: "moto24", Note: "-promo", OccurredOn: day},
+		{ItemID: 8, ItemName: "Motorex Coolant", ItemUnit: UnitML, Kind: MoveService, Delta: -500,
+			Note: "Coolant change", OccurredOn: day, ServiceRecordID: &svc, ServiceTitle: "Coolant change"},
+		{ItemID: 7, ItemName: "OEM Oil Filter", ItemUnit: UnitPiece, Kind: MoveUse, Delta: -1, OccurredOn: day},
+	}
+	var buf bytes.Buffer
+	if err := WriteMovementsCSV(&buf, moves); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"date,item_id,item,kind,change,change_display,unit,total_price,unit_price,price_per,shop,note,service",
+		"2026-10-29,8,Motorex Coolant,purchase,1000,+1 L,ml,67.00,67.00,L,moto24,'-promo,",
+		"2026-10-29,8,Motorex Coolant,service,-500,−500 ml,ml,,,,,,Coolant change",
+		"2026-10-29,7,OEM Oil Filter,use,-1,−1x,piece,,,,,,",
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != len(want) {
+		t.Fatalf("got %d lines, want %d:\n%s", len(lines), len(want), buf.String())
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("line %d = %q\nwant     %q", i, lines[i], want[i])
+		}
 	}
 }

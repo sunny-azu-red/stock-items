@@ -165,8 +165,12 @@ func TestStockFilterAndExport(t *testing.T) {
 		t.Errorf("export.txt =\n%s\nwant\n%s", rec.Body.String(), want)
 	}
 
+	oil := itemID(t, a.store, "Silkolene")
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+		"total_price": {"19.90"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}}), http.StatusSeeOther)
 	rec = a.get("/stock/export.csv")
-	expect(t, rec, http.StatusOK, "id,brand,name", "Hiflofiltro")
+	expect(t, rec, http.StatusOK, "id,brand,name", "last_price,price_per,stock_value,last_bought_on,last_shop", "Hiflofiltro",
+		",19.90,L,30.35,2026-10-29,Moto shop")
 	if ct := rec.Header().Get("Content-Disposition"); !strings.Contains(ct, "stock-2026-10-29.csv") {
 		t.Errorf("Content-Disposition = %q", ct)
 	}
@@ -752,4 +756,23 @@ func TestDeletingAServicePutsTheOdometerBack(t *testing.T) {
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="120000"`)
 	expect(t, a.post(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="10000"`)
+}
+
+func TestActivityExportCSV(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+		"total_price": {"19.90"}, "supplier": {"Moto shop"}}), http.StatusSeeOther)
+	expect(t, a.get("/activity?kind=purchase"), http.StatusOK, `href="/activity/export.csv?kind=purchase"`)
+
+	rec := a.get("/activity/export.csv?kind=purchase")
+	expect(t, rec, http.StatusOK, "date,item_id,item,kind,change", "Silkolene 15W50 PRO 4 XP,purchase,1000,+1 L,ml,19.90,19.90,L,Moto shop")
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if strings.Contains(rec.Body.String(), ",initial,") {
+		t.Error("kind filter not applied")
+	}
+	expect(t, a.get("/activity/export.csv"), http.StatusOK, ",initial,")
 }

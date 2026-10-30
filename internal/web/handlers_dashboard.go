@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"net/http"
+	"slices"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -83,16 +85,19 @@ type activityPage struct {
 	Kinds     []stock.MovementKind
 }
 
-func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
+var activityKinds = []stock.MovementKind{stock.MovePurchase, stock.MoveUse, stock.MoveService, stock.MoveCorrection, stock.MoveInitial}
+
+// activityKind reads the ?kind= filter, ignoring unknown kinds.
+func activityKind(r *http.Request) stock.MovementKind {
 	kind := stock.MovementKind(r.URL.Query().Get("kind"))
-	kinds := []stock.MovementKind{stock.MovePurchase, stock.MoveUse, stock.MoveService, stock.MoveCorrection, stock.MoveInitial}
-	valid := false
-	for _, k := range kinds {
-		valid = valid || k == kind
+	if slices.Contains(activityKinds, kind) {
+		return kind
 	}
-	if !valid {
-		kind = ""
-	}
+	return ""
+}
+
+func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
+	kind, kinds := activityKind(r), activityKinds
 	moves, err := s.store.ListMovements(r.Context(), store.MovementFilter{Kind: kind, Limit: 300})
 	if err != nil {
 		return err
@@ -101,4 +106,20 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 		Movements: moves, Kind: string(kind), Kinds: kinds,
 	}})
 	return nil
+}
+
+// activityExportCSV downloads every stock change (of the chosen kind).
+func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error {
+	moves, err := s.store.ListMovements(r.Context(), store.MovementFilter{Kind: activityKind(r)})
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := stock.WriteMovementsCSV(&buf, moves); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="history-`+s.now().Format("2006-01-02")+`.csv"`)
+	_, err = buf.WriteTo(w)
+	return err
 }

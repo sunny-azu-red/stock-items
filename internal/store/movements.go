@@ -171,6 +171,33 @@ func (s *Store) CountPurchases(ctx context.Context, itemID int64) (int, error) {
 	return n, err
 }
 
+// LastPurchases returns the most recent priced purchase of each of the
+// given items. Items never bought with a price are missing from the map.
+func (s *Store) LastPurchases(ctx context.Context, itemIDs []int64) (map[int64]stock.LastPurchase, error) {
+	out := map[int64]stock.LastPurchase{}
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (item_id) item_id, (total_price / delta)::float8, occurred_on, supplier
+		FROM stock_movements
+		WHERE item_id = ANY($1) AND kind = 'purchase' AND total_price IS NOT NULL AND delta > 0
+		ORDER BY item_id, occurred_on DESC, id DESC`, itemIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var lp stock.LastPurchase
+		if err := rows.Scan(&id, &lp.UnitPrice, &lp.On, &lp.Supplier); err != nil {
+			return nil, err
+		}
+		out[id] = lp
+	}
+	return out, rows.Err()
+}
+
 // LastUnitPrice returns the price per base unit of the item's most recent
 // priced purchase, or nil.
 func (s *Store) LastUnitPrice(ctx context.Context, itemID int64) (*float64, error) {

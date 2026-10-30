@@ -4,6 +4,9 @@
     <h1>Activity</h1>
     <p class="sub">Every change to your stock, newest first.</p>
   </div>
+  <div class="actions">
+    <a class="btn" href="/activity/export.csv{{with $d.Kind}}?kind={{.}}{{end}}" title="Download as CSV">{{icon "download"}} CSV</a>
+  </div>
 </div>
 <div class="chips mb" role="group" aria-label="Filter">
   <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="/activity">Everything</a>

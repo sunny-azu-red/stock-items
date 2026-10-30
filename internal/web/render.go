@@ -303,13 +303,8 @@ func (s *Server) formatUnitPrice(p *float64, u stock.Unit) string {
 	if p == nil {
 		return "—"
 	}
-	switch u {
-	case stock.UnitML:
-		return s.formatMoney(*p*1000) + " / L"
-	case stock.UnitGram:
-		return s.formatMoney(*p*1000) + " / kg"
-	}
-	return s.formatMoney(*p) + " / piece"
+	price, per := stock.PricePer(*p, u)
+	return s.formatMoney(price) + " / " + per
 }
 
 // formatDecimal renders f with two decimals and thousands separators.

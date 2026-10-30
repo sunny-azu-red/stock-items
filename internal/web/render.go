@@ -189,7 +189,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 		v.Flash = s.popFlash(w, r)
 	}
 	if vs, err := s.store.ListVehicles(r.Context()); err == nil {
-		v.NavVehicles = vs
+		v.NavVehicles = activeVehicles(vs)
 	}
 	if list, err := s.store.ListShopping(r.Context()); err == nil {
 		v.ShoppingCount = len(list)

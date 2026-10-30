@@ -101,6 +101,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /vehicles/{id}/edit", h(s.vehicleEdit))
 	mux.HandleFunc("POST /vehicles/{id}", h(s.vehicleUpdate))
 	mux.HandleFunc("POST /vehicles/{id}/delete", h(s.vehicleDelete))
+	mux.HandleFunc("POST /vehicles/{id}/archive", h(s.vehicleArchive))
+	mux.HandleFunc("POST /vehicles/{id}/restore", h(s.vehicleRestore))
 	mux.HandleFunc("POST /vehicles/{id}/odometer", h(s.vehicleOdometer))
 
 	mux.HandleFunc("GET /kits/new", h(s.kitNew))

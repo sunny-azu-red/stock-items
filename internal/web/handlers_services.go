@@ -41,7 +41,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		return err
 	}
 	describeRows(f.Parts, items)
-	p := serviceFormPage{Vehicles: vehicles}
+	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID)}
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
 			p.Vehicle = &vehicles[i]
@@ -272,6 +272,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	if p.Vehicles, err = s.store.ListVehicles(ctx); err != nil {
 		return err
 	}
+	p.Vehicles = activeVehicles(p.Vehicles, p.VehicleID)
 	kits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID})
 	if err != nil {
 		return err

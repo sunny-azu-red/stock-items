@@ -1,15 +1,15 @@
-{{define "content"}}
+{{define "content"}}{{$d := .Data}}
 <div class="page-head">
   <div>
-    <h1>Vehicles</h1>
-    <p class="sub">Items are tagged with the vehicles they fit.</p>
+    <h1>{{if $d.ShowArchived}}Archived vehicles{{else}}Vehicles{{end}}</h1>
+    <p class="sub">{{if $d.ShowArchived}}Their services and kits are kept. Open one to restore it.{{else}}Items are tagged with the vehicles they fit.{{end}}</p>
   </div>
   <div class="actions"><a class="btn btn-primary" href="/vehicles/new">{{icon "plus"}} Add vehicle</a></div>
 </div>
 
-{{if .Data}}
+{{if $d.Cards}}
 <div class="grid grid-3">
-  {{range .Data}}{{$v := .Vehicle}}
+  {{range $d.Cards}}{{$v := .Vehicle}}
   <a class="card vehicle-card" href="/vehicles/{{$v.ID}}" style="{{chipStyle $v.Color}}">
     <span class="body">
       <span class="name">{{icon $v.Kind.Icon}} {{$v.Name}}</span>
@@ -24,7 +24,13 @@
   </a>
   {{end}}
 </div>
-<p class="mt"><a class="btn btn-ghost" href="/activity">{{icon "history"}} Activity log</a></p>
+<p class="mt flex">
+  <a class="btn btn-ghost" href="/activity">{{icon "history"}} Activity log</a>
+  {{if $d.ShowArchived}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
+  {{else if $d.Archived}}<a class="btn btn-ghost" href="/vehicles?archived=1">{{icon "archive"}} {{plural $d.Archived "archived vehicle"}}</a>{{end}}
+</p>
+{{else if $d.ShowArchived}}
+<div class="card card-body muted">No archived vehicles. <a href="/vehicles">Back to vehicles</a></div>
 {{else}}
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "No vehicles yet" "Text" "Add your motorcycles and cars, then tag stock items with the vehicles they fit." "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
 {{end}}

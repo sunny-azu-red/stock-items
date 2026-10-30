@@ -1197,3 +1197,36 @@ func TestBuyingSomethingYouAlreadyHave(t *testing.T) {
 		t.Errorf("oil = %v, want 1525", it.Quantity)
 	}
 }
+
+func TestArchiveVehicleFlow(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	path := "/vehicles/" + itoa(k390)
+	expect(t, a.get(path), http.StatusOK, `action="`+path+`/delete"`)
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"},
+		"odometer_km": {"12000"}}), http.StatusSeeOther)
+	page := a.get(path)
+	expect(t, page, http.StatusOK, `action="`+path+`/archive"`)
+	expectNot(t, page, `action="`+path+`/delete"`)
+
+	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Archived", `action="`+path+`/restore"`)
+	expectNot(t, a.get("/vehicles"), `href="`+path+`"`)
+	expect(t, a.get("/vehicles"), http.StatusOK, "1 archived vehicle")
+	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, `href="`+path+`"`)
+	// Pickers leave it out; items tagged with it keep the tag when saved.
+	form := a.get("/services/new")
+	expect(t, form, http.StatusOK, ">KTM 1290</option>")
+	expectNot(t, form, ">KTM 390</option>")
+	pads := itemID(t, a.store, "Rear Brake")
+	expect(t, a.get("/items/"+itoa(pads)+"/edit"), http.StatusOK, `name="vehicle" value="`+itoa(k390)+`" checked`)
+
+	// The odometer can't go below the service's reading.
+	rec := a.post(path+"/odometer", url.Values{"odometer_km": {"11000"}})
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "12,000 km") {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.get("/vehicles"), http.StatusOK, `href="`+path+`"`)
+}

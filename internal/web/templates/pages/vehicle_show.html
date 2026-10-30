@@ -1,11 +1,11 @@
 {{define "content"}}{{$d := .Data}}{{$v := $d.Vehicle}}
-<a class="back" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
+<a class="back" href="/vehicles{{if $v.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Vehicles</a>
 <div class="page-head">
   <div class="vehicle-hero" style="{{chipStyle $v.Color}}">
     <span class="avatar">{{icon $v.Kind.Icon}}</span>
     <div>
       <h1>{{$v.Name}}</h1>
-      <p class="sub">{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</p>
+      <p class="sub">{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}{{if $v.Archived}} · <span class="badge badge-muted">{{icon "archive"}} Archived {{date $v.ArchivedAt}}</span>{{end}}</p>
     </div>
   </div>
   <div class="actions">
@@ -63,9 +63,19 @@
       {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
     </section>
 
-    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Its kits and service history are deleted too. Items stay on stock.">
+    {{if $v.Archived}}
+    <form method="post" action="/vehicles/{{$v.ID}}/restore">
+      <button class="btn btn-block" type="submit">{{icon "archive-restore"}} Restore vehicle</button>
+    </form>
+    {{else if or $d.ServiceCount $d.KitCount}}
+    <form method="post" action="/vehicles/{{$v.ID}}/archive" data-confirm="Archive {{$v.Name}}? It leaves the vehicle lists, pickers and reminders. Its {{plural $d.ServiceCount "service"}} and {{plural $d.KitCount "kit"}} are kept, and you can restore it.">
+      <button class="btn btn-danger btn-block" type="submit">{{icon "archive"}} Archive vehicle</button>
+    </form>
+    {{else}}
+    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Items stay on stock.">
       <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete vehicle</button>
     </form>
+    {{end}}
   </div>
 </div>
 {{end}}

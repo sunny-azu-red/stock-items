@@ -1,8 +1,10 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -68,24 +70,44 @@ func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, statu
 	}})
 }
 
+// vehicleCard is one vehicle on the vehicles page.
+type vehicleCard struct {
+	Vehicle stock.Vehicle
+	Kits    int
+	Next    *kitView
+}
+
+type vehiclesPage struct {
+	Cards        []vehicleCard
+	Archived     int  // how many vehicles are archived
+	ShowArchived bool // listing the archived ones
+}
+
 func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	vehicles, err := s.store.ListVehicles(ctx)
+	all, err := s.store.ListVehicles(ctx)
 	if err != nil {
 		return err
+	}
+	// The archived ones are listed on their own, from a link under the list.
+	showArchived := r.URL.Query().Get("archived") == "1"
+	var vehicles []stock.Vehicle
+	archived := 0
+	for _, v := range all {
+		if v.Archived() {
+			archived++
+		}
+		if v.Archived() == showArchived {
+			vehicles = append(vehicles, v)
+		}
 	}
 	kits, err := s.store.ListKits(ctx, store.KitFilter{})
 	if err != nil {
 		return err
 	}
-	type card struct {
-		Vehicle  stock.Vehicle
-		Kits     int
-		Next     *kitView
-		Services int
-	}
+
 	views := s.kitViews(kits, vehicles)
-	cards := make([]card, len(vehicles))
+	cards := make([]vehicleCard, len(vehicles))
 	for i, v := range vehicles {
 		cards[i].Vehicle = v
 		for j := range views {
@@ -99,7 +121,8 @@ func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 	}
-	s.render(w, r, http.StatusOK, "vehicles", View{Title: "Vehicles", Nav: "vehicles", Data: cards})
+	s.render(w, r, http.StatusOK, "vehicles", View{Title: "Vehicles", Nav: "vehicles",
+		Data: vehiclesPage{Cards: cards, Archived: archived, ShowArchived: showArchived}})
 	return nil
 }
 
@@ -178,10 +201,48 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteVehicle(r.Context(), id); err != nil {
+	var conflict *store.ConflictError
+	if err := s.store.DeleteVehicle(r.Context(), id); errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, "/vehicles", "Deleted "+v.Name+". Its parts are still on stock.")
+	return nil
+}
+
+// vehicleArchive hides a vehicle that has services or kits.
+func (s *Server) vehicleArchive(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	v, err := s.store.GetVehicle(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if err := s.store.ArchiveVehicle(r.Context(), id); err != nil {
+		return err
+	}
+	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Archived "+v.Name+". Its services and kits stay; restore it any time.")
+	return nil
+}
+
+func (s *Server) vehicleRestore(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	v, err := s.store.GetVehicle(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if err := s.store.RestoreVehicle(r.Context(), id); err != nil {
+		return err
+	}
+	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Restored "+v.Name)
 	return nil
 }
 
@@ -199,7 +260,12 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 		http.Redirect(w, r, fmt.Sprintf("/vehicles/%d", id), http.StatusSeeOther)
 		return nil
 	}
-	if err := s.store.SetOdometer(r.Context(), id, *km); err != nil {
+	var conflict *store.ConflictError
+	if err := s.store.SetOdometer(r.Context(), id, *km); errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, s.back(r, fmt.Sprintf("/vehicles/%d", id)), "Odometer set to "+stock.FormatKm(*km))
@@ -214,6 +280,8 @@ type vehiclePage struct {
 	Services   []stock.ServiceRecord
 	ItemCount  int
 	StockQuery string
+	// What refers to the vehicle: with any, it is archived, not deleted.
+	ServiceCount, KitCount int
 }
 
 func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
@@ -242,13 +310,30 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	serviceCount, kitCount, err := s.store.VehicleUsage(ctx, id)
+	if err != nil {
+		return err
+	}
 	p := vehiclePage{
+		ServiceCount: serviceCount, KitCount: kitCount,
 		Vehicle: v, Kits: s.kitViews(kits, vehicles), Sections: stock.GroupByVehicles(items, vehicles),
 		VehicleMap: vehicleMap(vehicles), Services: services, ItemCount: len(items),
 		StockQuery: "v=" + strconv.FormatInt(id, 10),
 	}
 	s.render(w, r, http.StatusOK, "vehicle_show", View{Title: v.Name, Nav: "vehicles", Data: p})
 	return nil
+}
+
+// activeVehicles leaves archived vehicles out of a list or picker, except
+// the ones in keep (e.g. already chosen), so saving a form never drops them.
+func activeVehicles(vehicles []stock.Vehicle, keep ...int64) []stock.Vehicle {
+	var out []stock.Vehicle
+	for _, v := range vehicles {
+		if !v.Archived() || slices.Contains(keep, v.ID) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // kitView is a kit with its computed readiness and due state.

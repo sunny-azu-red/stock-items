@@ -183,7 +183,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 		title = "Edit " + f.Name
 	}
 	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
-		Form: f, IsNew: isNew, Vehicles: vehicles, ItemGroups: itemOptions(items, vehicle),
+		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), ItemGroups: itemOptions(items, vehicle),
 	}})
 	return nil
 }

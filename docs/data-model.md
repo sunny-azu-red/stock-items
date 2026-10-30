@@ -13,7 +13,7 @@ items ─< shopping_entries (or free text)
 
 ## Tables
 
-**vehicles:** name (unique, case-insensitive), kind (`motorcycle`/`car`/`other`), make, model, year, plate, VIN, chip colour, `odometer_km`, notes.
+**vehicles:** name (unique, case-insensitive), kind (`motorcycle`/`car`/`other`), make, model, year, plate, VIN, chip colour, `odometer_km`, notes, `archived_at`.
 
 **items:** name, brand, category, `unit` (`piece`/`ml`/`g`), `quantity`, `min_quantity` (low-stock threshold), `expires_on`, location, notes.
 - `quantity >= 0` is enforced by a check constraint.
@@ -24,7 +24,8 @@ items ─< shopping_entries (or free text)
 **item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`ean`/`retailer`/`other`; `ean` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
 
 **item_vehicles:** many-to-many tags.
-- Deleting a vehicle removes its tags, but its items stay. Its kits and service records are deleted too. The parts those services used stay used: their `service` movements remain in the ledger (with `service_record_id` cleared and the service title as note).
+- A vehicle with services or kits can't be deleted (`store.DeleteVehicle` returns a `ConflictError`); it is archived instead (`ArchiveVehicle`): it leaves the vehicle lists, pickers, filters and the sidebar, and its kits leave reminders and suggestions (`ListKits` skips them unless asked by id or vehicle), but its services, kits, labour costs and item tags stay. `ListVehicles` returns archived vehicles too, flagged, for chips and lookups. A vehicle without either is deleted, which only removes its tags.
+- Older versions deleted vehicles with history, cascading to their kits and services; the parts those services used stayed in the ledger with `service_record_id` cleared and the service title as note, and can be edited like any stock change.
 - An item with no tags is "General" stock.
 
 **Deleting an item:** the foreign keys on `item_id` cascade, so a delete would also remove its movements, kit lines and shopping entry. `store.DeleteItem` therefore refuses an item with purchases, service movements or kit lines (`store.ItemUsage`) with a `ConflictError`. Such items are archived instead (`ArchiveItem` sets `archived_at` and removes the shopping entry). `ListItems` hides archived items unless `ItemFilter.Archived` asks for them; lookups by id (`GetItem`) always find them. Kit lines carry `Archived`: kit readiness, `SuggestPurchases`, the kit shortfall and a service started from the kit skip them. Archived items take no stock changes and can't go on the shopping list (`AddShopping`/`EnsureShopping` return `ErrNotFound`), and the vehicles' item counts leave them out.
@@ -54,7 +55,7 @@ items ─< shopping_entries (or free text)
 1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The exceptions change recorded movements together with their effect, so the sum still holds: deleting or editing a service (5), and editing or deleting a single movement (`store.UpdateMovement`/`DeleteMovement`, see 6).
 2. A movement can never make a quantity negative. You get `InsufficientStockError` instead, and the transaction rolls back. A service with one missing part logs nothing.
 3. An item's unit cannot change once it has stock history, is used in a kit, or has a quantity on the shopping list.
-4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting a service that moved it (`odometer_moved`) puts it back to the highest of `odometer_before` and the vehicle's other services' readings, or to no reading if there are none, unless the odometer was changed since. Services that didn't move it, and services logged before `odometer_moved` existed, leave it alone.
+4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting a service that moved it (`odometer_moved`) puts it back to the highest of `odometer_before` and the vehicle's other services' readings, or to no reading if there are none, unless the odometer was changed since. Services that didn't move it, and services logged before `odometer_moved` existed, leave it alone. A vehicle's reading can't be changed to less than its highest service reading, and a service's reading must fit between the services logged on earlier and later days (`checkVehicleOdometer`, `checkServiceOdometer`).
 5. Deleting a service deletes its `service` movements and puts the quantities back on stock. Editing a service (`store.UpdateService`) does the same for its old parts, takes the new ones, and redoes its odometer change, in one transaction; its vehicle can't change.
 6. A single movement other than `service` can be edited (amount, price, shop, date, note) or deleted; the item's quantity moves by the difference. The change is refused if the quantity would go below zero. A `correction` is edited as a signed change (added or took away, and how much), and `initial` stock that gets a price or shop becomes a `purchase` (`stock.ApplyEdit`).
 

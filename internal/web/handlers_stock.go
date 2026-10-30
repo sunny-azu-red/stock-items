@@ -135,7 +135,7 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	if err != nil {
 		return stockPage{}, err
 	}
-	p := stockPage{Filter: f, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Items: items}
+	p := stockPage{Filter: f, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), VehicleMap: vehicleMap(vehicles), Items: items}
 	for _, v := range vehicles {
 		if f.HasVehicle(v.ID) {
 			p.Selected = append(p.Selected, v)

@@ -199,7 +199,7 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 	// Always offer an empty SKU row to type into.
 	f.SKUs = append(f.SKUs, skuRow{Kind: string(stock.SKUOEM)})
 	return itemFormPage{
-		Form: f, IsNew: isNew, Vehicles: vehicles, Brands: brands, Categories: cats, Locations: locs,
+		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), Brands: brands, Categories: cats, Locations: locs,
 		Units: stock.Units, SubUnits: stock.SubUnits, SKUKinds: stock.SKUKinds,
 	}, nil
 }

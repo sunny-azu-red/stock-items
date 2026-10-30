@@ -83,6 +83,9 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := checkServiceKit(ctx, tx, in); err != nil {
 			return err
 		}
+		if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
+			return err
+		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
@@ -113,6 +116,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			return notFound(err)
 		}
 		if err := checkServiceKit(ctx, tx, in); err != nil {
+			return err
+		}
+		if err := checkServiceOdometer(ctx, tx, in, id); err != nil {
 			return err
 		}
 		// Lock the old and new parts together in id order, like CreateService.

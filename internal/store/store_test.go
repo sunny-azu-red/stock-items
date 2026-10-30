@@ -1160,7 +1160,8 @@ func TestVehicleCountsActiveItems(t *testing.T) {
 }
 
 func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
-	s, ctx := newStore(t)
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
 	k390 := mustVehicle(t, s, "KTM 390")
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
 	in := stock.ServiceInput{VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
@@ -1168,7 +1169,9 @@ func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
 	if _, err := s.CreateService(ctx, in); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteVehicle(ctx, k390); err != nil {
+	// Vehicles with services can no longer be deleted, but older versions
+	// deleted them, leaving the service's parts without a service.
+	if _, err := pool.Exec(ctx, `DELETE FROM vehicles WHERE id = $1`, k390); err != nil {
 		t.Fatal(err)
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
@@ -1365,5 +1368,109 @@ func TestLinkShopping(t *testing.T) {
 	}
 	if _, err := s.GetShopping(ctx, other); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("free entry should be gone: %v", err)
+	}
+}
+
+func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
+	s, ctx := newStore(t)
+	old, spare := mustVehicle(t, s, "Old bike"), mustVehicle(t, s, "Spare")
+	in := stock.ServiceInput{VehicleID: old, Title: "Chain", PerformedOn: time.Now(), LaborCost: ptr(80.0)}
+	in.Normalize()
+	if _, err := s.CreateService(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	kit := stock.KitInput{VehicleID: old, Name: "Oil service", IntervalMonths: ptr(12)}
+	kit.Normalize()
+	if _, err := s.CreateKit(ctx, kit); err != nil {
+		t.Fatal(err)
+	}
+	var conflict *store.ConflictError
+	if err := s.DeleteVehicle(ctx, old); !errors.As(err, &conflict) {
+		t.Fatalf("delete with history: want ConflictError, got %v", err)
+	}
+	if svc, kits, _ := s.VehicleUsage(ctx, old); svc != 1 || kits != 1 {
+		t.Errorf("usage = %d services, %d kits", svc, kits)
+	}
+	if err := s.ArchiveVehicle(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.GetVehicle(ctx, old); !v.Archived() {
+		t.Error("vehicle should be archived")
+	}
+	if kits, _ := s.ListKits(ctx, store.KitFilter{}); len(kits) != 0 {
+		t.Errorf("kits of archived vehicles should be left out: %+v", kits)
+	}
+	if kits, _ := s.ListKits(ctx, store.KitFilter{VehicleID: old}); len(kits) != 1 {
+		t.Errorf("the vehicle's own kits = %+v", kits)
+	}
+	if st, _ := s.GetStats(ctx, time.Now()); st.Spent12m != 80 {
+		t.Errorf("labour of an archived vehicle still counts: %+v", st)
+	}
+	if err := s.RestoreVehicle(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteVehicle(ctx, spare); err != nil {
+		t.Errorf("delete without history: %v", err)
+	}
+}
+
+func TestOdometerGuards(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	vin.Normalize()
+	v, err := s.CreateVehicle(ctx, vin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC) }
+	service := func(on time.Time, km int) (int64, error) {
+		in := stock.ServiceInput{VehicleID: v, Title: "Check", PerformedOn: on, OdometerKm: &km}
+		in.Normalize()
+		return s.CreateService(ctx, in)
+	}
+	if _, err := service(day(10), 12000); err != nil {
+		t.Fatal(err)
+	}
+	var conflict *store.ConflictError
+	tests := []struct {
+		name string
+		on   time.Time
+		km   int
+		ok   bool
+	}{
+		{"later and higher", day(20), 13000, true},
+		{"later but lower", day(25), 11000, false},
+		{"earlier and lower", day(1), 11000, true},
+		{"earlier but higher", day(5), 12500, false},
+		{"same day, either way", day(10), 11900, true},
+	}
+	for _, tt := range tests {
+		_, err := service(tt.on, tt.km)
+		if tt.ok && err != nil {
+			t.Errorf("%s: %v", tt.name, err)
+		}
+		if !tt.ok && (!errors.As(err, &conflict) || conflict.Field != "odometer_km") {
+			t.Errorf("%s: want odometer conflict, got %v", tt.name, err)
+		}
+	}
+
+	// The vehicle's reading can't go below a service's, but other edits
+	// still save while it stays as it is.
+	if err := s.SetOdometer(ctx, v, 12500); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "13,000 km") {
+		t.Errorf("lower than a service: want conflict naming 13,000 km, got %v", err)
+	}
+	if err := s.SetOdometer(ctx, v, 13500); err != nil {
+		t.Fatal(err)
+	}
+	upd := vin
+	upd.Name = "KTM 390 Duke"
+	upd.OdometerKm = ptr(13500)
+	if err := s.UpdateVehicle(ctx, v, upd); err != nil {
+		t.Errorf("rename: %v", err)
+	}
+	upd.OdometerKm = ptr(9000)
+	if err := s.UpdateVehicle(ctx, v, upd); !errors.As(err, &conflict) {
+		t.Errorf("lowering through the form: want conflict, got %v", err)
 	}
 }

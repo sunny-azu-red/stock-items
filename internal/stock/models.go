@@ -61,7 +61,13 @@ type Vehicle struct {
 	ItemCount  int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	// ArchivedAt is set for vehicles no longer kept: they leave the lists
+	// and pickers, but their services and kits stay.
+	ArchivedAt *time.Time
 }
+
+// Archived reports whether the vehicle has been archived.
+func (v Vehicle) Archived() bool { return v.ArchivedAt != nil }
 
 // Subtitle is "Make Model (Year)" with empty parts left out.
 func (v Vehicle) Subtitle() string {

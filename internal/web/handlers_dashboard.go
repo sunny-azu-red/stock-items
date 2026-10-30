@@ -51,7 +51,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	p := dashboardPage{
-		Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), ItemCount: len(items), KitCount: len(kits),
+		Vehicles: activeVehicles(vehicles), VehicleMap: vehicleMap(vehicles), ItemCount: len(items), KitCount: len(kits),
 		Recent: recent, Stats: stats, SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping))),
 		ExpiringDays: store.ExpiringDays,
 	}

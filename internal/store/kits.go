@@ -17,7 +17,8 @@ type KitFilter struct {
 }
 
 // ListKits returns service kits with their lines (and current stock) and
-// the last service performed with each kit.
+// the last service performed with each kit. Kits of archived vehicles are
+// left out unless they are asked for by id or vehicle.
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
@@ -36,6 +37,8 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		WHERE true`
 	if len(f.IDs) > 0 {
 		sql += " AND k.id = ANY(" + args.add(f.IDs) + ")"
+	} else if f.VehicleID == 0 {
+		sql += " AND v.archived_at IS NULL"
 	}
 	if f.VehicleID != 0 {
 		sql += " AND k.vehicle_id = " + args.add(f.VehicleID)

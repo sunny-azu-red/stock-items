@@ -31,15 +31,15 @@
   </div>
 
   <div class="form-section">
-    <h2>Fits these vehicles</h2>
     {{if $d.Vehicles}}
+    <div class="label-row"><h2>Fits these vehicles</h2>{{template "tip" (dict "ID" "vehicles-tip" "Text" "Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).")}}</div>
     <div class="chips" role="group" aria-label="Vehicles">
       {{range $d.Vehicles}}
       <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="vehicle" value="{{.ID}}" {{if hasID $f.VehicleIDs .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
       {{end}}
     </div>
-    <p class="hint mt">Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).</p>
     {{else}}
+    <h2>Fits these vehicles</h2>
     <p class="hint">No vehicles yet. <a href="/vehicles/new">Add one</a> to tag items with it.</p>
     {{end}}
   </div>
@@ -67,14 +67,13 @@
         {{template "err" (index $e "quantity")}}
       </div>
       <div class="field{{if index $e "min_quantity"}} has-error{{end}}">
-        <label for="min_quantity">Keep at least</label>
+        <div class="label-row"><label for="min_quantity">Keep at least</label>{{template "tip" (dict "ID" "min-tip" "Text" "You get a low-stock warning below this.")}}</div>
         <div class="qty-input">
-          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="optional">
+          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="optional" aria-describedby="min-tip">
           <select class="input" name="min_unit" data-subunit aria-label="Unit">
             {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.MinUnit}}selected{{end}}>{{.Label}}</option>{{end}}
           </select>
         </div>
-        <p class="hint">You get a low-stock warning below this.</p>
         {{template "err" (index $e "min_quantity")}}
       </div>
       <div class="field{{if index $e "expires_on"}} has-error{{end}}">
@@ -92,8 +91,7 @@
 
   {{if $d.IsNew}}
   <div class="form-section">
-    <h2>Bought it just now?</h2>
-    <p class="hint mb">Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
+    <div class="label-row"><h2>Bought it just now?</h2>{{template "tip" (dict "ID" "bought-tip" "Text" "Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.")}}</div>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
         <label for="total_price">Total price ({{.Currency}})</label>
@@ -114,8 +112,7 @@
   {{end}}
 
   <div class="form-section">
-    <h2>SKUs / part numbers</h2>
-    <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
+    <div class="label-row"><h2>SKUs / part numbers</h2>{{template "tip" (dict "ID" "skus-tip" "Text" "Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).")}}</div>
     {{template "err" (index $e "skus")}}
     <div class="rows" id="sku-rows">
       <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Label</span><span>Pack size</span><span></span></div>

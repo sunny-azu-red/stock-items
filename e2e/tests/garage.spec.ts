@@ -72,6 +72,7 @@ test("set up vehicles and the example inventory", async ({ page }) => {
         { code: "SK-80085", kind: "manufacturer", label: "1 L" },
         { code: "SK-80086", kind: "manufacturer", label: "4 L" },
         { code: "SK-80087", kind: "manufacturer", label: "20 L" },
+        { code: "SK-80088", kind: "manufacturer", label: "60 L" },
       ],
     },
   ];
@@ -126,18 +127,18 @@ test("filter stock by vehicle and copy it as text", async ({ page }, testInfo) =
   await expect(page.locator(".item-row")).toHaveCount(1);
   await expect(page.locator(".item-row")).toContainText("Hiflofiltro");
 
-  // Only two part numbers show in a row; "+1 more" reveals the rest in place.
+  // Only three part numbers show in a row; "+1 more" reveals the rest in place.
   const silk = page.locator(".item-row").filter({ hasText: "Silkolene" });
   await page.goto("/stock");
-  await expect(silk.locator(".sku:visible")).toHaveCount(2);
+  await expect(silk.locator(".sku:visible")).toHaveCount(3);
   await silk.getByRole("link", { name: "Show 1 more part number" }).click();
   await expect(page).toHaveURL(/\/stock$/);
-  await expect(silk.locator(".sku:visible")).toHaveCount(3);
-  await expect(silk.getByRole("link", { name: "SK-80087" })).toBeFocused();
+  await expect(silk.locator(".sku:visible")).toHaveCount(4);
+  await expect(silk.getByRole("link", { name: "SK-80088" })).toBeFocused();
 
-  // The category heads the item page and links back to the filtered stock.
+  // The category sits next to the vehicle chips and links back to the filtered stock.
   await silk.locator(".item-name").click();
-  await page.locator(".eyebrow").click();
+  await page.locator(".item-category").click();
   await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)fluids/);
   await expect(page.locator(".item-row")).toHaveCount(1);
 });
@@ -306,6 +307,27 @@ test("part rows keep a quantity hint until an item is chosen", async ({ page }) 
   await expect(qtys.first()).not.toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
   await items.first().selectOption({ label: "Choose an item…" });
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+});
+
+test("form hints open from the question mark", async ({ page }) => {
+  await page.goto("/items/new");
+  const hint = page.getByRole("tooltip", { name: "You get a low-stock warning below this." });
+  await expect(hint).toBeHidden();
+  // The input stays described by the hint for screen readers.
+  await expect(page.getByLabel("Keep at least")).toHaveAccessibleDescription("You get a low-stock warning below this.");
+
+  const help = page.locator(".label-row").filter({ hasText: "Keep at least" }).getByRole("button", { name: "Help" });
+  await help.hover();
+  await expect(hint).toBeVisible();
+  await page.getByLabel("Name", { exact: true }).hover();
+  await expect(hint).toBeHidden();
+
+  // A click (or tap) keeps it open until Escape or a click elsewhere.
+  await help.click();
+  await page.getByLabel("Name", { exact: true }).hover();
+  await expect(hint).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(hint).toBeHidden();
 });
 
 test("slash focuses search from any page", async ({ page }) => {

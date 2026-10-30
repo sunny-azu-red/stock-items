@@ -2,7 +2,7 @@
 <a class="back" href="/items/{{$m.ItemID}}">{{icon "arrow-left"}} {{$m.ItemName}}</a>
 <div class="page-head">
   <div>
-    <h1>Edit {{$d.Name}}</h1>
+    {{if $m.AmountEditable}}<h1>Edit {{$d.Name}}</h1>{{else}}<div class="label-row"><h1>Edit {{$d.Name}}</h1>{{template "tip" (dict "ID" "count-tip" "Text" "A count's change follows from what was on the shelf. To fix it, delete it or do a new count.")}}</div>{{end}}
     <p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>
   </div>
   <div class="actions">
@@ -25,9 +25,13 @@
     {{end}}
     {{if $m.TakesPrice}}
     <div class="field{{if index $e "total_price"}} has-error{{end}}">
+      {{if eq $m.Kind "initial"}}
+      <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" "With a price or shop, this becomes a purchase.")}}</div>
+      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
+      {{else}}
       <label for="total_price">Total price ({{.Currency}})</label>
       <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional">
-      {{if eq $m.Kind "initial"}}<p class="hint">With a price or shop, this becomes a purchase.</p>{{end}}
+      {{end}}
       {{template "err" (index $e "total_price")}}
     </div>
     <div class="field">
@@ -45,7 +49,6 @@
       <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="optional">
     </div>
   </div>
-  {{if not $m.AmountEditable}}<p class="hint mt">A count's change follows from what was on the shelf. To fix it, delete it or do a new count.</p>{{end}}
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="/items/{{$m.ItemID}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save</button>

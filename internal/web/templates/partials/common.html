@@ -7,6 +7,10 @@
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle */}}
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{template "chip" .}}{{end}}{{else}}<span class="chip">General</span>{{end}}</span>{{end}}
 
+{{/* A "?" after a label or heading that shows a hint on hover, focus or tap: dict "ID" string "Text" string.
+   Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
+{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="Help" aria-describedby="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}">{{.Text}}</span></span>{{end}}
+
 {{define "err"}}{{with .}}<p class="field-error">{{.}}</p>{{end}}{{end}}
 
 {{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} Please fix the highlighted fields.{{with index . "form"}} {{.}}{{end}}</div>{{end}}{{end}}
@@ -42,7 +46,7 @@
     <div class="item-meta">
       {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref $it.MinQuantity) $it.Unit}}</span>{{end}}
       {{with $it.ExpiresOn}}<span class="badge badge-info">{{icon "hourglass"}} {{date .}}</span>{{end}}
-      {{range $i, $s := $it.SKUs}}<a class="sku sku-link" href="{{skuSearch $s.Code}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}} — search on Google (.ro)"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $it.SKUs) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $it.SKUs) -2) "more part number"}}">+{{add (len $it.SKUs) -2}} more</a>{{end}}
+      {{range $i, $s := $it.SKUs}}<a class="sku sku-link" href="{{skuSearch $s.Code}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}} — search on Google (.ro)"{{if ge $i 3}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $it.SKUs) 3}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $it.SKUs) -3) "more part number"}}">+{{add (len $it.SKUs) -3}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
       {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles)}}{{end}}
     </div>

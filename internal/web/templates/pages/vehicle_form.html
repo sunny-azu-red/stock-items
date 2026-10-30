@@ -7,9 +7,8 @@
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
-        <label for="name">Name</label>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="80" placeholder="e.g. KTM 390" autofocus>
-        <p class="hint">Short, it is used on chips and headings.</p>
+        <div class="label-row"><label for="name">Name</label>{{template "tip" (dict "ID" "name-tip" "Text" "Keep it short: it is used on chips and headings.")}}</div>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="80" placeholder="e.g. KTM 390" autofocus aria-describedby="name-tip">
         {{template "err" (index $e "name")}}
       </div>
       <fieldset class="field">
@@ -20,12 +19,9 @@
         {{template "err" (index $e "kind")}}
       </fieldset>
       <div class="field{{if index $e "color"}} has-error{{end}}">
-        <label for="color">Colour</label>
-        <div class="flex">
-          <input class="input" type="color" id="color" name="color" value="{{$f.Color}}" list="palette">
-          <datalist id="palette">{{range $d.Palette}}<option value="{{.}}">{{end}}</datalist>
-          <span class="hint">Used for the vehicle's tag.</span>
-        </div>
+        <div class="label-row"><label for="color">Colour</label>{{template "tip" (dict "ID" "color-tip" "Text" "Used for the vehicle's tag.")}}</div>
+        <input class="input" type="color" id="color" name="color" value="{{$f.Color}}" list="palette" aria-describedby="color-tip">
+        <datalist id="palette">{{range $d.Palette}}<option value="{{.}}">{{end}}</datalist>
         {{template "err" (index $e "color")}}
       </div>
     </div>

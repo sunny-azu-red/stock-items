@@ -27,7 +27,7 @@
       {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock"))}}
       {{template "nav-link" (dict "Href" "/services" "Icon" "wrench" "Label" "Services" "Active" (eq .Nav "services"))}}
       {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping list" "Active" (eq .Nav "shopping") "Count" .ShoppingCount)}}
-      {{template "nav-link" (dict "Href" "/vehicles" "Icon" "square-parking" "Label" "Vehicles" "Active" (eq .Nav "vehicles"))}}
+      {{template "nav-link" (dict "Href" "/vehicles" "Icon" "warehouse" "Label" "Vehicles" "Active" (eq .Nav "vehicles"))}}
       {{template "nav-link" (dict "Href" "/activity" "Icon" "history" "Label" "Activity" "Active" (eq .Nav "activity"))}}
     </nav>
     {{with .NavVehicles}}
@@ -60,7 +60,7 @@
   <a href="/stock" {{if eq .Nav "stock"}}aria-current="page"{{end}}>{{icon "package"}}Stock</a>
   <a href="/services" {{if eq .Nav "services"}}aria-current="page"{{end}}>{{icon "wrench"}}Services</a>
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shopping{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>
-  <a href="/vehicles" {{if or (eq .Nav "vehicles") (eq .Nav "activity")}}aria-current="page"{{end}}>{{icon "square-parking"}}Vehicles</a>
+  <a href="/vehicles" {{if or (eq .Nav "vehicles") (eq .Nav "activity")}}aria-current="page"{{end}}>{{icon "warehouse"}}Vehicles</a>
 </nav>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 </body>

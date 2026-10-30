@@ -316,6 +316,36 @@
     if (extra.length) extra[0].focus();
   });
 
+  // ---- Hints --------------------------------------------------------------
+  // A "?" shows its hint on hover and keyboard focus (CSS only). A click or
+  // tap keeps it open until the next click elsewhere or Escape. Escape also
+  // hides a hint shown by hover or focus, until the pointer or focus leaves.
+  function closeTips(except) {
+    document.querySelectorAll(".tip.open").forEach(function (t) {
+      if (t !== except) t.classList.remove("open");
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".tip-btn");
+    closeTips(btn && btn.parentNode);
+    if (!btn) return;
+    btn.parentNode.classList.remove("dismissed");
+    btn.parentNode.classList.toggle("open");
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    closeTips();
+    document.querySelectorAll(".tip-btn:hover, .tip-btn:focus").forEach(function (b) {
+      b.parentNode.classList.add("dismissed");
+    });
+  });
+  ["mouseout", "focusout"].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      var tip = e.target.closest && e.target.closest(".tip");
+      if (tip && !tip.contains(e.relatedTarget)) tip.classList.remove("dismissed");
+    });
+  });
+
   // ---- Tabs ---------------------------------------------------------------
   document.addEventListener("click", function (e) {
     var tab = e.target.closest('[role="tab"]');

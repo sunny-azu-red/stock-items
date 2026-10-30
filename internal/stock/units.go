@@ -182,22 +182,36 @@ func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 }
 
 // FormatQuantity renders a base unit quantity for people:
-// "6x", "525 ml", "1.5 L", "400 g", "1.2 kg".
+// "6x", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg".
 func FormatQuantity(q float64, u Unit) string {
 	switch u {
 	case UnitML:
 		if useLargeUnit(q) {
 			return FormatNumber(q/1000) + " L"
 		}
-		return FormatNumber(q) + " ml"
+		return formatGrouped(q) + " ml"
 	case UnitGram:
 		if useLargeUnit(q) {
 			return FormatNumber(q/1000) + " kg"
 		}
-		return FormatNumber(q) + " g"
+		return formatGrouped(q) + " g"
 	default:
-		return FormatNumber(q) + "x"
+		return formatGrouped(q) + "x"
 	}
+}
+
+// formatGrouped is FormatNumber with thousands separators: "1 234.5".
+func formatGrouped(f float64) string {
+	s := FormatNumber(f)
+	whole, frac, hasFrac := strings.Cut(s, ".")
+	n, err := strconv.Atoi(whole)
+	if err != nil || (n > -1000 && n < 1000) {
+		return s
+	}
+	if hasFrac {
+		return FormatInt(n) + "." + frac
+	}
+	return FormatInt(n)
 }
 
 // FormatDelta renders a signed quantity change: "+2x", "−500 ml".
@@ -245,10 +259,11 @@ func DefaultStep(u Unit) float64 {
 }
 
 // useLargeUnit reports whether q (ml or g) reads better as L or kg: it must
-// be at least 1000 and a whole number, so no precision is lost.
+// be at least 1000 and a multiple of 10, so it takes at most two decimals.
+// Three ("1.475 L") would read as 1475 L where a point groups thousands.
 func useLargeUnit(q float64) bool {
 	q = math.Abs(round3(q))
-	return q >= 1000 && q == math.Trunc(q)
+	return q >= 1000 && math.Mod(q, 10) == 0
 }
 
 func round3(f float64) float64 {

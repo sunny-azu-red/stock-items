@@ -160,7 +160,7 @@ test("quick adjust and record a purchase", async ({ page }) => {
   await bought.getByLabel("Total price").fill("18,50");
   await bought.getByLabel("Shop").fill("Moto shop");
   await bought.getByRole("button", { name: "Add to stock" }).click();
-  await expect(page.locator("#item-qty")).toHaveText("1.525 L");
+  await expect(page.locator("#item-qty")).toHaveText("1\u202f525 ml");
   await expect(page.locator("section").filter({ hasText: "History" }).locator("table")).toContainText("Moto shop");
 });
 
@@ -174,7 +174,7 @@ test("fix a wrong price in the history", async ({ page }) => {
   await page.getByLabel("Total price").fill("16,50");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.locator(".flash-success")).toContainText("Updated the purchase");
-  await expect(page.locator("#item-qty")).toHaveText("1.525 L");
+  await expect(page.locator("#item-qty")).toHaveText("1\u202f525 ml");
   await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("16.50 EUR / L");
 });
 
@@ -225,7 +225,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await expect(page.locator("main")).toContainText("12\u202f000 km");
 
   await page.goto("/stock");
-  await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("3.825 L");
+  await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("3\u202f825 ml");
   await expect(row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0x");
 
   await page.goto("/");

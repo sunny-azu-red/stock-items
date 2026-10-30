@@ -245,7 +245,7 @@ func TestMovementsAndAdjust(t *testing.T) {
 	path := "/items/" + itoa(oil)
 
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19,90"}, "supplier": {"Moto shop"}}), http.StatusSeeOther)
-	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"5"}, "amount_unit": {"l"}}), http.StatusUnprocessableEntity, "Only 1.525 L on stock")
+	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"5"}, "amount_unit": {"l"}}), http.StatusUnprocessableEntity, "Only 1\u202f525 ml on stock")
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"25"}, "amount_unit": {"ml"}}), http.StatusSeeOther)
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"correction"}, "amount": {"1.2"}, "amount_unit": {"l"}}), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, "1.2 L", "Moto shop", "19.90 EUR")
@@ -279,7 +279,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
-	expect(t, a.get(kitPath), http.StatusOK, "1 part short", "1.175 L", "Not done yet")
+	expect(t, a.get(kitPath), http.StatusOK, "1 part short", "1\u202f175 ml", "Not done yet")
 	expect(t, a.get("/"), http.StatusOK, "Oil service", "Upcoming service")
 	expect(t, a.get("/shopping"), http.StatusOK, "Short for KTM 390: Oil service")
 
@@ -298,7 +298,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 		t.Fatalf("shopping = %+v", list)
 	}
 	entry := "/shopping/" + itoa(list[0].ID)
-	expect(t, a.get(entry+"/bought"), http.StatusOK, `value="1.175"`)
+	expect(t, a.get(entry+"/bought"), http.StatusOK, `value="1175"`)
 	expect(t, a.post(entry+"/bought", url.Values{"amount": {"4"}, "amount_unit": {"l"}, "total_price": {"45"}}), http.StatusSeeOther)
 	expect(t, a.get("/shopping/export.txt"), http.StatusOK, "Shopping list")
 

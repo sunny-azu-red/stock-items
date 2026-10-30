@@ -116,12 +116,16 @@ func TestFormatQuantity(t *testing.T) {
 		{1500, UnitML, "1.5 L"},
 		{1000, UnitML, "1 L"},
 		{4000, UnitML, "4 L"},
-		{1234.5, UnitML, "1234.5 ml"},
-		{1234, UnitML, "1.234 L"},
+		{1750, UnitML, "1.75 L"},
+		{1234.5, UnitML, "1 234.5 ml"},
+		{1475, UnitML, "1 475 ml"}, // not "1.475 L", which reads as 1475 L
+		{12345, UnitML, "12 345 ml"},
 		{0, UnitML, "0 ml"},
 		{400, UnitGram, "400 g"},
 		{1200, UnitGram, "1.2 kg"},
+		{2125, UnitGram, "2 125 g"},
 		{0.5, UnitML, "0.5 ml"},
+		{1500, UnitPiece, "1 500x"},
 	}
 	for _, tt := range tests {
 		if got := FormatQuantity(tt.q, tt.unit); got != tt.want {
@@ -132,6 +136,9 @@ func TestFormatQuantity(t *testing.T) {
 
 func TestFormatDelta(t *testing.T) {
 	if got := FormatDelta(-500, UnitML); got != "−500 ml" {
+		t.Errorf("got %q", got)
+	}
+	if got := FormatDelta(-1475, UnitML); got != "−1 475 ml" {
 		t.Errorf("got %q", got)
 	}
 	if got := FormatDelta(2, UnitPiece); got != "+2x" {
@@ -149,6 +156,7 @@ func TestSplitForInput(t *testing.T) {
 		{525, UnitML, "525", "ml"},
 		{3, UnitPiece, "3", "pcs"},
 		{2500, UnitGram, "2.5", "kg"},
+		{1475, UnitML, "1475", "ml"}, // ungrouped, so it parses back
 	}
 	for _, tt := range tests {
 		v, s := SplitForInput(tt.q, tt.unit)

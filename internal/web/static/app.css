@@ -25,6 +25,7 @@
   --info: light-dark(#1d4ed8, #93c5fd);
   --info-soft: light-dark(#dbeafe, #172544);
   --shadow: 0 1px 2px light-dark(rgb(0 0 0 / .05), rgb(0 0 0 / .4)), 0 2px 8px light-dark(rgb(0 0 0 / .04), transparent);
+  --shadow-pop: 0 8px 24px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .5));
   --radius: 12px;
   --radius-sm: 8px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -208,6 +209,38 @@ input[type="color"].input { padding: .2rem; height: 40px; width: 64px; }
 .qty-input { display: flex; gap: .4rem; }
 .qty-input .input:first-child { flex: 1; min-width: 0; }
 .qty-input select.input { width: auto; min-width: 72px; }
+
+/* Selects and suggestion inputs share one chevron. Its grey reads on both
+   themes, so a single image will do. */
+select.input, .combo .input {
+  appearance: none; padding-right: 2rem;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%238a8782' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right .6rem center / 16px;
+}
+select.input { cursor: pointer; }
+/* Where the browser allows it, the select's own list matches the theme too.
+   Elsewhere it keeps the native popup. */
+@supports (appearance: base-select) {
+  select.input, select.input::picker(select) { appearance: base-select; }
+  select.input::picker-icon { display: none; }
+  select.input::picker(select) {
+    margin-top: 4px; padding: .25rem; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);
+  }
+  select.input option { padding: .45rem .6rem; border-radius: 6px; gap: .4rem; }
+  select.input option:hover, select.input option:focus-visible { background: var(--surface-2); outline: none; }
+  select.input option:checked { color: var(--accent-strong); font-weight: 600; }
+}
+/* <input list> enhanced by app.js: a dropdown like the selects' instead of
+   the browser's datalist popup. */
+.combo { position: relative; }
+.combo-toggle { position: absolute; top: 0; right: 0; bottom: 0; width: 2.2rem; border: 0; padding: 0; background: none; cursor: pointer; }
+.combo-list {
+  position: fixed; inset: auto; margin: 0; padding: .25rem; list-style: none; overflow-y: auto;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);
+}
+.combo-list li { padding: .45rem .6rem; border-radius: 6px; cursor: pointer; }
+.combo-list li:hover, .combo-list li[aria-selected="true"] { background: var(--surface-2); }
 .form-actions { display: flex; gap: .5rem; justify-content: flex-end; flex-wrap: wrap; padding-top: .25rem; }
 .form-actions .spacer { margin-right: auto; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }

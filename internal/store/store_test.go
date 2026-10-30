@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -239,6 +240,10 @@ func TestListItemsFilters(t *testing.T) {
 	cats, err := s.Categories(ctx)
 	if err != nil || len(cats) < 3 {
 		t.Errorf("categories = %v, %v", cats, err)
+	}
+	brands, err := s.Brands(ctx)
+	if want := []string{"Hiflofiltro", "Motorex", "OEM"}; err != nil || !slices.Equal(brands, want) {
+		t.Errorf("brands = %v, %v; want %v", brands, err, want)
 	}
 }
 

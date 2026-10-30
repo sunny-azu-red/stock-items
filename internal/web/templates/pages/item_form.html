@@ -18,7 +18,7 @@
       <div class="field">
         <label for="brand">Brand</label>
         <input class="input" id="brand" name="brand" value="{{$f.Brand}}" placeholder="e.g. OEM, Motorex, Hiflofiltro" list="brands">
-        <datalist id="brands"><option value="OEM"></datalist>
+        <datalist id="brands">{{range $d.Brands}}<option value="{{.}}">{{end}}</datalist>
       </div>
       <div class="field">
         <label for="category">Category</label>

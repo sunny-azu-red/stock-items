@@ -264,6 +264,13 @@ func (s *Store) Categories(ctx context.Context) ([]string, error) {
 		) x ORDER BY lower(c)`)
 }
 
+// Brands returns the distinct brands in use, plus OEM.
+func (s *Store) Brands(ctx context.Context) ([]string, error) {
+	return s.distinct(ctx, `
+		SELECT b FROM (SELECT brand AS b FROM items WHERE brand <> '' UNION SELECT 'OEM') x
+		ORDER BY lower(b)`)
+}
+
 // Locations returns the distinct storage locations in use.
 func (s *Store) Locations(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `SELECT DISTINCT location FROM items WHERE location <> '' ORDER BY location`)

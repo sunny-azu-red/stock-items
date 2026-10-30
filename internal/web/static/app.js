@@ -1,6 +1,6 @@
 // Stock Items — small progressive enhancements. Every page works without
 // this file; it only adds convenience (confirmations, dynamic form rows,
-// clipboard, toasts and keyboard shortcuts).
+// suggestion dropdowns, clipboard, toasts and keyboard shortcuts).
 (function () {
   "use strict";
   document.documentElement.classList.add("js");
@@ -119,6 +119,127 @@
     }
   }
 
+  // ---- Suggestion lists ---------------------------------------------------
+  // <input list="…"> gets a dropdown styled like the selects. The browser's
+  // datalist popup cannot be styled and mixes in autofill history. Without
+  // JS (or popover support) the plain datalist still works. The list is a
+  // popover so cards with overflow: clip do not cut it off.
+  var placeOpenCombo = null;
+  function enhanceCombo(input) {
+    var list = document.getElementById(input.getAttribute("list"));
+    if (!list || !input.id || !HTMLElement.prototype.showPopover) return;
+    var values = Array.prototype.map.call(list.options, function (o) { return o.value; });
+    if (!values.length) return; // no chevron that opens nothing
+    var wrap = document.createElement("div");
+    wrap.className = "combo";
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "combo-toggle";
+    toggle.tabIndex = -1;
+    toggle.setAttribute("aria-hidden", "true");
+    var box = document.createElement("ul");
+    box.id = input.id + "-suggestions";
+    box.className = "combo-list";
+    box.setAttribute("role", "listbox");
+    box.setAttribute("popover", "manual");
+    wrap.append(toggle, box);
+    input.removeAttribute("list");
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", box.id);
+    input.setAttribute("aria-expanded", "false");
+
+    var active = -1;
+    function isOpen() { return box.matches(":popover-open"); }
+    function show(filter) {
+      var q = filter.trim().toLowerCase();
+      box.textContent = "";
+      values.forEach(function (v, i) {
+        if (q && v.toLowerCase().indexOf(q) < 0) return;
+        var li = document.createElement("li");
+        li.id = box.id + "-" + i;
+        li.setAttribute("role", "option");
+        li.textContent = v;
+        box.appendChild(li);
+      });
+      if (!box.children.length) return hide();
+      if (!isOpen()) box.showPopover();
+      input.setAttribute("aria-expanded", "true");
+      placeOpenCombo = place;
+      place();
+      setActive(-1);
+    }
+    function hide() {
+      if (isOpen()) box.hidePopover();
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+      if (placeOpenCombo === place) placeOpenCombo = null;
+    }
+    function setActive(i) {
+      active = i;
+      Array.prototype.forEach.call(box.children, function (li, j) {
+        li.setAttribute("aria-selected", j === i ? "true" : "false");
+      });
+      var li = box.children[i];
+      if (li) {
+        input.setAttribute("aria-activedescendant", li.id);
+        li.scrollIntoView({ block: "nearest" });
+      } else {
+        input.removeAttribute("aria-activedescendant");
+      }
+    }
+    function pick(li) {
+      input.value = li.textContent;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      hide();
+    }
+    // Below the input, or above it when there is little room below.
+    function place() {
+      var r = input.getBoundingClientRect();
+      var below = window.innerHeight - r.bottom;
+      var up = below < 160 && r.top > below;
+      box.style.left = r.left + "px";
+      box.style.width = r.width + "px";
+      box.style.top = up ? "auto" : r.bottom + 4 + "px";
+      box.style.bottom = up ? window.innerHeight - r.top + 4 + "px" : "auto";
+      box.style.maxHeight = Math.min(256, (up ? r.top : below) - 12) + "px";
+    }
+
+    input.addEventListener("input", function () { show(input.value); });
+    input.addEventListener("blur", hide);
+    input.addEventListener("keydown", function (e) {
+      var n = box.children.length;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!isOpen()) return show("");
+        setActive(e.key === "ArrowDown" ? (active + 1) % n : (active <= 0 ? n : active) - 1);
+      } else if (e.key === "Enter" && isOpen() && active >= 0) {
+        e.preventDefault();
+        pick(box.children[active]);
+      } else if (e.key === "Escape" && isOpen()) {
+        e.preventDefault();
+        hide();
+      }
+    });
+    // Keep focus in the input while clicking the list or the chevron.
+    box.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    box.addEventListener("click", function (e) {
+      var li = e.target.closest("li");
+      if (li) pick(li);
+    });
+    toggle.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    toggle.addEventListener("click", function () {
+      if (isOpen()) return hide();
+      input.focus();
+      show("");
+    });
+  }
+  window.addEventListener("resize", function () { if (placeOpenCombo) placeOpenCombo(); });
+  document.addEventListener("scroll", function () { if (placeOpenCombo) placeOpenCombo(); }, true);
+
   // ---- Clipboard ----------------------------------------------------------
   // navigator.clipboard only exists on HTTPS or localhost, so fall back to
   // execCommand for plain HTTP on the home network.
@@ -226,6 +347,7 @@
   function init(root) {
     root.querySelectorAll("form").forEach(syncUnits);
     root.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
+    root.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
   }
   document.addEventListener("DOMContentLoaded", function () {
     init(document);

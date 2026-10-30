@@ -34,6 +34,7 @@ type itemFormPage struct {
 	Form       itemForm
 	IsNew      bool
 	Vehicles   []stock.Vehicle
+	Brands     []string
 	Categories []string
 	Locations  []string
 	Units      []stock.Unit
@@ -142,6 +143,10 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 	if err != nil {
 		return itemFormPage{}, err
 	}
+	brands, err := s.store.Brands(ctx)
+	if err != nil {
+		return itemFormPage{}, err
+	}
 	cats, err := s.store.Categories(ctx)
 	if err != nil {
 		return itemFormPage{}, err
@@ -153,7 +158,7 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 	// Always offer an empty SKU row to type into.
 	f.SKUs = append(f.SKUs, skuRow{Kind: string(stock.SKUOEM)})
 	return itemFormPage{
-		Form: f, IsNew: isNew, Vehicles: vehicles, Categories: cats, Locations: locs,
+		Form: f, IsNew: isNew, Vehicles: vehicles, Brands: brands, Categories: cats, Locations: locs,
 		Units: stock.Units, SubUnits: stock.SubUnits, SKUKinds: stock.SKUKinds,
 	}, nil
 }

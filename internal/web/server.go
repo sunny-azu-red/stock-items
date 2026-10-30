@@ -19,39 +19,39 @@ import (
 type Options struct {
 	Currency string
 	// SKUSearchURL is the search URL a part number is appended to
-	// (default Google); SKUPrefix is added to every such search.
-	SKUSearchURL string
-	SKUPrefix    string
-	Version      string
-	Logger       *slog.Logger
+	// (default Google); SKUSearchPrefix is added to every such search.
+	SKUSearchURL    string
+	SKUSearchPrefix string
+	Version         string
+	Logger          *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
 
 // Server handles HTTP requests.
 type Server struct {
-	store       *store.Store
-	log         *slog.Logger
-	tmpl        *templates
-	currency    string
-	skuSearch   string
-	skuPrefix   string
-	version     string
-	assetHashes map[string]string
-	now         func() time.Time
-	mux         *http.ServeMux // set by Handler; used by back
+	store           *store.Store
+	log             *slog.Logger
+	tmpl            *templates
+	currency        string
+	skuSearch       string
+	skuSearchPrefix string
+	version         string
+	assetHashes     map[string]string
+	now             func() time.Time
+	mux             *http.ServeMux // set by Handler; used by back
 }
 
 // New builds a Server and parses all templates.
 func New(st *store.Store, opts Options) (*Server, error) {
 	s := &Server{
-		store:     st,
-		log:       opts.Logger,
-		currency:  opts.Currency,
-		skuSearch: opts.SKUSearchURL,
-		skuPrefix: strings.TrimSpace(opts.SKUPrefix),
-		version:   opts.Version,
-		now:       opts.Now,
+		store:           st,
+		log:             opts.Logger,
+		currency:        opts.Currency,
+		skuSearch:       opts.SKUSearchURL,
+		skuSearchPrefix: strings.TrimSpace(opts.SKUSearchPrefix),
+		version:         opts.Version,
+		now:             opts.Now,
 	}
 	if s.log == nil {
 		s.log = slog.Default()

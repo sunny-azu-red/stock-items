@@ -33,8 +33,8 @@ type Config struct {
 	// SKUSearchURL is the search engine URL that a part number is appended
 	// to, e.g. "https://www.google.com/search?q=".
 	SKUSearchURL string
-	// SKUPrefix is added to every part number search, e.g. "site:ro".
-	SKUPrefix string
+	// SKUSearchPrefix is added to every part number search, e.g. "site:ro".
+	SKUSearchPrefix string
 }
 
 // Addr is the HTTP listen address.
@@ -69,11 +69,11 @@ func Load() (Config, error) {
 			Username: env("DB_USERNAME", "postgres"),
 			Password: os.Getenv("DB_PASSWORD"),
 		},
-		Host:         env("HOST", "0.0.0.0"),
-		Port:         env("PORT", "8080"),
-		Currency:     env("APP_CURRENCY", "EUR"),
-		SKUSearchURL: env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
-		SKUPrefix:    envOrEmpty("APP_SKU_PREFIX", "site:ro"),
+		Host:            env("HOST", "0.0.0.0"),
+		Port:            env("PORT", "8080"),
+		Currency:        env("APP_CURRENCY", "EUR"),
+		SKUSearchURL:    env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
+		SKUSearchPrefix: envOrEmpty("APP_SKU_SEARCH_PREFIX", "site:ro"),
 	}
 	return cfg, nil
 }

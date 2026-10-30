@@ -67,7 +67,7 @@ All settings come from environment variables or a `.env` file (real environment 
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices |
 | `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q=` | Search engine for part number links; the number is appended |
-| `APP_SKU_PREFIX` | `site:ro` | Added to every part number search; set it empty for none |
+| `APP_SKU_SEARCH_PREFIX` | `site:ro` | Added to every part number search; set it empty for none |
 | `TZ` | system zone | When "today" starts (reminders, date checks, spending). Set it in Docker, whose default is UTC |
 
 `.env` is git-ignored. Never commit it.

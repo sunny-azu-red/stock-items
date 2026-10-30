@@ -31,7 +31,7 @@ func newApp(t *testing.T) *testApp {
 	st := store.New(testdb.New(t))
 	srv, err := New(st, Options{
 		Currency: "EUR", Version: "test",
-		SKUSearchURL: "https://duckduckgo.com/?q=", SKUPrefix: "site:ro",
+		SKUSearchURL: "https://duckduckgo.com/?q=", SKUSearchPrefix: "site:ro",
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now:    func() time.Time { return time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC) },
 	})

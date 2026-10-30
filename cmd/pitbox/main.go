@@ -75,11 +75,11 @@ func run() error {
 	}
 
 	srv, err := web.New(store.New(pool), web.Options{
-		Currency:     cfg.Currency,
-		SKUSearchURL: cfg.SKUSearchURL,
-		SKUPrefix:    cfg.SKUPrefix,
-		Version:      buildVersion(),
-		Logger:       logger,
+		Currency:        cfg.Currency,
+		SKUSearchURL:    cfg.SKUSearchURL,
+		SKUSearchPrefix: cfg.SKUSearchPrefix,
+		Version:         buildVersion(),
+		Logger:          logger,
 	})
 	if err != nil {
 		return err

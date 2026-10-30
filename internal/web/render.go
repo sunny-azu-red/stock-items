@@ -155,8 +155,8 @@ func (s *Server) funcs() template.FuncMap {
 		// with the configured prefix (e.g. "site:ro") added to the query.
 		"skuSearch": func(code string) template.URL {
 			q := code
-			if s.skuPrefix != "" {
-				q += " " + s.skuPrefix
+			if s.skuSearchPrefix != "" {
+				q += " " + s.skuSearchPrefix
 			}
 			return template.URL(s.skuSearch + url.QueryEscape(q))
 		},

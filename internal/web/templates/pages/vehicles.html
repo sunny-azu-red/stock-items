@@ -11,7 +11,6 @@
 <div class="grid grid-3">
   {{range .Data}}{{$v := .Vehicle}}
   <a class="card vehicle-card" href="/vehicles/{{$v.ID}}" style="{{chipStyle $v.Color}}">
-    <span class="stripe"></span>
     <span class="body">
       <span class="name">{{icon $v.Kind.Icon}} {{$v.Name}}</span>
       {{with $v.Subtitle}}<span class="muted small">{{.}}</span>{{end}}

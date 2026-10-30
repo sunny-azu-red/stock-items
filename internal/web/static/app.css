@@ -28,6 +28,7 @@
   --shadow-pop: 0 8px 24px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .5));
   --radius: 12px;
   --radius-sm: 8px;
+  --control-h: 42px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sidebar: 236px;
@@ -193,12 +194,29 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .field-error { color: var(--danger); font-size: .8rem; margin: 0; }
 .input, select.input, textarea.input {
   width: 100%; font: inherit; color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .55rem .7rem; min-height: 40px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .55rem .7rem; min-height: var(--control-h);
 }
+/* Single-line controls share one exact height, whatever the browser adds inside. */
+input.input, select.input { height: var(--control-h); }
 textarea.input { min-height: 80px; resize: vertical; }
 .input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .has-error .input { border-color: var(--danger); }
-input[type="color"].input { padding: .2rem; height: 40px; width: 64px; }
+input[type="color"].input { padding: .2rem; width: 64px; }
+/* Dates: Chromium pads the inner fields, and its calendar icon ignores the
+   theme. Strip the padding and draw the icon in the selects' chevron grey,
+   at the same spot as the chevron. */
+input[type="date"].input { padding-right: .6rem; }
+.input::-webkit-datetime-edit, .input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+.input::-webkit-datetime-edit-text { color: var(--muted); padding: 0 .1em; }
+.input::-webkit-datetime-edit-month-field:focus,
+.input::-webkit-datetime-edit-day-field:focus,
+.input::-webkit-datetime-edit-year-field:focus { background: var(--accent-soft); color: var(--accent-strong); border-radius: 4px; }
+.input::-webkit-date-and-time-value { text-align: left; }
+.input::-webkit-calendar-picker-indicator {
+  width: 16px; height: 16px; margin: 0; padding: 0; opacity: 1; cursor: pointer; color: transparent;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+.input:hover::-webkit-calendar-picker-indicator { filter: brightness(1.35); }
 .input-icon { position: relative; display: block; }
 .input-icon .icon { position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .input-icon .input { padding-left: 2.2rem; }
@@ -365,14 +383,22 @@ a.title:hover { color: var(--accent); }
 .list .end { text-align: right; white-space: nowrap; }
 
 /* ---------- Vehicles ---------- */
-.vehicle-card { --chip: var(--accent); overflow: hidden; display: flex; flex-direction: column; text-decoration: none; }
-.vehicle-card .stripe { height: 6px; background: var(--chip); }
+/* The border carries the vehicle colour: thick at the top, held round the
+   corners, then fading into the normal border down the sides. */
+.vehicle-card {
+  --chip: var(--accent); --rim-fade: var(--border);
+  overflow: hidden; display: flex; flex-direction: column; text-decoration: none;
+  border-radius: 18px; border-width: 3px 1px 1px; border-color: transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(to bottom, var(--chip) 18px, var(--rim-fade) 60%) border-box;
+}
 .vehicle-card .body { padding: 1rem 1.1rem; display: grid; gap: .6rem; }
 .vehicle-card .name { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.1rem; }
 .vehicle-card .name .icon { color: var(--chip); }
 .vehicle-card .stats { display: flex; gap: 1.25rem; color: var(--muted); font-size: .85rem; flex-wrap: wrap; }
 .vehicle-card .stats strong { color: var(--text); }
-a.vehicle-card:hover { border-color: var(--chip); }
+a.vehicle-card:hover { --rim-fade: color-mix(in srgb, var(--chip) 45%, var(--border)); }
 .vehicle-hero { --chip: var(--accent); display: flex; gap: 1rem; align-items: center; }
 .vehicle-hero .avatar { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--chip) 18%, var(--surface)); color: var(--chip); }
 .vehicle-hero .avatar .icon { width: 30px; height: 30px; }

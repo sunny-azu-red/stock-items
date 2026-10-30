@@ -12,18 +12,24 @@
 <form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
   <input type="hidden" name="back" value="{{$d.Back}}">
   {{template "error-summary" $e}}
-  {{with index $e "amount"}}{{if not $m.AmountEditable}}<p class="field-error">{{.}}</p>{{end}}{{end}}
   <div class="form-grid">
-    {{if $m.AmountEditable}}
+    {{if eq $m.Kind "correction"}}
+    <fieldset class="field">
+      <legend>The count</legend>
+      <span class="segmented">
+        <label><input type="radio" name="direction" value="added" {{if not $f.Removed}}checked{{end}}>Added stock</label>
+        <label><input type="radio" name="direction" value="removed" {{if $f.Removed}}checked{{end}}>Took stock away</label>
+      </span>
+    </fieldset>
+    {{end}}
     <div class="field{{if index $e "amount"}} has-error{{end}}">
-      <label for="amount">{{if eq $m.Kind "use"}}How much was used?{{else}}How much?{{end}}</label>
+      <label for="amount">{{if eq $m.Kind "use"}}How much was used?{{else if eq $m.Kind "correction"}}By how much?{{else}}How much?{{end}}</label>
       <div class="qty-input">
         <input class="input" id="amount" name="amount" value="{{$f.Amount}}" inputmode="decimal" autofocus>
         <select class="input" name="amount_unit" aria-label="Unit">{{range $d.Units}}<option value="{{.Value}}" {{if eq .Value $f.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
       </div>
       {{template "err" (index $e "amount")}}
     </div>
-    {{end}}
     {{if $m.TakesPrice}}
     <div class="field{{if index $e "total_price"}} has-error{{end}}">
       {{if eq $m.Kind "initial"}}
@@ -50,7 +56,6 @@
       <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="optional">
     </div>
   </div>
-  {{if not $m.AmountEditable}}<p class="hint mt">A count's change follows from what was on the shelf. To fix it, delete it or do a new count.</p>{{end}}
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="{{$d.Back}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save</button>

@@ -176,7 +176,7 @@ func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, err
 	}
 	m.ItemName = displayName(brand, name)
 	if !m.Editable() {
-		return m, &ConflictError{Field: "form", Message: "Parts used by a service are changed by deleting the service"}
+		return m, &ConflictError{Field: "form", Message: "Parts used by a service are changed by editing the service"}
 	}
 	return m, nil
 }

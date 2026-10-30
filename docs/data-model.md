@@ -55,7 +55,7 @@ items ─< shopping_entries (or free text)
 3. An item's unit cannot change once it has stock history, is used in a kit, or has a quantity on the shopping list.
 4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting a service that moved it (`odometer_moved`) puts it back to the highest of `odometer_before` and the vehicle's other services' readings, or to no reading if there are none, unless the odometer was changed since. Services that didn't move it, and services logged before `odometer_moved` existed, leave it alone.
 5. Deleting a service deletes its `service` movements and puts the quantities back on stock. Editing a service (`store.UpdateService`) does the same for its old parts, takes the new ones, and redoes its odometer change, in one transaction; its vehicle can't change.
-6. A single movement other than `service` can be edited (amount, price, shop, date, note) or deleted; the item's quantity moves by the difference. The change is refused if the quantity would go below zero. A `correction`'s amount is not editable, and `initial` stock that gets a price or shop becomes a `purchase` (`stock.ApplyEdit`).
+6. A single movement other than `service` can be edited (amount, price, shop, date, note) or deleted; the item's quantity moves by the difference. The change is refused if the quantity would go below zero. A `correction` is edited as a signed change (added or took away, and how much), and `initial` stock that gets a price or shop becomes a `purchase` (`stock.ApplyEdit`).
 
 ## Derived values (not stored)
 

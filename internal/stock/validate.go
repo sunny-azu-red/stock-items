@@ -286,21 +286,16 @@ func (in MovementInput) Validate() Errors {
 // the service is gone (its vehicle was deleted).
 func (m Movement) Editable() bool { return m.Kind != MoveService || m.ServiceRecordID == nil }
 
-// AmountEditable reports whether the amount of a stock change can be
-// edited. A count's change follows from what was on the shelf then, so a
-// wrong count is deleted or followed by a new count instead.
-func (m Movement) AmountEditable() bool {
-	return m.Editable() && m.Kind != MoveCorrection
-}
-
 // TakesPrice reports whether a stock change can carry a price and shop.
 func (m Movement) TakesPrice() bool { return m.Kind == MovePurchase || m.Kind == MoveInitial }
 
 // MovementEdit is the corrected data for a recorded stock change. Amount
-// is the size of the change; its sign follows the kind. A nil OccurredOn
-// keeps the date.
+// is the size of the change; its sign follows the kind, except for a count
+// (a correction or quick -/+), which can go either way: Removed says it took
+// stock away. A nil OccurredOn keeps the date.
 type MovementEdit struct {
 	Amount     float64
+	Removed    bool
 	TotalPrice *float64
 	Supplier   string
 	Note       string
@@ -308,12 +303,12 @@ type MovementEdit struct {
 }
 
 // ApplyEdit returns m corrected by e. Fields a kind doesn't have are kept
-// as they were (a count's amount, a use's price). Initial stock that gets
+// as they were (a use's price). Initial stock that gets
 // a price or shop becomes a purchase, as when an item is created.
 func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 	errs := Errors{}
 	if !m.Editable() {
-		errs.Add("form", "Parts used by a service are changed by deleting the service")
+		errs.Add("form", "Parts used by a service are changed by editing the service")
 		return MovementInput{}, errs
 	}
 	in := MovementInput{
@@ -323,14 +318,12 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 	if e.OccurredOn != nil {
 		in.OccurredOn = e.OccurredOn
 	}
-	if m.AmountEditable() {
-		if e.Amount <= 0 {
-			errs.Add("amount", "Amount must be greater than zero")
-		}
-		in.Delta = e.Amount
-		if m.Kind == MoveUse || m.Kind == MoveService {
-			in.Delta = -e.Amount
-		}
+	if e.Amount <= 0 {
+		errs.Add("amount", "Amount must be greater than zero")
+	}
+	in.Delta = e.Amount
+	if m.Kind == MoveUse || m.Kind == MoveService || (m.Kind == MoveCorrection && e.Removed) {
+		in.Delta = -e.Amount
 	}
 	if m.TakesPrice() {
 		in.TotalPrice, in.Supplier = e.TotalPrice, strings.TrimSpace(e.Supplier)

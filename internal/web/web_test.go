@@ -1157,3 +1157,21 @@ func mustShopping(t *testing.T, a *testApp) []stock.ShoppingEntry {
 	}
 	return list
 }
+
+func TestEditACount(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	// Quick + records a count of +100 ml.
+	expect(t, a.post("/items/"+itoa(oil)+"/adjust", url.Values{"dir": {"up"}}), http.StatusSeeOther)
+	counts, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveCorrection})
+	edit := "/movements/" + itoa(counts[0].ID)
+	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit count", `name="direction" value="added" checked`, `name="amount" value="100"`)
+	// It should have been a quick −: 100 ml taken away.
+	expect(t, a.post(edit, url.Values{"direction": {"removed"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"2026-10-29"}, "note": {"Quick adjust"}}),
+		http.StatusSeeOther)
+	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 425 {
+		t.Errorf("oil = %v, want 425", it.Quantity)
+	}
+}

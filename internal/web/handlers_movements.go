@@ -14,6 +14,7 @@ import (
 // movementEditForm holds the edit form for a recorded stock change.
 type movementEditForm struct {
 	Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
+	Removed                                                    bool   // a count that took stock away
 	Back                                                       string // page to return to
 	Errors                                                     stock.Errors
 }
@@ -56,7 +57,7 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
-		Back: s.back(r, itemPath(m.ItemID))}
+		Removed: m.Delta < 0, Back: s.back(r, itemPath(m.ItemID))}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)
@@ -76,15 +77,13 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	f := movementEditForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		Back: postedBack(r, itemPath(m.ItemID)), Errors: stock.Errors{},
+		Removed: formText(r, "direction") == "removed", Back: postedBack(r, itemPath(m.ItemID)), Errors: stock.Errors{},
 	}
-	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note}
-	if m.AmountEditable() {
-		if q, err := stock.ParseAmount(f.Amount, m.ItemUnit, f.AmountUnit); err != nil {
-			f.Errors.Add("amount", amountError(err, m.ItemUnit, "Enter an amount"))
-		} else {
-			e.Amount = q
-		}
+	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note, Removed: f.Removed}
+	if q, err := stock.ParseAmount(f.Amount, m.ItemUnit, f.AmountUnit); err != nil {
+		f.Errors.Add("amount", amountError(err, m.ItemUnit, "Enter an amount"))
+	} else {
+		e.Amount = q
 	}
 	if p, err := parseOptMoney(f.TotalPrice); err != nil {
 		f.Errors.Add("total_price", err.Error())
@@ -130,7 +129,7 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
-		Back: back, Errors: stock.Errors{}}
+		Removed: m.Delta < 0, Back: back, Errors: stock.Errors{}}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)

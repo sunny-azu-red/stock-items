@@ -172,15 +172,6 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 	}
 	assertLedger(t, s)
 
-	dupID, err := s.DuplicateItem(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dup := mustGet(t, s, dupID)
-	if dup.Name != "15W50 PRO 4 XP (copy)" || dup.Quantity != 0 || len(dup.SKUs) != 1 || len(dup.VehicleIDs) != 1 {
-		t.Errorf("duplicate = %+v", dup)
-	}
-
 	if err := s.DeleteItem(ctx, id); err != nil {
 		t.Fatal(err)
 	}
@@ -1341,9 +1332,9 @@ func TestLinkShopping(t *testing.T) {
 
 	// A free-text entry becomes the archived item's entry, which is restored.
 	free, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube", Quantity: ptr(400.0), Unit: stock.UnitML, Note: "the white one"})
-	entry, err := s.LinkShopping(ctx, free, lube)
-	if err != nil || entry != free {
-		t.Fatalf("link = %d, %v", entry, err)
+	entry, dropped, err := s.LinkShopping(ctx, free, lube)
+	if err != nil || entry != free || dropped {
+		t.Fatalf("link = %d, %v, %v", entry, dropped, err)
 	}
 	if it := mustGet(t, s, lube); it.Archived() {
 		t.Error("item should be restored")
@@ -1351,7 +1342,7 @@ func TestLinkShopping(t *testing.T) {
 	if e, _ := s.GetShopping(ctx, free); e.ItemID == nil || *e.ItemID != lube || *e.Quantity != 400 || e.Note != "the white one" {
 		t.Errorf("linked entry = %+v", e)
 	}
-	if _, err := s.LinkShopping(ctx, free, pads); !errors.Is(err, store.ErrNotFound) {
+	if _, _, err := s.LinkShopping(ctx, free, pads); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("relinking: want ErrNotFound, got %v", err)
 	}
 
@@ -1359,9 +1350,9 @@ func TestLinkShopping(t *testing.T) {
 	// another unit is dropped.
 	listed, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "sintered"})
 	other, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Brake pads", Quantity: ptr(500.0), Unit: stock.UnitML, Note: "rear"})
-	entry, err = s.LinkShopping(ctx, other, pads)
-	if err != nil || entry != listed {
-		t.Fatalf("merge = %d, %v; want %d", entry, err, listed)
+	entry, dropped, err = s.LinkShopping(ctx, other, pads)
+	if err != nil || entry != listed || !dropped {
+		t.Fatalf("merge = %d, %v, %v; want %d with the ml amount dropped", entry, dropped, err, listed)
 	}
 	if e, _ := s.GetShopping(ctx, listed); *e.Quantity != 2 || e.Note != "sintered; rear" {
 		t.Errorf("merged entry = %+v", e)
@@ -1475,24 +1466,6 @@ func TestOdometerGuards(t *testing.T) {
 	}
 }
 
-func TestDuplicateItemLeavesBarcodesAndExpiry(t *testing.T) {
-	s, ctx := newStore(t)
-	exp := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	id := mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 1000, ExpiresOn: &exp,
-		SKUs: []stock.SKU{{Code: "7611197108900", Kind: stock.SKUBarcode}, {Code: "M30", Kind: stock.SKUManufacturer}}})
-	dupID, err := s.DuplicateItem(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dup := mustGet(t, s, dupID)
-	if len(dup.SKUs) != 1 || dup.SKUs[0].Code != "M30" || dup.ExpiresOn != nil {
-		t.Errorf("duplicate = %+v", dup)
-	}
-	if got := mustList(t, s, store.ItemFilter{Query: "7611197108900"}); len(got) != 1 || got[0].ID != id {
-		t.Errorf("barcode search = %v", ids(got))
-	}
-}
-
 func TestSortByQuantityGroupsUnits(t *testing.T) {
 	s, _ := newStore(t)
 	mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
@@ -1582,4 +1555,40 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 	if err := s.UpdateService(ctx, id, in); err != nil {
 		t.Errorf("editing the service: %v", err)
 	}
+}
+
+func TestFitsAllPlusGeneral(t *testing.T) {
+	s, ctx := newStore(t)
+	a, b := mustVehicle(t, s, "A"), mustVehicle(t, s, "B")
+	mustItem(t, s, stock.ItemInput{Name: "Both", Unit: stock.UnitPiece, VehicleIDs: []int64{a, b}})
+	mustItem(t, s, stock.ItemInput{Name: "Only A", Unit: stock.UnitPiece, VehicleIDs: []int64{a}})
+	mustItem(t, s, stock.ItemInput{Name: "General", Unit: stock.UnitPiece})
+	got := ids(mustList(t, s, store.ItemFilter{VehicleIDs: []int64{a, b}, MatchAll: true, General: true}))
+	if want := []string{"Both", "General"}; !slices.Equal(got, want) {
+		t.Errorf("fits all + general = %v, want %v", got, want)
+	}
+	_ = ctx
+}
+
+func TestEnsureShoppingAddsTheReason(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(1.0), Note: "sintered"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EnsureShopping(ctx, pads, 2, "Short for KTM 390: Brakes"); err != nil {
+		t.Fatal(err)
+	}
+	if e := mustShoppingEntry(t, s); e.Note != "sintered; Short for KTM 390: Brakes" || *e.Quantity != 2 {
+		t.Errorf("entry = %+v", e)
+	}
+}
+
+func mustShoppingEntry(t *testing.T, s *store.Store) stock.ShoppingEntry {
+	t.Helper()
+	list, err := s.ListShopping(context.Background())
+	if err != nil || len(list) != 1 {
+		t.Fatalf("shopping = %+v, %v", list, err)
+	}
+	return list[0]
 }

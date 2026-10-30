@@ -15,6 +15,7 @@ import (
 type ServiceFilter struct {
 	VehicleID int64
 	Limit     int
+	Offset    int // skip this many, for paging
 }
 
 const serviceSelect = `
@@ -43,11 +44,21 @@ func (s *Store) ListServices(ctx context.Context, f ServiceFilter) ([]stock.Serv
 	if f.Limit > 0 {
 		sql += " LIMIT " + args.add(f.Limit)
 	}
+	if f.Offset > 0 {
+		sql += " OFFSET " + args.add(f.Offset)
+	}
 	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.ServiceRecord, error) { return scanService(r) })
+}
+
+// CountServices counts a vehicle's logged services (all vehicles for 0).
+func (s *Store) CountServices(ctx context.Context, vehicleID int64) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM service_records WHERE $1 = 0 OR vehicle_id = $1`, vehicleID).Scan(&n)
+	return n, err
 }
 
 // LaborTotal sums the labour cost of a vehicle's services (all vehicles

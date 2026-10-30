@@ -86,7 +86,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /items/{id}/delete", h(s.itemDelete))
 	mux.HandleFunc("POST /items/{id}/archive", h(s.itemArchive))
 	mux.HandleFunc("POST /items/{id}/restore", h(s.itemRestore))
-	mux.HandleFunc("POST /items/{id}/duplicate", h(s.itemDuplicate))
 	mux.HandleFunc("POST /items/{id}/adjust", h(s.itemAdjust))
 	mux.HandleFunc("POST /items/{id}/movements", h(s.itemMovement))
 	mux.HandleFunc("POST /items/{id}/photo", h(s.itemPhotoUpload))

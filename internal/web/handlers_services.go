@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -275,11 +277,29 @@ type servicesPage struct {
 	Vehicles  []stock.Vehicle
 	VehicleID int64
 	Labor     float64 // labour cost of all logged services shown
+	Total     int     // how many services are logged (for the filter)
+	Page      int
+	More      bool // there are older services
+}
+
+// servicesPageSize is how many services one page of the log shows.
+const servicesPageSize = 100
+
+// PageQuery is the query string for page n of the log.
+func (p servicesPage) PageQuery(n int) string {
+	q := url.Values{}
+	if p.VehicleID != 0 {
+		q.Set("v", strconv.FormatInt(p.VehicleID, 10))
+	}
+	if n > 1 {
+		q.Set("page", strconv.Itoa(n))
+	}
+	return q.Encode()
 }
 
 func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	p := servicesPage{}
+	p := servicesPage{Page: parsePage(r)}
 	if id := parseOptID(r.URL.Query().Get("v")); id != nil {
 		p.VehicleID = *id
 	}
@@ -293,7 +313,14 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	p.Kits = s.kitViews(kits, p.Vehicles)
-	if p.Services, err = s.store.ListServices(ctx, store.ServiceFilter{VehicleID: p.VehicleID, Limit: 200}); err != nil {
+	f := store.ServiceFilter{VehicleID: p.VehicleID, Limit: servicesPageSize + 1, Offset: (p.Page - 1) * servicesPageSize}
+	if p.Services, err = s.store.ListServices(ctx, f); err != nil {
+		return err
+	}
+	if len(p.Services) > servicesPageSize {
+		p.Services, p.More = p.Services[:servicesPageSize], true
+	}
+	if p.Total, err = s.store.CountServices(ctx, p.VehicleID); err != nil {
 		return err
 	}
 	if p.Labor, err = s.store.LaborTotal(ctx, p.VehicleID); err != nil {

@@ -109,11 +109,15 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		f.Errors.Add(k, v)
 	}
 	if !f.Errors.Any() {
-		if _, err := s.store.AddShopping(r.Context(), in); err != nil {
+		_, err := s.store.AddShopping(r.Context(), in)
+		if err == nil {
+			s.redirect(w, r, "/shopping", "Added to the shopping list")
+			return nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
-		s.redirect(w, r, "/shopping", "Added to the shopping list")
-		return nil
+		f.Errors.Add("item_id", "That item was archived or deleted meanwhile")
 	}
 	p, err := s.loadShopping(r, f)
 	if err != nil {
@@ -215,14 +219,28 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	entry, err := s.store.LinkShopping(r.Context(), id, *itemID)
+	entry, dropped, err := s.store.LinkShopping(r.Context(), id, *itemID)
+	if errors.Is(err, store.ErrNotFound) {
+		// Linked already (a second click) or ticked off meanwhile.
+		if e, err := s.store.GetShopping(r.Context(), id); err == nil && e.ItemID != nil {
+			s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", id), "")
+			return nil
+		}
+		s.setFlash(w, "error", "That shopping entry is gone")
+		s.redirect(w, r, "/shopping", "")
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	msg := ""
+	var notes []string
 	if it.Archived() {
-		msg = "Restored " + it.DisplayName()
+		notes = append(notes, "Restored "+it.DisplayName()+".")
 	}
+	if dropped {
+		notes = append(notes, "The listed amount was in another unit than "+it.DisplayName()+"'s, so enter what you bought.")
+	}
+	msg := strings.Join(notes, " ")
 	s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", entry), msg)
 	return nil
 }

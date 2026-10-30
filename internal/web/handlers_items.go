@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -217,6 +218,14 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	}
 	f.Category = q.Get("category")
 	f.Location = q.Get("location")
+	if id := parseOptID(q.Get("from")); id != nil {
+		// Duplicate: start from another item's fields; nothing is saved yet.
+		it, err := s.store.GetItem(r.Context(), *id)
+		if err != nil {
+			return err
+		}
+		f = duplicateForm(it, f.BoughtOn)
+	}
 	if id := parseOptID(q.Get("shopping")); id != nil {
 		// Something new bought from the shopping list.
 		e, err := s.store.GetShopping(r.Context(), *id)
@@ -251,6 +260,9 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f, in := parseItemForm(r, true, s.now())
+	if in.BoughtOn == nil {
+		in.BoughtOn = s.today()
+	}
 	if !f.Errors.Any() {
 		var id int64
 		var err error
@@ -259,7 +271,12 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		} else {
 			id, err = s.store.CreateItem(r.Context(), in)
 		}
-		if err == nil {
+		if f.ShoppingID != 0 && errors.Is(err, store.ErrNotFound) {
+			// Ticked off elsewhere, or this form was saved already. Keep what
+			// was typed, and let the next save add it as a plain new item.
+			f.ShoppingID = 0
+			f.Errors.Add("form", "The shopping entry is gone (ticked off, or this item was saved already). Check your stock, or save again to add it anyway.")
+		} else if err == nil {
 			if f.ShoppingID != 0 {
 				s.redirect(w, r, "/shopping", "Added "+displayInput(in)+" to stock")
 				return nil
@@ -283,8 +300,35 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if f.ShoppingID != 0 {
+		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
+			return err
+		}
+	}
 	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "New item", Nav: "stock", Data: page})
 	return nil
+}
+
+// duplicateForm is a new-item form that starts from it: the same fields,
+// part numbers and vehicles, but no stock, no best-before date and no
+// barcodes (a scan should find one item).
+func duplicateForm(it stock.Item, boughtOn string) itemForm {
+	f := itemFormFromItem(it)
+	f.ID, f.QuantityWas, f.ExpiresOn, f.BoughtOn = 0, "", "", boughtOn
+	f.Quantity = ""
+	_, f.QuantityUnit = stock.SplitForInput(0, it.Unit)
+	f.Name = it.Name + " (copy)"
+	if utf8.RuneCountInString(f.Name) > 200 {
+		f.Name = it.Name
+	}
+	skus := f.SKUs[:0]
+	for _, row := range f.SKUs {
+		if row.Kind != string(stock.SKUBarcode) {
+			skus = append(skus, row)
+		}
+	}
+	f.SKUs = skus
+	return f
 }
 
 func (s *Server) itemEdit(w http.ResponseWriter, r *http.Request) error {
@@ -418,19 +462,6 @@ func (s *Server) itemRestore(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Restored "+it.DisplayName())
-	return nil
-}
-
-func (s *Server) itemDuplicate(w http.ResponseWriter, r *http.Request) error {
-	id, err := pathID(r, "id")
-	if err != nil {
-		return err
-	}
-	newID, err := s.store.DuplicateItem(r.Context(), id)
-	if err != nil {
-		return err
-	}
-	s.redirect(w, r, fmt.Sprintf("/items/%d/edit", newID), "Copy created. Adjust it and save.")
 	return nil
 }
 

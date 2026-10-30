@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -224,10 +225,14 @@ func TestItemFormFlow(t *testing.T) {
 		t.Errorf("next location = %q", l)
 	}
 
-	// Duplicate and delete.
-	rec = a.post(loc+"/duplicate", nil)
-	expect(t, rec, http.StatusSeeOther)
-	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "7100 10W50 (copy)")
+	// Duplicate starts a new item without saving anything, then delete.
+	before, _ := a.store.ListItems(context.Background(), store.ItemFilter{})
+	dup := a.get("/items/new?from=" + loc[len("/items/"):])
+	expect(t, dup, http.StatusOK, `value="7100 10W50 (copy)"`, `value="Motul"`, `value="104098"`, `name="quantity" value=""`)
+	after, _ := a.store.ListItems(context.Background(), store.ItemFilter{})
+	if len(after) != len(before) {
+		t.Errorf("duplicate saved an item: %d → %d", len(before), len(after))
+	}
 	expect(t, a.post(loc+"/delete", nil), http.StatusSeeOther)
 	expect(t, a.get(loc), http.StatusNotFound)
 }
@@ -642,7 +647,9 @@ func TestBuySomethingNewFromShoppingList(t *testing.T) {
 	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Chain lube"))), http.StatusOK, "30.00 EUR / piece", "<dt>Purchases</dt><dd>1</dd>")
 
 	// Submitting again creates no second item.
-	expect(t, a.post("/items", form), http.StatusUnprocessableEntity, "no longer exists")
+	rec = a.post("/items", form)
+	expect(t, rec, http.StatusUnprocessableEntity, "The shopping entry is gone")
+	expectNot(t, rec, `name="shopping_id"`)
 	expect(t, a.get("/items/new?shopping="+entry), http.StatusNotFound)
 
 	// An entry for an existing item keeps the purchase form.
@@ -1344,4 +1351,81 @@ func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}}), http.StatusSeeOther)
 	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, "<strong>1</strong> kit")
+}
+
+func TestDuplicateLeavesBarcodesAndExpiry(t *testing.T) {
+	a := newApp(t)
+	exp := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	in := stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 1000, ExpiresOn: &exp,
+		SKUs: []stock.SKU{{Code: "7611197108900", Kind: stock.SKUBarcode}, {Code: "M30", Kind: stock.SKUManufacturer}}}
+	in.Normalize()
+	id, err := a.store.CreateItem(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := a.get("/items/new?from=" + itoa(id))
+	expect(t, rec, http.StatusOK, `value="M30"`, `name="expires_on" value=""`)
+	expectNot(t, rec, "7611197108900")
+}
+
+func TestShoppingFlowsThatRaceOtherTabs(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+
+	// The entry is ticked off in another tab while the new-item form is open.
+	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube"})
+	if _, err := a.store.MarkBought(ctx, free, nil); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"shopping_id": {itoa(free)}, "name": {"Chain lube"}, "unit": {"piece"}, "quantity": {"1"}}
+	rec := a.post("/items", form)
+	expect(t, rec, http.StatusUnprocessableEntity, "The shopping entry is gone", `value="Chain lube"`)
+	expectNot(t, rec, `name="shopping_id"`)
+	form.Del("shopping_id") // what the re-rendered form posts
+	expect(t, a.post("/items", form), http.StatusSeeOther)
+	itemID(t, a.store, "Chain lube")
+
+	// "Add to this item" clicked twice.
+	oil := itemID(t, a.store, "Silkolene")
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Silkolene oil"})
+	link := "/shopping/" + itoa(entry) + "/link"
+	expect(t, a.post(link, url.Values{"item_id": {itoa(oil)}}), http.StatusSeeOther)
+	rec = a.post(link, url.Values{"item_id": {itoa(oil)}})
+	if l := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || l != "/shopping/"+itoa(entry)+"/bought" {
+		t.Errorf("second click = %d %q", rec.Code, l)
+	}
+
+	// An item archived meanwhile can't be added.
+	pads := itemID(t, a.store, "Rear Brake")
+	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(pads)}}), http.StatusUnprocessableEntity, "archived or deleted meanwhile")
+}
+
+func TestNewItemFromShoppingKeepsMatchesAfterAnError(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	free, _ := a.store.AddShopping(context.Background(), stock.ShoppingInput{FreeText: "rear brake pads"})
+	expect(t, a.post("/items", url.Values{"shopping_id": {itoa(free)}, "name": {"Rear Brake Pads"}, "unit": {"piece"}}),
+		http.StatusUnprocessableEntity, "Enter how much you bought", "Already have it?")
+}
+
+func TestServicesPaging(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	for i := range 101 {
+		in := stock.ServiceInput{VehicleID: k390, Title: fmt.Sprintf("Check %d", i), PerformedOn: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)}
+		in.Normalize()
+		if _, err := a.store.CreateService(context.Background(), in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expect(t, a.get("/services"), http.StatusOK, `<span class="muted small">101`, `href="/services?page=2"`, "Check 100")
+	page2 := a.get("/services?page=2")
+	expect(t, page2, http.StatusOK, "Check 0", "Newer")
+	expectNot(t, page2, "Check 100")
+	expect(t, a.get("/services?page=99999999999999999999"), http.StatusOK)
+	expect(t, a.get("/activity?page=9223372036854775807"), http.StatusOK)
 }

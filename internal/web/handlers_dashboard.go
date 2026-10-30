@@ -138,10 +138,7 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: 1}
-	if n, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && n > 1 {
-		p.Page = n
-	}
+	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: parsePage(r)}
 	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize}
 	if item != nil {
 		f.ItemID = item.ID

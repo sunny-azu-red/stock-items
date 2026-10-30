@@ -4,7 +4,7 @@
   <h1>{{$it.DisplayName}}</h1>
   <div class="actions">
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/duplicate"><button class="btn" type="submit" title="Create a similar item">{{icon "copy"}} Duplicate</button></form>
+    <a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
     {{if $it.Archived}}
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><button class="btn" type="submit">{{icon "archive-restore"}} Restore</button></form>
     {{else if $d.Usage.InUse}}

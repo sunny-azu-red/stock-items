@@ -78,7 +78,10 @@ func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, n
 		INSERT INTO shopping_entries (item_id, quantity, note)
 		SELECT id, $2, $3 FROM items WHERE id = $1 AND archived_at IS NULL
 		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-		SET quantity = excluded.quantity
+		SET quantity = excluded.quantity,
+		    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
+		                WHEN shopping_entries.note = '' THEN excluded.note
+		                ELSE shopping_entries.note || '; ' || excluded.note END
 		WHERE shopping_entries.quantity IS NULL OR shopping_entries.quantity < excluded.quantity`,
 		itemID, qty, note)
 	if err != nil {
@@ -164,11 +167,10 @@ func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, erro
 // restoring the item if it was archived, and returns the entry to mark
 // bought. If the item is on the list already, the free-text entry is
 // merged into that one. A quantity in another unit than the item's is
-// dropped. ErrNotFound means the entry is gone or already linked, or the
-// item is gone.
-func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (int64, error) {
-	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+// dropped (dropped reports it). ErrNotFound means the entry is gone or
+// already linked, or the item is gone.
+func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (id int64, dropped bool, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var linked *int64
 		var unit stock.Unit
 		var qty *float64
@@ -181,6 +183,13 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (int64,
 		if linked != nil {
 			return ErrNotFound
 		}
+		// Lock the item's own entry before the item, like MarkBought, so the
+		// two can't deadlock.
+		err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, itemID).Scan(&id)
+		merge := err == nil
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		var itemUnit stock.Unit
 		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&itemUnit); err != nil {
 			return notFound(err)
@@ -188,17 +197,13 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (int64,
 		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, itemID); err != nil {
 			return err
 		}
-		if itemUnit != unit {
-			qty = nil
+		if itemUnit != unit && qty != nil {
+			qty, dropped = nil, true
 		}
-		err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, itemID).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if !merge {
 			id = entryID
 			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4 WHERE id = $1`,
 				entryID, itemID, qty, itemUnit)
-			return err
-		}
-		if err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID); err != nil {
@@ -212,5 +217,5 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (int64,
 			WHERE id = $1`, id, qty, note, stock.MaxQuantity)
 		return err
 	})
-	return id, err
+	return id, dropped, err
 }

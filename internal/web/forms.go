@@ -95,6 +95,18 @@ func (s *Server) today() *time.Time {
 	return &d
 }
 
+// maxPage caps ?page= so the offset it turns into can't overflow.
+const maxPage = 100_000
+
+// parsePage reads ?page= (1 for missing or nonsense).
+func parsePage(r *http.Request) int {
+	n, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || n < 1 {
+		return 1
+	}
+	return min(n, maxPage)
+}
+
 // parseEventDate parses an optional date of something that already
 // happened (a purchase, stock change or service), refusing dates that are
 // surely typos; see stock.CheckEventDate.

@@ -360,7 +360,7 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: .4rem; padding: 0; 
 @keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
 
 /* ---------- Tables ---------- */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; position: relative; } /* contains .sr-only labels */
 table.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .table th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: .6rem 1.1rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .table td { padding: .6rem 1.1rem; border-top: 1px solid var(--border); vertical-align: middle; }

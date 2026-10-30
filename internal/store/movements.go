@@ -99,6 +99,7 @@ func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64
 
 // MovementFilter narrows ListMovements.
 type MovementFilter struct {
+	ID     int64
 	ItemID int64
 	Kind   stock.MovementKind
 	Limit  int
@@ -114,6 +115,9 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 		JOIN items i ON i.id = m.item_id
 		LEFT JOIN service_records sr ON sr.id = m.service_record_id
 		WHERE true`
+	if f.ID != 0 {
+		sql += " AND m.id = " + args.add(f.ID)
+	}
 	if f.ItemID != 0 {
 		sql += " AND m.item_id = " + args.add(f.ItemID)
 	}
@@ -136,6 +140,110 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 		m.ItemName = displayName(brand, name)
 		return m, err
 	})
+}
+
+// GetMovement returns one stock change.
+func (s *Store) GetMovement(ctx context.Context, id int64) (stock.Movement, error) {
+	moves, err := s.ListMovements(ctx, MovementFilter{ID: id})
+	if err != nil {
+		return stock.Movement{}, err
+	}
+	if len(moves) == 0 {
+		return stock.Movement{}, ErrNotFound
+	}
+	return moves[0], nil
+}
+
+// lockedMovement is a stock change and its item's stock, read under lock.
+type lockedMovement struct {
+	stock.Movement
+	qty float64
+}
+
+// lockMovement locks a stock change and its item for revising.
+func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, error) {
+	var m lockedMovement
+	var brand, name string
+	err := tx.QueryRow(ctx, `
+		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, m.kind, m.delta, m.total_price, m.supplier,
+		       m.note, m.occurred_on, m.service_record_id
+		FROM stock_movements m JOIN items i ON i.id = m.item_id
+		WHERE m.id = $1 FOR UPDATE`, id).
+		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
+			&m.Note, &m.OccurredOn, &m.ServiceRecordID)
+	if err != nil {
+		return m, notFound(err)
+	}
+	m.ItemName = displayName(brand, name)
+	if !m.Editable() {
+		return m, &ConflictError{Field: "form", Message: "Parts used by a service are changed by deleting the service"}
+	}
+	return m, nil
+}
+
+// reviseMovement changes the stock as if m had been recorded with delta
+// instead (0 for not at all). Together with updating or deleting the
+// movement row, this keeps quantity equal to the sum of the ledger.
+func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta float64) error {
+	qty := math.Round((m.qty-m.Delta+delta)*1000) / 1000
+	if qty < 0 {
+		return &InsufficientStockError{ItemID: m.ItemID, ItemName: m.ItemName, Unit: m.ItemUnit, Have: m.qty, Need: m.Delta - delta}
+	}
+	if qty > stock.MaxQuantity {
+		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, m.ItemUnit) + " on stock"}
+	}
+	_, err := tx.Exec(ctx, `UPDATE items SET quantity = $2, updated_at = now() WHERE id = $1`, m.ItemID, qty)
+	return err
+}
+
+// UpdateMovement corrects a recorded stock change (see stock.ApplyEdit).
+// The item's stock moves by the difference; a correction that would leave
+// less than nothing on stock fails with *InsufficientStockError. Like
+// DeleteMovement, it is a deliberate exception to "every change goes
+// through applyMovement": it rewrites a mistaken entry together with its
+// effect, so the ledger still adds up.
+func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEdit) error {
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		m, err := lockMovement(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		in, errs := stock.ApplyEdit(m.Movement, e)
+		if errs.Any() {
+			return errs
+		}
+		in.Delta = math.Round(in.Delta*1000) / 1000
+		if in.Delta == 0 {
+			return stock.Errors{"amount": "Amount must not be zero"}
+		}
+		if err := reviseMovement(ctx, tx, m, in.Delta); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE stock_movements SET kind = $2, delta = $3, total_price = $4, supplier = $5, note = $6, occurred_on = $7
+			WHERE id = $1`, id, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, *in.OccurredOn)
+		return err
+	})
+}
+
+// DeleteMovement removes a mistaken stock change and undoes its effect on
+// the stock. It fails with *InsufficientStockError when that would leave
+// less than nothing, e.g. for a purchase that has been used up since. A
+// best-before date the purchase set is kept.
+func (s *Store) DeleteMovement(ctx context.Context, id int64) (stock.Movement, error) {
+	var m lockedMovement
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if m, err = lockMovement(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := reviseMovement(ctx, tx, m, 0); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM stock_movements WHERE id = $1`, id)
+		return err
+	})
+	return m.Movement, err
 }
 
 // Stats are the money figures shown on the dashboard.

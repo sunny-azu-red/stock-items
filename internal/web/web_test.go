@@ -776,3 +776,48 @@ func TestActivityExportCSV(t *testing.T) {
 	}
 	expect(t, a.get("/activity/export.csv"), http.StatusOK, ",initial,")
 }
+
+func TestEditAndDeleteMovement(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	item := "/items/" + itoa(oil)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+		"total_price": {"199"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}}), http.StatusSeeOther)
+	purchases, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+	edit := "/movements/" + itoa(purchases[0].ID)
+
+	// Service parts have no edit link, other rows do.
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil)}, "part_qty": {"25"}})
+	expect(t, rec, http.StatusSeeOther)
+	services, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
+	page := a.get(item)
+	expect(t, page, http.StatusOK, `href="`+edit+`/edit"`)
+	expectNot(t, page, `href="/movements/`+itoa(services[0].ID)+`/edit"`)
+	expect(t, a.get("/movements/"+itoa(services[0].ID)+"/edit"), http.StatusNotFound)
+	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`)
+
+	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit purchase", `value="199.00"`, `value="Moto shop"`, `name="amount" value="1"`)
+	expect(t, a.post(edit, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19.90"}, "occurred_on": {"2027-01-01"}}),
+		http.StatusUnprocessableEntity, "Date cannot be in the future", `value="19.90"`)
+	rec = a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}})
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != item {
+		t.Errorf("location = %q, want %q", l, item)
+	}
+	expect(t, a.get(item), http.StatusOK, "19.90 EUR / L", "2.5 L")
+
+	// Taking away more than is left is refused with a hint.
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
+	expect(t, a.post(edit+"/delete", nil), http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
+
+	uses, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+	expect(t, a.post("/movements/"+itoa(uses[0].ID)+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.post(edit+"/delete", nil), http.StatusSeeOther)
+	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 500 {
+		t.Errorf("quantity = %v, want 500 (525 initial - 25 service)", it.Quantity)
+	}
+	expect(t, a.get(edit+"/edit"), http.StatusNotFound)
+}

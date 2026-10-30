@@ -14,7 +14,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Use constraints for invariants that must never break: non-negative quantity, valid enums, foreign keys.
 - Write all SQL in `internal/store`. Use positional parameters (`$1`), never string-concatenated values. Dynamic filters go through the `sqlArgs` helper.
 - Writes that touch more than one row run in `Store.inTx`.
-- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The only exception is `DeleteService`, which undoes a mistaken service by deleting its movements together with their effect.
+- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The exceptions fix mistakes by changing a recorded entry together with its effect: `DeleteService` (deletes a service's movements), and `UpdateMovement`/`DeleteMovement` (revise one movement through `reviseMovement`, which moves the stock by the difference under the item's row lock and refuses to go below zero).
 - Lock several items in id order inside one transaction, so concurrent requests cannot deadlock.
 
 ## Domain

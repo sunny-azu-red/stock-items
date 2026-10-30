@@ -231,3 +231,65 @@ func TestShoppingInputValidate(t *testing.T) {
 		t.Error("free text entry should be valid")
 	}
 }
+
+func TestApplyEdit(t *testing.T) {
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	other := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		m        Movement
+		e        MovementEdit
+		kind     MovementKind
+		delta    float64
+		price    *float64
+		errField string
+	}{
+		{"fix a purchase price", Movement{Kind: MovePurchase, Delta: 1000, TotalPrice: ptr(670.0)},
+			MovementEdit{Amount: 1000, TotalPrice: ptr(67.0)}, MovePurchase, 1000, ptr(67.0), ""},
+		{"fix a purchase amount", Movement{Kind: MovePurchase, Delta: 1000},
+			MovementEdit{Amount: 4000}, MovePurchase, 4000, nil, ""},
+		{"a use stays negative", Movement{Kind: MoveUse, Delta: -100},
+			MovementEdit{Amount: 250}, MoveUse, -250, nil, ""},
+		{"a use takes no price", Movement{Kind: MoveUse, Delta: -100},
+			MovementEdit{Amount: 100, TotalPrice: ptr(5.0)}, MoveUse, -100, nil, ""},
+		{"priced initial stock becomes a purchase", Movement{Kind: MoveInitial, Delta: 2},
+			MovementEdit{Amount: 2, TotalPrice: ptr(30.0)}, MovePurchase, 2, ptr(30.0), ""},
+		{"initial stock with a shop becomes a purchase", Movement{Kind: MoveInitial, Delta: 2},
+			MovementEdit{Amount: 2, Supplier: "moto24"}, MovePurchase, 2, nil, ""},
+		{"a count keeps its amount", Movement{Kind: MoveCorrection, Delta: -75},
+			MovementEdit{Amount: 999, Note: "recount"}, MoveCorrection, -75, nil, ""},
+		{"zero amount", Movement{Kind: MovePurchase, Delta: 1},
+			MovementEdit{}, MovePurchase, 0, nil, "amount"},
+		{"bad price", Movement{Kind: MovePurchase, Delta: 1},
+			MovementEdit{Amount: 1, TotalPrice: ptr(-1.0)}, MovePurchase, 1, ptr(-1.0), "total_price"},
+		{"service parts are not edited here", Movement{Kind: MoveService, Delta: -1},
+			MovementEdit{Amount: 1}, "", 0, nil, "form"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.m.ItemID, tt.m.OccurredOn = 7, day
+			in, errs := ApplyEdit(tt.m, tt.e)
+			if _, ok := errs[tt.errField]; tt.errField != "" && !ok {
+				t.Fatalf("want error on %s, got %v", tt.errField, errs)
+			} else if tt.errField == "" && errs.Any() {
+				t.Fatalf("unexpected errors: %v", errs)
+			}
+			if tt.errField == "form" {
+				return
+			}
+			if in.Kind != tt.kind || in.Delta != tt.delta || in.ItemID != 7 {
+				t.Errorf("got %s %v for item %d, want %s %v", in.Kind, in.Delta, in.ItemID, tt.kind, tt.delta)
+			}
+			if (in.TotalPrice == nil) != (tt.price == nil) || (in.TotalPrice != nil && *in.TotalPrice != *tt.price) {
+				t.Errorf("price = %v, want %v", in.TotalPrice, tt.price)
+			}
+			if !in.OccurredOn.Equal(day) {
+				t.Errorf("date = %v, want it kept", in.OccurredOn)
+			}
+		})
+	}
+	m := Movement{Kind: MovePurchase, Delta: 1, OccurredOn: day}
+	if in, _ := ApplyEdit(m, MovementEdit{Amount: 1, OccurredOn: &other}); !in.OccurredOn.Equal(other) {
+		t.Errorf("date = %v, want %v", in.OccurredOn, other)
+	}
+}

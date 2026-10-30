@@ -38,7 +38,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - **Never run tests or experiments against the `public` schema.** Use `internal/testdb` (schemas `test_*`) or `DB_SCHEMA=e2e_*`. `db.DropSchema` refuses anything else. Keep it that way.
 - **Migrations are append-only.** Add `internal/db/migrations/0000N_description.sql` (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
 - **Quantities are stored in base units:** pieces, millilitres, grams. Convert only at the edges with `stock.ParseAmount` and `stock.FormatQuantity`.
-- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The single exception is `DeleteService`, which deletes a service's movements together with their effect.)
+- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The exceptions undo or fix a recorded entry together with its effect: `DeleteService`, and `UpdateMovement`/`DeleteMovement`, which go through `reviseMovement`.)
 - **Money figures (last price, stock value, spending) read only `purchase` movements.** Stock the user paid for must be recorded as a purchase, never as `initial` or `correction`.
 - Business rules belong in `internal/stock` (pure, unit tested). SQL belongs in `internal/store`. HTTP and HTML belong in `internal/web`.
 - Forms must work without JavaScript (plain POST and redirect). htmx and `app.js` only enhance.

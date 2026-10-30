@@ -142,6 +142,20 @@ test("quick adjust and record a purchase", async ({ page }) => {
   await expect(page.locator("section").filter({ hasText: "History" }).locator("table")).toContainText("Moto shop");
 });
 
+test("fix a wrong price in the history", async ({ page }) => {
+  await page.goto("/stock");
+  await row(page, "15W50 PRO 4 XP").getByRole("link").first().click();
+  const history = page.locator("section").filter({ hasText: "History" });
+  await history.locator("tr").filter({ hasText: "Moto shop" }).getByRole("link", { name: /Edit this Purchase/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edit purchase");
+  await expect(page.getByLabel("Total price")).toHaveValue("18.50");
+  await page.getByLabel("Total price").fill("16,50");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Updated the purchase");
+  await expect(page.locator("#item-qty")).toHaveText("1.525 L");
+  await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("16.50 EUR / L");
+});
+
 test("plan an oil service, shop for what is missing and log it", async ({ page }, testInfo) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/vehicles");
@@ -224,7 +238,7 @@ test("edit and delete items", async ({ page }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock?q=Fuel");
   await page.locator(".item-row a.item-name").first().click();
-  await page.getByRole("link", { name: "Edit" }).click();
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
   await page.getByLabel("Location").fill("Garage shelf 2");
   await page.getByRole("button", { name: "Save item" }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved");
@@ -287,6 +301,8 @@ test("no page scrolls sideways", async ({ page }) => {
   paths.push(await page.locator(".item-row a.item-name").first().getAttribute("href") as string);
   await page.goto("/vehicles");
   paths.push(await page.locator("a.vehicle-card").first().getAttribute("href") as string);
+  await page.goto("/activity");
+  paths.push(await page.locator('a[href^="/movements/"]').first().getAttribute("href") as string);
   for (const p of paths) {
     await page.goto(p);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

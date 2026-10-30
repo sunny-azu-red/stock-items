@@ -281,6 +281,68 @@ func (in MovementInput) Validate() Errors {
 	return errs
 }
 
+// Editable reports whether a stock change can be edited or deleted on
+// its own. Parts used by a service are changed through the service.
+func (m Movement) Editable() bool { return m.Kind != MoveService }
+
+// AmountEditable reports whether the amount of a stock change can be
+// edited. A count's change follows from what was on the shelf then, so a
+// wrong count is deleted or followed by a new count instead.
+func (m Movement) AmountEditable() bool {
+	return m.Kind == MovePurchase || m.Kind == MoveUse || m.Kind == MoveInitial
+}
+
+// TakesPrice reports whether a stock change can carry a price and shop.
+func (m Movement) TakesPrice() bool { return m.Kind == MovePurchase || m.Kind == MoveInitial }
+
+// MovementEdit is the corrected data for a recorded stock change. Amount
+// is the size of the change; its sign follows the kind. A nil OccurredOn
+// keeps the date.
+type MovementEdit struct {
+	Amount     float64
+	TotalPrice *float64
+	Supplier   string
+	Note       string
+	OccurredOn *time.Time
+}
+
+// ApplyEdit returns m corrected by e. Fields a kind doesn't have are kept
+// as they were (a count's amount, a use's price). Initial stock that gets
+// a price or shop becomes a purchase, as when an item is created.
+func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
+	errs := Errors{}
+	if !m.Editable() {
+		errs.Add("form", "Parts used by a service are changed by deleting the service")
+		return MovementInput{}, errs
+	}
+	in := MovementInput{
+		ItemID: m.ItemID, Kind: m.Kind, Delta: m.Delta, TotalPrice: m.TotalPrice, Supplier: m.Supplier,
+		Note: strings.TrimSpace(e.Note), OccurredOn: &m.OccurredOn, ServiceRecordID: m.ServiceRecordID,
+	}
+	if e.OccurredOn != nil {
+		in.OccurredOn = e.OccurredOn
+	}
+	if m.AmountEditable() {
+		if e.Amount <= 0 {
+			errs.Add("amount", "Amount must be greater than zero")
+		}
+		in.Delta = e.Amount
+		if m.Kind == MoveUse {
+			in.Delta = -e.Amount
+		}
+	}
+	if m.TakesPrice() {
+		in.TotalPrice, in.Supplier = e.TotalPrice, strings.TrimSpace(e.Supplier)
+		if in.Kind == MoveInitial && (in.TotalPrice != nil || in.Supplier != "") {
+			in.Kind = MovePurchase
+		}
+	}
+	for k, v := range in.Validate() {
+		errs.Add(k, v)
+	}
+	return in, errs
+}
+
 // earliestEventDate is the oldest date accepted for a purchase, stock
 // change or service. Anything earlier is almost certainly a typo.
 var earliestEventDate = time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)

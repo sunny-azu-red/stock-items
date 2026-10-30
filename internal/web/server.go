@@ -121,6 +121,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /shopping/{id}/bought", h(s.shoppingBought))
 	mux.HandleFunc("POST /shopping/{id}/delete", h(s.shoppingDelete))
 
+	mux.HandleFunc("GET /movements/{id}/edit", h(s.movementEdit))
+	mux.HandleFunc("POST /movements/{id}", h(s.movementUpdate))
+	mux.HandleFunc("POST /movements/{id}/delete", h(s.movementDelete))
+
 	mux.HandleFunc("GET /activity", h(s.activity))
 	mux.HandleFunc("GET /activity/export.csv", h(s.activityExportCSV))
 	mux.HandleFunc("POST /theme", h(s.setTheme))

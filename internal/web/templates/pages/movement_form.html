@@ -1,0 +1,54 @@
+{{define "content"}}{{$d := .Data}}{{$m := $d.Movement}}{{$f := $d.Form}}{{$e := $f.Errors}}
+<a class="back" href="/items/{{$m.ItemID}}">{{icon "arrow-left"}} {{$m.ItemName}}</a>
+<div class="page-head">
+  <div>
+    <h1>Edit {{$d.Name}}</h1>
+    <p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>
+  </div>
+  <div class="actions">
+    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+  </div>
+</div>
+<form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
+  {{template "error-summary" $e}}
+  {{with index $e "amount"}}{{if not $m.AmountEditable}}<p class="field-error">{{.}}</p>{{end}}{{end}}
+  <div class="form-grid">
+    {{if $m.AmountEditable}}
+    <div class="field{{if index $e "amount"}} has-error{{end}}">
+      <label for="amount">{{if eq $m.Kind "use"}}How much was used?{{else}}How much?{{end}}</label>
+      <div class="qty-input">
+        <input class="input" id="amount" name="amount" value="{{$f.Amount}}" inputmode="decimal" autofocus>
+        <select class="input" name="amount_unit" aria-label="Unit">{{range $d.Units}}<option value="{{.Value}}" {{if eq .Value $f.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
+      </div>
+      {{template "err" (index $e "amount")}}
+    </div>
+    {{end}}
+    {{if $m.TakesPrice}}
+    <div class="field{{if index $e "total_price"}} has-error{{end}}">
+      <label for="total_price">Total price ({{.Currency}})</label>
+      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional">
+      {{if eq $m.Kind "initial"}}<p class="hint">With a price or shop, this becomes a purchase.</p>{{end}}
+      {{template "err" (index $e "total_price")}}
+    </div>
+    <div class="field">
+      <label for="supplier">Shop</label>
+      <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="optional">
+    </div>
+    {{end}}
+    <div class="field{{if index $e "occurred_on"}} has-error{{end}}">
+      <label for="occurred_on">Date</label>
+      <input class="input" type="date" id="occurred_on" name="occurred_on" value="{{$f.OccurredOn}}">
+      {{template "err" (index $e "occurred_on")}}
+    </div>
+    <div class="field">
+      <label for="note">Note</label>
+      <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="optional">
+    </div>
+  </div>
+  {{if not $m.AmountEditable}}<p class="hint mt">A count's change follows from what was on the shelf. To fix it, delete it or do a new count.</p>{{end}}
+  <div class="form-actions">
+    <a class="btn btn-ghost spacer" href="/items/{{$m.ItemID}}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save</button>
+  </div>
+</form>
+{{end}}

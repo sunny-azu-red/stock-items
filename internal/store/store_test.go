@@ -914,3 +914,91 @@ func TestLastPurchases(t *testing.T) {
 		t.Errorf("no ids: %v, %v", empty, err)
 	}
 }
+
+func TestUpdateAndDeleteMovements(t *testing.T) {
+	s, ctx := newStore(t)
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
+	day := stock.DateOnly(time.Now())
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(670.0), OccurredOn: &day}); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+	purchase := moves[0].ID
+
+	// The price typo is fixed, and every money figure follows.
+	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 1000, TotalPrice: ptr(67.0), Supplier: "moto24"}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.LastUnitPrice(ctx, oil); p == nil || *p != 0.067 {
+		t.Errorf("last unit price = %v, want 0.067", p)
+	}
+	if st, _ := s.GetStats(ctx); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
+		t.Errorf("stats = %+v, want value 100.5 and spent 67", st)
+	}
+
+	// The amount moves the stock by the difference.
+	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 4000, TotalPrice: ptr(67.0)}); err != nil {
+		t.Fatal(err)
+	}
+	if it := mustGet(t, s, oil); it.Quantity != 4500 {
+		t.Errorf("quantity = %v, want 4500", it.Quantity)
+	}
+
+	// Using 4.2 L leaves 300 ml: shrinking the purchase below what was used fails.
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -4200}); err != nil {
+		t.Fatal(err)
+	}
+	var short *store.InsufficientStockError
+	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 500}); !errors.As(err, &short) || short.Have != 300 || short.Need != 3500 {
+		t.Errorf("shrink used-up purchase: want InsufficientStockError(300, 3500), got %v", err)
+	}
+	if _, err := s.DeleteMovement(ctx, purchase); !errors.As(err, &short) {
+		t.Errorf("delete used-up purchase: want InsufficientStockError, got %v", err)
+	}
+
+	// Deleting the use puts it back; then the purchase can go too.
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+	if _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.DeleteMovement(ctx, purchase)
+	if err != nil || m.ItemID != oil || m.Kind != stock.MovePurchase {
+		t.Fatalf("delete purchase = %+v, %v", m, err)
+	}
+	if it := mustGet(t, s, oil); it.Quantity != 500 {
+		t.Errorf("quantity = %v, want 500", it.Quantity)
+	}
+	if n, _ := s.CountPurchases(ctx, oil); n != 0 {
+		t.Errorf("purchases = %d, want 0", n)
+	}
+	if _, err := s.GetMovement(ctx, purchase); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("deleted movement: want ErrNotFound, got %v", err)
+	}
+	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 1}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("update deleted movement: want ErrNotFound, got %v", err)
+	}
+	assertLedger(t, s)
+}
+
+func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
+	s, ctx := newStore(t)
+	k390 := mustVehicle(t, s, "KTM 390")
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 2})
+	in := stock.ServiceInput{VehicleID: k390, Title: "Brakes", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: pads, Quantity: 1}}}
+	in.Normalize()
+	if _, err := s.CreateService(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveService})
+	var conflict *store.ConflictError
+	if err := s.UpdateMovement(ctx, moves[0].ID, stock.MovementEdit{Amount: 2}); !errors.As(err, &conflict) {
+		t.Errorf("update: want ConflictError, got %v", err)
+	}
+	if _, err := s.DeleteMovement(ctx, moves[0].ID); !errors.As(err, &conflict) {
+		t.Errorf("delete: want ConflictError, got %v", err)
+	}
+	if it := mustGet(t, s, pads); it.Quantity != 1 {
+		t.Errorf("quantity = %v, want 1", it.Quantity)
+	}
+	assertLedger(t, s)
+}

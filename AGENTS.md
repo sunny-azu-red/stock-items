@@ -30,7 +30,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | All checks (fmt, vet, staticcheck, tests) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |
-| E2E screenshots | `cd e2e && SCREENSHOT_DIR=/some/dir npx playwright test -g "set up\|filter\|quick\|plan\|screenshots"` |
+| E2E screenshots | see [docs/development.md](docs/development.md#screenshots) |
 
 ## Hard rules
 
@@ -38,7 +38,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - **Never run tests or experiments against the `public` schema.** Use `internal/testdb` (schemas `test_*`) or `DB_SCHEMA=e2e_*`. `db.DropSchema` refuses anything else. Keep it that way.
 - **Migrations are append-only.** Add `internal/db/migrations/0000N_description.sql` (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
 - **Quantities are stored in base units:** pieces, millilitres, grams. Convert only at the edges with `stock.ParseAmount` and `stock.FormatQuantity`.
-- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this.
+- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The single exception is `DeleteService`, which deletes a service's movements together with their effect.)
 - Business rules belong in `internal/stock` (pure, unit tested). SQL belongs in `internal/store`. HTTP and HTML belong in `internal/web`.
 - Forms must work without JavaScript (plain POST and redirect). htmx and `app.js` only enhance.
 - Build URLs with query strings in templates using the `withQuery` helper. Otherwise `html/template` escapes `=` in pre-encoded query strings.

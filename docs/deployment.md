@@ -28,14 +28,18 @@ sudo chown -R stock-items: /opt/stock-items
 ```ini
 [Unit]
 Description=Stock Items
-After=network-online.target
-Wants=network-online.target
+# Drop postgresql.service from both lines if the database is on another machine.
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
 
 [Service]
 User=stock-items
 WorkingDirectory=/opt/stock-items
 ExecStart=/opt/stock-items/stock-items
 Restart=on-failure
+# The app gives up when the database is not reachable at start; retry slowly
+# rather than hitting systemd's start limit while Postgres boots.
+RestartSec=5
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -58,6 +62,8 @@ docker build -t stock-items --build-arg VERSION=$(git describe --always) .
 docker run -d --name stock-items --restart unless-stopped -p 8080:8080 --env-file .env stock-items
 ```
 
+Inside the container, `127.0.0.1` is the container itself. If Postgres runs on the Docker host, set `DB_HOST` to the host's LAN address, or use `--network host` (then drop `-p`). Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=secret`, not `DB_PASSWORD="secret"`.
+
 The image is distroless and runs as a non-root user (~27 MB).
 
 ## Upgrades
@@ -66,7 +72,7 @@ Stop the service, replace the binary and start it again. New migrations are appl
 
 ## Health check
 
-`GET /healthz` returns `{"status":"ok"}` (HTTP 200), or HTTP 503 when the database is unreachable.
+`GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. The distroless image has no shell or curl, so check it from outside the container (for example from your monitoring or reverse proxy).
 
 ## Backups
 

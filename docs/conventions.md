@@ -14,7 +14,8 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Use constraints for invariants that must never break: non-negative quantity, valid enums, foreign keys.
 - Write all SQL in `internal/store`. Use positional parameters (`$1`), never string-concatenated values. Dynamic filters go through the `sqlArgs` helper.
 - Writes that touch more than one row run in `Store.inTx`.
-- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete.
+- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The only exception is `DeleteService`, which undoes a mistaken service by deleting its movements together with their effect.
+- Lock several items in id order inside one transaction, so concurrent requests cannot deadlock.
 
 ## Domain
 
@@ -27,7 +28,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Every page is server-rendered and every form works without JavaScript (POST, then a 303 redirect with a flash message). htmx and `static/app.js` are progressive enhancements only.
 - Invalid forms re-render with status **422**, keeping exactly what the user typed, with messages next to the fields.
 - Templates: pages in `templates/pages`, reusable blocks in `templates/partials`, helpers in `render.go`. Use `withQuery` for URLs built from encoded query strings.
-- No external CDNs or fonts at runtime. Vendor assets under `static/vendor` with their licence files.
+- No external CDNs or fonts at runtime. Vendor assets under `static/vendor` with their licence files. (The Lucide icons are inlined as a sprite in `templates/partials/icons.html`; their licence is in `static/vendor`.)
 - The layout must work from 360 px phone width up. The e2e suite fails if any page scrolls sideways.
 - Accessibility: real `<label>`s for inputs, buttons for actions, links for navigation, `aria-label` on icon-only buttons.
 

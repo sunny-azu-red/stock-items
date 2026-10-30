@@ -27,13 +27,13 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Photos** of items (resized and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a phone in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).
 
-| Stock filtered by vehicle | Service kit | Phone |
+| Stock grouped by vehicle | Service kit | Phone |
 |---|---|---|
 | ![Stock](docs/screenshots/desktop-stock.png) | ![Kit](docs/screenshots/desktop-kit.png) | ![Mobile](docs/screenshots/mobile-stock.png) |
 
 ## Quick start
 
-Requirements: [Go](https://go.dev/dl/) 1.27+ and a PostgreSQL database (tested with 18).
+Requirements: [Go](https://go.dev/dl/) 1.27.3+ and a PostgreSQL database (tested with 18).
 
 ```bash
 cp .env.example .env     # then fill in your database credentials

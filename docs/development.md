@@ -2,7 +2,7 @@
 
 ## Setup
 
-1. Install Go 1.27+. Without root access, unpack the official tarball into `~/.local/go` and add `~/.local/go/bin` to `PATH`.
+1. Install Go 1.27.3 or newer (the version in `go.mod`). Without root access, unpack the official tarball into `~/.local/go` and add `~/.local/go/bin` to `PATH`.
 2. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases.
 3. `go run ./cmd/stock-items` starts the app on `http://localhost:8080`.
 
@@ -38,7 +38,7 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/stock-items
 
 1. **Schema change?** Add a new migration file. Don't edit old ones.
 2. **Rules** go in `internal/stock` with table-driven tests.
-3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx`, and route stock changes through `applyMovement`.
+3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx`, and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`), or two requests can deadlock.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.
 5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed.
 6. Add a case to `web_test.go`, and to the e2e spec for anything interactive.
@@ -48,7 +48,8 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/stock-items
 
 ```bash
 cd e2e
-SCREENSHOT_DIR=../docs/screenshots npx playwright test -g "set up|filter|quick|plan|screenshots"
+SCREENSHOT_DIR=/tmp/shots npx playwright test -g "set up|filter|quick|plan|screenshots"
+cp /tmp/shots/{desktop-dashboard,desktop-stock,desktop-kit,mobile-stock}.png ../docs/screenshots/
 ```
 
-This writes one PNG per page and device. The README uses a few of them.
+This writes one PNG per page and device. Only the four the README shows are kept in `docs/screenshots`.

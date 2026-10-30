@@ -6,7 +6,7 @@
 2. **Add your items** (Add item, or press `n`):
    - **Name and brand.** "OEM" works fine as a brand for original parts.
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).
-   - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded.
+   - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded, or once the item is in a kit or on the shopping list with a quantity.
    - **On stock.** The amount you have right now, e.g. `525` ml or `1.5` L.
    - **Keep at least** (optional). Below this the item shows as *low* and is suggested on the shopping list.
    - **SKUs.** Add every number you might search for: the OEM part number, the manufacturer number, one row per pack size.

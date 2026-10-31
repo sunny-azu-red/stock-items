@@ -49,6 +49,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	time.Local = cfg.Location
 	if *healthcheck {
 		return checkHealth(cfg)
 	}

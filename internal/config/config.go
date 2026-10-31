@@ -4,11 +4,13 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/joho/godotenv"
@@ -35,7 +37,11 @@ type Config struct {
 	// to, e.g. "https://www.google.com/search?q=".
 	SKUSearchURL string
 	// SKUSearchPrefix is added to every part number search, e.g. "site:de".
+	// Empty means none.
 	SKUSearchPrefix string
+	// Location decides when "today" starts: the zone named by TZ, or the
+	// machine's zone when TZ is unset, empty or unknown.
+	Location *time.Location
 }
 
 // Addr is the HTTP listen address.
@@ -75,8 +81,41 @@ func Load() (Config, error) {
 		Currency:        env("APP_CURRENCY", "EUR"),
 		SKUSearchURL:    env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
 		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
+		Location:        location(),
 	}
 	return cfg, cfg.check()
+}
+
+// location reads TZ. Go itself turns an empty or unknown TZ into UTC; here
+// both mean the machine's zone, and a bad name is a warning, not a reason
+// to refuse to start.
+func location() *time.Location {
+	tz, set := os.LookupEnv("TZ")
+	if !set {
+		return time.Local // Go has read the machine's zone
+	}
+	if tz = strings.TrimPrefix(strings.TrimSpace(tz), ":"); tz != "" {
+		loc, err := time.LoadLocation(tz)
+		if err == nil {
+			return loc
+		}
+		slog.Warn("unknown TZ, using the machine's time zone", "TZ", tz, "err", err)
+	}
+	return machineZone()
+}
+
+// machineZone is the zone in /etc/localtime (in Docker, the host's when
+// compose.yaml mounts it), or UTC without one.
+func machineZone() *time.Location {
+	b, err := os.ReadFile("/etc/localtime")
+	if err != nil {
+		return time.UTC
+	}
+	loc, err := time.LoadLocationFromTZData("Local", b)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }
 
 // check refuses settings that would otherwise only show up later, as

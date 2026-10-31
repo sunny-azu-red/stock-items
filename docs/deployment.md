@@ -77,7 +77,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
    | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
    | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q=` | default Google; part number links append the number to it. A full `http(s)://` URL, or the app won't start |
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
-   | `TZ` | `Europe/Bucharest` | default `UTC`; sets when "today" starts for reminders, date checks and spending |
+   | `TZ` | `Europe/Berlin` | sets when "today" starts for reminders, date checks and spending; default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`) |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`; pin a tag to stay on a version |
 
@@ -105,7 +105,8 @@ To build the image yourself instead of pulling it:
 
 ```bash
 docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) .
-docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env pitbox
+docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env \
+  -v /etc/localtime:/etc/localtime:ro pitbox
 ```
 
 Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=secret`, not `DB_PASSWORD="secret"`. Compose's `.env` handles quotes normally.

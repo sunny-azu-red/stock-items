@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+	"time"
+)
 
 func TestSchema(t *testing.T) {
 	tests := []struct{ in, want string }{
@@ -37,5 +41,27 @@ func TestCheck(t *testing.T) {
 		if err := c.check(); (err == nil) != tt.ok {
 			t.Errorf("%s: check() = %v, want ok %v", tt.name, err, tt.ok)
 		}
+	}
+}
+
+func TestLocation(t *testing.T) {
+	machine := machineZone().String()
+	tests := []struct{ tz, want string }{
+		{"Europe/Berlin", "Europe/Berlin"},
+		{" :America/New_York ", "America/New_York"},
+		{"UTC", "UTC"},
+		{"", machine},
+		{"Nowhere/City", machine},
+	}
+	for _, tt := range tests {
+		t.Setenv("TZ", tt.tz)
+		if got := location().String(); got != tt.want {
+			t.Errorf("TZ=%q: location() = %q, want %q", tt.tz, got, tt.want)
+		}
+	}
+	t.Setenv("TZ", "")
+	os.Unsetenv("TZ")
+	if got := location(); got != time.Local {
+		t.Errorf("TZ unset: location() = %v, want time.Local", got)
 	}
 }

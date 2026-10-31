@@ -154,7 +154,7 @@ func (s *Server) funcs() template.FuncMap {
 			return template.URL(path + "?" + query)
 		},
 		// skuSearch links a part number to the configured search engine,
-		// with the configured prefix (e.g. "site:ro") added to the query.
+		// with the configured prefix (e.g. "site:de"), if any, added to the query.
 		"skuSearch": func(code string) template.URL {
 			q := code
 			if s.skuSearchPrefix != "" {

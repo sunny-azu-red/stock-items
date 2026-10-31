@@ -125,6 +125,9 @@ func TestFormatQuantity(t *testing.T) {
 		{1200, UnitGram, "1.2 kg"},
 		{2125, UnitGram, "2 125 g"},
 		{0.5, UnitML, "0.5 ml"},
+		{1.234, UnitGram, "1.23 g"}, // not "1.234 g", which reads as 1234 g
+		{1234.567, UnitML, "1 234.57 ml"},
+		{0.004, UnitML, "<0.01 ml"},
 		{1500, UnitPiece, "1 500x"},
 	}
 	for _, tt := range tests {
@@ -156,7 +159,10 @@ func TestSplitForInput(t *testing.T) {
 		{525, UnitML, "525", "ml"},
 		{3, UnitPiece, "3", "pcs"},
 		{2500, UnitGram, "2.5", "kg"},
-		{1475, UnitML, "1475", "ml"}, // ungrouped, so it parses back
+		{1475, UnitML, "1475", "ml"},    // ungrouped, so it parses back
+		{1.234, UnitML, "1.2340", "ml"}, // "1.234" would be refused as ambiguous
+		{12.345, UnitGram, "12.3450", "g"},
+		{0.5, UnitGram, "0.5", "g"},
 	}
 	for _, tt := range tests {
 		v, s := SplitForInput(tt.q, tt.unit)

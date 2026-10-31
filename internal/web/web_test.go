@@ -797,7 +797,7 @@ func TestActivityExportCSV(t *testing.T) {
 	expect(t, a.get("/activity?kind=purchase"), http.StatusOK, `href="/activity/export.csv?kind=purchase"`)
 
 	rec := a.get("/activity/export.csv?kind=purchase")
-	expect(t, rec, http.StatusOK, "date,item_id,item,kind,change", "Silkolene 15W50 PRO 4 XP,purchase,1000,+1 L,ml,19.90,19.90,L,Moto shop")
+	expect(t, rec, http.StatusOK, "date,item_id,item,kind,change", "Silkolene 15W50 PRO 4 XP,purchase,1000,'+1 L,ml,19.90,19.90,L,Moto shop")
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
 		t.Errorf("Content-Type = %q", ct)
 	}

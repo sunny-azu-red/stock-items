@@ -269,7 +269,7 @@ func WriteMovementsCSV(w io.Writer, moves []Movement) error {
 		}
 		row := []string{
 			m.OccurredOn.Format("2006-01-02"), strconv.FormatInt(m.ItemID, 10), csvSafe(m.ItemName), string(m.Kind),
-			FormatNumber(m.Delta), FormatDelta(m.Delta, m.ItemUnit), string(m.ItemUnit),
+			FormatNumber(m.Delta), csvSafe(FormatDelta(m.Delta, m.ItemUnit)), string(m.ItemUnit),
 			total, unitPrice, per, csvSafe(m.Supplier), csvSafe(note), csvSafe(m.ServiceTitle),
 		}
 		if err := cw.Write(row); err != nil {

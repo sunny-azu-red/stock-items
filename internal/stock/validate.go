@@ -443,8 +443,13 @@ func (in KitInput) Validate() Errors {
 		errs.Add("interval_months", "Interval must be greater than zero")
 	}
 	for i, l := range in.Lines {
-		if l.Quantity <= 0 {
+		switch {
+		case l.Quantity <= 0:
 			errs.Add(fmt.Sprintf("line_%d", i), "Quantity must be greater than zero")
+		case l.Quantity > MaxQuantity:
+			// Rows of the same item are added up by Normalize, so the form's
+			// rows can each be fine.
+			errs.Add("lines", "Together that is more than "+FormatInt(MaxQuantity)+" of one item")
 		}
 	}
 	if utf8.RuneCountInString(in.Name) > maxShortText {

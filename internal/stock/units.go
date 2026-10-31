@@ -182,22 +182,33 @@ func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 }
 
 // FormatQuantity renders a base unit quantity for people:
-// "6x", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg".
+// "6x", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg". Like L and kg,
+// ml and g show at most two decimals, as "1.234 g" reads as 1234 g.
 func FormatQuantity(q float64, u Unit) string {
 	switch u {
 	case UnitML:
 		if useLargeUnit(q) {
 			return FormatNumber(q/1000) + " L"
 		}
-		return formatGrouped(q) + " ml"
+		return formatSmall(q) + " ml"
 	case UnitGram:
 		if useLargeUnit(q) {
 			return FormatNumber(q/1000) + " kg"
 		}
-		return formatGrouped(q) + " g"
+		return formatSmall(q) + " g"
 	default:
 		return formatGrouped(q) + "x"
 	}
+}
+
+// formatSmall is formatGrouped to two decimals; a little that would show
+// as nothing shows as "<0.01".
+func formatSmall(q float64) string {
+	r := math.Round(q*100) / 100
+	if r == 0 && q != 0 {
+		return "<0.01"
+	}
+	return formatGrouped(r)
 }
 
 // formatGrouped is FormatNumber with thousands separators: "1 234.5".
@@ -224,21 +235,33 @@ func FormatDelta(q float64, u Unit) string {
 
 // SplitForInput turns a base quantity into an input value and sub unit,
 // picking the larger unit when it reads better (1500 ml -> "1.5", "l").
+// The value parses back to exactly q.
 func SplitForInput(q float64, u Unit) (string, string) {
 	switch u {
 	case UnitML:
 		if useLargeUnit(q) {
 			return FormatNumber(q / 1000), "l"
 		}
-		return FormatNumber(q), "ml"
+		return exactInput(q), "ml"
 	case UnitGram:
 		if useLargeUnit(q) {
 			return FormatNumber(q / 1000), "kg"
 		}
-		return FormatNumber(q), "g"
+		return exactInput(q), "g"
 	default:
 		return FormatNumber(q), "pcs"
 	}
+}
+
+// exactInput is FormatNumber with a trailing zero where the number would
+// otherwise be refused as ambiguous on the way back: "1.2340" ml, not
+// "1.234" (which could mean 1234).
+func exactInput(q float64) string {
+	s := FormatNumber(q)
+	if CheckAmbiguous(s) != nil {
+		s += "0"
+	}
+	return s
 }
 
 // FormatNumber prints up to three decimals without trailing zeros.

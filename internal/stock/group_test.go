@@ -179,7 +179,7 @@ func TestWriteMovementsCSV(t *testing.T) {
 	}
 	want := []string{
 		"date,item_id,item,kind,change,change_display,unit,total_price,unit_price,price_per,shop,note,service",
-		"2026-10-29,8,Motorex Coolant,purchase,1000,+1 L,ml,67.00,67.00,L,moto24,'-promo,",
+		"2026-10-29,8,Motorex Coolant,purchase,1000,'+1 L,ml,67.00,67.00,L,moto24,'-promo,", // "+1 L" would be a formula
 		"2026-10-29,8,Motorex Coolant,service,-500,−500 ml,ml,,,,,,Coolant change",
 		"2026-10-29,7,OEM Oil Filter,use,-1,−1x,piece,,,,,,",
 	}

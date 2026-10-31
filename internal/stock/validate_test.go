@@ -318,6 +318,11 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"shop on a purchase", MovementInput{Kind: MovePurchase, Delta: 1, Supplier: long}.Validate(), "form"},
 		{"kit months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(241)}.Validate(), "interval_months"},
 		{"kit km", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(1_000_001)}.Validate(), "interval_km"},
+		{"kit line over the maximum", func() Errors {
+			in := KitInput{VehicleID: 1, Name: "A", Lines: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
+			in.Normalize()
+			return in.Validate()
+		}(), "lines"},
 		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
 		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "free_text"},
 	}

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs every check CI runs (except e2e): formatting, vet, staticcheck, tests.
+# Runs every check CI runs (except govulncheck, e2e and the Docker smoke
+# test): formatting, vet, staticcheck, tests.
 # Usage: scripts/check.sh            (integration tests need DB_* or .env)
 set -euo pipefail
 cd "$(dirname "$0")/.."

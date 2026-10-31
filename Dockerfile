@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ----
-# Runs on the build machine's platform and cross-compiles, so arm64 images
-# (Raspberry Pi) build without emulation.
+# Runs on the build machine's platform and cross-compiles to the target's
+# (CI publishes linux/amd64), so building on another machine needs no
+# emulation.
 FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

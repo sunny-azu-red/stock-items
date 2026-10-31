@@ -33,14 +33,14 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 - Each DB test gets a fresh, migrated schema `test_<random>` that is dropped when the test ends. Without `DB_HOST` (and no `.env`) these tests are skipped.
 - The e2e suite starts two servers, one per Playwright project, on the schemas `e2e_desktop` and `e2e_mobile`. They are reset at the start of each run and left in place afterwards so you can inspect them.
 - The e2e tests use `@playwright/test` 1.63.0, pinned to match the Chromium build installed on the dev machine. After upgrading it, run `npx playwright install chromium`.
-- `scripts/check.sh` runs what CI runs, except the e2e tests and the Docker smoke test (CI builds the image, starts it on the schema `e2e_docker` and waits for its health check to pass).
+- `scripts/check.sh` runs what CI runs, except govulncheck, the e2e tests and the Docker smoke test (CI builds the image, starts it on the schema `e2e_docker` and waits for its health check to pass).
 
 ## CI
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on pull requests, pushes to `master` and `v*` tags:
 
-1. **test:** `scripts/check.sh` against a Postgres 18 service, the Docker smoke test, then the Playwright suite.
-2. **image** (pushes only, after **test** passes): builds `linux/amd64` and `linux/arm64` and pushes `ghcr.io/sunny-azu-red/pitbox`, tagged `latest` from `master`, `sha-<commit>` from every push, and `1.2.3` and `1.2` from a `v1.2.3` tag. [Deployment](deployment.md#portainer) uses these images.
+1. **test:** `scripts/check.sh` against a Postgres 18 service, govulncheck (fails on a known vulnerability in Go or a dependency that the code reaches; its version is pinned in the workflow, and it is fetched there, not a module dependency), the Docker smoke test, then the Playwright suite. To run govulncheck locally: `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...`.
+2. **image** (pushes only, after **test** passes): builds `linux/amd64` (the only platform Pitbox runs on) and pushes `ghcr.io/sunny-azu-red/pitbox`, tagged `latest` from `master`, `sha-<commit>` from every push, and `1.2.3` and `1.2` from a `v1.2.3` tag. [Deployment](deployment.md#portainer) uses these images.
 
 ## Adding a feature (checklist)
 

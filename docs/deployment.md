@@ -11,7 +11,7 @@ CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe 
   -o bin/pitbox ./cmd/pitbox
 ```
 
-Cross-compile for a Raspberry Pi or another ARM server with `GOOS=linux GOARCH=arm64`.
+Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host). To build on another machine, such as a Mac, set `GOOS=linux GOARCH=amd64`.
 
 ## Run with systemd
 
@@ -59,7 +59,7 @@ journalctl -u pitbox -f
 
 The image is distroless and runs as a non-root user. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
-CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry Pi): `latest` for every push to `master`, `sha-<commit>` for every push, and `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
+CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `latest` for every push to `master`, `sha-<commit>` for every push, and `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
 
 ### Portainer
 

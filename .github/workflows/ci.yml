@@ -42,6 +42,8 @@ jobs:
           go-version-file: go.mod
       - name: Lint and test
         run: scripts/check.sh
+      - name: Known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
       - name: Docker image starts and turns healthy
         run: |
@@ -73,8 +75,8 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report
 
-  # Publishes ghcr.io/<owner>/pitbox for amd64 and arm64: `latest` from
-  # master, `sha-<commit>` from every push, `1.2.3` and `1.2` from a v1.2.3 tag.
+  # Publishes ghcr.io/<owner>/pitbox for amd64: `latest` from master,
+  # `sha-<commit>` from every push, `1.2.3` and `1.2` from a v1.2.3 tag.
   image:
     needs: test
     if: github.event_name == 'push'
@@ -105,7 +107,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -52,4 +52,4 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 - **Archive instead of delete**
  for items, vehicles and kits that other records refer to, so history and spending never change behind the user's back.
 - **Deletes go to a trash.** Each delete stores a JSON snapshot of the rows it removes in `trash`, in the same transaction, which gives every delete an Undo and a *Recently deleted* page. Restoring re-inserts the rows with their ids and redoes their stock effect (`store/trash.go`). Permanently deleting an entry also deletes the entries that can't be restored without it.
-- **Photos in Postgres** (`bytea`, resized to 1600 px plus a 320 px thumbnail). A `pg_dump` is a complete backup.
+- **Photos in Postgres** (`bytea`, resized to 1600 px plus a 320 px thumbnail). A `pg_dump` is a complete backup. Uploads are decoded one at a time and refused over 50 megapixels, so one decode takes at most about 1.4 GB (a progressive CMYK JPEG; an ordinary phone JPEG about 270 MB).

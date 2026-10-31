@@ -1,13 +1,18 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1879,4 +1884,109 @@ func TestPhotoRestoreBeatsTheCache(t *testing.T) {
 	// Undo swaps them back.
 	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
 	expect(t, a.get(photo), http.StatusOK, "new")
+}
+
+// photoUpload is the item page's photo form sending data.
+func photoUpload(t *testing.T, ctx context.Context, item string, data []byte) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	fw, err := w.CreateFormFile("photo", "p.png")
+	if err == nil {
+		_, err = fw.Write(data)
+	}
+	if err == nil {
+		err = w.Close()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, item+"/photo", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req
+}
+
+func smallPNG(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	m := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for i := range m.Pix {
+		m.Pix[i] = 255
+	}
+	m.Set(0, 0, c)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, m); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// A photo over the pixel limit is refused with the limit, and nothing is
+// saved.
+func TestPhotoUploadTooManyPixels(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	rec := a.do(photoUpload(t, context.Background(), item, pngWithSize(t, 7072, 7071)))
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "The photo has too many pixels (max 50 megapixels)" {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get(item+"/photo"), http.StatusNotFound)
+}
+
+// An upload waits while another photo is being decoded, then saves; one
+// whose client goes away while waiting saves nothing.
+func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	send := func(ctx context.Context, data []byte) <-chan *httptest.ResponseRecorder {
+		done := make(chan *httptest.ResponseRecorder, 1)
+		req := photoUpload(t, ctx, item, data)
+		go func() { done <- a.do(req) }()
+		return done
+	}
+	waiting := func(done <-chan *httptest.ResponseRecorder) {
+		t.Helper()
+		select {
+		case rec := <-done:
+			t.Fatalf("answered while another decode held the slot: %d %+v", rec.Code, flashOf(t, rec))
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	answer := func(done <-chan *httptest.ResponseRecorder) *httptest.ResponseRecorder {
+		t.Helper()
+		select {
+		case rec := <-done:
+			return rec
+		case <-time.After(10 * time.Second):
+			t.Fatal("still waiting")
+			return nil
+		}
+	}
+
+	photoSlot <- struct{}{} // another upload is being decoded
+	done := send(context.Background(), smallPNG(t, color.Black))
+	waiting(done)
+	<-photoSlot
+	rec := answer(done)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Message != "Photo saved" {
+		t.Fatalf("flash = %+v", f)
+	}
+	first := a.get(item + "/photo").Body.String()
+
+	photoSlot <- struct{}{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done = send(ctx, smallPNG(t, color.White))
+	waiting(done)
+	cancel()
+	answer(done)
+	<-photoSlot
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("an upload whose client went away replaced the photo")
+	}
+	if strings.Contains(a.get("/trash").Body.String(), "Photo: Silkolene") {
+		t.Error("an upload whose client went away put the old photo in the trash")
+	}
 }

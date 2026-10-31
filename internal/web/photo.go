@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"image"
@@ -18,11 +19,30 @@ const (
 	photoMaxSide = 1600
 	thumbSide    = 320
 	// photoMaxPixels bounds the memory a decode can take. A small file can
-	// declare a huge image ("decompression bomb").
-	photoMaxPixels = 80_000_000
+	// declare a huge image ("decompression bomb"). 50 MP still takes the
+	// largest phone photos. Processing one at the limit takes about 270 MB
+	// for an ordinary JPEG, up to about 1.4 GB for a progressive CMYK one.
+	photoMaxPixels = 50_000_000
 )
 
 var errPhotoTooBig = errors.New("image has too many pixels")
+
+// photoSlot lets one photo decode run at a time, so two or three uploads
+// at once can't add up to several gigabytes and run the server out of
+// memory. One at a time is plenty for a garage.
+var photoSlot = make(chan struct{}, 1)
+
+// processPhotoQueued is processPhoto once the photo slot is free. It gives
+// up waiting when ctx ends (the client went away).
+func processPhotoQueued(ctx context.Context, data []byte) (full, thumb []byte, err error) {
+	select {
+	case photoSlot <- struct{}{}:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	defer func() { <-photoSlot }()
+	return processPhoto(data)
+}
 
 // processPhoto decodes an uploaded image, applies the EXIF orientation
 // (phone photos are often stored sideways), and returns a resized JPEG and
@@ -64,16 +84,24 @@ func fit(img image.Image, maxSide int) image.Image {
 		return flatten(img)
 	}
 	if w >= h {
-		h = h * maxSide / w
+		h = max(h*maxSide/w, 1)
 		w = maxSide
 	} else {
-		w = w * maxSide / h
+		w = max(w*maxSide/h, 1)
 		h = maxSide
 	}
-	dst := image.NewRGBA(image.Rect(0, 0, max(w, 1), max(h, 1)))
-	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
-	return dst
+	// Halve a large photo first, until it is under twice the target size:
+	// CatmullRom's scratch buffer is 32 bytes × target width × source
+	// height, about 360 MB straight from 50 MP. Bilinear at exactly half
+	// (an odd last row or column is left out) is the average of each 2×2
+	// block, so the halving doesn't alias, and CatmullRom makes the last
+	// step.
+	for b.Dx()/2 >= w && b.Dy()/2 >= h {
+		even := image.Rect(b.Min.X, b.Min.Y, b.Min.X+b.Dx()&^1, b.Min.Y+b.Dy()&^1)
+		img = scaleOnWhite(draw.ApproxBiLinear, img, even, b.Dx()/2, b.Dy()/2)
+		b = img.Bounds()
+	}
+	return scaleOnWhite(draw.CatmullRom, img, b, w, h)
 }
 
 // cover crops the centre square of img and scales it to side x side.
@@ -81,10 +109,15 @@ func cover(img image.Image, side int) image.Image {
 	b := img.Bounds()
 	s := min(b.Dx(), b.Dy())
 	x, y := b.Min.X+(b.Dx()-s)/2, b.Min.Y+(b.Dy()-s)/2
-	crop := image.Rect(x, y, x+s, y+s)
-	dst := image.NewRGBA(image.Rect(0, 0, side, side))
+	return scaleOnWhite(draw.CatmullRom, img, image.Rect(x, y, x+s, y+s), side, side)
+}
+
+// scaleOnWhite scales the part sr of img to a new w x h image on white
+// (JPEG has no transparency).
+func scaleOnWhite(s draw.Scaler, img image.Image, sr image.Rectangle, w, h int) *image.RGBA {
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, crop, draw.Over, nil)
+	s.Scale(dst, dst.Bounds(), img, sr, draw.Over, nil)
 	return dst
 }
 

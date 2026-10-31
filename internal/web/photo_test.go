@@ -2,13 +2,16 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
 	"testing"
+	"time"
 )
 
 func testImage(w, h int) image.Image {
@@ -43,19 +46,95 @@ func TestProcessPhoto(t *testing.T) {
 	}
 }
 
-// A tiny PNG can declare a huge canvas; it must be refused before decoding.
-func TestProcessPhotoRefusesDecompressionBomb(t *testing.T) {
+// pngWithSize is a 1x1 PNG whose header declares w x h, as a small file
+// can ("decompression bomb").
+func pngWithSize(t *testing.T, w, h uint32) []byte {
+	t.Helper()
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatal(err)
 	}
 	b := buf.Bytes()
 	// Patch width and height in the IHDR chunk and fix up its CRC.
-	binary.BigEndian.PutUint32(b[16:20], 20000)
-	binary.BigEndian.PutUint32(b[20:24], 20000)
+	binary.BigEndian.PutUint32(b[16:20], w)
+	binary.BigEndian.PutUint32(b[20:24], h)
 	binary.BigEndian.PutUint32(b[29:33], crc32.ChecksumIEEE(b[12:29]))
-	if _, _, err := processPhoto(b); err != errPhotoTooBig {
-		t.Fatalf("err = %v, want errPhotoTooBig", err)
+	return b
+}
+
+// A huge canvas must be refused before decoding.
+func TestProcessPhotoRefusesDecompressionBomb(t *testing.T) {
+	for _, tc := range []struct {
+		w, h    uint32
+		refused bool
+	}{
+		{20000, 20000, true},
+		{7072, 7071, true},   // 50,006,112 pixels: just over the limit
+		{10000, 5000, false}, // exactly 50 MP: decoded (and found truncated)
+	} {
+		_, _, err := processPhoto(pngWithSize(t, tc.w, tc.h))
+		if got := errors.Is(err, errPhotoTooBig); got != tc.refused || err == nil {
+			t.Errorf("%dx%d: err = %v, want refused = %v", tc.w, tc.h, err, tc.refused)
+		}
+	}
+}
+
+// Only one photo is decoded at a time; the next waits for its turn, and
+// stops waiting when its client goes away.
+func TestPhotoDecodesOneAtATime(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, testImage(40, 30)); err != nil {
+		t.Fatal(err)
+	}
+	decode := func(ctx context.Context) <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, _, err := processPhotoQueued(ctx, buf.Bytes())
+			done <- err
+		}()
+		return done
+	}
+	waiting := func(done <-chan error) {
+		t.Helper()
+		select {
+		case err := <-done:
+			t.Fatalf("decoded while another decode held the slot (err = %v)", err)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	finished := func(done <-chan error) error {
+		t.Helper()
+		select {
+		case err := <-done:
+			return err
+		case <-time.After(5 * time.Second):
+			t.Fatal("still waiting")
+			return nil
+		}
+	}
+
+	photoSlot <- struct{}{} // another upload is being decoded
+	done := decode(context.Background())
+	waiting(done)
+	<-photoSlot
+	if err := finished(done); err != nil {
+		t.Fatal(err)
+	}
+	if len(photoSlot) != 0 {
+		t.Fatal("a finished decode kept the slot")
+	}
+
+	photoSlot <- struct{}{}
+	defer func() { <-photoSlot }()
+	ctx, cancel := context.WithCancel(context.Background())
+	done = decode(ctx)
+	waiting(done)
+	cancel()
+	if err := finished(done); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if len(photoSlot) != 1 {
+		t.Error("a cancelled wait freed the slot it never had")
 	}
 }
 
@@ -121,5 +200,24 @@ func TestCoverCropsTheCentre(t *testing.T) {
 	r, g, _, _ := cover(img, 10).At(1, 5).RGBA()
 	if r > g {
 		t.Errorf("thumbnail edge is red (r=%d g=%d): not the centre crop", r>>8, g>>8)
+	}
+}
+
+// A large image is halved before the last step; that keeps its shape, and
+// its colours right to the edges (no white seam where an odd row or column
+// was left out).
+func TestFitHalvesLargeImages(t *testing.T) {
+	src := image.NewNRGBA(image.Rect(0, 0, 641, 321))
+	for i := 0; i < len(src.Pix); i += 4 {
+		copy(src.Pix[i:], []byte{200, 40, 10, 255})
+	}
+	img := fit(src, 100)
+	if b := img.Bounds(); b.Dx() != 100 || b.Dy() != 50 {
+		t.Fatalf("size = %v, want 100x50", b)
+	}
+	for _, p := range []image.Point{{0, 0}, {99, 0}, {0, 49}, {99, 49}, {50, 25}} {
+		if r, g, b, _ := img.At(p.X, p.Y).RGBA(); r>>8 != 200 || g>>8 != 40 || b>>8 != 10 {
+			t.Errorf("pixel %v = %d,%d,%d, want 200,40,10", p, r>>8, g>>8, b>>8)
+		}
 	}
 }

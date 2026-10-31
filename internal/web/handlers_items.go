@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -942,7 +943,10 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	if _, err := buf.ReadFrom(file); err != nil {
 		return err
 	}
-	full, thumb, err := processPhoto(buf.Bytes())
+	full, thumb, err := processPhotoQueued(r.Context(), buf.Bytes())
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err // the client went away while waiting for its turn
+	}
 	if errors.Is(err, errPhotoTooBig) {
 		s.setFlash(w, "error", fmt.Sprintf("The photo has too many pixels (max %d megapixels)", photoMaxPixels/1_000_000))
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)

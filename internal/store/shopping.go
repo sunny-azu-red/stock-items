@@ -289,6 +289,24 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&itemUnit); err != nil {
 			return notFound(err)
 		}
+		// Looked up again under the item's lock, like ArchiveItem: locking
+		// an entry that wasn't there yet locked nothing, and an AddShopping
+		// or EnsureShopping that held the item has committed its entry by
+		// now (it can't add one while this holds the item). NOWAIT: this
+		// entry comes after the item, against the usual order, so one that
+		// is being ticked off right now (MarkBought holds it and waits for
+		// the item) is refused instead of deadlocking.
+		if !merge {
+			err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE NOWAIT`, itemID).Scan(&id)
+			switch {
+			case err == nil:
+				merge = true
+			case isLockNotAvailable(err):
+				return &ConflictError{Field: "form", Message: "The shopping list changed meanwhile. Try again."}
+			case !errors.Is(err, pgx.ErrNoRows):
+				return err
+			}
+		}
 		// Un-archiving changes the item's page: a new version, only then.
 		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL, version = version + 1 WHERE id = $1 AND archived_at IS NOT NULL`,
 			itemID); err != nil {

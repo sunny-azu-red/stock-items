@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -147,16 +148,56 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 // in.Version fails with a *StaleError.
 func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) error {
 	return s.inFormTx(ctx, in.FormKey, WhatKit, &id, func(tx pgx.Tx) error {
-		// A kit can stay with its archived vehicle, but not move to one.
+		// The vehicles (the kit's and the one it moves to, in id order)
+		// before the kit, as logging a service with the kit locks its
+		// vehicle before the kit (checkServiceKit): the two can't deadlock.
+		// The kit's vehicle is read without a lock first; a kit moved since
+		// has a new version, so the check below refuses it.
 		var was int64
+		err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1`, id).Scan(&was)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return goneError(ctx, tx, WhatKit, id)
+		}
+		if err != nil {
+			return err
+		}
+		vehicles, err := tx.Query(ctx, `SELECT id, name, archived_at IS NOT NULL FROM vehicles WHERE id IN ($1, $2) ORDER BY id FOR NO KEY UPDATE`,
+			was, in.VehicleID)
+		if err != nil {
+			return err
+		}
+		var target string
+		var targetArchived, found bool
+		for vehicles.Next() {
+			var vid int64
+			var name string
+			var archived bool
+			if err := vehicles.Scan(&vid, &name, &archived); err != nil {
+				return err
+			}
+			if vid == in.VehicleID {
+				target, targetArchived, found = name, archived, true
+			}
+		}
+		if err := vehicles.Err(); err != nil {
+			return err
+		}
+		var now int64
 		var version int
-		err := tx.QueryRow(ctx, `SELECT vehicle_id, version FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&was, &version)
+		err = tx.QueryRow(ctx, `SELECT vehicle_id, version FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&now, &version)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatKit, id); err != nil {
 			return err
 		}
+		if now != was {
+			return &StaleError{What: WhatKit}
+		}
+		// A kit can stay with its archived vehicle, but not move to one.
 		if was != in.VehicleID {
-			if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
-				return err
+			if !found {
+				return ErrNotFound
+			}
+			if targetArchived {
+				return &ConflictError{Field: "form", Message: target + " is archived; restore it first."}
 			}
 		}
 		// A new version (its lines count as part of the kit): a form opened
@@ -175,7 +216,28 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 	})
 }
 
+// replaceKitLines replaces a kit's lines. Their items are locked first
+// (see shareItems), and a line read in another unit than its item has now
+// is refused: 1000 ml would otherwise be saved as 1000 g.
 func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines []stock.KitLineInput) error {
+	ids := make([]int64, 0, len(lines))
+	for _, l := range lines {
+		ids = append(ids, l.ItemID)
+	}
+	units, err := shareItems(ctx, tx, ids)
+	if err != nil {
+		return err
+	}
+	for _, l := range lines {
+		u, ok := units[l.ItemID]
+		if !ok {
+			return ErrNotFound
+		}
+		if l.Unit != "" && l.Unit != u.unit {
+			return &ConflictError{Field: "lines", Message: u.name + " is counted in " + string(u.unit) +
+				" now (its unit was changed meanwhile). Check its amount and save again."}
+		}
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM service_kit_lines WHERE kit_id = $1`, kitID); err != nil {
 		return err
 	}
@@ -190,6 +252,41 @@ func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines []stock.
 		}
 	}
 	return nil
+}
+
+// sharedItem is an item a kit line names, as shareItems read it.
+type sharedItem struct {
+	name string
+	unit stock.Unit
+}
+
+// shareItems locks the items of kit lines FOR SHARE, in id order, before
+// the lines are inserted: inserting alone takes a KEY SHARE lock, which an
+// item's edit (FOR NO KEY UPDATE) doesn't wait for, so its unit could
+// change past a line it can't see yet. This way the edit waits and then
+// sees the line, or the kit waits and sees the new unit. Items come after
+// the kit and its vehicle, as everywhere.
+func shareItems(ctx context.Context, tx pgx.Tx, ids []int64) (map[int64]sharedItem, error) {
+	out := map[int64]sharedItem{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, brand, name, unit FROM items WHERE id = ANY($1) ORDER BY id FOR SHARE`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var brand, name string
+		var it sharedItem
+		if err := rows.Scan(&id, &brand, &name, &it.unit); err != nil {
+			return nil, err
+		}
+		it.name = displayName(brand, name)
+		out[id] = it
+	}
+	return out, rows.Err()
 }
 
 // KitServices counts the services logged with a kit.

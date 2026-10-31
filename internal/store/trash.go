@@ -330,16 +330,23 @@ var hardLinks = map[string][][2]string{
 // changes and list entries along, a vehicle its deleted services and
 // kits. others counts those. Only items and vehicles are needed that way,
 // so one level is all there is.
+//
+// The entry and those that go along are locked in id order before any is
+// deleted, as EmptyTrash locks, so the two can't deadlock.
 func (s *Store) PurgeTrash(ctx context.Context, id int64) (others int, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var raw string
-		if err := tx.QueryRow(ctx, `DELETE FROM trash WHERE id = $1 RETURNING payload::text`, id).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT payload::text FROM trash WHERE id = $1`, id).Scan(&raw); err != nil {
 			return notFound(err)
 		}
 		var p trashPayload
 		if err := json.Unmarshal([]byte(raw), &p); err != nil {
 			return err
 		}
+		// What goes along: payloads holding a row that refers to the
+		// purged item or vehicle (trash rows never change, so this holds).
+		var along []string
+		var args []any
 		for _, parent := range []string{"items", "vehicles"} {
 			rows, err := decodeRows(p[parent])
 			if err != nil {
@@ -347,23 +354,45 @@ func (s *Store) PurgeTrash(ctx context.Context, id int64) (others int, err error
 			}
 			for _, r := range rows {
 				for _, link := range hardLinks[parent] {
-					tag, err := tx.Exec(ctx, `DELETE FROM trash WHERE payload @> `+inTrash, link[0], link[1], r.int64("id"))
-					if err != nil {
-						return err
-					}
-					others += int(tag.RowsAffected())
+					n := len(args)
+					along = append(along, fmt.Sprintf(`payload @> jsonb_build_object($%d::text, jsonb_build_array(jsonb_build_object($%d::text, $%d::bigint)))`,
+						n+2, n+3, n+4))
+					args = append(args, link[0], link[1], r.int64("id"))
 				}
 			}
 		}
-		return nil
+		where := "id = $1"
+		if len(along) > 0 {
+			where += " OR " + strings.Join(along, " OR ")
+		}
+		rows, err := tx.Query(ctx, `SELECT id FROM trash WHERE `+where+` ORDER BY id FOR UPDATE`, append([]any{id}, args...)...)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(ids, id) {
+			return ErrNotFound // restored or purged meanwhile
+		}
+		others = len(ids) - 1
+		_, err = tx.Exec(ctx, `DELETE FROM trash WHERE id = ANY($1)`, ids)
+		return err
 	})
 	return others, err
 }
 
-// EmptyTrash deletes everything in the trash for good.
+// EmptyTrash deletes everything in the trash for good. It locks the rows
+// in id order first, like PurgeTrash.
 func (s *Store) EmptyTrash(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM trash`)
-	return err
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT id FROM trash ORDER BY id FOR UPDATE`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `DELETE FROM trash`)
+		return err
+	})
 }
 
 // Restored says what a restore brought back: its kind and the id of the
@@ -518,6 +547,16 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (i
 		return 0, err
 	}
 	if lines, err = linked(ctx, tx, lines, "item_id", "items", dropped); err != nil {
+		return 0, err
+	}
+	// Hold the items FOR SHARE, like saving a kit, so none changes unit
+	// past the lines coming back. Their units can't have changed while the
+	// lines were in the trash (UpdateItem checks the trash too).
+	ids := make([]int64, 0, len(lines))
+	for _, l := range lines {
+		ids = append(ids, l.int64("item_id"))
+	}
+	if _, err := shareItems(ctx, tx, ids); err != nil {
 		return 0, err
 	}
 	return kit.int64("id"), restoreRows(ctx, tx, "service_kit_lines", encodeRows(lines))

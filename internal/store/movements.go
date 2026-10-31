@@ -195,17 +195,30 @@ type lockedMovement struct {
 
 // lockMovement locks a stock change and its item for revising. An
 // archived item's changes are refused, like new ones.
+//
+// The item is locked before the stock change, as everything that changes
+// both does: deleting an item locks it and then cascades to its stock
+// changes, and undoing a Bought locks the item before its purchase. So the
+// item id is read without a lock first and checked again once both are
+// held (a stock change never moves to another item, but a deleted one is
+// gone by then).
 func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, error) {
 	var m lockedMovement
+	var itemID int64
+	if err := tx.QueryRow(ctx, `SELECT item_id FROM stock_movements WHERE id = $1`, id).Scan(&itemID); err != nil {
+		return m, notFound(err)
+	}
 	var brand, name string
 	var archived bool
-	err := tx.QueryRow(ctx, `
-		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, i.archived_at IS NOT NULL, m.kind, m.delta,
-		       m.total_price, m.supplier, m.note, m.occurred_on, m.service_record_id, m.version
-		FROM stock_movements m JOIN items i ON i.id = m.item_id
-		WHERE m.id = $1 FOR NO KEY UPDATE`, id).
-		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &archived, &m.Kind, &m.Delta, &m.TotalPrice,
-			&m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.Version)
+	err := tx.QueryRow(ctx, `SELECT brand, name, unit, quantity, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).
+		Scan(&brand, &name, &m.ItemUnit, &m.qty, &archived)
+	if err != nil {
+		return m, notFound(err)
+	}
+	err = tx.QueryRow(ctx, `
+		SELECT id, item_id, kind, delta, total_price, supplier, note, occurred_on, service_record_id, version
+		FROM stock_movements WHERE id = $1 AND item_id = $2 FOR NO KEY UPDATE`, id, itemID).
+		Scan(&m.ID, &m.ItemID, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.Version)
 	if err != nil {
 		return m, notFound(err)
 	}

@@ -431,6 +431,9 @@ type KitInput struct {
 type KitLineInput struct {
 	ItemID   int64
 	Quantity float64
+	// Unit is the item's unit the quantity was read in, so a save can
+	// refuse a line whose item changed unit meanwhile ("" skips the check).
+	Unit Unit
 }
 
 // Normalize trims fields and merges duplicate lines.

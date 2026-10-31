@@ -302,6 +302,11 @@ func replaceSKUsAndTags(ctx context.Context, tx pgx.Tx, id int64, in stock.ItemI
 		_, err := tx.Exec(ctx, `
 			INSERT INTO item_vehicles (item_id, vehicle_id)
 			SELECT $1, v.id FROM vehicles v WHERE v.id = ANY($2)`, id, in.VehicleIDs)
+		if isForeignKeyViolation(err) {
+			// A vehicle deleted after this statement saw it: the tag's key
+			// check waited for the delete and then found it gone.
+			return &ConflictError{Field: "form", Message: "A vehicle you picked was deleted meanwhile. Check the vehicles and save again."}
+		}
 		if err != nil {
 			return err
 		}
@@ -342,6 +347,8 @@ func (s *Store) DeleteItem(ctx context.Context, id int64, version int) (trashID 
 		}
 		var name, brand string
 		var have int
+		// The item before the stock changes the delete cascades to, as
+		// editing or deleting one of them locks (lockMovement).
 		err := tx.QueryRow(ctx, `SELECT name, brand, version FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand, &have)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatItem, id); err != nil {
 			return err

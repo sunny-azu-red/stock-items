@@ -116,6 +116,9 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := lockItems(ctx, tx, partIDs(in.Parts)); err != nil {
 			return err
 		}
+		if err := checkPartUnits(ctx, tx, in.Parts); err != nil {
+			return err
+		}
 		if err := checkArchivedParts(ctx, tx, 0, in.Parts); err != nil {
 			return err
 		}
@@ -191,6 +194,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		if err != nil {
 			return err
 		}
+		if err := checkPartUnits(ctx, tx, in.Parts); err != nil {
+			return err
+		}
 		if err := checkArchivedParts(ctx, tx, id, in.Parts); err != nil {
 			return err
 		}
@@ -224,14 +230,18 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 }
 
 // checkServiceKit refuses a kit that belongs to another vehicle or is
-// archived.
+// archived. It holds the kit FOR SHARE, so it can't be archived or moved
+// before the service commits (inserting the service only takes a KEY
+// SHARE lock, which archiving doesn't wait for). The caller holds the
+// vehicle; the kit comes after it and before the parts, the order UpdateKit
+// locks in too.
 func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) error {
 	if in.KitID == nil {
 		return nil
 	}
 	var kitVehicle int64
 	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT vehicle_id, archived_at IS NOT NULL FROM service_kits WHERE id = $1`, *in.KitID).
+	if err := tx.QueryRow(ctx, `SELECT vehicle_id, archived_at IS NOT NULL FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
 		Scan(&kitVehicle, &archived); err != nil {
 		return notFound(err)
 	}
@@ -266,6 +276,30 @@ func lockVehicle(ctx context.Context, tx pgx.Tx, id int64) (name string, archive
 	err = tx.QueryRow(ctx, `SELECT name, archived_at IS NOT NULL FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).
 		Scan(&name, &archived)
 	return name, archived, notFound(err)
+}
+
+// checkPartUnits refuses a part read in another unit than its item has
+// now, like replaceKitLines. The caller holds the items' locks.
+func checkPartUnits(ctx context.Context, tx pgx.Tx, parts []stock.KitLineInput) error {
+	for _, p := range parts {
+		if p.Unit == "" {
+			continue
+		}
+		var brand, name string
+		var unit stock.Unit
+		err := tx.QueryRow(ctx, `SELECT brand, name, unit FROM items WHERE id = $1`, p.ItemID).Scan(&brand, &name, &unit)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue // the parts' movements report it
+		}
+		if err != nil {
+			return err
+		}
+		if unit != p.Unit {
+			return &ConflictError{Field: "parts", Message: displayName(brand, name) + " is counted in " + string(unit) +
+				" now (its unit was changed meanwhile). Check its amount and save again."}
+		}
+	}
+	return nil
 }
 
 // checkArchivedParts refuses to take an archived item for a service, or a

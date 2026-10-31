@@ -121,7 +121,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			case q <= 0:
 				row.Error = "Quantity must be greater than zero"
 			default:
-				lines = append(lines, stock.KitLineInput{ItemID: id, Quantity: q})
+				lines = append(lines, stock.KitLineInput{ItemID: id, Quantity: q, Unit: it.Unit})
 			}
 		}
 		if row.Error != "" {

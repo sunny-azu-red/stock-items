@@ -93,11 +93,15 @@
 </section>
 {{end}}
 
-{{/* Movement history table: dict "Movements" []Movement "ShowItem" bool */}}
-{{define "movement-table"}}
+{{/* A column header that sorts the table when clicked: sortCol (from
+     sortHeads.Col). A plain link, so it works without JavaScript. */}}
+{{define "sort-th"}}<th{{if .Num}} class="num"{{end}} aria-sort="{{.Sort}}">{{if .Href}}<a class="sort-link{{if ne .Sort "none"}} sorted{{end}}" href="{{.Href}}" title="{{.Title}}">{{.Label}}{{if eq .Sort "ascending"}}{{icon "arrow-up"}}{{else if eq .Sort "descending"}}{{icon "arrow-down"}}{{else}}{{icon "arrow-up-down"}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
+
+{{/* Movement history table: dict "Movements" []Movement "ShowItem" bool "Sort" sortHeads */}}
+{{define "movement-table"}}{{$h := .Sort}}
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Date</th>{{if .ShowItem}}<th>Item</th>{{end}}<th>What</th><th class="num">Change</th><th class="num">Price</th><th>Note</th><th><span class="sr-only">Edit</span></th></tr></thead>
+  <thead><tr>{{template "sort-th" ($h.Col "date" "Date" false)}}{{if .ShowItem}}{{template "sort-th" ($h.Col "item" "Item" false)}}{{end}}{{template "sort-th" ($h.Col "kind" "What" false)}}{{template "sort-th" ($h.Col "change" "Change" true)}}{{template "sort-th" ($h.Col "price" "Price" true)}}<th>Note</th><th><span class="sr-only">Edit</span></th></tr></thead>
   <tbody>
   {{range .Movements}}
     <tr>

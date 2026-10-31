@@ -60,4 +60,4 @@ SCREENSHOT_DIR=/tmp/shots npx playwright test -g "set up|filter|quick|plan|scree
 cp /tmp/shots/{desktop-dashboard,desktop-stock,desktop-kit,mobile-stock}.png ../docs/screenshots/
 ```
 
-This writes one PNG per page and device. Only the four the README shows are kept in `docs/screenshots`.
+This writes one PNG per page and device. Add `SCREENSHOT_SCHEME=dark` for the dark theme (the files end in `-dark`). Only the four the README shows are kept in `docs/screenshots`.

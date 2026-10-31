@@ -134,6 +134,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .card-head h2 { display: flex; align-items: center; gap: .5rem; font-size: 1rem; }
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
+.card-head a.sort-reset { display: inline-flex; align-items: center; gap: .2rem; color: var(--accent); font-weight: 600; }
+.card-head a.sort-reset .icon { width: 14px; height: 14px; }
 .card-body { padding: 1rem 1.2rem; }
 .card + .card, .stack > * + * { margin-top: 1rem; }
 .grid { display: grid; gap: 1rem; }
@@ -350,6 +352,17 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: .4rem; padding: 0; 
 .toggle { display: inline-flex; align-items: center; gap: .4rem; font-size: .88rem; cursor: pointer; padding: .4rem .7rem; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); }
 .toggle:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
 .toggle input { accent-color: var(--accent); margin: 0; }
+/* Sort by, at the end of the toggles: on its own line once they wrap. */
+.sort-by { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-left: auto; }
+.sort-label { font-size: .88rem; color: var(--muted); }
+.filters-row .sort-by select.input { flex: 0 1 auto; width: auto; height: 36px; min-height: 36px; padding-top: .3rem; padding-bottom: .3rem; font-size: .88rem; }
+.sort-by .segmented { gap: 0; }
+.sort-by .segmented label { padding: .4rem .7rem; font-size: .85rem; white-space: nowrap; }
+.sort-by .segmented label:first-of-type { border-radius: 99px 0 0 99px; }
+.sort-by .segmented label:last-of-type { border-radius: 0 99px 99px 0; margin-left: -1px; }
+.sort-by .segmented label:has(input:checked) { position: relative; z-index: 1; }
+.sort-by .segmented .icon { width: 15px; height: 15px; }
+@media (max-width: 640px) { .sort-by { margin-left: 0; } }
 .results-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin: 1.25rem 0 .75rem; }
 .results-head .count { color: var(--muted); font-size: .9rem; }
 
@@ -394,6 +407,16 @@ table.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .table .nowrap { white-space: nowrap; }
 .table a { text-decoration: none; font-weight: 600; }
 .table a:hover { color: var(--accent); }
+/* Sortable column headers (the "sort-th" partial): the arrows show the
+   order, and stay faint on the columns not sorted by. */
+.sort-link { display: inline-flex; align-items: center; gap: .3rem; color: inherit; margin: -.25rem -.4rem; padding: .25rem .4rem; border-radius: 6px; }
+.table .sort-link { font-weight: 600; }
+.table .sort-link:hover { color: var(--text); background: var(--surface-2); }
+.sort-link .icon { width: 13px; height: 13px; opacity: .4; transition: opacity .15s; }
+.sort-link:hover .icon, .sort-link:focus-visible .icon, .sort-link.sorted .icon { opacity: 1; }
+.table .sort-link.sorted { color: var(--accent-strong); }
+.sort-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.num .sort-link { flex-direction: row-reverse; }
 .delta-pos { color: var(--ok); font-weight: 700; }
 .delta-neg { color: var(--danger); font-weight: 700; }
 

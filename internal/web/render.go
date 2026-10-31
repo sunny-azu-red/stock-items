@@ -148,10 +148,7 @@ func (s *Server) funcs() template.FuncMap {
 		// withQuery joins a path and an already encoded query string
 		// (from url.Values.Encode), so html/template does not escape it again.
 		"withQuery": func(path, query string) template.URL {
-			if query == "" {
-				return template.URL(path)
-			}
-			return template.URL(path + "?" + query)
+			return template.URL(joinQuery(path, query))
 		},
 		// skuSearch links a part number to the configured search engine,
 		// with the configured prefix (e.g. "site:de"), if any, added to the query.

@@ -404,7 +404,9 @@ type kitPage struct {
 	View         kitView
 	Vehicle      stock.Vehicle
 	Services     []stock.ServiceRecord
-	ServiceCount int // all services logged with the kit, on any vehicle
+	ServiceCount int             // all services logged with the kit, on any vehicle
+	Lines        []stock.KitLine // the kit's lines in the order asked for
+	Sort         sortHeads
 }
 
 func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
@@ -435,7 +437,9 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	p := kitPage{View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count}
+	order := kitSorts.parse(r.URL.Query())
+	p := kitPage{View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
+		Lines: stock.SortKitLines(k.Lines, order.Key, order.Desc), Sort: sortHeads{Order: order, Path: "/kits/" + strconv.FormatInt(id, 10)}}
 	s.render(w, r, http.StatusOK, "kit_show", View{Title: k.Name + " · " + v.Name, Nav: "services", Data: p})
 	return nil
 }

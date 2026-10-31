@@ -82,27 +82,51 @@ type activityPage struct {
 	Item      *stock.Item // set when showing one item's history
 	Page      int         // 1 is the newest
 	More      bool        // there are older entries
+	Sort      sortOrder
 }
 
 // activityPageSize is how many stock changes one Activity page shows.
 const activityPageSize = 200
 
 // KindQuery is the query string for the given kind ("" for all), keeping
-// the item filter and starting at the newest page.
-func (p activityPage) KindQuery(kind string) string {
-	q := url.Values{}
+// the item filter and the sort, and starting at the first page.
+func (p activityPage) KindQuery(kind string) string { return p.kindValues(kind).Encode() }
+
+func (p activityPage) kindValues(kind string) url.Values {
+	q := p.Sort.Values()
 	if kind != "" {
 		q.Set("kind", kind)
 	}
 	if p.Item != nil {
 		q.Set("item", strconv.FormatInt(p.Item.ID, 10))
 	}
-	return q.Encode()
+	return q
+}
+
+// SortNote says how the table is sorted, e.g. "by price, highest first":
+// on a phone the sorted column may be scrolled out of view.
+func (p activityPage) SortNote() string {
+	words := map[string][3]string{
+		store.MoveSortDate:   {"", "oldest first", "newest first"},
+		store.MoveSortItem:   {"by item, ", "A–Z", "Z–A"},
+		store.MoveSortKind:   {"by kind, ", "A–Z", "Z–A"},
+		store.MoveSortChange: {"by change, ", "smallest first", "largest first"},
+		store.MoveSortPrice:  {"by price, ", "lowest first", "highest first"},
+	}[p.Sort.Key]
+	if p.Sort.Desc {
+		return words[0] + words[2]
+	}
+	return words[0] + words[1]
+}
+
+// Heads are the table's column headers, keeping the kind and item filters.
+func (p activityPage) Heads() sortHeads {
+	return sortHeads{Order: p.Sort, Path: "/activity", Query: p.kindValues(p.Kind)}
 }
 
 // PageQuery is the query string for page n with the current filters.
 func (p activityPage) PageQuery(n int) string {
-	q, _ := url.ParseQuery(p.KindQuery(p.Kind))
+	q := p.kindValues(p.Kind)
 	if n > 1 {
 		q.Set("page", strconv.Itoa(n))
 	}
@@ -138,8 +162,9 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: parsePage(r)}
-	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize}
+	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: parsePage(r), Sort: activitySorts.parse(r.URL.Query())}
+	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize,
+		Sort: p.Sort.Key, Desc: p.Sort.Desc}
 	if item != nil {
 		f.ItemID = item.ID
 	}
@@ -158,13 +183,14 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 }
 
 // activityExportCSV downloads every stock change (of the chosen kind and
-// item).
+// item), in the order the page shows them.
 func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error {
 	item, err := s.activityItem(r)
 	if err != nil {
 		return err
 	}
-	f := store.MovementFilter{Kind: activityKind(r)}
+	order := activitySorts.parse(r.URL.Query())
+	f := store.MovementFilter{Kind: activityKind(r), Sort: order.Key, Desc: order.Desc}
 	if item != nil {
 		f.ItemID = item.ID
 	}

@@ -11,7 +11,7 @@
 
 <form id="filters" class="card filters" method="get" action="/stock"
       hx-get="/stock" hx-trigger="change, input from:#q delay:300ms, submit" hx-target="#results" hx-select="#results"
-      hx-select-oob="#stock-head,#filter-all,#match-toggle"
+      hx-select-oob="#stock-head,#filter-all,#match-toggle,#sort-dir"
       hx-swap="outerHTML" hx-push-url="true" hx-indicator="#results">
   <div class="filters-row">
     <label class="input-icon">{{icon "search"}}<span class="sr-only">Search</span>
@@ -43,7 +43,21 @@
     <label class="toggle"><input type="checkbox" name="instock" value="1" {{if $f.InStock}}checked{{end}}> In stock only</label>
     <label class="toggle"><input type="checkbox" name="archived" value="1" {{if $f.Archived}}checked{{end}}> Archived</label>
     {{if eq $f.View "list"}}<input type="hidden" name="view" value="list">{{end}}
-    {{with $f.Sort}}<input type="hidden" name="sort" value="{{.}}">{{end}}
+    <div class="sort-by">
+      <label class="sort-label" for="sort">Sort by</label>
+      <select class="input" id="sort" name="sort">
+        {{range $f.SortKeys}}<option value="{{.Key}}" {{if eq .Key $f.Sort.Key}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+      {{/* Swapped in with the results, so its labels fit the chosen key. The
+           hidden fields say what the page shows, so a new key starts in its
+           own direction (see parseStockSort). */}}
+      <span id="sort-dir" class="segmented segmented-tight" role="group" aria-label="Sort direction">
+        <input type="hidden" name="was_sort" value="{{$f.Sort.Key}}"><input type="hidden" name="was_dir" value="{{$f.Sort.Dir}}">
+        {{$l := $f.DirLabels}}
+        <label><input type="radio" id="dir-asc" name="dir" value="asc" {{if not $f.Sort.Desc}}checked{{end}}>{{icon "arrow-up-narrow-wide"}}{{index $l 0}}</label>
+        <label><input type="radio" id="dir-desc" name="dir" value="desc" {{if $f.Sort.Desc}}checked{{end}}>{{icon "arrow-down-wide-narrow"}}{{index $l 1}}</label>
+      </span>
+    </div>
   </div>
 </form>
 

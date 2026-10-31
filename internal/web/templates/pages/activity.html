@@ -3,7 +3,7 @@
 <div class="page-head">
   <div>
     <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}Activity{{end}}</h1>
-    <p class="sub">{{if $d.Item}}Every change to this item's stock{{else}}Every change to your stock{{end}}, newest first.</p>
+    <p class="sub">{{if $d.Item}}Every change to this item's stock{{else}}Every change to your stock{{end}}, {{$d.SortNote}}.</p>
   </div>
   <div class="actions">
     {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Recently deleted ({{.TrashCount}})</a>{{end}}
@@ -15,7 +15,7 @@
   {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
 </div>
 <section class="card">
-  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item))}}
+  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item) "Sort" $d.Heads)}}
   {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
   {{else if $d.Kind}}{{template "empty" (dict "Icon" "history" "Title" "Nothing of this kind yet" "Href" (withQuery "/activity" ($d.KindQuery "")) "Action" "Show everything" "ActionIcon" "history")}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}

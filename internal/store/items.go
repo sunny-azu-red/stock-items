@@ -25,7 +25,10 @@ type ItemFilter struct {
 	LowStock bool
 	Expiring bool // with stock left and expired or expiring within ExpiringDays
 	InStock  bool // quantity > 0
-	Sort     string
+	// Sort is one of the Sort* keys (anything else sorts by name), and
+	// Desc reverses it. See itemOrder.
+	Sort string
+	Desc bool
 	// Today is the date "expiring" is counted from (default: today in the
 	// app's zone).
 	Today time.Time
@@ -48,8 +51,10 @@ const ExpiringDays = 60
 const (
 	SortName     = "name"
 	SortCategory = "category"
-	SortRecent   = "recent"
+	SortLocation = "location"
 	SortQuantity = "quantity"
+	SortExpiry   = "expiry"
+	SortRecent   = "recent"
 )
 
 const itemSelect = `
@@ -135,24 +140,41 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 	if len(where) > 0 {
 		sql += " WHERE " + strings.Join(where, " AND ")
 	}
-	nameOrder := "lower(btrim(i.brand || ' ' || i.name)), i.id"
-	switch f.Sort {
-	case SortCategory:
-		sql += " ORDER BY lower(i.category) = '', lower(i.category), " + nameOrder
-	case SortRecent:
-		sql += " ORDER BY i.updated_at DESC, i.id DESC"
-	case SortQuantity:
-		// Pieces, millilitres and grams don't compare: group by unit first.
-		sql += " ORDER BY i.unit, i.quantity, " + nameOrder
-	default:
-		sql += " ORDER BY " + nameOrder
-	}
+	sql += " ORDER BY " + itemOrder(f.Sort, f.Desc)
 
 	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Item, error) { return scanItem(r) })
+}
+
+// itemOrder is the ORDER BY of ListItems for a sort key, whitelisted: an
+// unknown key sorts by name, and nothing from the request reaches the SQL.
+// Blanks (no category, location or best-before date) come last in both
+// directions, and ties go by name, then id, so the order is stable.
+func itemOrder(key string, desc bool) string {
+	dir := " ASC"
+	if desc {
+		dir = " DESC"
+	}
+	name := "lower(btrim(i.brand || ' ' || i.name))"
+	byName := name + ", i.id"
+	switch key {
+	case SortCategory:
+		return "i.category = '', lower(i.category)" + dir + ", " + byName
+	case SortLocation:
+		return "i.location = '', lower(i.location)" + dir + ", " + byName
+	case SortQuantity:
+		// Pieces, millilitres and grams don't compare: group by unit first.
+		return "i.unit, i.quantity" + dir + ", " + byName
+	case SortExpiry:
+		return "i.expires_on" + dir + " NULLS LAST, " + byName
+	case SortRecent:
+		return "i.updated_at" + dir + ", i.id" + dir
+	default:
+		return name + dir + ", i.id" + dir
+	}
 }
 
 // GetItem returns one item with its SKUs and vehicle tags.

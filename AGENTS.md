@@ -60,6 +60,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
   - Test repeats over HTTP (`internal/web/formkeys_test.go`): at once, after the save, after a failed save, after Undo.
 - Business rules belong in `internal/stock` (pure, unit tested). SQL belongs in `internal/store`. HTTP and HTML belong in `internal/web`.
 - Forms must work without JavaScript (plain POST and redirect). htmx and `app.js` only enhance.
+- **Sort keys are whitelisted, never interpolated.** A page reads `sort`/`dir` with its `sortSpec` (`internal/web/sort.go`): an unknown value falls back to the page's default. The store maps each key to its own ORDER BY (`itemOrder`, `movementOrder`; kit lines in Go, `stock.SortKitLines`) with a stable tiebreak ending in the id, and blanks last in both directions. Sortable headers use the `sort-th` partial (plain links, `aria-sort`).
 - Build URLs with query strings in templates using the `withQuery` helper. Otherwise `html/template` escapes `=` in pre-encoded query strings.
 - No external CDNs at runtime. Vendor assets into `internal/web/static/vendor/`.
 - Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing.

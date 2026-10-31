@@ -563,8 +563,17 @@ type itemPage struct {
 	ExpiryState   string
 	PurchaseCount int
 	Usage         stock.ItemUsage
-	HistoryCapped bool   // Movements holds only the newest itemHistory entries
+	HistoryCapped bool   // Movements holds only the first itemHistory entries
 	Today         string // yyyy-mm-dd, the default date of a stock change
+	History       sortHeads
+}
+
+// AllEntriesQuery is the query string of the item's full history on the
+// Activity page, in the same order.
+func (p itemPage) AllEntriesQuery() string {
+	q := p.History.Order.Values()
+	q.Set("item", strconv.FormatInt(p.Item.ID, 10))
+	return q.Encode()
 }
 
 // itemHistory is how many stock changes the item page shows.
@@ -580,7 +589,8 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
-	moves, err := s.store.ListMovements(ctx, store.MovementFilter{ItemID: id, Limit: itemHistory + 1})
+	order := historySorts.parse(r.URL.Query())
+	moves, err := s.store.ListMovements(ctx, store.MovementFilter{ItemID: id, Limit: itemHistory + 1, Sort: order.Key, Desc: order.Desc})
 	if err != nil {
 		return itemPage{}, err
 	}
@@ -609,6 +619,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
+		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]

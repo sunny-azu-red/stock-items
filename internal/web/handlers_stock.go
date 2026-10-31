@@ -24,7 +24,7 @@ type stockFilter struct {
 	InStock    bool
 	Archived   bool   // show archived items instead of active ones
 	View       string // "grouped" (default) or "list"
-	Sort       string
+	Sort       sortOrder
 }
 
 func parseStockFilter(q url.Values) stockFilter {
@@ -39,14 +39,31 @@ func parseStockFilter(q url.Values) stockFilter {
 		InStock:    q.Get("instock") == "1",
 		Archived:   q.Get("archived") == "1",
 		View:       q.Get("view"),
-		Sort:       q.Get("sort"),
+		Sort:       parseStockSort(q),
 	}
 }
+
+// parseStockSort reads the stock page's sort. The filter form also sends
+// the order the page was showing (was_sort, was_dir): when only the key
+// was changed, the new key starts in its natural direction (newest first
+// for Recently changed, A to Z for Name), as a column header would.
+func parseStockSort(q url.Values) sortOrder {
+	o := stockSorts.parse(q)
+	if was := q.Get("was_sort"); was != "" && was != o.Key && q.Get("dir") == q.Get("was_dir") {
+		o.Desc = stockSorts.natural(o.Key)
+	}
+	return o
+}
+
+// shownSort reports whether the request carries the filter form's
+// was_sort or was_dir, which only the server reads: the address bar then
+// gets the filter's own, shorter URL instead.
+func shownSort(q url.Values) bool { return q.Has("was_sort") || q.Has("was_dir") }
 
 func (f stockFilter) store() store.ItemFilter {
 	sf := store.ItemFilter{
 		VehicleIDs: f.VehicleIDs, MatchAll: f.MatchAll, General: f.General, Query: f.Query, Category: f.Category,
-		LowStock: f.Low, Expiring: f.Expiring, InStock: f.InStock, Sort: f.Sort,
+		LowStock: f.Low, Expiring: f.Expiring, InStock: f.InStock, Sort: f.Sort.Key, Desc: f.Sort.Desc,
 	}
 	if f.Archived {
 		sf.Archived = store.ArchivedOnly
@@ -82,16 +99,15 @@ func (f stockFilter) Values() url.Values {
 	if f.View == "list" {
 		q.Set("view", "list")
 	}
-	if f.Sort != "" {
-		q.Set("sort", f.Sort)
-	}
+	f.Sort.set(q)
 	return q
 }
 
 // Encode is the query string, e.g. "v=1&low=1".
 func (f stockFilter) Encode() string { return f.Values().Encode() }
 
-// Active reports whether any narrowing filter is applied.
+// Active reports whether any narrowing filter is applied (the view and the
+// sort don't narrow anything).
 func (f stockFilter) Active() bool {
 	return len(f.VehicleIDs) > 0 || f.General || f.Query != "" || f.Category != "" || f.Low || f.Expiring || f.InStock || f.Archived
 }
@@ -128,6 +144,23 @@ func (f stockFilter) Cleared() string {
 // IsCategory reports whether c is the selected category. The store
 // matches categories case-insensitively, and so does this.
 func (f stockFilter) IsCategory(c string) bool { return strings.EqualFold(c, f.Category) }
+
+// SortKeys are the choices of Sort by.
+func (f stockFilter) SortKeys() []sortKey { return stockSorts.Keys }
+
+// DirLabels names the two directions of the current sort key, ascending
+// first: "A–Z" and "Z–A" for names, "Newest first" for Recently changed.
+func (f stockFilter) DirLabels() [2]string {
+	switch f.Sort.Key {
+	case store.SortQuantity:
+		return [2]string{"Low first", "High first"}
+	case store.SortExpiry:
+		return [2]string{"Soonest first", "Latest first"}
+	case store.SortRecent:
+		return [2]string{"Oldest first", "Newest first"}
+	}
+	return [2]string{"A–Z", "Z–A"}
+}
 
 type stockPage struct {
 	Filter      stockFilter
@@ -169,6 +202,14 @@ func (s *Server) stockPage(w http.ResponseWriter, r *http.Request) error {
 	p, err := s.loadStock(r)
 	if err != nil {
 		return err
+	}
+	if shownSort(r.URL.Query()) {
+		canonical := joinQuery("/stock", p.Filter.Encode())
+		if !isHTMX(r) {
+			http.Redirect(w, r, canonical, http.StatusSeeOther)
+			return nil
+		}
+		w.Header().Set("HX-Push-Url", canonical)
 	}
 	if p.Categories, err = s.store.Categories(r.Context()); err != nil {
 		return err

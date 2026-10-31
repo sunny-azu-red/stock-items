@@ -53,9 +53,9 @@
       {{end}}
     </section>
 
-    <section class="card">
-      <div class="card-head"><h2>{{icon "history"}} History</h2>{{if $d.HistoryCapped}}<a class="more" href="/activity?item={{$it.ID}}">All entries →</a>{{else}}<span class="muted small">{{plural (len $d.Movements) "entry"}}</span>{{end}}</div>
-      {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false)}}
+    <section class="card" id="history">
+      <div class="card-head"><h2>{{icon "history"}} History</h2>{{if $d.HistoryCapped}}<a class="more" href="{{withQuery "/activity" $d.AllEntriesQuery}}">All entries →</a>{{else}}<span class="muted small">{{plural (len $d.Movements) "entry"}}</span>{{end}}</div>
+      {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false "Sort" $d.History)}}
       {{else}}<div class="card-body muted small">No stock changes yet.</div>{{end}}
     </section>
   </div>

@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -179,5 +180,48 @@ func TestLoggedSoonAfter(t *testing.T) {
 					tt.performedOn.Format(time.DateOnly), tt.loc, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSortKitLines(t *testing.T) {
+	lines := []KitLine{
+		{ItemID: 1, ItemName: "Oil filter", Unit: UnitPiece, Need: 1, Have: 0},    // short 1
+		{ItemID: 2, ItemName: "engine oil", Unit: UnitML, Need: 1700, Have: 500},  // short 1200
+		{ItemID: 3, ItemName: "Crush washer", Unit: UnitPiece, Need: 2, Have: 10}, // covered
+		{ItemID: 4, ItemName: "Old gasket", Unit: UnitPiece, Need: 3, Have: 0, Archived: true},
+		{ItemID: 5, ItemName: "Oil filter", Unit: UnitPiece, Need: 1, Have: 1},      // covered, same name
+		{ItemID: 6, ItemName: "Assembly grease", Unit: UnitGram, Need: 10, Have: 5}, // short 5
+	}
+	tests := []struct {
+		key  string
+		desc bool
+		want []int64
+	}{
+		{"", false, []int64{1, 2, 3, 4, 5, 6}}, // the kit's own order
+		{"bogus", true, []int64{1, 2, 3, 4, 5, 6}},
+		// Names ignore case; the two oil filters go by id.
+		{KitSortItem, false, []int64{6, 3, 2, 1, 5, 4}},
+		{KitSortItem, true, []int64{4, 5, 1, 2, 3, 6}},
+		// Grouped by unit (g, ml, pieces) both ways; equal amounts by name.
+		{KitSortNeed, true, []int64{6, 2, 4, 3, 1, 5}},
+		{KitSortNeed, false, []int64{6, 2, 1, 5, 3, 4}},
+		{KitSortHave, true, []int64{6, 2, 3, 5, 1, 4}},
+		{KitSortHave, false, []int64{6, 2, 1, 4, 5, 3}},
+		// The short lines first, by unit and amount, then the covered ones
+		// (the archived one among them) by name.
+		{KitSortMissing, true, []int64{6, 2, 1, 3, 5, 4}},
+		{KitSortMissing, false, []int64{3, 5, 4, 6, 2, 1}},
+	}
+	for _, tt := range tests {
+		var got []int64
+		for _, l := range SortKitLines(lines, tt.key, tt.desc) {
+			got = append(got, l.ItemID)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%q desc=%v: got %v, want %v", tt.key, tt.desc, got, tt.want)
+		}
+	}
+	if lines[0].ItemID != 1 || lines[5].ItemID != 6 {
+		t.Error("SortKitLines changed the kit's own lines")
 	}
 }

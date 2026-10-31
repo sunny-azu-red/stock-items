@@ -1412,7 +1412,7 @@ func TestStockFilterLinksKeepTheView(t *testing.T) {
 	expect(t, rec, http.StatusOK,
 		`id="filter-all" href="/stock?cat=FILTERS&amp;q=oil&amp;sort=quantity&amp;view=list"`,
 		`href="/stock?sort=quantity&amp;view=list">clear filters</a>`,
-		`name="sort" value="quantity"`, "<option selected>Filters</option>")
+		`<option value="quantity" selected>Quantity</option>`, "<option selected>Filters</option>")
 }
 
 func TestActivityPagesAndItemHistory(t *testing.T) {

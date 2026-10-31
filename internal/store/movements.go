@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -133,9 +135,63 @@ type MovementFilter struct {
 	Kind   stock.MovementKind
 	Limit  int
 	Offset int // skip this many, for paging
+	// Sort is one of the MoveSort* keys (anything else sorts by date), and
+	// Desc reverses it. No Sort is newest first. See movementOrder.
+	Sort string
+	Desc bool
 }
 
-// ListMovements returns ledger entries, newest first.
+// Sort orders understood by ListMovements.
+const (
+	MoveSortDate   = "date"
+	MoveSortItem   = "item"
+	MoveSortKind   = "kind"
+	MoveSortChange = "change"
+	MoveSortPrice  = "price"
+)
+
+// kindsByLabel lists the kinds of stock change in the alphabetical order
+// of the labels the pages show, for sorting by kind.
+var kindsByLabel = func() []string {
+	kinds := []stock.MovementKind{stock.MoveInitial, stock.MovePurchase, stock.MoveUse, stock.MoveCorrection, stock.MoveService}
+	slices.SortFunc(kinds, func(a, b stock.MovementKind) int { return strings.Compare(a.Label(), b.Label()) })
+	out := make([]string, len(kinds))
+	for i, k := range kinds {
+		out[i] = string(k)
+	}
+	return out
+}()
+
+// movementOrder is the ORDER BY of ListMovements for a sort key,
+// whitelisted: an unknown key sorts by date, and nothing from the request
+// reaches the SQL. Entries without a price come last in both directions,
+// and ties go newest first, then by id, so the order is stable (and pages
+// don't overlap).
+func movementOrder(args *sqlArgs, key string, desc bool) string {
+	dir := " ASC"
+	if desc {
+		dir = " DESC"
+	}
+	newest := "m.occurred_on DESC, m.id DESC"
+	switch key {
+	case "":
+		return newest
+	case MoveSortItem:
+		return "lower(btrim(i.brand || ' ' || i.name))" + dir + ", i.id" + dir + ", " + newest
+	case MoveSortKind:
+		return "array_position(" + args.add(kindsByLabel) + "::text[], m.kind::text)" + dir + ", " + newest
+	case MoveSortChange:
+		// Pieces, millilitres and grams don't compare: group by unit first.
+		return "i.unit, m.delta" + dir + ", " + newest
+	case MoveSortPrice:
+		return "m.total_price" + dir + " NULLS LAST, " + newest
+	default:
+		return "m.occurred_on" + dir + ", m.id" + dir
+	}
+}
+
+// ListMovements returns ledger entries, newest first unless f says
+// otherwise.
 func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Movement, error) {
 	var args sqlArgs
 	sql := `
@@ -154,7 +210,7 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	if f.Kind != "" {
 		sql += " AND m.kind = " + args.add(f.Kind)
 	}
-	sql += " ORDER BY m.occurred_on DESC, m.id DESC"
+	sql += " ORDER BY " + movementOrder(&args, f.Sort, f.Desc)
 	if f.Limit > 0 {
 		sql += " LIMIT " + args.add(f.Limit)
 	}

@@ -3,6 +3,7 @@ package stock
 import (
 	"cmp"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -227,4 +228,74 @@ func plural(n int, word string) string {
 		return fmt.Sprintf("1 %s", word)
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// Sort keys of a kit's parts table.
+const (
+	KitSortItem    = "item"
+	KitSortNeed    = "need"
+	KitSortHave    = "have"
+	KitSortMissing = "missing"
+)
+
+// SortKitLines returns a kit's lines sorted by key (one of the KitSort*
+// keys), descending if desc; an unknown key keeps the kit's own order.
+// Amounts of different units don't compare, so the amount columns group by
+// unit first, as the stock page does. By missing, the lines that are short
+// come before the covered ones when descending (after them when
+// ascending); an archived item's line counts as covered, as the page shows
+// it, and the covered lines go by name. Ties go by name, then item id, so
+// the order is stable.
+func SortKitLines(lines []KitLine, key string, desc bool) []KitLine {
+	missing := func(l KitLine) float64 {
+		if l.Archived {
+			return 0
+		}
+		return l.Short()
+	}
+	var amount func(KitLine) float64
+	switch key {
+	case KitSortItem:
+	case KitSortNeed:
+		amount = func(l KitLine) float64 { return l.Need }
+	case KitSortHave:
+		amount = func(l KitLine) float64 { return l.Have }
+	case KitSortMissing:
+		amount = missing
+	default:
+		return lines
+	}
+	flip := func(c int) int {
+		if desc {
+			return -c
+		}
+		return c
+	}
+	byName := func(a, b KitLine) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a.ItemName), strings.ToLower(b.ItemName)), cmp.Compare(a.ItemID, b.ItemID))
+	}
+	out := slices.Clone(lines)
+	slices.SortStableFunc(out, func(a, b KitLine) int {
+		if amount == nil {
+			return flip(byName(a, b))
+		}
+		if key == KitSortMissing {
+			sa, sb := missing(a) > 0, missing(b) > 0
+			if sa != sb {
+				return flip(cmp.Compare(btoi(sa), btoi(sb)))
+			}
+			if !sa {
+				return byName(a, b) // covered: nothing to compare but the name
+			}
+		}
+		return cmp.Or(cmp.Compare(a.Unit, b.Unit), flip(cmp.Compare(amount(a), amount(b))), byName(a, b))
+	})
+	return out
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

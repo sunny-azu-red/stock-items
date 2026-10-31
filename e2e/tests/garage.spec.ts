@@ -523,7 +523,7 @@ test("replaced photos show their thumbnails in Recently deleted", async ({ page 
 });
 
 test("no page scrolls sideways", async ({ page }) => {
-  const paths = ["/", "/stock", "/stock?view=list", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new"];
+  const paths = ["/", "/stock", "/stock?view=list", "/stock?sort=expiry&dir=desc", "/activity?sort=price", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new"];
   // Also every detail page linked from the stock list and vehicles.
   await page.goto("/stock");
   paths.push(await page.locator(".item-row a.item-name").first().getAttribute("href") as string);
@@ -538,10 +538,130 @@ test("no page scrolls sideways", async ({ page }) => {
   }
 });
 
+// The item names of the table's rows, with repeats next to each other
+// counted once.
+async function columnRuns(page: Page, col: number) {
+  const cells = await page.locator(`table.table tbody tr td:nth-child(${col})`).allInnerTexts();
+  return cells.map((c) => c.trim()).filter((c, i, all) => i === 0 || c !== all[i - 1]);
+}
+
+test("sort the activity by clicking its headers", async ({ page }) => {
+  await page.goto("/activity");
+  const th = (name: string) => page.locator("table.table thead th").filter({ hasText: name });
+  await expect(th("Date")).toHaveAttribute("aria-sort", "descending");
+  await expect(th("Item")).toHaveAttribute("aria-sort", "none");
+
+  await th("Item").getByRole("link").click();
+  await expect(page).toHaveURL(/\/activity\?sort=item$/);
+  await expect(th("Item")).toHaveAttribute("aria-sort", "ascending");
+  await expect(th("Date")).toHaveAttribute("aria-sort", "none");
+  const az = await columnRuns(page, 2);
+  expect(az.length).toBeGreaterThan(2);
+
+  await th("Item").getByRole("link").click();
+  await expect(page).toHaveURL(/\/activity\?dir=desc&sort=item$/);
+  await expect(th("Item")).toHaveAttribute("aria-sort", "descending");
+  expect(await columnRuns(page, 2)).toEqual([...az].reverse());
+  await expect(th("Item").getByRole("link")).toHaveAttribute("title", "Sort by Item, ascending");
+
+  // A kind chip keeps the sort.
+  await page.locator(".chips").getByRole("link", { name: "Purchase" }).click();
+  await expect(page).toHaveURL(/dir=desc&kind=purchase&sort=item/);
+  await expect(th("Item")).toHaveAttribute("aria-sort", "descending");
+
+  // Keyboard: the headers are links, with a visible focus ring.
+  await th("Price").getByRole("link").focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/kind=purchase&sort=price/);
+  await expect(th("Price")).toHaveAttribute("aria-sort", "descending");
+  const cells = await page.locator("table.table tbody tr td:nth-child(5)").allInnerTexts();
+  const prices = cells.filter((c) => c.trim()).map((p) => parseFloat(p.replace(/[^\d.]/g, "")));
+  expect(prices.length).toBeGreaterThan(1);
+  expect(prices).toEqual([...prices].sort((a, b) => b - a));
+  // Purchases without a price come last.
+  expect(cells.slice(prices.length).every((c) => !c.trim())).toBe(true);
+});
+
+test("sort the stock with Sort by and its direction", async ({ page }) => {
+  await page.goto("/stock?view=list");
+  const names = () => page.locator("#results .item-row .item-name").allInnerTexts();
+  const az = await names();
+  const sort = page.getByLabel("Sort by");
+  await expect(sort).toHaveValue("name");
+  const asc = page.locator("#sort-dir label").first();
+  const desc = page.locator("#sort-dir label").last();
+  await expect(asc).toHaveText("A–Z");
+  await expect(page.locator("#dir-asc")).toBeChecked();
+
+  // The direction flips the list, without a reload, and the address keeps it.
+  await page.evaluate(() => { (window as any).same = true; });
+  await desc.click();
+  await expect(page).toHaveURL(/\/stock\?dir=desc&view=list$/);
+  await expect.poll(names).toEqual([...az].reverse());
+  await expect(page.locator("#dir-desc")).toBeChecked();
+  expect(await page.evaluate(() => (window as any).same)).toBe(true);
+
+  // Another key starts in its own direction, with its own labels.
+  await sort.selectOption("recent");
+  await expect(page).toHaveURL(/\/stock\?sort=recent&view=list$/);
+  await expect(page.locator("#dir-desc")).toBeChecked();
+  await expect(desc).toHaveText("Newest first");
+  await expect(asc).toHaveText("Oldest first");
+  // The item changed last comes first, and last the other way round.
+  const screen = "Oil Screen 2 O-Ring";
+  const before = await row(page, screen).locator(".qty").innerText();
+  await row(page, screen).getByRole("button", { name: /^Add / }).click();
+  await expect(row(page, screen).locator(".qty")).not.toHaveText(before);
+  await page.reload();
+  await expect(page.locator("#results .item-row").first()).toContainText(screen);
+  await asc.click();
+  await expect(page).toHaveURL(/\/stock\?dir=asc&sort=recent&view=list$/);
+  await expect(page.locator("#results .item-row").last()).toContainText(screen);
+  await row(page, screen).getByRole("button", { name: /^Use / }).click();
+  await expect(row(page, screen).locator(".qty")).toHaveText(before);
+
+  // Sorting isn't a filter, and the other links keep it.
+  await expect(page.locator("#results")).not.toContainText("clear filters");
+  await page.locator("#results").getByRole("link", { name: "Grouped" }).click();
+  await expect(page).toHaveURL(/\/stock\?dir=asc&sort=recent$/);
+  await expect(page.getByLabel("Sort by")).toHaveValue("recent");
+});
+
+test("sorting works without JavaScript", async ({ browser }, testInfo) => {
+  const { baseURL, viewport } = testInfo.project.use;
+  const context = await browser.newContext({ baseURL, viewport, javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto("/activity");
+    const date = page.locator("table.table thead th").filter({ hasText: "Date" });
+    await date.getByRole("link").click();
+    await expect(page).toHaveURL(/\/activity\?dir=asc$/);
+    await expect(date).toHaveAttribute("aria-sort", "ascending");
+
+    // The stock form sends the sort with Apply, and lands on a plain URL.
+    await page.goto("/stock");
+    await page.getByLabel("Sort by").selectOption("expiry");
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page).toHaveURL(/\/stock\?sort=expiry$/);
+    await expect(page.getByLabel("Sort by")).toHaveValue("expiry");
+    await expect(page.locator("#dir-asc")).toBeChecked();
+    await expect(page.locator("#sort-dir")).toContainText("Soonest first");
+    await page.locator("#sort-dir label").last().click();
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page).toHaveURL(/\/stock\?dir=desc&sort=expiry$/);
+  } finally {
+    await context.close();
+  }
+});
+
 // Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test -g screenshots (see docs/development.md)
 test("screenshots", async ({ page }, testInfo) => {
   const dir = process.env.SCREENSHOT_DIR;
   test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
+  // SCREENSHOT_SCHEME=dark for the dark theme (the names get "-dark").
+  const scheme = process.env.SCREENSHOT_SCHEME === "dark" ? "dark" : "light";
+  await page.emulateMedia({ colorScheme: scheme });
+  const suffix = scheme === "dark" ? "-dark" : "";
   const shots: [string, string][] = [
     ["dashboard", "/"],
     ["stock", "/stock"],
@@ -549,6 +669,8 @@ test("screenshots", async ({ page }, testInfo) => {
     ["services", "/services"],
     ["shopping", "/shopping"],
     ["activity", "/activity"],
+    ["activity-sorted", "/activity?sort=price"],
+    ["stock-sorted", "/stock?sort=expiry&dir=desc"],
     ["item-new", "/items/new"],
   ];
   await page.goto("/stock?q=Silkolene");
@@ -559,11 +681,12 @@ test("screenshots", async ({ page }, testInfo) => {
   shots.push(["vehicle", vehicle]);
   await page.goto("/services");
   shots.push(["kit", (await page.locator("a.kit-row").first().getAttribute("href")) as string]);
+  shots.push(["kit-sorted", shots[shots.length - 1][1] + "?sort=missing"]);
   shots.push(["kit-new", "/kits/new"]);
   shots.push(["service-new", "/services/new"]);
   for (const [name, url] of shots) {
     await page.goto(url);
-    await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}.png`, fullPage: true });
+    await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}${suffix}.png`, fullPage: true });
   }
 });
 

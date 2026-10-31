@@ -80,7 +80,7 @@ func blocked(t *testing.T, pool *pgxpool.Pool, xids []string, tables []string) (
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	n := 0
+	pids := map[int]bool{} // a session in a savepoint has two transaction ids
 	var own []string
 	for rows.Next() {
 		var pid int
@@ -88,7 +88,7 @@ func blocked(t *testing.T, pool *pgxpool.Pool, xids []string, tables []string) (
 		if err := rows.Scan(&pid, &xid); err != nil {
 			t.Fatal(err)
 		}
-		n++
+		pids[pid] = true
 		if xid != "" {
 			own = append(own, xid)
 		}
@@ -96,7 +96,7 @@ func blocked(t *testing.T, pool *pgxpool.Pool, xids []string, tables []string) (
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	return n, own
+	return len(pids), own
 }
 
 // waitBlocked waits until n sessions wait for the holder (or a session
@@ -505,4 +505,54 @@ func TestTaggingAVehicleDeletedMeanwhile(t *testing.T) {
 	c.wait()
 	noDeadlock(t, "save", saved)
 	wantConflict(t, "tag a deleted vehicle", saved, "deleted meanwhile")
+}
+
+// Archiving an item while its shopping list entry, put on the list just
+// after the archive looked for one, is ticked off: ticking off locks the
+// entry, then the item; archiving must not lock the item, then that
+// entry. Here the Bought goes first and the archive then trashes what is
+// left of the entry, which Undo brings back once the item is restored.
+func TestArchivingAnItemAndTickingOffItsEntryTakeTurns(t *testing.T) {
+	s, pool, ctx := newStorePool(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	padsV := cur(t, s, store.WhatItem, pads)
+
+	// A share lock on the item: the archive waits for it, while putting
+	// the item on the list (also FOR SHARE) goes ahead.
+	h := hold(t, pool, `SELECT 1 FROM items WHERE id = $1 FOR SHARE`, pads)
+	var c calls
+	var archived error
+	var listTrash int64
+	c.run(func() { listTrash, archived = s.ArchiveItem(ctx, pads, padsV) })
+	xids := waitBlocked(t, pool, 1, []string{h.xid}, "items")
+	entry, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bought error
+	c.run(func() {
+		_, _, bought = s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 1, TotalPrice: ptr(10.0)})
+	})
+	waitBlocked(t, pool, 2, xids, "items")
+	h.release(t)
+	c.wait()
+	noDeadlock(t, "archive", archived)
+	noDeadlock(t, "bought", bought)
+	if archived != nil || bought != nil {
+		t.Fatalf("archive = %v, bought = %v", archived, bought)
+	}
+	if it := mustGet(t, s, pads); !it.Archived() || it.Quantity != 1 {
+		t.Errorf("pads = %+v, want archived with the 1 bought", it)
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 0 || listTrash == 0 {
+		t.Errorf("list = %+v, list trash = %d; want the rest of the entry in the trash", list, listTrash)
+	}
+	if err := s.RestoreItem(ctx, pads, cur(t, s, store.WhatItem, pads)); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, listTrash)
+	if list, _ := s.ListShopping(ctx); len(list) != 1 || *list[0].Quantity != 2 {
+		t.Errorf("list after Undo = %+v, want the 2 still to buy", list)
+	}
+	assertLedger(t, s)
 }

@@ -263,3 +263,48 @@ func TestDeletedPhotosShowTheirThumbnails(t *testing.T) {
 	expect(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil), http.StatusSeeOther)
 	expect(t, a.get(itemPath(oil)+"/photo"), http.StatusOK, "third photo")
 }
+
+// Archiving an item on the shopping list puts its entry in Recently
+// deleted; once the item is restored, restoring the entry brings it back
+// as it was, and it can be bought.
+func TestArchivingAListedItemKeepsItsEntry(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake")
+	item := itemPath(pads)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"2"}, "total_price": {"40"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/shopping", url.Values{"quantity": {"2"}}), http.StatusSeeOther)
+
+	rec := a.postV(item+"/archive", nil)
+	if f := flashOf(t, rec); !strings.Contains(f.Message, "Its shopping list entry is in Recently deleted.") {
+		t.Errorf("archive flash = %+v", f)
+	}
+	if list, _ := a.store.ListShopping(ctx); len(list) != 0 {
+		t.Errorf("list = %+v, want empty", list)
+	}
+	trash, _ := a.store.ListTrash(ctx)
+	if len(trash) != 1 || trash[0].Kind != store.TrashShopping {
+		t.Fatalf("trash = %+v", trash)
+	}
+	expect(t, a.get("/trash"), http.StatusOK, "Shopping list: OEM Rear Brake Pads")
+	// While the item is archived the entry can't come back.
+	if f := flashOf(t, a.post("/trash/"+itoa(trash[0].ID)+"/restore", nil)); f.Kind != "error" {
+		t.Errorf("restore while archived = %+v", f)
+	}
+	expect(t, a.postV(item+"/restore", nil), http.StatusSeeOther)
+	rec = a.post("/trash/"+itoa(trash[0].ID)+"/restore", nil)
+	if f := flashOf(t, rec); f.Kind == "error" {
+		t.Fatalf("restore: %s", f.Message)
+	}
+	list, _ := a.store.ListShopping(ctx)
+	if len(list) != 1 || *list[0].Quantity != 2 || list[0].ItemID == nil || *list[0].ItemID != pads {
+		t.Fatalf("list = %+v", list)
+	}
+	page := "/shopping/" + itoa(list[0].ID) + "/bought"
+	saveFresh(t, a, page, page, url.Values{"amount": {"2"}})
+	if got := a.quantity(t, pads); got != 5 {
+		t.Errorf("pads = %v, want 5", got)
+	}
+	a.ledger(t)
+}

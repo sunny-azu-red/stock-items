@@ -381,32 +381,68 @@ func (s *Store) DeleteItem(ctx context.Context, id int64, version int) (trashID 
 // a *StaleError.
 func (s *Store) ArchiveItem(ctx context.Context, id int64, version int) (listTrashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		// The entry before the item, like MarkBought, so the two can't deadlock.
-		if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id); err != nil {
-			return err
+		// An entry put on the list after the first look can only be locked
+		// after the item, against the order (MarkBought locks the entry,
+		// then the item). When someone holds it, step back (the savepoint
+		// lets go of the item) and start over, taking it first this time.
+		for range 5 {
+			sp, err := tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			listTrashID, err = archiveItem(ctx, sp, id, version)
+			if errors.Is(err, errEntryBusy) {
+				if err := sp.Rollback(ctx); err != nil {
+					return err
+				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			return sp.Commit(ctx)
 		}
-		// Archiving changes the item's page: a new version.
-		tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), version = version + 1
-			WHERE id = $1 AND version = $2`, id, version)
-		if err := versionedUpdate(ctx, tx, tag, err, WhatItem, id); err != nil {
-			return err
-		}
-		// Looked up again under the item's lock: an AddShopping that held
-		// the item has committed its entry by now.
-		var entryID int64
-		err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id).Scan(&entryID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if listTrashID, err = trashShopping(ctx, tx, entryID); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID)
-		return err
+		return &ConflictError{Field: "form", Message: "Its shopping list entry is being changed right now. Try again."}
 	})
+	return listTrashID, err
+}
+
+// errEntryBusy says the item's shopping list entry appeared after the
+// archive's first look and is locked by someone else.
+var errEntryBusy = errors.New("shopping entry busy")
+
+func archiveItem(ctx context.Context, tx pgx.Tx, id int64, version int) (int64, error) {
+	// The entry before the item, like MarkBought, so the two can't deadlock.
+	var locked int64
+	err := tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id).Scan(&locked)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return 0, err
+	}
+	// Archiving changes the item's page: a new version.
+	tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), version = version + 1
+		WHERE id = $1 AND version = $2`, id, version)
+	if err := versionedUpdate(ctx, tx, tag, err, WhatItem, id); err != nil {
+		return 0, err
+	}
+	// Looked up again under the item's lock: an AddShopping that held the
+	// item has committed its entry by now, and none can be added until
+	// this commits. NOWAIT: a new entry comes after the item, and one being
+	// ticked off right now waits for the item (see ArchiveItem).
+	var entryID int64
+	err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE NOWAIT`, id).Scan(&entryID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return 0, nil
+	case isLockNotAvailable(err):
+		return 0, errEntryBusy
+	case err != nil:
+		return 0, err
+	}
+	listTrashID, err := trashShopping(ctx, tx, entryID)
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID)
 	return listTrashID, err
 }
 

@@ -2351,3 +2351,45 @@ func TestRestoredServiceKeepsTheOdometerInOrder(t *testing.T) {
 	}
 	mustRestore(t, s, trashID)
 }
+
+// What is in the trash comes back in the unit it was recorded in, so it
+// locks the unit like live records do.
+func TestUnitLockedByTheTrash(t *testing.T) {
+	s, ctx := newStore(t)
+	in := stock.ItemInput{Name: "Oil", Unit: stock.UnitPiece, Quantity: 4}
+	id := mustItem(t, s, in)
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id})
+	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Unit, in.Quantity = stock.UnitML, 0
+	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, in), "including in Recently deleted")
+	if err := s.PurgeTrash(ctx, trashID); err != nil {
+		t.Fatal(err)
+	}
+
+	// A list entry with an amount locks it; one without doesn't.
+	for _, qty := range []*float64{ptr(2.0), nil} {
+		if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &id, Quantity: qty}); err != nil {
+			t.Fatal(err)
+		}
+		list, _ := s.ListShopping(ctx)
+		trashID, err = s.DeleteShopping(ctx, list[0].ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err := s.UpdateItem(ctx, id, in)
+		if qty != nil {
+			wantConflict(t, "with a deleted list entry", err, "including in Recently deleted")
+			if err := s.PurgeTrash(ctx, trashID); err != nil {
+				t.Fatal(err)
+			}
+		} else if err != nil {
+			t.Errorf("with a deleted entry without an amount: %v", err)
+		}
+	}
+	if it := mustGet(t, s, id); it.Unit != stock.UnitML {
+		t.Errorf("unit = %s", it.Unit)
+	}
+}

@@ -225,7 +225,8 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 // quantity field was left as it was, the stock is not touched (it may have
 // changed since the form was opened). Changing the unit is refused once the
 // item has history or is used in a kit or on the shopping list, as those
-// amounts would no longer make sense.
+// amounts would no longer make sense, and so is a change while any of
+// those is in the trash, as it would come back in the old unit.
 func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
@@ -245,12 +246,18 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 			err := tx.QueryRow(ctx, `
 				SELECT EXISTS (SELECT 1 FROM stock_movements WHERE item_id = $1)
 				    OR EXISTS (SELECT 1 FROM service_kit_lines WHERE item_id = $1)
-				    OR EXISTS (SELECT 1 FROM shopping_entries WHERE item_id = $1 AND quantity IS NOT NULL)`, id).Scan(&used)
+				    OR EXISTS (SELECT 1 FROM shopping_entries WHERE item_id = $1 AND quantity IS NOT NULL)
+				    -- What is in the trash comes back in the unit it was recorded in.
+				    OR EXISTS (SELECT 1 FROM trash t WHERE t.payload @> jsonb_build_object('stock_movements', jsonb_build_array(jsonb_build_object('item_id', $1::bigint)))
+				                                     OR t.payload @> jsonb_build_object('service_kit_lines', jsonb_build_array(jsonb_build_object('item_id', $1::bigint))))
+				    OR EXISTS (SELECT 1 FROM trash t, jsonb_array_elements(t.payload -> 'shopping_entries') e
+				               WHERE t.payload @> jsonb_build_object('shopping_entries', jsonb_build_array(jsonb_build_object('item_id', $1::bigint)))
+				                 AND (e ->> 'item_id')::bigint = $1 AND e -> 'quantity' <> 'null'::jsonb)`, id).Scan(&used)
 			if err != nil {
 				return err
 			}
 			if used {
-				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list"}
+				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in Recently deleted"}
 			}
 		}
 		_, err = tx.Exec(ctx, `

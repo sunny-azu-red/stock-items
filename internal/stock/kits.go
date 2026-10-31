@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -102,10 +103,9 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 	}
 	var d Due
 	soon, overdue, known := false, false, false
-	lastKm := k.LastService.OdometerKm
-	if lastKm == nil {
-		lastKm = k.LastOdometerKm
-	}
+	// A service logged without a reading counts from the vehicle's reading
+	// at the time; one logged before that was kept, from the latest reading.
+	lastKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
 	if k.IntervalKm != nil && lastKm != nil {
 		dueKm := *lastKm + *k.IntervalKm
 		d.DueKm = &dueKm

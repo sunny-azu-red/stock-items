@@ -2036,3 +2036,63 @@ func TestTrashSnapshotsSurviveNewColumns(t *testing.T) {
 		t.Errorf("item = %+v", it)
 	}
 }
+
+func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	vin.Normalize()
+	v, _ := s.CreateVehicle(ctx, vin)
+	kin := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalKm: ptr(6000)}
+	kin.Normalize()
+	kit, err := s.CreateKit(ctx, kin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logService := func(on time.Time, reading *int) int64 {
+		t.Helper()
+		in := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: on, OdometerKm: reading}
+		in.Normalize()
+		id, err := s.CreateService(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	logService(time.Now().AddDate(0, -5, 0), ptr(10000))
+	if err := s.SetOdometer(ctx, v, 16000); err != nil {
+		t.Fatal(err)
+	}
+	svc := logService(time.Now(), nil)
+	k, err := s.GetKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.LastService == nil || k.LastService.OdometerAtLog == nil || *k.LastService.OdometerAtLog != 16000 {
+		t.Fatalf("last service = %+v", k.LastService)
+	}
+	if d := k.Due(ptr(16100), time.Now()); d.State != stock.DueOK || *d.DueKm != 22000 {
+		t.Errorf("due = %+v, want ok at 22 000 km", d)
+	}
+
+	// Editing the service later keeps the reading it was logged at, and a
+	// reading entered on it wins.
+	if err := s.SetOdometer(ctx, v, 17000); err != nil {
+		t.Fatal(err)
+	}
+	edit := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service, filter too", PerformedOn: time.Now()}
+	edit.Normalize()
+	if err := s.UpdateService(ctx, svc, edit); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerAtLog != 16000 {
+		t.Errorf("after edit: at log = %d, want 16000", *k.LastService.OdometerAtLog)
+	}
+	edit.OdometerKm = ptr(16500)
+	if err := s.UpdateService(ctx, svc, edit); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog != nil || *k.LastService.OdometerKm != 16500 {
+		t.Errorf("with a reading: %+v", k.LastService)
+	}
+}

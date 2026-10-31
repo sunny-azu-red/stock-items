@@ -27,14 +27,14 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	var args sqlArgs
 	sql := `
 		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at,
-		       ls.id, ls.performed_on, ls.odometer_km,
+		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
 		        ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1)
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer_km FROM service_records sr
+			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
 			ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
 		) ls ON true
@@ -65,7 +65,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsDate *time.Time
 		var ls stock.ServiceRef
 		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.Notes, &k.ArchivedAt, &lsID, &lsDate, &ls.OdometerKm, &k.LastOdometerKm)
+			&k.Notes, &k.ArchivedAt, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &k.LastOdometerKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			k.LastService = &ls

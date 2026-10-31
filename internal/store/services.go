@@ -108,8 +108,10 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost, odometer_at_log)
+			VALUES ($1, $2, $3, $4, $5, $6, $7,
+			        CASE WHEN $4::integer IS NULL THEN (SELECT odometer_km FROM vehicles WHERE id = $1) END)
+			RETURNING id`,
 			in.VehicleID, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
@@ -166,7 +168,8 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			return err
 		}
 		_, err := tx.Exec(ctx, `
-			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7
+			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7,
+			       odometer_at_log = CASE WHEN $4::integer IS NULL THEN odometer_at_log END
 			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound

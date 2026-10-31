@@ -52,6 +52,10 @@ func TestKitDue(t *testing.T) {
 		{"monthly is soon in its second half", Kit{IntervalMonths: ptr(1), LastService: last(20, 0)}, nil, DueSoon},
 		{"km from an earlier reading when the last service has none",
 			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today}, LastOdometerKm: ptr(10000)}, ptr(16500), DueOverdue},
+		{"km from the odometer when a service without a reading was logged",
+			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today, OdometerAtLog: ptr(16000)}, LastOdometerKm: ptr(10000)}, ptr(16100), DueOK},
+		{"the service's own reading wins over the odometer at the time",
+			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today, OdometerKm: ptr(15000), OdometerAtLog: ptr(16000)}}, ptr(20600), DueSoon},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

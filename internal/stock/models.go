@@ -295,6 +295,9 @@ type ServiceRef struct {
 	ID          int64
 	PerformedOn time.Time
 	OdometerKm  *int
+	// OdometerAtLog is the vehicle's reading when a service without its
+	// own reading was logged.
+	OdometerAtLog *int
 }
 
 // KitLine is one item (and needed quantity) of a kit.

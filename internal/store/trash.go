@@ -129,6 +129,10 @@ func (r snapshotRow) float(col string) float64 {
 	return f
 }
 
+// inTrash matches a payload holding a row of table $1 whose column $2 is
+// $3, in the containment form trash_payload_idx can serve.
+const inTrash = `jsonb_build_object($1::text, jsonb_build_array(jsonb_build_object($2::text, $3::bigint)))`
+
 // needRow checks that row id of table (items, vehicles or service_kits)
 // exists. One that is in the trash must be restored first, so nothing is
 // lost by restoring in the "wrong" order: that is a *ConflictError naming
@@ -144,8 +148,8 @@ func needRow(ctx context.Context, tx pgx.Tx, table string, id int64) (gone bool,
 	}
 	var label string
 	err = tx.QueryRow(ctx, `
-		SELECT label FROM trash WHERE payload -> $1 @> jsonb_build_array(jsonb_build_object('id', $2::bigint))
-		ORDER BY id DESC LIMIT 1`, table, id).Scan(&label)
+		SELECT label FROM trash WHERE payload @> `+inTrash+`
+		ORDER BY id DESC LIMIT 1`, table, "id", id).Scan(&label)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return true, nil
 	}

@@ -26,6 +26,118 @@ type ConflictError struct {
 
 func (e *ConflictError) Error() string { return e.Message }
 
+// StaleError refuses a form or button whose record changed or vanished
+// since it was shown: the version it carries no longer matches. Gone
+// means the row no longer exists; InTrash that it can be restored from
+// Recently deleted. A gone record also matches ErrNotFound.
+type StaleError struct {
+	What    string // what the record is, e.g. WhatItem
+	Gone    bool
+	InTrash bool
+}
+
+// Values of StaleError.What.
+const (
+	WhatItem     = "item"
+	WhatVehicle  = "vehicle"
+	WhatKit      = "kit"
+	WhatService  = "service"
+	WhatMovement = "stock change"
+	WhatShopping = "shopping list entry"
+)
+
+// versionedTables maps each StaleError.What to its table. These are the
+// tables with a version column.
+var versionedTables = map[string]string{
+	WhatItem: "items", WhatVehicle: "vehicles", WhatKit: "service_kits", WhatService: "service_records",
+	WhatMovement: "stock_movements", WhatShopping: "shopping_entries",
+}
+
+// versioned reports whether table has a version column.
+func versioned(table string) bool {
+	for _, t := range versionedTables {
+		if t == table {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *StaleError) Error() string {
+	switch {
+	case e.Gone && e.InTrash:
+		return "This " + e.What + " was deleted since you opened this; it's in Recently deleted."
+	case e.Gone:
+		return "This " + e.What + " was deleted since you opened this."
+	}
+	return "This " + e.What + " was changed since you opened this (another tab or person). Reload to see the latest, then make your change again."
+}
+
+// Is lets errors.Is(err, ErrNotFound) match a gone record.
+func (e *StaleError) Is(target error) bool { return e.Gone && target == ErrNotFound }
+
+// checkVersion compares the version read under the row's lock with the
+// one the form or button carried. A missing version (0) is stale too.
+func checkVersion(have, want int, what string) error {
+	if have != want {
+		return &StaleError{What: what}
+	}
+	return nil
+}
+
+// goneError explains a row that is not there: a *StaleError saying
+// whether it is in the trash.
+func goneError(ctx context.Context, q queryRower, what string, id int64) error {
+	var trashed bool
+	err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM trash WHERE payload @> `+inTrash+`)`,
+		versionedTables[what], "id", id).Scan(&trashed)
+	if err != nil {
+		return err
+	}
+	return &StaleError{What: what, Gone: true, InTrash: trashed}
+}
+
+// lockedVersion handles the error of a SELECT … FOR UPDATE that read a
+// row and its version: a row that is not there is gone, and one with
+// another version than want is stale.
+func lockedVersion(ctx context.Context, q queryRower, err error, have, want int, what string, id int64) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return goneError(ctx, q, what, id)
+	}
+	if err != nil {
+		return err
+	}
+	return checkVersion(have, want, what)
+}
+
+// versionedUpdate checks a one-row write whose WHERE also matched the
+// version ("… AND version = $n"): when it changed nothing, the row was
+// either changed meanwhile or is gone. The statement takes the row's lock
+// and re-checks the version once a concurrent writer is done, so no extra
+// lock is needed.
+func versionedUpdate(ctx context.Context, q queryRower, tag pgconn.CommandTag, err error, what string, id int64) error {
+	if err != nil || tag.RowsAffected() > 0 {
+		return err
+	}
+	var exists bool
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+versionedTables[what]+` WHERE id = $1)`, id).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return &StaleError{What: what}
+	}
+	return goneError(ctx, q, what, id)
+}
+
+// Gone explains a record of kind what (WhatItem, …) that a page found
+// missing: a *StaleError saying whether it is in Recently deleted.
+func (s *Store) Gone(ctx context.Context, what string, id int64) error {
+	if _, ok := versionedTables[what]; !ok {
+		return ErrNotFound
+	}
+	return goneError(ctx, s.pool, what, id)
+}
+
 // InsufficientStockError is returned when a movement would make a
 // quantity negative.
 type InsufficientStockError struct {

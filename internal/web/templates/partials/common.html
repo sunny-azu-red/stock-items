@@ -15,6 +15,10 @@
 
 {{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} Please fix the highlighted fields.{{with index . "form"}} {{.}}{{end}}</div>{{end}}{{end}}
 
+{{/* The banner of an edit form refused because its record changed or was
+     deleted since it was opened: *staleNote, or nil for none. */}}
+{{define "stale"}}{{with .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} {{.Message}}{{with .Href}} <a href="{{.}}">{{$.Link}}</a>{{end}}</div>{{end}}{{end}}
+
 {{define "empty"}}<div class="empty">{{icon .Icon}}<h2>{{.Title}}</h2>{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
 
 {{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}
@@ -160,14 +164,14 @@
 
 {{/* Items already on stock with a free-text shopping entry's name:
      dict "EntryID" int64 "Matches" []Item */}}
-{{define "shopping-matches"}}{{$entry := .EntryID}}
+{{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}
 <div class="card card-body">
   <p><strong>Already have it?</strong> Add this purchase to the item instead of creating a new one.</p>
   <ul class="list">
     {{range .Matches}}
     <li>
       <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}} on stock{{if .Archived}} · archived{{end}}</span></span>
-      <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
+      <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}
   </ul>

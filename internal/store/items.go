@@ -54,7 +54,7 @@ const (
 
 const itemSelect = `
 SELECT i.id, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.expires_on, i.location,
-       i.notes, i.created_at, i.updated_at, i.archived_at,
+       i.notes, i.created_at, i.updated_at, i.archived_at, i.version,
        COALESCE((SELECT array_agg(iv.vehicle_id ORDER BY iv.vehicle_id) FROM item_vehicles iv WHERE iv.item_id = i.id), '{}'),
        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'code', s.code, 'kind', s.kind, 'label', s.label,
                                                    'pack_size', s.pack_size) ORDER BY s.id)
@@ -65,7 +65,7 @@ FROM items i`
 func scanItem(row pgx.Row) (stock.Item, error) {
 	var it stock.Item
 	err := row.Scan(&it.ID, &it.Name, &it.Brand, &it.Category, &it.Unit, &it.Quantity, &it.MinQuantity,
-		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
+		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt, &it.Version, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
 	return it, err
 }
 
@@ -227,16 +227,18 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 // item has history or is used in a kit or on the shopping list, as those
 // amounts would no longer make sense, and so is a change while any of
 // those is in the trash, as it would come back in the old unit. A
-// correction is dated on.
+// correction is dated on. An item changed since in.Version fails with a
+// *StaleError.
 func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on time.Time) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
 		var unit stock.Unit
 		var archived bool
-		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, id).
-			Scan(&qty, &unit, &archived)
-		if err != nil {
-			return notFound(err)
+		var version int
+		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL, version FROM items WHERE id = $1 FOR NO KEY UPDATE`, id).
+			Scan(&qty, &unit, &archived, &version)
+		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatItem, id); err != nil {
+			return err
 		}
 		quantityEdited := in.QuantityWas == nil || in.Quantity != *in.QuantityWas
 		if archived && quantityEdited {
@@ -261,9 +263,10 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in Recently deleted"}
 			}
 		}
+		// A new version: a form opened before this save is stale now.
 		_, err = tx.Exec(ctx, `
 			UPDATE items SET name = $2, brand = $3, category = $4, unit = $5, min_quantity = $6, expires_on = $7,
-			       location = $8, notes = $9, updated_at = now()
+			       location = $8, notes = $9, updated_at = now(), version = version + 1
 			WHERE id = $1`,
 			id, in.Name, in.Brand, in.Category, in.Unit, in.MinQuantity, in.ExpiresOn, in.Location, in.Notes)
 		if err != nil {
@@ -328,8 +331,9 @@ func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, er
 // DeleteItem removes an item with its own history (initial stock, uses,
 // counts), SKUs, tags and photo. An item that other records refer to
 // (purchases, services, kits) is not deleted, as that would change them;
-// it fails with a *ConflictError and should be archived instead.
-func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err error) {
+// it fails with a *ConflictError and should be archived instead. An item
+// changed since version fails with a *StaleError.
+func (s *Store) DeleteItem(ctx context.Context, id int64, version int) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		// The shopping entry the delete cascades to before the item, like
 		// MarkBought, so the two can't deadlock.
@@ -337,8 +341,10 @@ func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err er
 			return err
 		}
 		var name, brand string
-		if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand); err != nil {
-			return notFound(err)
+		var have int
+		err := tx.QueryRow(ctx, `SELECT name, brand, version FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatItem, id); err != nil {
+			return err
 		}
 		u, err := itemUsage(ctx, tx, id)
 		if err != nil {
@@ -364,20 +370,24 @@ func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err er
 // ArchiveItem hides an item from stock, pickers and suggestions while
 // keeping its history, services, kits and spending. Its shopping list
 // entry, if any, goes to the trash; listTrashID is that trash entry (0
-// when it wasn't on the list).
-func (s *Store) ArchiveItem(ctx context.Context, id int64) (listTrashID int64, err error) {
+// when it wasn't on the list). An item changed since version fails with
+// a *StaleError.
+func (s *Store) ArchiveItem(ctx context.Context, id int64, version int) (listTrashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		// The entry before the item, like MarkBought, so the two can't deadlock.
 		if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id); err != nil {
 			return err
 		}
-		if err := checkAffected(tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id)); err != nil {
+		// Archiving changes the item's page: a new version.
+		tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), version = version + 1
+			WHERE id = $1 AND version = $2`, id, version)
+		if err := versionedUpdate(ctx, tx, tag, err, WhatItem, id); err != nil {
 			return err
 		}
 		// Looked up again under the item's lock: an AddShopping that held
 		// the item has committed its entry by now.
 		var entryID int64
-		err := tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id).Scan(&entryID)
+		err = tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id).Scan(&entryID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -393,9 +403,12 @@ func (s *Store) ArchiveItem(ctx context.Context, id int64) (listTrashID int64, e
 	return listTrashID, err
 }
 
-// RestoreItem brings an archived item back.
-func (s *Store) RestoreItem(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, id))
+// RestoreItem brings an archived item back. An item changed since
+// version fails with a *StaleError.
+func (s *Store) RestoreItem(ctx context.Context, id int64, version int) error {
+	// Restoring changes the item's page: a new version.
+	tag, err := s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	return versionedUpdate(ctx, s.pool, tag, err, WhatItem, id)
 }
 
 // Categories returns the distinct categories in use, plus common defaults.

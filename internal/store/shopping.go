@@ -13,14 +13,14 @@ import (
 
 const shoppingSelect = `
 SELECT e.id, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit), e.free_text,
-       e.quantity, e.note, e.created_at
+       e.quantity, e.note, e.created_at, e.version
 FROM shopping_entries e
 LEFT JOIN items i ON i.id = e.item_id`
 
 func scanShopping(row pgx.Row) (stock.ShoppingEntry, error) {
 	var e stock.ShoppingEntry
 	var brand, name string
-	err := row.Scan(&e.ID, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt)
+	err := row.Scan(&e.ID, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt, &e.Version)
 	if name != "" {
 		e.ItemName = displayName(brand, name)
 	}
@@ -68,10 +68,12 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 				return ErrNotFound
 			}
 		}
+		// Adding to an entry changes what its Bought form shows: a new version.
 		return tx.QueryRow(ctx, `
 			INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit) VALUES ($1, $2, $3, $4, $6)
 			ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-			SET quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
+			SET version = shopping_entries.version + 1,
+			    quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 			                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
 			                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
 			    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
@@ -102,10 +104,12 @@ func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, n
 		if archived {
 			return ErrNotFound
 		}
+		// A new version when the entry changes, like AddShopping.
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO shopping_entries (item_id, quantity, note) VALUES ($1, $2, $3)
 			ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-			SET quantity = excluded.quantity,
+			SET version = shopping_entries.version + 1,
+			    quantity = excluded.quantity,
 			    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
 			                WHEN shopping_entries.note = '' THEN excluded.note
 			                ELSE shopping_entries.note || '; ' || excluded.note END
@@ -117,14 +121,21 @@ func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, n
 	return changed, err
 }
 
-// DeleteShopping removes an entry.
-func (s *Store) DeleteShopping(ctx context.Context, id int64) (trashID int64, err error) {
+// DeleteShopping removes an entry. An entry changed since version fails
+// with a *StaleError.
+func (s *Store) DeleteShopping(ctx context.Context, id int64, version int) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		trashID, err = trashShopping(ctx, tx, id)
+		if errors.Is(err, ErrNotFound) {
+			return goneError(ctx, tx, WhatShopping, id)
+		}
 		if err != nil {
 			return err
 		}
-		return checkAffected(tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, id))
+		// The delete locks the entry and checks its version; one changed
+		// since the snapshot rolls the snapshot back too.
+		tag, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1 AND version = $2`, id, version)
+		return versionedUpdate(ctx, tx, tag, err, WhatShopping, id)
 	})
 	return trashID, err
 }
@@ -149,13 +160,16 @@ func trashShopping(ctx context.Context, tx pgx.Tx, id int64) (int64, error) {
 // the purchase is recorded as a stock movement in the same transaction
 // (purchase.ItemID is filled in from the entry). When less was bought than
 // the entry asks for, the entry stays on the list with the rest; left is
-// that remaining quantity (0 when the entry was removed).
-func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.MovementInput) (left float64, trashID int64, err error) {
+// that remaining quantity (0 when the entry was removed). An entry changed
+// since version fails with a *StaleError.
+func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase *stock.MovementInput) (left float64, trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var itemID *int64
 		var qty *float64
-		if err := tx.QueryRow(ctx, `SELECT item_id, quantity FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID, &qty); err != nil {
-			return notFound(err)
+		var have int
+		err := tx.QueryRow(ctx, `SELECT item_id, quantity, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID, &qty, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, id); err != nil {
+			return err
 		}
 		// The entry as it was, so ticking it off can be undone.
 		before, err := snapshotRows(ctx, tx, "shopping_entries", "id = $1", id)
@@ -186,7 +200,8 @@ func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.Moveme
 			return err
 		}
 		if left > 0 {
-			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2 WHERE id = $1`, id, left)
+			// What is left to buy is new: a new version.
+			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2, version = version + 1 WHERE id = $1`, id, left)
 			return err
 		}
 		left = 0
@@ -235,17 +250,19 @@ func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, erro
 // bought. If the item is on the list already, the free-text entry is
 // merged into that one. A quantity in another unit than the item's is
 // dropped (dropped reports it). ErrNotFound means the entry is gone or
-// already linked, or the item is gone.
-func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (id int64, dropped bool, err error) {
+// already linked, or the item is gone. An entry changed since version
+// fails with a *StaleError.
+func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, itemID int64) (id int64, dropped bool, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var linked *int64
 		var unit stock.Unit
 		var qty *float64
 		var note string
-		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, note FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
-			Scan(&linked, &unit, &qty, &note)
-		if err != nil {
-			return notFound(err)
+		var have int
+		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, note, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
+			Scan(&linked, &unit, &qty, &note, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, entryID); err != nil {
+			return err
 		}
 		if linked != nil {
 			return ErrNotFound
@@ -261,7 +278,9 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (id int
 		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&itemUnit); err != nil {
 			return notFound(err)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, itemID); err != nil {
+		// Un-archiving changes the item's page: a new version, only then.
+		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL, version = version + 1 WHERE id = $1 AND archived_at IS NOT NULL`,
+			itemID); err != nil {
 			return err
 		}
 		if itemUnit != unit && qty != nil {
@@ -269,15 +288,18 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (id int
 		}
 		if !merge {
 			id = entryID
-			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4 WHERE id = $1`,
-				entryID, itemID, qty, itemUnit)
+			// It is another entry now: a new version.
+			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4, version = version + 1
+				WHERE id = $1`, entryID, itemID, qty, itemUnit)
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID); err != nil {
 			return err
 		}
+		// The merged entry asks for more: a new version.
 		_, err = tx.Exec(ctx, `
 			UPDATE shopping_entries SET
+			  version = version + 1,
 			  quantity = CASE WHEN quantity IS NULL OR $2::numeric IS NULL THEN COALESCE($2, quantity)
 			                  ELSE LEAST(quantity + $2, $4) END,
 			  note = CASE WHEN $3 = '' OR strpos(note, $3) > 0 THEN note WHEN note = '' THEN $3 ELSE note || '; ' || $3 END

@@ -149,6 +149,8 @@ type kitForm struct {
 	Notes                            string
 	Lines                            []lineRow
 	Stored                           string // the saved name while editing, for the heading
+	Version                          int    // as the edit form was opened (see itemForm)
+	Stale                            *staleNote
 	Errors                           stock.Errors
 }
 
@@ -197,12 +199,12 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	f := kitForm{
 		Name: formText(r, "name"), IntervalKm: formText(r, "interval_km"), IntervalMonths: formText(r, "interval_months"),
-		Notes: formText(r, "notes"), Errors: stock.Errors{},
+		Notes: formText(r, "notes"), Version: parseVersion(r), Errors: stock.Errors{},
 	}
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID = *id
 	}
-	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Notes: f.Notes}
+	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Notes: f.Notes, Version: f.Version}
 	if in.IntervalKm, err = parseOptInt(f.IntervalKm); err != nil {
 		f.Errors.Add("interval_km", err.Error())
 	}
@@ -220,7 +222,7 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
 		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalKm: optIntString(k.IntervalKm),
-		IntervalMonths: optIntString(k.IntervalMonths), Notes: k.Notes,
+		IntervalMonths: optIntString(k.IntervalMonths), Notes: k.Notes, Version: k.Version,
 	}
 	for _, l := range k.Lines {
 		f.Lines = append(f.Lines, partRow(l.ItemID, l.Need, l.Unit))
@@ -288,7 +290,7 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 			s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Saved kit "+in.Name)
 			return nil
 		}
-		if !formConflict(f.Errors, err) {
+		if f.Stale = staleForm(err, fmt.Sprintf("/kits/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -305,13 +307,21 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	page := fmt.Sprintf("/kits/%d", id)
 	k, err := s.store.GetKit(r.Context(), id)
-	if err != nil {
+	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	var conflict *store.ConflictError
-	trashID, err := s.store.DeleteKit(r.Context(), id)
-	if errors.As(err, &conflict) {
+	trashID, err := s.store.DeleteKit(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/services") {
+		return nil
+	} else if errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "")
 		return nil
@@ -328,11 +338,20 @@ func (s *Server) kitArchive(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	k, err := s.store.GetKit(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	if err := s.store.ArchiveKit(r.Context(), id); err != nil {
+	page := fmt.Sprintf("/kits/%d", id)
+	k, err := s.store.GetKit(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	err = s.store.ArchiveKit(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/services") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Archived "+k.Name+". Its services keep it; restore it any time.")
@@ -344,11 +363,20 @@ func (s *Server) kitRestore(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	k, err := s.store.GetKit(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	if err := s.store.RestoreKit(r.Context(), id); err != nil {
+	page := fmt.Sprintf("/kits/%d", id)
+	k, err := s.store.GetKit(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	err = s.store.RestoreKit(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/services") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Restored "+k.Name)

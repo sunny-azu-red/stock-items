@@ -8,7 +8,7 @@
   <div class="actions">
     <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
     {{if $k.Archived}}
-    <form class="inline-form" method="post" action="/kits/{{$k.ID}}/restore"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore kit</button></form>
+    <form class="inline-form" method="post" action="/kits/{{$k.ID}}/restore"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore kit</button></form>
     {{else if $d.Vehicle.Archived}}
     <span class="muted small">Restore {{$d.Vehicle.Name}} to do this service.</span>
     {{else}}
@@ -63,11 +63,11 @@
     </section>
 
     {{if $k.Archived}}{{else if $d.ServiceCount}}
-    <form method="post" action="/kits/{{$k.ID}}/archive" data-confirm="Archive the kit {{$k.Name}}? It leaves the lists and reminders; its {{plural $d.ServiceCount "logged service"}} keep it, and you can restore it.">
+    <form method="post" action="/kits/{{$k.ID}}/archive" data-confirm="Archive the kit {{$k.Name}}? It leaves the lists and reminders; its {{plural $d.ServiceCount "logged service"}} keep it, and you can restore it."><input type="hidden" name="version" value="{{$k.Version}}">
       <button class="btn btn-danger btn-block" type="submit">{{icon "archive"}} Archive kit</button>
     </form>
     {{else}}
-    <form method="post" action="/kits/{{$k.ID}}/delete" data-confirm="Delete the kit {{$k.Name}}?">
+    <form method="post" action="/kits/{{$k.ID}}/delete" data-confirm="Delete the kit {{$k.Name}}?"><input type="hidden" name="version" value="{{$k.Version}}">
       <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete kit</button>
     </form>
     {{end}}

@@ -53,6 +53,8 @@ trash (JSON snapshots of deleted rows; no foreign keys)
 - A free-text entry can be linked to an existing item with the same name (`store.ItemsNamed`, `store.LinkShopping`): the item is restored if archived, and the entry is merged into the item's own entry if it has one.
 - A free-text entry can become a new item: `store.CreateItemFromShopping` creates the item with its starting purchase and deletes the entry in one transaction.
 
+**version** (on `items`, `vehicles`, `service_kits`, `service_records`, `stock_movements`, `shopping_entries`; migration 00010): counts the changes to what the record's edit form or page shows, starting at 1. Edit forms and record buttons post it back, and the store refuses a stale one with `StaleError`. It moves on with an edit, archive or restore, a purchase's best-before date on the item, and any change to a shopping entry's quantity or note; it doesn't with stock quantity or odometer changes. SKUs, tags, kit lines and a service's parts count as part of their parent. A row restored from the trash gets its snapshot's version plus one (snapshots from before 00010 get 1). The migration's Down also strips `version` from trash snapshots, so the code before it can still restore them.
+
 ## Invariants
 
 1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The exceptions change recorded movements together with their effect, so the sum still holds:
@@ -64,6 +66,7 @@ trash (JSON snapshots of deleted rows; no foreign keys)
 4. Logging a service moves the vehicle odometer forward. It never moves it backwards. Deleting a service that moved it (`odometer_moved`) puts it back to the highest of `odometer_before` and the vehicle's other services' readings, or to no reading if there are none, unless the odometer was changed since. Services that didn't move it, and services logged before `odometer_moved` existed, leave it alone. A vehicle's reading can't be changed to less than its highest service reading, and a service's reading must fit between the services logged on earlier and later days (`checkVehicleOdometer`, `checkServiceOdometer`; service changes hold the vehicle's lock, so two saved at once take turns), also when a deleted service is restored.
 5. Deleting a service deletes its `service` movements and puts the quantities back on stock. Editing a service (`store.UpdateService`) does the same for its old parts, takes the new ones, and redoes its odometer change, in one transaction; its vehicle can't change.
 6. A single movement other than `service` can be edited (amount, price, shop, date, note) or deleted; the item's quantity moves by the difference. The change is refused if the quantity would go below zero. A `correction` is edited as a signed change (added or took away, and how much), and `initial` stock that gets a price or shop becomes a `purchase` (`stock.ApplyEdit`).
+7. A form or button never acts on a record that changed or was deleted since it was shown: the record's `version` is compared under the row's lock.
 
 ## Derived values (not stored)
 

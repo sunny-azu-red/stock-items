@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"html/template"
@@ -16,6 +17,8 @@ type movementEditForm struct {
 	Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
 	Removed                                                    bool   // a count that took stock away
 	Back                                                       string // page to return to
+	Version                                                    int    // as the form was opened (see itemForm)
+	Stale                                                      *staleNote
 	Errors                                                     stock.Errors
 }
 
@@ -26,11 +29,16 @@ type movementPage struct {
 	Form     movementEditForm
 	Back     template.URL // the page that opened the form, already checked
 	Units    []stock.SubUnit
+	Gone     bool // deleted since the form was opened: Movement is what the form said
 }
 
 // errItemArchived means the stock change belongs to an archived item, whose
 // stock can't change until it is restored.
 var errItemArchived = errors.New("item is archived")
+
+// errMovementGone means the stock change no longer exists. It matches
+// store.ErrNotFound, so pages that show one answer 404.
+var errMovementGone = fmt.Errorf("stock change is gone: %w", store.ErrNotFound)
 
 // loadMovement returns an editable stock change; parts used by a service
 // are not edited here, nor are an archived item's changes.
@@ -40,6 +48,9 @@ func (s *Server) loadMovement(r *http.Request) (stock.Movement, error) {
 		return stock.Movement{}, err
 	}
 	m, err := s.store.GetMovement(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		return stock.Movement{ID: id}, errMovementGone
+	}
 	if err != nil {
 		return m, err
 	}
@@ -73,6 +84,38 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit)}})
 }
 
+// goneMovementForm shows the edit form of a stock change deleted since it
+// was opened, as it was posted, saying where the change went. The page no
+// longer knows the change, so it goes by what the form said it was.
+func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int64) error {
+	m := stock.Movement{ID: id, Kind: stock.MovementKind(formText(r, "kind"))}
+	if id := parseOptID(formText(r, "item_id")); id != nil {
+		m.ItemID = *id
+	}
+	it, err := s.store.GetItem(r.Context(), m.ItemID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	m.ItemName, m.ItemUnit = cmp.Or(it.DisplayName(), "the item"), it.Unit
+	gone := s.store.Gone(r.Context(), store.WhatMovement, id)
+	f := movementEditForm{
+		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
+		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
+		Removed: formText(r, "direction") == "removed", Back: postedBack(r, movementBack(m)),
+		Version: parseVersion(r), Errors: stock.Errors{}, Stale: staleForm(gone, ""),
+	}
+	if f.Stale == nil {
+		return gone
+	}
+	units := stock.SubUnitsFor(m.ItemUnit)
+	if !m.ItemUnit.Valid() {
+		units = stock.SubUnits
+	}
+	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
+		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true}})
+	return nil
+}
+
 func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 	m, err := s.loadMovement(r)
 	if s.movementRefused(w, r, m, err) {
@@ -82,7 +125,7 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
-		Removed: m.Delta < 0, Back: s.back(r, itemPath(m.ItemID))}
+		Removed: m.Delta < 0, Back: s.back(r, itemPath(m.ItemID)), Version: m.Version}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)
@@ -92,22 +135,27 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
 	m, err := s.loadMovement(r)
 	if s.movementRefused(w, r, m, err) {
 		return nil
 	}
-	if err != nil {
-		return err
+	if errors.Is(err, errMovementGone) {
+		// Deleted meanwhile: keep what was typed, and say where it went.
+		return s.goneMovementForm(w, r, m.ID)
 	}
-	if err := parseForm(w, r); err != nil {
+	if err != nil {
 		return err
 	}
 	f := movementEditForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		Removed: formText(r, "direction") == "removed", Back: postedBack(r, itemPath(m.ItemID)), Errors: stock.Errors{},
+		Removed: formText(r, "direction") == "removed", Back: postedBack(r, itemPath(m.ItemID)),
+		Version: parseVersion(r), Errors: stock.Errors{},
 	}
-	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note, Removed: f.Removed}
+	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note, Removed: f.Removed, Version: f.Version}
 	if q, err := stock.ParseAmount(f.Amount, m.ItemUnit, f.AmountUnit); err != nil {
 		f.Errors.Add("amount", amountError(err, m.ItemUnit, "Enter an amount"))
 	} else {
@@ -129,7 +177,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 			s.redirect(w, r, f.Back, "Updated the "+changeName(m.Kind))
 			return nil
 		}
-		if !movementConflict(f.Errors, err) {
+		if f.Stale = staleForm(err, fmt.Sprintf("/movements/%d/edit", m.ID)); f.Stale == nil && !movementConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -138,18 +186,26 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
 	m, err := s.loadMovement(r)
 	if s.movementRefused(w, r, m, err) {
 		return nil
 	}
-	if err != nil {
+	back := postedBack(r, movementBack(m))
+	if errors.Is(err, errMovementGone) {
+		err = s.store.Gone(r.Context(), store.WhatMovement, m.ID)
+	}
+	if s.staleButton(w, r, err, fmt.Sprintf("/movements/%d/edit", m.ID), back) {
+		return nil
+	} else if err != nil {
 		return err
 	}
-	if err := parseForm(w, r); err != nil {
-		return err
+	deleted, trashID, err := s.store.DeleteMovement(r.Context(), m.ID, parseVersion(r))
+	if s.staleButton(w, r, err, fmt.Sprintf("/movements/%d/edit", m.ID), back) {
+		return nil
 	}
-	back := postedBack(r, itemPath(m.ItemID))
-	deleted, trashID, err := s.store.DeleteMovement(r.Context(), m.ID)
 	if err == nil {
 		it, err := s.store.GetItem(r.Context(), deleted.ItemID)
 		if err != nil {
@@ -173,6 +229,15 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 }
 
 func itemPath(id int64) string { return fmt.Sprintf("/items/%d", id) }
+
+// movementBack is where a stock change's form returns by default: its
+// item, or the activity log for one that is gone.
+func movementBack(m stock.Movement) string {
+	if m.ItemID == 0 {
+		return "/activity"
+	}
+	return itemPath(m.ItemID)
+}
 
 // changeName names a kind of stock change in a sentence.
 func changeName(k stock.MovementKind) string {

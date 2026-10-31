@@ -23,7 +23,7 @@
           </span>
           <span class="end qty">{{with .Quantity}}{{qty . $entry.ItemUnit}}{{end}}</span>
           <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "check"}} Bought</a>
-          <form class="inline-form" method="post" action="/shopping/{{.ID}}/delete"><button class="icon-btn" type="submit" aria-label="Remove {{.Title}}" title="Remove">{{icon "x"}}</button></form>
+          <form class="inline-form" method="post" action="/shopping/{{.ID}}/delete"><input type="hidden" name="version" value="{{.Version}}"><button class="icon-btn" type="submit" aria-label="Remove {{.Title}}" title="Remove">{{icon "x"}}</button></form>
         </li>
         {{end}}
       </ul>

@@ -77,11 +77,22 @@ func putTrash(ctx context.Context, tx pgx.Tx, kind, label string, p trashPayload
 
 // restoreRows inserts snapshot rows back into table with their ids. Only
 // the columns in the snapshot are set, so columns added since get their
-// defaults.
+// defaults. A restored row of a versioned table comes back with a new
+// version, so a form opened before it was deleted can't save over it
+// (snapshots from before versions get the default, 1, and such a form
+// carried none).
 func restoreRows(ctx context.Context, tx pgx.Tx, table string, rows json.RawMessage) error {
 	decoded, err := decodeRows(rows)
 	if err != nil || len(decoded) == 0 {
 		return err
+	}
+	if versioned(table) {
+		for _, r := range decoded {
+			if _, ok := r["version"].(json.Number); ok {
+				r["version"] = json.Number(strconv.FormatInt(r.int64("version")+1, 10))
+			}
+		}
+		rows = encodeRows(decoded)
 	}
 	var cols []string
 	for _, r := range decoded {
@@ -220,6 +231,7 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 	if next > stock.MaxQuantity {
 		return &ConflictError{Field: "form", Message: displayName(brand, name) + " would have more than " + stock.FormatQuantity(stock.MaxQuantity, unit)}
 	}
+	// No new version, like applyMovement.
 	_, err := tx.Exec(ctx, `UPDATE items SET quantity = $2, updated_at = now() WHERE id = $1`, itemID, next)
 	return err
 }
@@ -670,7 +682,8 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 		// Still listed (bought in part, or listed again): it needs what the
 		// purchase covered once more.
 		if listed != nil && undone != nil {
-			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = LEAST(quantity + $2, $3) WHERE id = $1`,
+			// It asks for more again: a new version.
+			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = LEAST(quantity + $2, $3), version = version + 1 WHERE id = $1`,
 				current, *undone, stock.MaxQuantity)
 			return current, err
 		}

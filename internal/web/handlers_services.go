@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,6 +24,8 @@ type serviceForm struct {
 	LaborCost   string
 	Parts       []lineRow
 	Stored      string // the saved title while editing, for the page title
+	Version     int    // as the edit form was opened (see itemForm)
+	Stale       *staleNote
 	Errors      stock.Errors
 }
 
@@ -44,9 +47,10 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		return err
 	}
 	if f.ID != 0 {
-		// Saving returns this service's parts first: count them as available.
+		// Saving returns this service's parts first: count them as available
+		// (none when the service was deleted meanwhile).
 		rec, err := s.store.GetService(ctx, f.ID)
-		if err != nil {
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
 		for _, p := range rec.Parts {
@@ -117,9 +121,9 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	f := serviceForm{
 		PerformedOn: formText(r, "performed_on"), OdometerKm: formText(r, "odometer_km"), Title: formText(r, "title"),
 		Notes: formText(r, "notes"), LaborCost: formText(r, "labor_cost"), KitName: formText(r, "kit_name"),
-		Errors: stock.Errors{},
+		Version: parseVersion(r), Errors: stock.Errors{},
 	}
-	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes}
+	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, Version: f.Version}
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID, in.VehicleID = *id, *id
 	}
@@ -195,7 +199,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, PerformedOn: rec.PerformedOn.Format("2006-01-02"),
-		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Stored: rec.Title,
+		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Stored: rec.Title, Version: rec.Version,
 	}
 	if rec.KitID != nil {
 		f.KitID = *rec.KitID
@@ -217,24 +221,29 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	rec, err := s.store.GetService(r.Context(), id)
-	if err != nil {
-		return err
-	}
 	f, in, err := s.parseServiceForm(r)
 	if err != nil {
 		return err
 	}
-	f.ID, f.VehicleID, f.Stored = id, rec.VehicleID, rec.Title // the vehicle can't change
+	f.ID = id
 	if !f.Errors.Any() {
+		// The store keeps the service's vehicle, whatever was posted.
 		err := s.store.UpdateService(r.Context(), id, in)
 		if err == nil {
 			s.redirect(w, r, fmt.Sprintf("/services/%d", id), "Saved "+in.Title)
 			return nil
 		}
-		if !serviceConflict(f, err) {
+		// Changed or deleted meanwhile: say so, and keep what was typed.
+		if f.Stale = staleForm(err, fmt.Sprintf("/services/%d/edit", id)); f.Stale == nil && !serviceConflict(f, err) {
 			return err
 		}
+	}
+	// Deleted meanwhile, the form still shows what was typed.
+	f.Stored = cmp.Or(f.Title, "service")
+	if rec, err := s.store.GetService(r.Context(), id); err == nil {
+		f.VehicleID, f.Stored = rec.VehicleID, rec.Title // the vehicle can't change
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return err
 	}
 	return s.renderServiceForm(w, r, http.StatusUnprocessableEntity, f)
 }
@@ -257,12 +266,20 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	rec, err := s.store.GetService(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	trashID, err := s.store.DeleteService(r.Context(), id)
-	if err != nil {
+	page := fmt.Sprintf("/services/%d", id)
+	rec, err := s.store.GetService(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatService, id), page, "/services") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	trashID, err := s.store.DeleteService(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/services") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	msg := "Deleted " + rec.Title

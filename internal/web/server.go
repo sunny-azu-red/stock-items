@@ -175,6 +175,11 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 		err := fn(w, r)
 		switch {
 		case err == nil:
+		case errors.As(err, new(*store.StaleError)) && r.Method == http.MethodPost:
+			// A form or button no handler expected to go stale: say so where
+			// the user was, as for a conflict (a gone record also matches
+			// ErrNotFound, so this comes first).
+			s.staleButton(w, r, err, s.back(r, "/"), "/")
 		case errors.Is(err, store.ErrNotFound), errors.Is(err, errBadID):
 			s.notFound(w, r)
 		case errors.As(err, new(*store.ConflictError)) && r.Method == http.MethodPost:

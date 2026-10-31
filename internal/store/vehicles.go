@@ -13,7 +13,7 @@ import (
 
 const vehicleSelect = `
 SELECT v.id, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer_km, v.notes,
-       v.created_at, v.updated_at, v.archived_at,
+       v.created_at, v.updated_at, v.archived_at, v.version,
        (SELECT count(*) FROM item_vehicles iv JOIN items i ON i.id = iv.item_id
         WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL)
 FROM vehicles v`
@@ -21,7 +21,7 @@ FROM vehicles v`
 func scanVehicle(row pgx.Row) (stock.Vehicle, error) {
 	var v stock.Vehicle
 	err := row.Scan(&v.ID, &v.Name, &v.Kind, &v.Make, &v.Model, &v.Year, &v.Plate, &v.VIN, &v.Color,
-		&v.OdometerKm, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt, &v.ItemCount)
+		&v.OdometerKm, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt, &v.Version, &v.ItemCount)
 	return v, err
 }
 
@@ -60,17 +60,26 @@ func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64
 }
 
 // UpdateVehicle replaces a vehicle's fields. A changed odometer may not be
-// lower than a service's reading (see checkVehicleOdometer).
+// lower than a service's reading (see checkVehicleOdometer). A vehicle
+// changed since in.Version fails with a *StaleError.
 func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
+		// The lock the update takes anyway (and checkVehicleOdometer), first.
+		var version int
+		err := tx.QueryRow(ctx, `SELECT version FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&version)
+		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatVehicle, id); err != nil {
+			return err
+		}
 		if !in.KeepOdometer {
 			if err := checkVehicleOdometer(ctx, tx, id, in.OdometerKm); err != nil {
 				return err
 			}
 		}
+		// A new version: a form opened before this save is stale now.
 		tag, err := tx.Exec(ctx, `
 			UPDATE vehicles SET name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
-			       color = $9, odometer_km = CASE WHEN $12 THEN odometer_km ELSE $10 END, notes = $11, updated_at = now()
+			       color = $9, odometer_km = CASE WHEN $12 THEN odometer_km ELSE $10 END, notes = $11, updated_at = now(),
+			       version = version + 1
 			WHERE id = $1`,
 			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes, in.KeepOdometer)
 		return checkAffected(tag, vehicleConflict(err))
@@ -84,6 +93,8 @@ func (s *Store) SetOdometer(ctx context.Context, id int64, km int) error {
 		if err := checkVehicleOdometer(ctx, tx, id, &km); err != nil {
 			return err
 		}
+		// No new version: the edit form guards the reading with odometer_was,
+		// so setting it here (or by a service) leaves an open form good.
 		tag, err := tx.Exec(ctx, `UPDATE vehicles SET odometer_km = $2, updated_at = now() WHERE id = $1`, id, km)
 		return checkAffected(tag, err)
 	})
@@ -184,8 +195,9 @@ func vehicleUsage(ctx context.Context, q queryRower, id int64) (services, kits i
 // DeleteVehicle removes a vehicle that has no services or kits; its items
 // stay but lose this tag. A vehicle with history fails with a
 // *ConflictError and should be archived instead, which keeps its services,
-// kits and labour costs.
-func (s *Store) DeleteVehicle(ctx context.Context, id int64) (trashID int64, err error) {
+// kits and labour costs. A vehicle changed since version fails with a
+// *StaleError.
+func (s *Store) DeleteVehicle(ctx context.Context, id int64, version int) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		// The tags the delete cascades to before the vehicle: saving an item
 		// replaces its tags, then checks each tag's vehicle (KEY SHARE).
@@ -193,8 +205,10 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64) (trashID int64, err
 			return err
 		}
 		var name string
-		if err := tx.QueryRow(ctx, `SELECT name FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&name); err != nil {
-			return notFound(err)
+		var have int
+		err := tx.QueryRow(ctx, `SELECT name, version FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&name, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatVehicle, id); err != nil {
+			return err
 		}
 		services, kits, err := vehicleUsage(ctx, tx, id)
 		if err != nil {
@@ -216,12 +230,18 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64) (trashID int64, err
 }
 
 // ArchiveVehicle hides a vehicle from lists, pickers and reminders while
-// keeping its services, kits and item tags.
-func (s *Store) ArchiveVehicle(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id))
+// keeping its services, kits and item tags. A vehicle changed since
+// version fails with a *StaleError.
+func (s *Store) ArchiveVehicle(ctx context.Context, id int64, version int) error {
+	// Archiving changes the vehicle's page: a new version.
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = COALESCE(archived_at, now()), version = version + 1
+		WHERE id = $1 AND version = $2`, id, version)
+	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }
 
-// RestoreVehicle brings an archived vehicle back.
-func (s *Store) RestoreVehicle(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL WHERE id = $1`, id))
+// RestoreVehicle brings an archived vehicle back. A vehicle changed since
+// version fails with a *StaleError.
+func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }

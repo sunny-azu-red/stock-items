@@ -46,6 +46,8 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 	if qty+in.Delta > stock.MaxQuantity {
 		return 0, stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " on stock"}
 	}
+	// No new version: a stock change is a delta, and the edit form guards
+	// the quantity with quantity_was, so an open form stays good.
 	if _, err := tx.Exec(ctx, `UPDATE items SET quantity = quantity + $2, updated_at = now() WHERE id = $1`,
 		in.ItemID, in.Delta); err != nil {
 		return 0, err
@@ -87,7 +89,10 @@ func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (i
 	if err != nil || in.ExpiresOn == nil {
 		return id, err
 	}
-	_, err = tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now() WHERE id = $1`, in.ItemID, *in.ExpiresOn)
+	// The edit form shows the best-before date: a new version, so a form
+	// opened before can't save the old date back.
+	_, err = tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now(), version = version + 1 WHERE id = $1`,
+		in.ItemID, *in.ExpiresOn)
 	return id, err
 }
 
@@ -134,7 +139,7 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	var args sqlArgs
 	sql := `
 		SELECT m.id, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
-		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at
+		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at, m.version
 		FROM stock_movements m
 		JOIN items i ON i.id = m.item_id
 		LEFT JOIN service_records sr ON sr.id = m.service_record_id
@@ -163,7 +168,7 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 		var m stock.Movement
 		var brand, name string
 		err := r.Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
-			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.CreatedAt)
+			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.CreatedAt, &m.Version)
 		m.ItemName = displayName(brand, name)
 		return m, err
 	})
@@ -195,11 +200,11 @@ func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, err
 	var archived bool
 	err := tx.QueryRow(ctx, `
 		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, i.archived_at IS NOT NULL, m.kind, m.delta,
-		       m.total_price, m.supplier, m.note, m.occurred_on, m.service_record_id
+		       m.total_price, m.supplier, m.note, m.occurred_on, m.service_record_id, m.version
 		FROM stock_movements m JOIN items i ON i.id = m.item_id
 		WHERE m.id = $1 FOR NO KEY UPDATE`, id).
 		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &archived, &m.Kind, &m.Delta, &m.TotalPrice,
-			&m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID)
+			&m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.Version)
 	if err != nil {
 		return m, notFound(err)
 	}
@@ -213,6 +218,19 @@ func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, err
 	return m, nil
 }
 
+// lockVersionedMovement is lockMovement for a form or button that carried
+// the stock change's version: one deleted or changed since is stale.
+func lockVersionedMovement(ctx context.Context, tx pgx.Tx, id int64, version int) (lockedMovement, error) {
+	m, err := lockMovement(ctx, tx, id)
+	if errors.Is(err, ErrNotFound) {
+		return m, goneError(ctx, tx, WhatMovement, id)
+	}
+	if err != nil {
+		return m, err
+	}
+	return m, checkVersion(m.Version, version, WhatMovement)
+}
+
 // reviseMovement changes the stock as if m had been recorded with delta
 // instead (0 for not at all). Together with updating or deleting the
 // movement row, this keeps quantity equal to the sum of the ledger.
@@ -224,6 +242,7 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 	if qty > stock.MaxQuantity {
 		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, m.ItemUnit) + " on stock"}
 	}
+	// No new version for the item, like applyMovement.
 	_, err := tx.Exec(ctx, `UPDATE items SET quantity = $2, updated_at = now() WHERE id = $1`, m.ItemID, qty)
 	return err
 }
@@ -233,10 +252,11 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 // less than nothing on stock fails with *InsufficientStockError. Like
 // DeleteMovement, it is a deliberate exception to "every change goes
 // through applyMovement": it rewrites a mistaken entry together with its
-// effect, so the ledger still adds up.
+// effect, so the ledger still adds up. A stock change changed or deleted
+// since e.Version fails with a *StaleError.
 func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEdit) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		m, err := lockMovement(ctx, tx, id)
+		m, err := lockVersionedMovement(ctx, tx, id, e.Version)
 		if err != nil {
 			return err
 		}
@@ -251,8 +271,10 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 		if err := reviseMovement(ctx, tx, m, in.Delta); err != nil {
 			return err
 		}
+		// A new version: an edit form opened before this one is stale now.
 		_, err = tx.Exec(ctx, `
-			UPDATE stock_movements SET kind = $2, delta = $3, total_price = $4, supplier = $5, note = $6, occurred_on = $7
+			UPDATE stock_movements SET kind = $2, delta = $3, total_price = $4, supplier = $5, note = $6, occurred_on = $7,
+			       version = version + 1
 			WHERE id = $1`, id, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, *in.OccurredOn)
 		return err
 	})
@@ -261,12 +283,13 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 // DeleteMovement removes a mistaken stock change and undoes its effect on
 // the stock. It fails with *InsufficientStockError when that would leave
 // less than nothing, e.g. for a purchase that has been used up since. A
-// best-before date the purchase set is kept.
-func (s *Store) DeleteMovement(ctx context.Context, id int64) (deleted stock.Movement, trashID int64, err error) {
+// best-before date the purchase set is kept. A stock change changed or
+// deleted since version fails with a *StaleError.
+func (s *Store) DeleteMovement(ctx context.Context, id int64, version int) (deleted stock.Movement, trashID int64, err error) {
 	var m lockedMovement
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		if m, err = lockMovement(ctx, tx, id); err != nil {
+		if m, err = lockVersionedMovement(ctx, tx, id, version); err != nil {
 			return err
 		}
 		if err := reviseMovement(ctx, tx, m, 0); err != nil {

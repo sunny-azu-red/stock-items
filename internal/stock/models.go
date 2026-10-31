@@ -61,6 +61,7 @@ type Vehicle struct {
 	ItemCount  int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	Version    int // see Item.Version; odometer readings don't count
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -138,6 +139,10 @@ type Item struct {
 	HasPhoto    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// Version counts the changes to what the item's edit form and page
+	// show; forms carry it, so one opened before a change is refused
+	// (store.StaleError). Stock changes don't count: they are deltas.
+	Version int
 	// ArchivedAt is set for items no longer kept: they are hidden from
 	// stock, pickers and suggestions, but their history stays.
 	ArchivedAt *time.Time
@@ -263,6 +268,7 @@ type Movement struct {
 	ServiceRecordID *int64
 	ServiceTitle    string
 	CreatedAt       time.Time
+	Version         int // see Item.Version
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an
@@ -282,6 +288,7 @@ type Kit struct {
 	// that has one; km reminders count from it when the last service was
 	// logged without a reading.
 	LastOdometerKm *int
+	Version        int // see Item.Version
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -334,6 +341,7 @@ type ServiceRecord struct {
 	Parts        []ServicePart
 	PartCount    int
 	CreatedAt    time.Time
+	Version      int // see Item.Version
 }
 
 // ServicePart is an item consumed by a service.
@@ -355,6 +363,7 @@ type ShoppingEntry struct {
 	Quantity  *float64
 	Note      string
 	CreatedAt time.Time
+	Version   int // see Item.Version
 }
 
 // Title is the item display name or the free text.

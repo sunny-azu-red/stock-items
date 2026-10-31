@@ -22,6 +22,8 @@ type vehicleForm struct {
 	Plate, VIN, Color, OdometerKm, Notes string
 	OdometerWas                          string // as the edit form was opened
 	Stored                               string // the saved name while editing, for the heading
+	Version                              int    // as the edit form was opened (see itemForm)
+	Stale                                *staleNote
 	Errors                               stock.Errors
 }
 
@@ -36,7 +38,7 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
 		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm), Notes: v.Notes,
-		OdometerWas: optIntString(v.OdometerKm), Stored: v.Name,
+		OdometerWas: optIntString(v.OdometerKm), Stored: v.Name, Version: v.Version,
 	}
 }
 
@@ -45,11 +47,11 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
 		OdometerKm: formText(r, "odometer_km"), Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
-		Errors: stock.Errors{},
+		Version: parseVersion(r), Errors: stock.Errors{},
 	}
 	in := stock.VehicleInput{
 		Name: f.Name, Kind: stock.VehicleKind(f.Kind), Make: f.Make, Model: f.Model, Plate: f.Plate, VIN: f.VIN,
-		Color: f.Color, Notes: f.Notes,
+		Color: f.Color, Notes: f.Notes, Version: f.Version,
 	}
 	var err error
 	if in.Year, err = parseOptInt(f.Year); err != nil {
@@ -192,7 +194,7 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 			s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Saved "+in.Name)
 			return nil
 		}
-		if !formConflict(f.Errors, err) {
+		if f.Stale = staleForm(err, fmt.Sprintf("/vehicles/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -210,13 +212,21 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	page := fmt.Sprintf("/vehicles/%d", id)
 	v, err := s.store.GetVehicle(r.Context(), id)
-	if err != nil {
+	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	var conflict *store.ConflictError
-	trashID, err := s.store.DeleteVehicle(r.Context(), id)
-	if errors.As(err, &conflict) {
+	trashID, err := s.store.DeleteVehicle(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/vehicles") {
+		return nil
+	} else if errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "")
 		return nil
@@ -233,11 +243,20 @@ func (s *Server) vehicleArchive(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	v, err := s.store.GetVehicle(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	if err := s.store.ArchiveVehicle(r.Context(), id); err != nil {
+	page := fmt.Sprintf("/vehicles/%d", id)
+	v, err := s.store.GetVehicle(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	err = s.store.ArchiveVehicle(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/vehicles") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Archived "+v.Name+". Its services and kits stay; restore it any time.")
@@ -249,11 +268,20 @@ func (s *Server) vehicleRestore(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	v, err := s.store.GetVehicle(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	if err := s.store.RestoreVehicle(r.Context(), id); err != nil {
+	page := fmt.Sprintf("/vehicles/%d", id)
+	v, err := s.store.GetVehicle(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	err = s.store.RestoreVehicle(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, page, "/vehicles") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Restored "+v.Name)

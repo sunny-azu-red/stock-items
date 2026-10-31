@@ -466,6 +466,49 @@ test("screenshots", async ({ page }, testInfo) => {
   }
 });
 
+test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
+  page.on("dialog", (d) => d.accept());
+  await page.goto("/stock");
+  await row(page, "OEM Rear Brake Pads").getByRole("link").first().click();
+  const edit = page.url() + "/edit";
+  await page.goto(edit);
+
+  const other = await context.newPage();
+  other.on("dialog", (d) => d.accept());
+  await other.goto(edit);
+  await other.getByLabel("Notes").fill("From the other tab");
+  await other.getByRole("button", { name: "Save item" }).click();
+  await expect(other.locator(".flash-success")).toContainText("Saved");
+
+  // The first tab is refused, keeps what was typed, and offers a reload.
+  await page.getByLabel("Notes").fill("From this tab");
+  await page.getByRole("button", { name: "Save item" }).click();
+  await expect(page.locator(".error-summary")).toContainText("This item was changed since you opened this");
+  await expect(page.getByLabel("Notes")).toHaveValue("From this tab");
+  await page.getByRole("link", { name: "Reload" }).click();
+  await expect(page.getByLabel("Notes")).toHaveValue("From the other tab");
+
+  // Deleted and undone in the other tab: the form opened before is stale.
+  await other.goto(edit.replace(/\/edit$/, ""));
+  const archive = other.getByRole("button", { name: "Archive" });
+  if (await archive.count()) {
+    await archive.click();
+    await other.getByRole("button", { name: "Restore" }).click();
+  } else {
+    await other.getByRole("button", { name: "Delete" }).click();
+    await other.locator(".flash").getByRole("button", { name: "Undo" }).click();
+  }
+  await expect(other.locator(".flash-success")).toContainText("Restored");
+  await page.getByLabel("Notes").fill("");
+  await page.getByRole("button", { name: "Save item" }).click();
+  await expect(page.locator(".error-summary")).toContainText("was changed since you opened this");
+  await page.getByRole("link", { name: "Reload" }).click();
+  await page.getByLabel("Notes").fill("");
+  await page.getByRole("button", { name: "Save item" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Saved");
+  await other.close();
+});
+
 // Last, so the item it adds doesn't change what the tests above see.
 test("Enter in the new item form saves the item", async ({ page }) => {
   await page.goto("/items/new");

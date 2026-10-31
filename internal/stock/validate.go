@@ -77,6 +77,9 @@ type ItemInput struct {
 	TotalPrice *float64
 	Supplier   string
 	BoughtOn   *time.Time
+	// Version is the item's version as the edit form was opened (see
+	// Item.Version); unused on create.
+	Version int
 }
 
 // Bought reports whether a price or shop was given for the starting stock.
@@ -227,6 +230,7 @@ type VehicleInput struct {
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
+	Version      int // as the edit form was opened; unused on create
 }
 
 // Normalize trims text fields and applies defaults.
@@ -345,6 +349,7 @@ type MovementEdit struct {
 	Supplier   string
 	Note       string
 	OccurredOn *time.Time
+	Version    int // the movement's version as the form was opened
 }
 
 // ApplyEdit returns m corrected by e. A kind without a price and shop
@@ -412,6 +417,7 @@ type KitInput struct {
 	IntervalMonths *int
 	Notes          string
 	Lines          []KitLineInput
+	Version        int // as the edit form was opened; unused on create
 }
 
 // KitLineInput is one item of a kit.
@@ -475,6 +481,7 @@ type ServiceInput struct {
 	Notes       string
 	LaborCost   *float64
 	Parts       []KitLineInput
+	Version     int // as the edit form was opened; unused on create
 }
 
 // Normalize trims fields and merges duplicate parts.

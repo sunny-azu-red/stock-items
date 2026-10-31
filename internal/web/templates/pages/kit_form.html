@@ -11,6 +11,8 @@
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "Add a vehicle first" "Text" "Kits belong to a vehicle." "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
 {{else}}
 <form class="card" method="post" action="{{if $d.IsNew}}/kits{{else}}/kits/{{$f.ID}}{{end}}" novalidate>
+  {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
+  {{with $f.Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
   <div class="form-section">
     <div class="form-grid">

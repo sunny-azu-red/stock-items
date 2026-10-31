@@ -3,14 +3,17 @@
 <div class="page-head">
   <div>
     <h1>Edit {{$d.Name}}</h1>
-    <p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>
+    {{if $d.Gone}}<p class="sub">{{$m.ItemName}}</p>{{else}}<p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>{{end}}
   </div>
-  <div class="actions">
-    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><input type="hidden" name="back" value="{{$d.Back}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
-  </div>
+  {{if not $d.Gone}}<div class="actions">
+    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+  </div>{{end}}
 </div>
 <form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
-  <input type="hidden" name="back" value="{{$d.Back}}">
+  <input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$f.Version}}">
+  {{/* What the change was, to show the form again if it is deleted meanwhile. */}}
+  <input type="hidden" name="item_id" value="{{$m.ItemID}}"><input type="hidden" name="kind" value="{{$m.Kind}}">
+  {{template "stale" $f.Stale}}
   {{template "error-summary" $e}}
   <div class="form-grid">
     {{if eq $m.Kind "correction"}}

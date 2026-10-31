@@ -18,6 +18,72 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+// cur reads a record's current version, as a page opened now would carry
+// it (0 when the record is gone). It is safe to call from goroutines.
+func cur(t *testing.T, s *store.Store, what string, id int64) int {
+	t.Helper()
+	ctx := context.Background()
+	var v int
+	var err error
+	switch what {
+	case store.WhatItem:
+		var it stock.Item
+		it, err = s.GetItem(ctx, id)
+		v = it.Version
+	case store.WhatVehicle:
+		var x stock.Vehicle
+		x, err = s.GetVehicle(ctx, id)
+		v = x.Version
+	case store.WhatKit:
+		var k stock.Kit
+		k, err = s.GetKit(ctx, id)
+		v = k.Version
+	case store.WhatService:
+		var r stock.ServiceRecord
+		r, err = s.GetService(ctx, id)
+		v = r.Version
+	case store.WhatMovement:
+		var m stock.Movement
+		m, err = s.GetMovement(ctx, id)
+		v = m.Version
+	case store.WhatShopping:
+		var e stock.ShoppingEntry
+		e, err = s.GetShopping(ctx, id)
+		v = e.Version
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		t.Error(err)
+	}
+	return v
+}
+
+// itemV, vehicleV, kitV, serviceV and editV give an edit the record's
+// current version, like a form opened now.
+func itemV(t *testing.T, s *store.Store, id int64, in stock.ItemInput) stock.ItemInput {
+	in.Version = cur(t, s, store.WhatItem, id)
+	return in
+}
+
+func vehicleV(t *testing.T, s *store.Store, id int64, in stock.VehicleInput) stock.VehicleInput {
+	in.Version = cur(t, s, store.WhatVehicle, id)
+	return in
+}
+
+func kitV(t *testing.T, s *store.Store, id int64, in stock.KitInput) stock.KitInput {
+	in.Version = cur(t, s, store.WhatKit, id)
+	return in
+}
+
+func serviceV(t *testing.T, s *store.Store, id int64, in stock.ServiceInput) stock.ServiceInput {
+	in.Version = cur(t, s, store.WhatService, id)
+	return in
+}
+
+func editV(t *testing.T, s *store.Store, id int64, e stock.MovementEdit) stock.MovementEdit {
+	e.Version = cur(t, s, store.WhatMovement, id)
+	return e
+}
+
 func newStore(t *testing.T) (*store.Store, context.Context) {
 	t.Helper()
 	return store.New(testdb.New(t)), context.Background()
@@ -101,7 +167,7 @@ func TestVehicles(t *testing.T) {
 	}
 
 	upd := stock.VehicleInput{Name: "KTM 390 Duke", Kind: stock.KindMotorcycle, Make: "KTM", Year: ptr(2021), Color: "#ff6600", OdometerKm: ptr(12000)}
-	if err := s.UpdateVehicle(ctx, id, upd); err != nil {
+	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, upd)); err != nil {
 		t.Fatal(err)
 	}
 	v, err := s.GetVehicle(ctx, id)
@@ -121,7 +187,7 @@ func TestVehicles(t *testing.T) {
 		t.Errorf("list = %+v", list)
 	}
 
-	if _, err := s.DeleteVehicle(ctx, id); err != nil {
+	if _, err := s.DeleteVehicle(ctx, id, cur(t, s, store.WhatVehicle, id)); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, itemID); len(it.VehicleIDs) != 0 {
@@ -130,7 +196,7 @@ func TestVehicles(t *testing.T) {
 	if _, err := s.GetVehicle(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
-	if _, err := s.DeleteVehicle(ctx, id); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.DeleteVehicle(ctx, id, cur(t, s, store.WhatVehicle, id)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }
@@ -153,7 +219,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 
 	upd := stock.ItemInput{Name: "15W50 PRO 4 XP", Brand: "Silkolene", Unit: stock.UnitML, Quantity: 1500,
 		SKUs: []stock.SKU{{Code: "80086", Kind: stock.SKUManufacturer}}, VehicleIDs: []int64{a}}
-	if err := s.UpdateItem(ctx, id, upd, time.Now()); err != nil {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, upd), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	it = mustGet(t, s, id)
@@ -167,18 +233,18 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 
 	upd.Unit = stock.UnitPiece
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, upd), time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
 		t.Errorf("unit change with history: want conflict, got %v", err)
 	}
 	assertLedger(t, s)
 
-	if _, err := s.DeleteItem(ctx, id); err != nil {
+	if _, err := s.DeleteItem(ctx, id, cur(t, s, store.WhatItem, id)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetItem(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
-	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.Is(err, store.ErrNotFound) {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, upd), time.Now()); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update missing: want ErrNotFound, got %v", err)
 	}
 }
@@ -337,7 +403,7 @@ func TestKitsAndServices(t *testing.T) {
 	if len(list) != 1 || *list[0].Quantity != 1175 || list[0].ItemName != "Silkolene 15W50" {
 		t.Fatalf("shopping = %+v", list)
 	}
-	if _, _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
+	if _, _, err := s.MarkBought(ctx, list[0].ID, cur(t, s, store.WhatShopping, list[0].ID), &stock.MovementInput{Delta: 4000, TotalPrice: ptr(55.0)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -386,7 +452,7 @@ func TestKitsAndServices(t *testing.T) {
 	}
 	assertLedger(t, s)
 
-	if _, err := s.DeleteService(ctx, svcID); err != nil {
+	if _, err := s.DeleteService(ctx, svcID, cur(t, s, store.WhatService, svcID)); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, oil); it.Quantity != 4525 {
@@ -401,7 +467,7 @@ func TestKitsAndServices(t *testing.T) {
 	if len(using) != 1 {
 		t.Errorf("kits using oil = %d", len(using))
 	}
-	if _, err := s.DeleteKit(ctx, kitID); err != nil {
+	if _, err := s.DeleteKit(ctx, kitID, cur(t, s, store.WhatKit, kitID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetKit(ctx, kitID); !errors.Is(err, store.ErrNotFound) {
@@ -434,19 +500,19 @@ func TestShoppingList(t *testing.T) {
 		t.Errorf("unknown item: want ErrNotFound, got %v", err)
 	}
 
-	if _, _, err := s.MarkBought(ctx, list[0].ID, &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
+	if _, _, err := s.MarkBought(ctx, list[0].ID, cur(t, s, store.WhatShopping, list[0].ID), &stock.MovementInput{Delta: 3, TotalPrice: ptr(42.0), Supplier: "KTM dealer"}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, pads); it.Quantity != 3 {
 		t.Errorf("pads after purchase = %v", it.Quantity)
 	}
-	if _, _, err := s.MarkBought(ctx, freeID, nil); err != nil {
+	if _, _, err := s.MarkBought(ctx, freeID, cur(t, s, store.WhatShopping, freeID), nil); err != nil {
 		t.Fatal(err)
 	}
 	if list, _ := s.ListShopping(ctx); len(list) != 0 {
 		t.Errorf("list should be empty: %+v", list)
 	}
-	if _, err := s.DeleteShopping(ctx, freeID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.DeleteShopping(ctx, freeID, cur(t, s, store.WhatShopping, freeID)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -499,14 +565,14 @@ func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	form := stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5, QuantityWas: ptr(5.0), Notes: "NGK"}
-	if err := s.UpdateItem(ctx, id, form, time.Now()); err != nil {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, form), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 3 || it.Notes != "NGK" {
 		t.Errorf("after untouched quantity: %v (%q), want 3", it.Quantity, it.Notes)
 	}
 	form.Quantity = 8
-	if err := s.UpdateItem(ctx, id, form, time.Now()); err != nil {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, form), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 8 {
@@ -537,14 +603,14 @@ func TestUnitLockedOnceUsedInKitOrShoppingList(t *testing.T) {
 	}
 	in.Unit = stock.UnitPiece
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, in, time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
 		t.Errorf("unit change of an item in a kit: want conflict, got %v", err)
 	}
 	other := mustItem(t, s, stock.ItemInput{Name: "Grease", Unit: stock.UnitGram})
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &other, Quantity: ptr(400.0)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateItem(ctx, other, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece}, time.Now()); !errors.As(err, &conflict) {
+	if err := s.UpdateItem(ctx, other, itemV(t, s, other, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece}), time.Now()); !errors.As(err, &conflict) {
 		t.Errorf("unit change of an item on the list: want conflict, got %v", err)
 	}
 }
@@ -597,7 +663,7 @@ func TestKitMovedToAnotherVehicle(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.VehicleID = v2
-	if err := s.UpdateKit(ctx, kit, in); err != nil {
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, in)); err != nil {
 		t.Fatal(err)
 	}
 	k, err := s.GetKit(ctx, kit)
@@ -711,7 +777,7 @@ func TestMarkBoughtKeepsTheRest(t *testing.T) {
 		{"no quantity listed", oilEntry, 4000, 0, 0},
 	}
 	for _, tt := range tests {
-		left, _, err := s.MarkBought(ctx, tt.entry, &stock.MovementInput{Delta: tt.delta})
+		left, _, err := s.MarkBought(ctx, tt.entry, cur(t, s, store.WhatShopping, tt.entry), &stock.MovementInput{Delta: tt.delta})
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
@@ -755,7 +821,7 @@ func TestPurchaseSetsBestBefore(t *testing.T) {
 
 	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &id})
 	later := fresh.AddDate(1, 0, 0)
-	if _, _, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1000, ExpiresOn: &later}); err != nil {
+	if _, _, err := s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 1000, ExpiresOn: &later}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(later) {
@@ -882,7 +948,7 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v, svc := tt.setup()
-			if _, err := s.DeleteService(ctx, svc); err != nil {
+			if _, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc)); err != nil {
 				t.Fatal(err)
 			}
 			got := odometer(v)
@@ -939,7 +1005,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	purchase := moves[0].ID
 
 	// The price typo is fixed, and every money figure follows.
-	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 1000, TotalPrice: ptr(67.0), Supplier: "moto24"}); err != nil {
+	if err := s.UpdateMovement(ctx, purchase, editV(t, s, purchase, stock.MovementEdit{Amount: 1000, TotalPrice: ptr(67.0), Supplier: "moto24"})); err != nil {
 		t.Fatal(err)
 	}
 	if p, _ := s.LastUnitPrice(ctx, oil); p == nil || *p != 0.067 {
@@ -950,7 +1016,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	}
 
 	// The amount moves the stock by the difference.
-	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 4000, TotalPrice: ptr(67.0)}); err != nil {
+	if err := s.UpdateMovement(ctx, purchase, editV(t, s, purchase, stock.MovementEdit{Amount: 4000, TotalPrice: ptr(67.0)})); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, oil); it.Quantity != 4500 {
@@ -962,19 +1028,19 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 		t.Fatal(err)
 	}
 	var short *store.InsufficientStockError
-	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 500}); !errors.As(err, &short) || short.Have != 300 || short.Need != 3500 {
+	if err := s.UpdateMovement(ctx, purchase, editV(t, s, purchase, stock.MovementEdit{Amount: 500})); !errors.As(err, &short) || short.Have != 300 || short.Need != 3500 {
 		t.Errorf("shrink used-up purchase: want InsufficientStockError(300, 3500), got %v", err)
 	}
-	if _, _, err := s.DeleteMovement(ctx, purchase); !errors.As(err, &short) {
+	if _, _, err := s.DeleteMovement(ctx, purchase, cur(t, s, store.WhatMovement, purchase)); !errors.As(err, &short) {
 		t.Errorf("delete used-up purchase: want InsufficientStockError, got %v", err)
 	}
 
 	// Deleting the use puts it back; then the purchase can go too.
 	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
-	if _, _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
+	if _, _, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID)); err != nil {
 		t.Fatal(err)
 	}
-	m, _, err := s.DeleteMovement(ctx, purchase)
+	m, _, err := s.DeleteMovement(ctx, purchase, cur(t, s, store.WhatMovement, purchase))
 	if err != nil || m.ItemID != oil || m.Kind != stock.MovePurchase {
 		t.Fatalf("delete purchase = %+v, %v", m, err)
 	}
@@ -987,7 +1053,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	if _, err := s.GetMovement(ctx, purchase); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("deleted movement: want ErrNotFound, got %v", err)
 	}
-	if err := s.UpdateMovement(ctx, purchase, stock.MovementEdit{Amount: 1}); !errors.Is(err, store.ErrNotFound) {
+	if err := s.UpdateMovement(ctx, purchase, editV(t, s, purchase, stock.MovementEdit{Amount: 1})); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update deleted movement: want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -1004,10 +1070,10 @@ func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveService})
 	var conflict *store.ConflictError
-	if err := s.UpdateMovement(ctx, moves[0].ID, stock.MovementEdit{Amount: 2}); !errors.As(err, &conflict) {
+	if err := s.UpdateMovement(ctx, moves[0].ID, editV(t, s, moves[0].ID, stock.MovementEdit{Amount: 2})); !errors.As(err, &conflict) {
 		t.Errorf("update: want ConflictError, got %v", err)
 	}
-	if _, _, err := s.DeleteMovement(ctx, moves[0].ID); !errors.As(err, &conflict) {
+	if _, _, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID)); !errors.As(err, &conflict) {
 		t.Errorf("delete: want ConflictError, got %v", err)
 	}
 	if it := mustGet(t, s, pads); it.Quantity != 1 {
@@ -1046,11 +1112,11 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 		t.Fatalf("usage = %+v, %v", u, err)
 	}
 	var conflict *store.ConflictError
-	if _, err := s.DeleteItem(ctx, filter); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Archive it instead") {
+	if _, err := s.DeleteItem(ctx, filter, cur(t, s, store.WhatItem, filter)); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Archive it instead") {
 		t.Fatalf("delete used item: want ConflictError, got %v", err)
 	}
 
-	listTrash, err := s.ArchiveItem(ctx, filter)
+	listTrash, err := s.ArchiveItem(ctx, filter, cur(t, s, store.WhatItem, filter))
 	if err != nil || listTrash == 0 {
 		t.Fatalf("archive = %v, %v; want it taken off the shopping list", listTrash, err)
 	}
@@ -1079,7 +1145,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 		t.Errorf("stats before %+v, after %+v: spending kept, archived stock not valued", before, after)
 	}
 
-	if err := s.RestoreItem(ctx, filter); err != nil {
+	if err := s.RestoreItem(ctx, filter, cur(t, s, store.WhatItem, filter)); err != nil {
 		t.Fatal(err)
 	}
 	if got := ids(mustList(t, s, store.ItemFilter{})); len(got) != 2 {
@@ -1090,13 +1156,13 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: spare, Kind: stock.MoveUse, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DeleteItem(ctx, spare); err != nil {
+	if _, err := s.DeleteItem(ctx, spare, cur(t, s, store.WhatItem, spare)); err != nil {
 		t.Fatalf("delete unused item: %v", err)
 	}
-	if err := s.RestoreItem(ctx, spare); !errors.Is(err, store.ErrNotFound) {
+	if err := s.RestoreItem(ctx, spare, cur(t, s, store.WhatItem, spare)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("restore deleted: want ErrNotFound, got %v", err)
 	}
-	if _, err := s.ArchiveItem(ctx, spare); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.ArchiveItem(ctx, spare, cur(t, s, store.WhatItem, spare)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("archive deleted: want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -1115,7 +1181,7 @@ func TestShoppingRefusesArchivedAndReportsChanges(t *testing.T) {
 	s, ctx := newStore(t)
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
 	old := mustItem(t, s, stock.ItemInput{Name: "Old pads", Unit: stock.UnitPiece})
-	if _, err := s.ArchiveItem(ctx, old); err != nil {
+	if _, err := s.ArchiveItem(ctx, old, cur(t, s, store.WhatItem, old)); err != nil {
 		t.Fatal(err)
 	}
 	steps := []struct {
@@ -1153,7 +1219,7 @@ func TestVehicleCountsActiveItems(t *testing.T) {
 	k390 := mustVehicle(t, s, "KTM 390")
 	mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, VehicleIDs: []int64{k390}})
 	old := mustItem(t, s, stock.ItemInput{Name: "Old pads", Unit: stock.UnitPiece, VehicleIDs: []int64{k390}})
-	if _, err := s.ArchiveItem(ctx, old); err != nil {
+	if _, err := s.ArchiveItem(ctx, old, cur(t, s, store.WhatItem, old)); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, k390); v.ItemCount != 1 {
@@ -1180,7 +1246,7 @@ func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
 	if len(moves) != 1 || !moves[0].Editable() {
 		t.Fatalf("orphaned service movement = %+v", moves)
 	}
-	if err := s.UpdateMovement(ctx, moves[0].ID, stock.MovementEdit{Amount: 1500}); err != nil {
+	if err := s.UpdateMovement(ctx, moves[0].ID, editV(t, s, moves[0].ID, stock.MovementEdit{Amount: 1500})); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, oil); it.Quantity != 500 {
@@ -1238,7 +1304,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 	}
 	edited := time.Date(2029, 7, 2, 0, 0, 0, 0, time.UTC)
 	in := stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 12, ExpiresOn: &expires}
-	if err := s.UpdateItem(ctx, id, in, edited); err != nil {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, in), edited); err != nil {
 		t.Fatal(err)
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id, Kind: stock.MoveCorrection})
@@ -1273,7 +1339,7 @@ func TestUpdateService(t *testing.T) {
 	upd := stock.ServiceInput{VehicleID: 999, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &fixed, LaborCost: ptr(50.0),
 		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1500}, {ItemID: ring, Quantity: 1}}}
 	upd.Normalize()
-	if err := s.UpdateService(ctx, id, upd); err != nil {
+	if err := s.UpdateService(ctx, id, serviceV(t, s, id, upd)); err != nil {
 		t.Fatal(err)
 	}
 	for item, want := range map[int64]float64{oil: 2500, filter: 2, ring: 0} {
@@ -1293,7 +1359,7 @@ func TestUpdateService(t *testing.T) {
 	short := upd
 	short.Parts = []stock.KitLineInput{{ItemID: oil, Quantity: 9000}}
 	var insufficient *store.InsufficientStockError
-	if err := s.UpdateService(ctx, id, short); !errors.As(err, &insufficient) || insufficient.ItemID != oil {
+	if err := s.UpdateService(ctx, id, serviceV(t, s, id, short)); !errors.As(err, &insufficient) || insufficient.ItemID != oil {
 		t.Fatalf("want InsufficientStockError for oil, got %v", err)
 	}
 	if got := mustGet(t, s, oil).Quantity; got != 2500 {
@@ -1301,13 +1367,13 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Deleting it now puts the odometer back to before the service.
-	if _, err := s.DeleteService(ctx, id); err != nil {
+	if _, err := s.DeleteService(ctx, id, cur(t, s, store.WhatService, id)); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 10000 {
 		t.Errorf("odometer after delete = %d, want 10000", *v.OdometerKm)
 	}
-	if err := s.UpdateService(ctx, id, upd); !errors.Is(err, store.ErrNotFound) {
+	if err := s.UpdateService(ctx, id, serviceV(t, s, id, upd)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update deleted service: want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -1354,7 +1420,7 @@ func TestLinkShopping(t *testing.T) {
 	s, ctx := newStore(t)
 	lube := mustItem(t, s, stock.ItemInput{Name: "Chain lube", Brand: "Motul", Unit: stock.UnitML})
 	pads := mustItem(t, s, stock.ItemInput{Name: "Brake pads", Unit: stock.UnitPiece})
-	if _, err := s.ArchiveItem(ctx, lube); err != nil {
+	if _, err := s.ArchiveItem(ctx, lube, cur(t, s, store.WhatItem, lube)); err != nil {
 		t.Fatal(err)
 	}
 	for _, text := range []string{"chain lube", " Motul Chain Lube "} {
@@ -1365,7 +1431,7 @@ func TestLinkShopping(t *testing.T) {
 
 	// A free-text entry becomes the archived item's entry, which is restored.
 	free, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube", Quantity: ptr(400.0), Unit: stock.UnitML, Note: "the white one"})
-	entry, dropped, err := s.LinkShopping(ctx, free, lube)
+	entry, dropped, err := s.LinkShopping(ctx, free, cur(t, s, store.WhatShopping, free), lube)
 	if err != nil || entry != free || dropped {
 		t.Fatalf("link = %d, %v, %v", entry, dropped, err)
 	}
@@ -1375,7 +1441,7 @@ func TestLinkShopping(t *testing.T) {
 	if e, _ := s.GetShopping(ctx, free); e.ItemID == nil || *e.ItemID != lube || *e.Quantity != 400 || e.Note != "the white one" {
 		t.Errorf("linked entry = %+v", e)
 	}
-	if _, _, err := s.LinkShopping(ctx, free, pads); !errors.Is(err, store.ErrNotFound) {
+	if _, _, err := s.LinkShopping(ctx, free, cur(t, s, store.WhatShopping, free), pads); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("relinking: want ErrNotFound, got %v", err)
 	}
 
@@ -1383,7 +1449,7 @@ func TestLinkShopping(t *testing.T) {
 	// another unit is dropped.
 	listed, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "sintered"})
 	other, _ := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Brake pads", Quantity: ptr(500.0), Unit: stock.UnitML, Note: "rear"})
-	entry, dropped, err = s.LinkShopping(ctx, other, pads)
+	entry, dropped, err = s.LinkShopping(ctx, other, cur(t, s, store.WhatShopping, other), pads)
 	if err != nil || entry != listed || !dropped {
 		t.Fatalf("merge = %d, %v, %v; want %d with the ml amount dropped", entry, dropped, err, listed)
 	}
@@ -1409,13 +1475,13 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	var conflict *store.ConflictError
-	if _, err := s.DeleteVehicle(ctx, old); !errors.As(err, &conflict) {
+	if _, err := s.DeleteVehicle(ctx, old, cur(t, s, store.WhatVehicle, old)); !errors.As(err, &conflict) {
 		t.Fatalf("delete with history: want ConflictError, got %v", err)
 	}
 	if svc, kits, _ := s.VehicleUsage(ctx, old); svc != 1 || kits != 1 {
 		t.Errorf("usage = %d services, %d kits", svc, kits)
 	}
-	if err := s.ArchiveVehicle(ctx, old); err != nil {
+	if err := s.ArchiveVehicle(ctx, old, cur(t, s, store.WhatVehicle, old)); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, old); !v.Archived() {
@@ -1430,10 +1496,10 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	if st, _ := s.GetStats(ctx, time.Now()); st.Spent12m != 80 {
 		t.Errorf("labour of an archived vehicle still counts: %+v", st)
 	}
-	if err := s.RestoreVehicle(ctx, old); err != nil {
+	if err := s.RestoreVehicle(ctx, old, cur(t, s, store.WhatVehicle, old)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DeleteVehicle(ctx, spare); err != nil {
+	if _, err := s.DeleteVehicle(ctx, spare, cur(t, s, store.WhatVehicle, spare)); err != nil {
 		t.Errorf("delete without history: %v", err)
 	}
 }
@@ -1490,11 +1556,11 @@ func TestOdometerGuards(t *testing.T) {
 	upd := vin
 	upd.Name = "KTM 390 Duke"
 	upd.OdometerKm = ptr(13500)
-	if err := s.UpdateVehicle(ctx, v, upd); err != nil {
+	if err := s.UpdateVehicle(ctx, v, vehicleV(t, s, v, upd)); err != nil {
 		t.Errorf("rename: %v", err)
 	}
 	upd.OdometerKm = ptr(9000)
-	if err := s.UpdateVehicle(ctx, v, upd); !errors.As(err, &conflict) {
+	if err := s.UpdateVehicle(ctx, v, vehicleV(t, s, v, upd)); !errors.As(err, &conflict) {
 		t.Errorf("lowering through the form: want conflict, got %v", err)
 	}
 }
@@ -1514,16 +1580,16 @@ func TestSortByQuantityGroupsUnits(t *testing.T) {
 func TestArchivedItemQuantityCantBeEdited(t *testing.T) {
 	s, ctx := newStore(t)
 	id := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 3})
-	if _, err := s.ArchiveItem(ctx, id); err != nil {
+	if _, err := s.ArchiveItem(ctx, id, cur(t, s, store.WhatItem, id)); err != nil {
 		t.Fatal(err)
 	}
 	upd := stock.ItemInput{Name: "Pads (old)", Unit: stock.UnitPiece, Quantity: 3, QuantityWas: ptr(3.0)}
-	if err := s.UpdateItem(ctx, id, upd, time.Now()); err != nil {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, upd), time.Now()); err != nil {
 		t.Errorf("renaming an archived item: %v", err)
 	}
 	upd.Quantity = 5
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.As(err, &conflict) || conflict.Field != "quantity" {
+	if err := s.UpdateItem(ctx, id, itemV(t, s, id, upd), time.Now()); !errors.As(err, &conflict) || conflict.Field != "quantity" {
 		t.Errorf("changing an archived item's quantity: want conflict, got %v", err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 3 {
@@ -1546,7 +1612,7 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.Plate, in.KeepOdometer = "B-123", true
-	if err := s.UpdateVehicle(ctx, id, in); err != nil {
+	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, in)); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, id); *v.OdometerKm != 12000 || v.Plate != "B-123" {
@@ -1560,7 +1626,7 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 	}
 	in.KeepOdometer, in.OdometerKm = false, nil
 	var conflict *store.ConflictError
-	if err := s.UpdateVehicle(ctx, id, in); !errors.As(err, &conflict) || conflict.Field != "odometer_km" {
+	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, in)); !errors.As(err, &conflict) || conflict.Field != "odometer_km" {
 		t.Errorf("clearing: want conflict, got %v", err)
 	}
 }
@@ -1581,11 +1647,11 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit.VehicleID = b
-	if err := s.UpdateKit(ctx, kitID, kit); err != nil {
+	if err := s.UpdateKit(ctx, kitID, kitV(t, s, kitID, kit)); err != nil {
 		t.Fatal(err)
 	}
 	in.Notes = "fixed a typo"
-	if err := s.UpdateService(ctx, id, in); err != nil {
+	if err := s.UpdateService(ctx, id, serviceV(t, s, id, in)); err != nil {
 		t.Errorf("editing the service: %v", err)
 	}
 }
@@ -1647,13 +1713,13 @@ func TestArchiveKitWithServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	var conflict *store.ConflictError
-	if _, err := s.DeleteKit(ctx, used); !errors.As(err, &conflict) {
+	if _, err := s.DeleteKit(ctx, used, cur(t, s, store.WhatKit, used)); !errors.As(err, &conflict) {
 		t.Fatalf("delete a used kit: want ConflictError, got %v", err)
 	}
 	if n, _ := s.KitServices(ctx, used); n != 1 {
 		t.Errorf("services = %d", n)
 	}
-	if err := s.ArchiveKit(ctx, used); err != nil {
+	if err := s.ArchiveKit(ctx, used, cur(t, s, store.WhatKit, used)); err != nil {
 		t.Fatal(err)
 	}
 	if kits, _ := s.ListKits(ctx, store.KitFilter{}); len(kits) != 1 || kits[0].ID != unused {
@@ -1669,10 +1735,10 @@ func TestArchiveKitWithServices(t *testing.T) {
 	if r, _ := s.GetService(ctx, svc); r.KitID == nil || *r.KitID != used {
 		t.Errorf("service lost its kit: %+v", r)
 	}
-	if err := s.RestoreKit(ctx, used); err != nil {
+	if err := s.RestoreKit(ctx, used, cur(t, s, store.WhatKit, used)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DeleteKit(ctx, unused); err != nil {
+	if _, err := s.DeleteKit(ctx, unused, cur(t, s, store.WhatKit, unused)); err != nil {
 		t.Errorf("delete an unused kit: %v", err)
 	}
 }
@@ -1704,7 +1770,7 @@ func TestTrashRestoresAService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashID, err := s.DeleteService(ctx, svc)
+	trashID, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1737,7 +1803,7 @@ func TestTrashRestoresAService(t *testing.T) {
 
 	// Deleted again, but the oil got used meanwhile: the restore is refused
 	// and nothing changes.
-	trashID, _ = s.DeleteService(ctx, svc)
+	trashID, _ = s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -1000}); err != nil {
 		t.Fatal(err)
 	}
@@ -1764,7 +1830,7 @@ func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
 		t.Fatal(err)
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
-	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID)
+	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1782,7 +1848,7 @@ func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
 	kit := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
 	kit.Normalize()
 	kitID, _ := s.CreateKit(ctx, kit)
-	trashID, err = s.DeleteKit(ctx, kitID)
+	trashID, err = s.DeleteKit(ctx, kitID, cur(t, s, store.WhatKit, kitID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1793,7 +1859,7 @@ func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
 
 	// Shopping: a removed entry comes back, unless the item is listed again.
 	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(1000.0), Note: "4 L can"})
-	trashID, err = s.DeleteShopping(ctx, entry)
+	trashID, err = s.DeleteShopping(ctx, entry, cur(t, s, store.WhatShopping, entry))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1805,7 +1871,7 @@ func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
 		t.Errorf("restoring onto a listed item: want conflict, got %v", err)
 	}
 	list, _ := s.ListShopping(ctx)
-	if _, err := s.DeleteShopping(ctx, list[0].ID); err != nil {
+	if _, err := s.DeleteShopping(ctx, list[0].ID, cur(t, s, store.WhatShopping, list[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	mustRestore(t, s, trashID)
@@ -1821,7 +1887,7 @@ func TestTrashUndoesBought(t *testing.T) {
 	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0), Note: "sintered"})
 
 	// Bought in part: undo removes the purchase and puts the 3 back.
-	left, trashID, err := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1, TotalPrice: ptr(30.0)})
+	left, trashID, err := s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 1, TotalPrice: ptr(30.0)})
 	if err != nil || left != 2 {
 		t.Fatalf("bought = %v, %v", left, err)
 	}
@@ -1839,7 +1905,7 @@ func TestTrashUndoesBought(t *testing.T) {
 	}
 
 	// Bought in full: the entry comes back. Used since: refused.
-	_, trashID, _ = s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 3})
+	_, trashID, _ = s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 3})
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
@@ -1848,7 +1914,7 @@ func TestTrashUndoesBought(t *testing.T) {
 		t.Errorf("undo after using it: want InsufficientStockError, got %v", err)
 	}
 	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
-	if _, _, err := s.DeleteMovement(ctx, uses[0].ID); err != nil {
+	if _, _, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	mustRestore(t, s, trashID)
@@ -1881,7 +1947,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	}
 
 	// The whole item: fields, SKUs, tags, photo and history.
-	trashID, err = s.DeleteItem(ctx, id)
+	trashID, err = s.DeleteItem(ctx, id, cur(t, s, store.WhatItem, id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1896,7 +1962,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	assertLedger(t, s)
 
 	// A vehicle: its tags come back; a vehicle with its name meanwhile blocks it.
-	trashID, err = s.DeleteVehicle(ctx, v)
+	trashID, err = s.DeleteVehicle(ctx, v, cur(t, s, store.WhatVehicle, v))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1908,7 +1974,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "KTM 390") {
 		t.Errorf("name taken: want conflict, got %v", err)
 	}
-	if _, err := s.DeleteVehicle(ctx, other); err != nil {
+	if _, err := s.DeleteVehicle(ctx, other, cur(t, s, store.WhatVehicle, other)); err != nil {
 		t.Fatal(err)
 	}
 	if res := mustRestore(t, s, trashID); res.ID != v {
@@ -1923,7 +1989,7 @@ func TestTrashPurgeAndEmpty(t *testing.T) {
 	s, ctx := newStore(t)
 	for _, name := range []string{"A", "B", "C"} {
 		id := mustItem(t, s, stock.ItemInput{Name: name, Unit: stock.UnitPiece})
-		if _, err := s.DeleteItem(ctx, id); err != nil {
+		if _, err := s.DeleteItem(ctx, id, cur(t, s, store.WhatItem, id)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1958,11 +2024,11 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	kit := stock.KitInput{VehicleID: other, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: ring, Quantity: 1}}}
 	kit.Normalize()
 	kitID, _ := s.CreateKit(ctx, kit)
-	kitTrash, err := s.DeleteKit(ctx, kitID)
+	kitTrash, err := s.DeleteKit(ctx, kitID, cur(t, s, store.WhatKit, kitID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	itemTrash, err := s.DeleteItem(ctx, ring)
+	itemTrash, err := s.DeleteItem(ctx, ring, cur(t, s, store.WhatItem, ring))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1976,14 +2042,14 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	}
 
 	// A vehicle, then an item tagged with it: both orders keep the tag.
-	vehicleTrash, err := s.DeleteVehicle(ctx, v)
+	vehicleTrash, err := s.DeleteVehicle(ctx, v, cur(t, s, store.WhatVehicle, v))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DeleteKit(ctx, kitID); err != nil { // so the O-ring can be deleted
+	if _, err := s.DeleteKit(ctx, kitID, cur(t, s, store.WhatKit, kitID)); err != nil { // so the O-ring can be deleted
 		t.Fatal(err)
 	}
-	itemTrash, err = s.DeleteItem(ctx, ring)
+	itemTrash, err = s.DeleteItem(ctx, ring, cur(t, s, store.WhatItem, ring))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2006,8 +2072,8 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svcTrash, _ := s.DeleteService(ctx, svc)
-	kitTrash, err = s.DeleteKit(ctx, kitID)
+	svcTrash, _ := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+	kitTrash, err = s.DeleteKit(ctx, kitID, cur(t, s, store.WhatKit, kitID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2021,8 +2087,8 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	}
 
 	// A service whose part item is in the trash says which one.
-	svcTrash, _ = s.DeleteService(ctx, svc)
-	if _, err := s.DeleteItem(ctx, ring); err != nil {
+	svcTrash, _ = s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+	if _, err := s.DeleteItem(ctx, ring, cur(t, s, store.WhatItem, ring)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.RestoreTrash(ctx, svcTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "O-ring") {
@@ -2035,8 +2101,8 @@ func TestTrashUndoesTwoPartialBoughts(t *testing.T) {
 	s, ctx := newStore(t)
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
 	entry, _ := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(3.0)})
-	_, first, _ := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 1})
-	_, second, _ := s.MarkBought(ctx, entry, &stock.MovementInput{Delta: 2})
+	_, first, _ := s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 1})
+	_, second, _ := s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 2})
 	// Oldest first: the list asks for 1, then for all 3 again.
 	mustRestore(t, s, first)
 	if e := mustShoppingEntry(t, s); *e.Quantity != 1 {
@@ -2056,7 +2122,7 @@ func TestTrashSnapshotsSurviveNewColumns(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
 	id := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 1})
-	trashID, err := s.DeleteItem(ctx, id)
+	trashID, err := s.DeleteItem(ctx, id, cur(t, s, store.WhatItem, id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2111,17 +2177,17 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	// One logged long after it was done says nothing about where it was
 	// done: km count from the last reading again.
 	back := logService(time.Now().AddDate(0, 0, 1).AddDate(0, -1, 0), nil)
-	if err := s.UpdateService(ctx, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service",
-		PerformedOn: time.Now().AddDate(0, -2, 0)}); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service",
+		PerformedOn: time.Now().AddDate(0, -2, 0)})); err != nil {
 		t.Fatal(err)
 	}
 	if k, _ = s.GetKit(ctx, kit); k.LastService.ID != back || k.LastService.OdometerAtLog != nil {
 		t.Errorf("backdated: last service = %+v, want %d without a reading at log", k.LastService, back)
 	}
-	if _, err := s.DeleteService(ctx, back); err != nil {
+	if _, err := s.DeleteService(ctx, back, cur(t, s, store.WhatService, back)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateService(ctx, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()}); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2132,14 +2198,14 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	}
 	edit := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service, filter too", PerformedOn: time.Now()}
 	edit.Normalize()
-	if err := s.UpdateService(ctx, svc, edit); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatal(err)
 	}
 	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerAtLog != 16000 {
 		t.Errorf("after edit: at log = %d, want 16000", *k.LastService.OdometerAtLog)
 	}
 	edit.OdometerKm = ptr(16500)
-	if err := s.UpdateService(ctx, svc, edit); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatal(err)
 	}
 	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog != nil || *k.LastService.OdometerKm != 16500 {
@@ -2171,7 +2237,10 @@ func TestKitSavesAndServicesDoNotDeadlock(t *testing.T) {
 				var err error
 				if g%2 == 0 {
 					in := stock.KitInput{VehicleID: v, Name: "Kit", Lines: lines}
-					err = s.UpdateKit(ctx, kit, in)
+					err = s.UpdateKit(ctx, kit, kitV(t, s, kit, in))
+					if errors.As(err, new(*store.StaleError)) {
+						err = nil // the other saver got in between: refused, as two tabs would be
+					}
 				} else {
 					_, err = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(),
 						Parts: []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}})
@@ -2198,7 +2267,7 @@ func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "front"}); err != nil {
 		t.Fatal(err)
 	}
-	trashID, err := s.ArchiveItem(ctx, pads)
+	trashID, err := s.ArchiveItem(ctx, pads, cur(t, s, store.WhatItem, pads))
 	if err != nil || trashID == 0 {
 		t.Fatalf("archive = %d, %v", trashID, err)
 	}
@@ -2209,7 +2278,7 @@ func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
 	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) {
 		t.Errorf("restore while archived: want ConflictError, got %v", err)
 	}
-	if err := s.RestoreItem(ctx, pads); err != nil {
+	if err := s.RestoreItem(ctx, pads, cur(t, s, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 	mustRestore(t, s, trashID)
@@ -2218,10 +2287,10 @@ func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
 		t.Errorf("list = %+v", list)
 	}
 	// Not on the list: nothing goes to the trash.
-	if _, err := s.DeleteShopping(ctx, list[0].ID); err != nil {
+	if _, err := s.DeleteShopping(ctx, list[0].ID, cur(t, s, store.WhatShopping, list[0].ID)); err != nil {
 		t.Fatal(err)
 	}
-	if trashID, err := s.ArchiveItem(ctx, pads); err != nil || trashID != 0 {
+	if trashID, err := s.ArchiveItem(ctx, pads, cur(t, s, store.WhatItem, pads)); err != nil || trashID != 0 {
 		t.Errorf("archive off the list = %d, %v", trashID, err)
 	}
 }
@@ -2256,11 +2325,11 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
 	use := moves[0].ID
-	_, useTrash, err := s.DeleteMovement(ctx, use)
+	_, useTrash, err := s.DeleteMovement(ctx, use, cur(t, s, store.WhatMovement, use))
 	if err != nil {
 		t.Fatal(err)
 	}
-	serviceTrash, err := s.DeleteService(ctx, svc)
+	serviceTrash, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2273,23 +2342,23 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	}
 	moves, _ = s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
 	use = moves[0].ID
-	if _, err := s.ArchiveItem(ctx, filter); err != nil {
+	if _, err := s.ArchiveItem(ctx, filter, cur(t, s, store.WhatItem, filter)); err != nil {
 		t.Fatal(err)
 	}
 	before := mustGet(t, s, filter).Quantity
 
-	_, _, delErr := s.DeleteMovement(ctx, use)
+	_, _, delErr := s.DeleteMovement(ctx, use, cur(t, s, store.WhatMovement, use))
 	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
 	_, newSvcErr := s.CreateService(ctx, service(1))
 	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now())
 	for what, err := range map[string]error{
 		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 1}),
 		"correct":         correctErr,
-		"edit a change":   s.UpdateMovement(ctx, use, stock.MovementEdit{Amount: 2}),
+		"edit a change":   s.UpdateMovement(ctx, use, editV(t, s, use, stock.MovementEdit{Amount: 2})),
 		"delete a change": delErr,
 		"restore change":  restoreUseErr,
 		"new service":     newSvcErr,
-		"more in service": s.UpdateService(ctx, svc, service(2)),
+		"more in service": s.UpdateService(ctx, svc, serviceV(t, s, svc, service(2))),
 	} {
 		wantConflict(t, what, err, "Filter is archived")
 	}
@@ -2311,7 +2380,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	edit := service(1)
 	edit.Title = "Oil service, checked bolts"
 	edit.Parts[1].Quantity = 2
-	if err := s.UpdateService(ctx, svc, edit); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatalf("edit keeping the archived part: %v", err)
 	}
 	if got := mustGet(t, s, filter).Quantity; got != before {
@@ -2329,19 +2398,19 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	kin.Normalize()
 	kit, _ := s.CreateKit(ctx, kin)
 	old, _ := s.CreateKit(ctx, kin)
-	oldTrash, err := s.DeleteKit(ctx, old)
+	oldTrash, err := s.DeleteKit(ctx, old, cur(t, s, store.WhatKit, old))
 	if err != nil {
 		t.Fatal(err)
 	}
 	svcIn := stock.ServiceInput{VehicleID: v, Title: "Chain clean", PerformedOn: time.Now()}
 	svcIn.Normalize()
 	svc, _ := s.CreateService(ctx, svcIn)
-	svcTrash, err := s.DeleteService(ctx, svc)
+	svcTrash, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.ArchiveKit(ctx, kit); err != nil {
+	if err := s.ArchiveKit(ctx, kit, cur(t, s, store.WhatKit, kit)); err != nil {
 		t.Fatal(err)
 	}
 	withKit := svcIn
@@ -2349,7 +2418,7 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	_, err = s.CreateService(ctx, withKit)
 	wantConflict(t, "service with an archived kit", err, "kit is archived")
 
-	if err := s.ArchiveVehicle(ctx, v); err != nil {
+	if err := s.ArchiveVehicle(ctx, v, cur(t, s, store.WhatVehicle, v)); err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.CreateService(ctx, svcIn)
@@ -2365,14 +2434,14 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	otherKit := stock.KitInput{VehicleID: other, Name: "Brakes"}
 	otherKit.Normalize()
 	brakes, _ := s.CreateKit(ctx, otherKit)
-	wantConflict(t, "move a kit to it", s.UpdateKit(ctx, brakes, moved), "KTM 390 is archived")
+	wantConflict(t, "move a kit to it", s.UpdateKit(ctx, brakes, kitV(t, s, brakes, moved)), "KTM 390 is archived")
 
 	// A kit staying with its archived vehicle can still be edited.
 	kin.Name = "Chain kit"
-	if err := s.UpdateKit(ctx, kit, kin); err != nil {
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, kin)); err != nil {
 		t.Errorf("edit a kit of an archived vehicle: %v", err)
 	}
-	if err := s.RestoreVehicle(ctx, v); err != nil {
+	if err := s.RestoreVehicle(ctx, v, cur(t, s, store.WhatVehicle, v)); err != nil {
 		t.Fatal(err)
 	}
 	mustRestore(t, s, svcTrash)
@@ -2396,7 +2465,7 @@ func TestRestoredServiceKeepsTheOdometerInOrder(t *testing.T) {
 		return id
 	}
 	first := logAt(day(10), 5000)
-	trashID, err := s.DeleteService(ctx, first)
+	trashID, err := s.DeleteService(ctx, first, cur(t, s, store.WhatService, first))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2404,7 +2473,7 @@ func TestRestoredServiceKeepsTheOdometerInOrder(t *testing.T) {
 	_, err = s.RestoreTrash(ctx, trashID)
 	wantConflict(t, "restore", err, "logged on 12 Oct 2026, after this service")
 
-	if _, err := s.DeleteService(ctx, later); err != nil {
+	if _, err := s.DeleteService(ctx, later, cur(t, s, store.WhatService, later)); err != nil {
 		t.Fatal(err)
 	}
 	mustRestore(t, s, trashID)
@@ -2417,12 +2486,12 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 	in := stock.ItemInput{Name: "Oil", Unit: stock.UnitPiece, Quantity: 4}
 	id := mustItem(t, s, in)
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id})
-	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID)
+	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 	in.Unit, in.Quantity = stock.UnitML, 0
-	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, in, time.Now()), "including in Recently deleted")
+	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now()), "including in Recently deleted")
 	if _, err := s.PurgeTrash(ctx, trashID); err != nil {
 		t.Fatal(err)
 	}
@@ -2433,11 +2502,11 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 			t.Fatal(err)
 		}
 		list, _ := s.ListShopping(ctx)
-		trashID, err = s.DeleteShopping(ctx, list[0].ID)
+		trashID, err = s.DeleteShopping(ctx, list[0].ID, cur(t, s, store.WhatShopping, list[0].ID))
 		if err != nil {
 			t.Fatal(err)
 		}
-		err := s.UpdateItem(ctx, id, in, time.Now())
+		err := s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now())
 		if qty != nil {
 			wantConflict(t, "with a deleted list entry", err, "including in Recently deleted")
 			if _, err := s.PurgeTrash(ctx, trashID); err != nil {
@@ -2468,10 +2537,10 @@ func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 	}
 	// An edit that leaves the parts as they were is fine.
 	in.Title = "Bolts, checked"
-	if err := s.UpdateService(ctx, svc, in); err != nil {
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, in)); err != nil {
 		t.Errorf("title edit near the maximum: %v", err)
 	}
-	_, err = s.DeleteService(ctx, svc)
+	_, err = s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
 	wantConflict(t, "delete", err, "Bolt would have more than")
 	if _, err := s.GetService(ctx, svc); err != nil {
 		t.Errorf("service should stay: %v", err)
@@ -2487,11 +2556,11 @@ func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
 	kin := stock.KitInput{VehicleID: v, Name: "Chain"}
 	kin.Normalize()
 	kit, _ := s.CreateKit(ctx, kin)
-	kitTrash, err := s.DeleteKit(ctx, kit)
+	kitTrash, err := s.DeleteKit(ctx, kit, cur(t, s, store.WhatKit, kit))
 	if err != nil {
 		t.Fatal(err)
 	}
-	vehicleTrash, err := s.DeleteVehicle(ctx, v)
+	vehicleTrash, err := s.DeleteVehicle(ctx, v, cur(t, s, store.WhatVehicle, v))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2502,15 +2571,15 @@ func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
 	okin.Normalize()
 	oilKit, _ := s.CreateKit(ctx, okin)
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil})
-	_, moveTrash, err := s.DeleteMovement(ctx, moves[0].ID)
+	_, moveTrash, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	oilKitTrash, err := s.DeleteKit(ctx, oilKit)
+	oilKitTrash, err := s.DeleteKit(ctx, oilKit, cur(t, s, store.WhatKit, oilKit))
 	if err != nil {
 		t.Fatal(err)
 	}
-	itemTrash, err := s.DeleteItem(ctx, oil)
+	itemTrash, err := s.DeleteItem(ctx, oil, cur(t, s, store.WhatItem, oil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2566,7 +2635,7 @@ func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
 					errs <- err
 					continue
 				}
-				if _, err := s.DeleteService(ctx, id); err != nil {
+				if _, err := s.DeleteService(ctx, id, cur(t, s, store.WhatService, id)); err != nil {
 					errs <- err
 				}
 			}
@@ -2594,7 +2663,7 @@ func TestPhotoUploadsAndDeletesTakeTurns(t *testing.T) {
 				defer wg.Done()
 				var err error
 				if g == 3 {
-					_, err = s.DeleteItem(ctx, id)
+					_, err = s.DeleteItem(ctx, id, cur(t, s, store.WhatItem, id))
 				} else {
 					_, err = s.SetPhoto(ctx, id, "image/jpeg", []byte{byte(g)}, []byte{byte(g)})
 				}
@@ -2609,4 +2678,96 @@ func TestPhotoUploadsAndDeletesTakeTurns(t *testing.T) {
 			t.Error(err)
 		}
 	}
+}
+
+// Versions move on with every write that changes what a record's edit
+// form or page shows, and not with stock changes or odometer readings,
+// which their forms guard otherwise (quantity_was, odometer_was).
+// Restoring from the trash gives a new version.
+func TestVersions(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
+	step := func(what string, id int64, want int, why string) {
+		t.Helper()
+		if got := cur(t, s, what, id); got != want {
+			t.Errorf("%s: %s version = %d, want %d", why, what, got, want)
+		}
+	}
+	step(store.WhatItem, oil, 1, "created")
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -100}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CorrectStock(ctx, oil, 800, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatItem, oil, 1, "after stock changes")
+	expires := time.Date(2030, 1, 31, 0, 0, 0, 0, time.UTC)
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, ExpiresOn: &expires}); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatItem, oil, 2, "after a purchase with a best-before date")
+
+	upd := stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1800, QuantityWas: ptr(1800.0), Notes: "x", Version: 1}
+	var stale *store.StaleError
+	if err := s.UpdateItem(ctx, oil, upd, time.Now()); !errors.As(err, &stale) || stale.Gone {
+		t.Errorf("stale update: %v", err)
+	}
+	if err := s.UpdateItem(ctx, oil, itemV(t, s, oil, upd), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatItem, oil, 3, "after an edit")
+
+	// Odometer readings, set or moved by a service, leave the vehicle's
+	// version alone.
+	if err := s.SetOdometer(ctx, v, 12000); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Chain", PerformedOn: time.Now(), OdometerKm: ptr(12500)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatVehicle, v, 1, "after odometer readings")
+	if _, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc)); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatVehicle, v, 1, "after deleting a service that moved the odometer")
+
+	// The shopping entry: adding to it is a change, asking for less than
+	// it has is not.
+	entry, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(1000.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(500.0)}); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatShopping, entry, 2, "after adding to it")
+	if _, err := s.EnsureShopping(ctx, oil, 100, ""); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatShopping, entry, 2, "after asking for less")
+	if _, _, err := s.MarkBought(ctx, entry, 2, &stock.MovementInput{Delta: 500}); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatShopping, entry, 3, "after buying part of it")
+
+	// Deleted, then restored: a new version, so a form opened before the
+	// delete is stale; while deleted, the record is gone and in the trash.
+	trashID, err := s.DeleteShopping(ctx, entry, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.MarkBought(ctx, entry, 3, nil); !errors.As(err, &stale) || !stale.Gone || !stale.InTrash ||
+		!errors.Is(err, store.ErrNotFound) {
+		t.Errorf("bought while deleted: %v", err)
+	}
+	if _, err := s.RestoreTrash(ctx, trashID); err != nil {
+		t.Fatal(err)
+	}
+	step(store.WhatShopping, entry, 4, "after the Undo")
+	if _, err := s.DeleteShopping(ctx, entry, 3); !errors.As(err, &stale) || stale.Gone {
+		t.Errorf("delete with the version before the Undo: %v", err)
+	}
+	assertLedger(t, s)
 }

@@ -184,7 +184,7 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	f := movementForm{OccurredOn: s.now().Format("2006-01-02")}
+	f := movementForm{OccurredOn: s.now().Format("2006-01-02"), Version: e.Version}
 	if e.Quantity != nil {
 		f.Amount, f.AmountUnit = stock.SplitForInput(*e.Quantity, e.ItemUnit)
 	} else {
@@ -219,18 +219,23 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	entry, dropped, err := s.store.LinkShopping(r.Context(), id, *itemID)
-	if errors.Is(err, store.ErrNotFound) {
-		// Linked already (a second click) or ticked off meanwhile.
+	entry, dropped, err := s.store.LinkShopping(r.Context(), id, parseVersion(r), *itemID)
+	if errors.Is(err, store.ErrNotFound) || errors.As(err, new(*store.StaleError)) {
+		// Linked already (a second click, which also finds a new version)
+		// or ticked off meanwhile.
 		if e, err := s.store.GetShopping(r.Context(), id); err == nil && e.ItemID != nil {
 			s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", id), "")
 			return nil
 		}
+	}
+	if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", "That shopping entry is gone")
 		s.redirect(w, r, "/shopping", "")
 		return nil
 	}
-	if err != nil {
+	if s.staleButton(w, r, err, fmt.Sprintf("/shopping/%d/bought", id), "/shopping") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	var notes []string
@@ -260,10 +265,19 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
+	page := fmt.Sprintf("/shopping/%d/bought", id)
+	if e.ItemID != nil && !r.PostForm.Has("amount") && parseVersion(r) != e.Version {
+		// "Just tick it off" from a page where the entry was still free
+		// text: it has been linked to an item since.
+		s.staleButton(w, r, &store.StaleError{What: store.WhatShopping}, page, "/shopping")
+		return nil
+	}
 	if e.ItemID == nil {
-		_, trashID, err := s.store.MarkBought(r.Context(), id, nil)
+		_, trashID, err := s.store.MarkBought(r.Context(), id, parseVersion(r), nil)
 		if errors.Is(err, store.ErrNotFound) {
 			s.shoppingGone(w, r)
+			return nil
+		} else if s.staleButton(w, r, err, page, "/shopping") {
 			return nil
 		} else if err != nil {
 			return err
@@ -274,7 +288,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	f := movementForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		ExpiresOn: formText(r, "expires_on"), Errors: stock.Errors{},
+		ExpiresOn: formText(r, "expires_on"), Version: parseVersion(r), Errors: stock.Errors{},
 	}
 	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note}
 	if q, err := stock.ParseAmount(f.Amount, e.ItemUnit, f.AmountUnit); err != nil || q <= 0 {
@@ -300,7 +314,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		in.ExpiresOn = d
 	}
 	if !f.Errors.Any() {
-		if left, trashID, err := s.store.MarkBought(r.Context(), id, &in); err == nil {
+		if left, trashID, err := s.store.MarkBought(r.Context(), id, f.Version, &in); err == nil {
 			msg := "Added " + stock.FormatQuantity(in.Delta, e.ItemUnit) + " of " + e.Title() + " to stock"
 			if left > 0 {
 				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
@@ -310,7 +324,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		} else if errors.Is(err, store.ErrNotFound) {
 			s.shoppingGone(w, r)
 			return nil
-		} else if !formConflict(f.Errors, err) {
+		} else if f.Stale = staleForm(err, page); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -324,9 +338,14 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	trashID, err := s.store.DeleteShopping(r.Context(), id)
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
+	trashID, err := s.store.DeleteShopping(r.Context(), id, parseVersion(r))
 	if errors.Is(err, store.ErrNotFound) {
 		s.shoppingGone(w, r)
+		return nil
+	} else if s.staleButton(w, r, err, "/shopping", "/shopping") {
 		return nil
 	} else if err != nil {
 		return err

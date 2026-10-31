@@ -22,7 +22,7 @@ type ServiceFilter struct {
 
 const serviceSelect = `
 SELECT sr.id, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.performed_on, sr.odometer_km,
-       sr.title, sr.notes, sr.labor_cost::float8, sr.created_at,
+       sr.title, sr.notes, sr.labor_cost::float8, sr.created_at, sr.version,
        (SELECT count(*) FROM stock_movements m WHERE m.service_record_id = sr.id)
 FROM service_records sr
 JOIN vehicles v ON v.id = sr.vehicle_id
@@ -31,7 +31,7 @@ LEFT JOIN service_kits k ON k.id = sr.kit_id`
 func scanService(row pgx.Row) (stock.ServiceRecord, error) {
 	var r stock.ServiceRecord
 	err := row.Scan(&r.ID, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.PerformedOn,
-		&r.OdometerKm, &r.Title, &r.Notes, &r.LaborCost, &r.CreatedAt, &r.PartCount)
+		&r.OdometerKm, &r.Title, &r.Notes, &r.LaborCost, &r.CreatedAt, &r.Version, &r.PartCount)
 	return r, err
 }
 
@@ -153,13 +153,16 @@ func partIDs(parts []stock.KitLineInput) []int64 {
 // taken, and the odometer change is redone, all in one transaction, so a
 // part that is short leaves the service as it was. Like DeleteService it
 // rewrites recorded movements together with their effect, so the ledger
-// still adds up.
+// still adds up. A service changed or deleted since in.Version fails with
+// a *StaleError.
 func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var kitWas *int64
-		if err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&in.VehicleID, &kitWas); err != nil {
-			return notFound(err)
+		var version int
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id, version FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&in.VehicleID, &kitWas, &version)
+		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
+			return err
 		}
 		// The service, its vehicle, then its parts: the order every service
 		// change locks in, so none can deadlock with another.
@@ -197,9 +200,11 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		if err := restoreOdometer(ctx, tx, id); err != nil {
 			return err
 		}
+		// A new version (its parts count as part of the service, and get new
+		// movement ids): a form opened before this save is stale now.
 		_, err = tx.Exec(ctx, `
 			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7,
-			       odometer_at_log = CASE WHEN $4::integer IS NULL THEN odometer_at_log END
+			       odometer_at_log = CASE WHEN $4::integer IS NULL THEN odometer_at_log END, version = version + 1
 			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
@@ -330,6 +335,8 @@ func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.
 // their movements. The caller holds the item locks, and checks the
 // maximum on stock once it is done (refuseOverMax).
 func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	// No new version for the items: stock changes don't stale their forms
+	// (see applyMovement).
 	if _, err := tx.Exec(ctx, `
 		UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
 		FROM (SELECT item_id, sum(delta) AS total FROM stock_movements WHERE service_record_id = $1 GROUP BY item_id) m
@@ -371,6 +378,8 @@ func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, re
 	}
 	moved := reading != nil && (current == nil || *current < *reading)
 	if moved {
+		// No new version for the vehicle: its edit form guards the reading
+		// with odometer_was, so logging a service leaves an open form good.
 		if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer_km = $2, updated_at = now() WHERE id = $1`, vehicleID, *reading); err != nil {
 			return err
 		}
@@ -387,6 +396,7 @@ func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, re
 // readings of the vehicle's other services (NULL if there are none).
 // Services logged before odometer_moved existed are left alone.
 func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	// No new version, like moveOdometer.
 	_, err := tx.Exec(ctx, `
 		UPDATE vehicles v SET odometer_km = back.km, updated_at = now()
 		FROM service_records sr,
@@ -402,17 +412,20 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 // It is a deliberate exception to "every change goes through
 // applyMovement": it undoes a mistaken entry by deleting its movements
 // together with their effect, so the ledger still adds up. The odometer
-// change it made is undone too (see restoreOdometer).
-func (s *Store) DeleteService(ctx context.Context, id int64) (trashID int64, err error) {
+// change it made is undone too (see restoreOdometer). A service changed
+// since version fails with a *StaleError.
+func (s *Store) DeleteService(ctx context.Context, id int64, version int) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var title, vehicle string
 		var vehicleID int64
 		var on time.Time
+		var have int
 		// Lock the service, its vehicle, then its items, like UpdateService.
-		if err := tx.QueryRow(ctx, `
-			SELECT sr.title, sr.performed_on, sr.vehicle_id, v.name FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
-			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicleID, &vehicle); err != nil {
-			return notFound(err)
+		err := tx.QueryRow(ctx, `
+			SELECT sr.title, sr.performed_on, sr.vehicle_id, v.name, sr.version FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
+			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicleID, &vehicle, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatService, id); err != nil {
+			return err
 		}
 		if _, _, err := lockVehicle(ctx, tx, vehicleID); err != nil {
 			return err

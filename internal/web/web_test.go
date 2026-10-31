@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -115,6 +117,90 @@ func (a *testApp) seed() (k390, k1290 int64) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// cur reads a record's current version, for changes made "in another
+// tab" straight through the store (0 when the record is gone).
+func cur(t *testing.T, s *store.Store, what string, id int64) int {
+	t.Helper()
+	ctx := context.Background()
+	var v int
+	var err error
+	switch what {
+	case store.WhatItem:
+		var it stock.Item
+		it, err = s.GetItem(ctx, id)
+		v = it.Version
+	case store.WhatVehicle:
+		var x stock.Vehicle
+		x, err = s.GetVehicle(ctx, id)
+		v = x.Version
+	case store.WhatShopping:
+		var e stock.ShoppingEntry
+		e, err = s.GetShopping(ctx, id)
+		v = e.Version
+	default:
+		t.Fatalf("cur: %s", what)
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		t.Fatal(err)
+	}
+	return v
+}
+
+// postV posts form the way the page showing it does: with the version
+// that page's form carries (see formVersion). Use post to send a form
+// without one, or with a version taken earlier (a stale tab).
+func (a *testApp) postV(path string, form url.Values, headers ...string) *httptest.ResponseRecorder {
+	a.t.Helper()
+	if form == nil {
+		form = url.Values{}
+	}
+	form.Set("version", a.versionOf(path))
+	return a.post(path, form, headers...)
+}
+
+// versionOf opens the page with the form that posts to action, as a user
+// would, and returns the version that form carries.
+func (a *testApp) versionOf(action string) string {
+	a.t.Helper()
+	page := formPage(action)
+	rec := a.get(page)
+	if rec.Code != http.StatusOK {
+		a.t.Fatalf("GET %s (for the form posting to %s) = %d", page, action, rec.Code)
+	}
+	return formVersion(a.t, rec.Body.String(), action)
+}
+
+// formVersion finds the form posting to action in a page and returns its
+// version field.
+func formVersion(t *testing.T, body, action string) string {
+	t.Helper()
+	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(action) + `"[^>]*>(.*?)</form>`).FindStringSubmatch(body)
+	if form == nil {
+		t.Fatalf("no form posts to %s", action)
+	}
+	v := regexp.MustCompile(`name="version" value="([0-9]+)"`).FindStringSubmatch(form[1])
+	if v == nil {
+		t.Fatalf("the form posting to %s carries no version", action)
+	}
+	return v[1]
+}
+
+// formPage is the page that shows the form posting to action: an edit
+// form (/items/5 → /items/5/edit), a record's buttons (/items/5/delete →
+// /items/5), a shopping entry's Bought page, or the shopping list.
+func formPage(action string) string {
+	parts := strings.Split(strings.Trim(action, "/"), "/")
+	switch {
+	case len(parts) == 2, parts[0] == "movements":
+		return "/" + parts[0] + "/" + parts[1] + "/edit"
+	case parts[0] == "shopping" && parts[2] == "delete":
+		return "/shopping"
+	case parts[0] == "shopping":
+		return "/shopping/" + parts[1] + "/bought"
+	}
+	return "/" + parts[0] + "/" + parts[1]
+}
 
 func itemID(t *testing.T, s *store.Store, query string) int64 {
 	t.Helper()
@@ -237,7 +323,7 @@ func TestItemFormFlow(t *testing.T) {
 	if len(after) != len(before) {
 		t.Errorf("duplicate saved an item: %d → %d", len(before), len(after))
 	}
-	expect(t, a.post(loc+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(loc+"/delete", nil), http.StatusSeeOther)
 	expect(t, a.get(loc), http.StatusNotFound)
 }
 
@@ -321,7 +407,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	}
 	entry := "/shopping/" + itoa(list[0].ID)
 	expect(t, a.get(entry+"/bought"), http.StatusOK, `value="1175"`)
-	expect(t, a.post(entry+"/bought", url.Values{"amount": {"4"}, "amount_unit": {"l"}, "total_price": {"45"}}), http.StatusSeeOther)
+	expect(t, a.postV(entry+"/bought", url.Values{"amount": {"4"}, "amount_unit": {"l"}, "total_price": {"45"}}), http.StatusSeeOther)
 	expect(t, a.get("/shopping/export.txt"), http.StatusOK, "Shopping list")
 
 	rec = a.post("/services", svc)
@@ -335,7 +421,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	if *v.OdometerKm != 12000 {
 		t.Errorf("odometer = %d", *v.OdometerKm)
 	}
-	expect(t, a.post(svcPath+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(svcPath+"/delete", nil), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), oil); it.Quantity != 4525 {
 		t.Errorf("oil after deleting service = %v", it.Quantity)
 	}
@@ -346,7 +432,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	expect(t, a.post("/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"2"}}), http.StatusSeeOther)
 	expect(t, a.get("/shopping"), http.StatusOK, "Chain lube", "OEM Rear Brake Pads")
 
-	expect(t, a.post(kitPath+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(kitPath+"/delete", nil), http.StatusSeeOther)
 }
 
 func TestVehicleFlow(t *testing.T) {
@@ -358,9 +444,9 @@ func TestVehicleFlow(t *testing.T) {
 	expect(t, a.get(path), http.StatusOK, "Golf", "2015", `value="150000"`)
 	expect(t, a.post("/vehicles", url.Values{"name": {"golf"}}), http.StatusUnprocessableEntity, "already exists")
 	expect(t, a.post(path+"/odometer", url.Values{"odometer_km": {"151000"}}), http.StatusSeeOther)
-	expect(t, a.post(path, url.Values{"name": {"VW Golf"}, "kind": {"car"}, "color": {"#2563eb"}}), http.StatusSeeOther)
+	expect(t, a.postV(path, url.Values{"name": {"VW Golf"}, "kind": {"car"}, "color": {"#2563eb"}}), http.StatusSeeOther)
 	expect(t, a.get("/vehicles"), http.StatusOK, "VW Golf")
-	expect(t, a.post(path+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/delete", nil), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusNotFound)
 }
 
@@ -579,12 +665,17 @@ func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
 	a.seed()
 	id := itemID(t, a.store, "Silkolene")
 	path := "/items/" + itoa(id)
-	expect(t, a.get(path+"/edit"), http.StatusOK, `name="quantity_was" value="525"`)
-	// Someone uses 25 ml while the form is open...
+	edit := a.get(path + "/edit")
+	expect(t, edit, http.StatusOK, `name="quantity_was" value="525"`)
+	version := formVersion(t, edit.Body.String(), path)
+	// Someone uses 25 ml, and quick-adds some, while the form is open...
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"25"}}), http.StatusSeeOther)
-	// ...then the form is saved with the quantity it showed.
+	expect(t, a.post(path+"/adjust", url.Values{"dir": {"up"}}), http.StatusSeeOther)
+	expect(t, a.post(path+"/adjust", url.Values{"dir": {"down"}}), http.StatusSeeOther)
+	// ...then the form is saved with the quantity it showed. Stock changes
+	// don't make the form stale.
 	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {"525"},
-		"quantity_unit": {"ml"}, "quantity_was": {"525"}, "notes": {"Changed"}}
+		"quantity_unit": {"ml"}, "quantity_was": {"525"}, "notes": {"Changed"}, "version": {version}}
 	expect(t, a.post(path, form), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), id); it.Quantity != 500 || it.Notes != "Changed" {
 		t.Errorf("quantity = %v notes = %q, want 500 and Changed", it.Quantity, it.Notes)
@@ -651,9 +742,9 @@ func TestItemEditForm(t *testing.T) {
 	// A blank quantity must not silently empty the stock.
 	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {""},
 		"quantity_unit": {"ml"}, "quantity_was": {"525"}}
-	expect(t, a.post(path, form), http.StatusUnprocessableEntity, "Enter the amount on stock (0 if none)")
+	expect(t, a.postV(path, form), http.StatusUnprocessableEntity, "Enter the amount on stock (0 if none)")
 	form.Set("quantity", "0")
-	expect(t, a.post(path, form), http.StatusSeeOther)
+	expect(t, a.postV(path, form), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), id); it.Quantity != 0 {
 		t.Errorf("quantity = %v, want 0 after an explicit 0", it.Quantity)
 	}
@@ -703,7 +794,7 @@ func TestBuySomethingNewFromShoppingList(t *testing.T) {
 
 	// Or just tick a free-text entry off.
 	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Zip ties"})
-	expect(t, a.post("/shopping/"+itoa(free)+"/bought", nil), http.StatusSeeOther)
+	expect(t, a.postV("/shopping/"+itoa(free)+"/bought", nil), http.StatusSeeOther)
 	if _, err := a.store.GetShopping(ctx, free); err == nil {
 		t.Error("ticked-off entry should be gone")
 	}
@@ -717,9 +808,9 @@ func TestShoppingPartialPurchaseAndBestBefore(t *testing.T) {
 	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &oil, Quantity: ptr(4000.0)})
 	path := "/shopping/" + itoa(entry) + "/bought"
 
-	expect(t, a.post(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "occurred_on": {"2062-10-29"}}),
+	expect(t, a.postV(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "occurred_on": {"2062-10-29"}}),
 		http.StatusUnprocessableEntity, "Date cannot be in the future")
-	expect(t, a.post(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2029-06-30"}}), http.StatusSeeOther)
+	expect(t, a.postV(path, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2029-06-30"}}), http.StatusSeeOther)
 	e, err := a.store.GetShopping(ctx, entry)
 	if err != nil || *e.Quantity != 3000 {
 		t.Errorf("entry = %+v, %v; want 3 L still on the list", e, err)
@@ -806,7 +897,7 @@ func TestDeletingAServicePutsTheOdometerBack(t *testing.T) {
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}, "odometer_km": {"120000"}})
 	expect(t, rec, http.StatusSeeOther)
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="120000"`)
-	expect(t, a.post(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="10000"`)
 }
 
@@ -852,9 +943,9 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`)
 
 	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit purchase", `value="199.00"`, `value="Moto shop"`, `name="amount" value="1"`)
-	expect(t, a.post(edit, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19.90"}, "occurred_on": {"2027-01-01"}}),
+	expect(t, a.postV(edit, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19.90"}, "occurred_on": {"2027-01-01"}}),
 		http.StatusUnprocessableEntity, "Date cannot be in the future", `value="19.90"`)
-	rec = a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}})
+	rec = a.postV(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != item {
 		t.Errorf("location = %q, want %q", l, item)
@@ -867,7 +958,7 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	req.Header.Set("Referer", "http://example.com/activity?kind=purchase")
 	expect(t, a.do(req), http.StatusOK, `href="/activity?kind=purchase">Cancel`, `name="back" value="/activity?kind=purchase"`)
 	for back, want := range map[string]string{"/activity?kind=purchase": "/activity?kind=purchase", "//evil.example/": item, "https://evil.example/": item} {
-		rec = a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "occurred_on": {"2026-10-29"}, "back": {back}})
+		rec = a.postV(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"}, "occurred_on": {"2026-10-29"}, "back": {back}})
 		if l := rec.Header().Get("Location"); l != want {
 			t.Errorf("back %q: location = %q, want %q", back, l, want)
 		}
@@ -875,11 +966,11 @@ func TestEditAndDeleteMovement(t *testing.T) {
 
 	// Taking away more than is left is refused with a hint.
 	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
-	expect(t, a.post(edit+"/delete", nil), http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
+	expect(t, a.postV(edit+"/delete", nil), http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
 
 	uses, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
-	expect(t, a.post("/movements/"+itoa(uses[0].ID)+"/delete", nil), http.StatusSeeOther)
-	expect(t, a.post(edit+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV("/movements/"+itoa(uses[0].ID)+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(edit+"/delete", nil), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 500 {
 		t.Errorf("quantity = %v, want 500 (525 initial - 25 service)", it.Quantity)
 	}
@@ -907,7 +998,7 @@ func TestArchiveItemFlow(t *testing.T) {
 	page = a.get(path)
 	expect(t, page, http.StatusOK, `action="`+path+`/archive"`, "stays in 1 kit")
 	expectNot(t, page, `action="`+path+`/delete"`)
-	rec = a.post(path+"/delete", nil)
+	rec = a.post(path+"/delete", url.Values{"version": {a.versionOf(path + "/archive")}}) // a hand-made POST
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != path {
 		t.Errorf("refused delete went to %q", l)
@@ -916,7 +1007,7 @@ func TestArchiveItemFlow(t *testing.T) {
 		t.Fatalf("item in a kit was deleted: %v", err)
 	}
 
-	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, "Archived", `action="`+path+`/restore"`)
 	stockPage := a.get("/stock")
 	expectNot(t, stockPage, "15W50 PRO 4 XP")
@@ -925,7 +1016,7 @@ func TestArchiveItemFlow(t *testing.T) {
 
 	// Saving the kit keeps the archived line.
 	expect(t, a.get(kit+"/edit"), http.StatusOK, `value="`+itoa(oil)+`" `)
-	expect(t, a.post(kit, url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
+	expect(t, a.postV(kit, url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
 		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"}}), http.StatusSeeOther)
 	if k, _ := a.store.GetKit(ctx, mustID(t, kit)); len(k.Lines) != 2 {
 		t.Errorf("kit lines after save = %+v", k.Lines)
@@ -936,12 +1027,12 @@ func TestArchiveItemFlow(t *testing.T) {
 		t.Errorf("shopping = %+v", list)
 	}
 
-	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/restore", nil), http.StatusSeeOther)
 	expect(t, a.get("/stock"), http.StatusOK, "15W50 PRO 4 XP")
 
 	// On the shopping list: archiving says where the entry went.
 	expect(t, a.post(path+"/shopping", nil), http.StatusSeeOther)
-	rec = a.post(path+"/archive", nil)
+	rec = a.postV(path+"/archive", nil)
 	if f := flashOf(t, rec); !strings.Contains(f.Message, "shopping list entry is in Recently deleted") {
 		t.Errorf("flash = %+v", f)
 	}
@@ -1019,7 +1110,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	ctx := context.Background()
 	pads := itemID(t, a.store, "Rear Brake")
 	item := "/items/" + itoa(pads)
-	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+	if _, err := a.store.ArchiveItem(ctx, pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 	page := a.get(item)
@@ -1116,10 +1207,10 @@ func TestEditService(t *testing.T) {
 	expect(t, a.get(svc+"/edit"), http.StatusOK, "Edit service", `value="Oil top-up"`, `value="1000.00"`, `value="11000"`,
 		`action="`+svc+`"`, "Save changes", "on stock: 525 ml") // 425 ml left + the 100 ml this service returns
 
-	expect(t, a.post(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+	expect(t, a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),
 		http.StatusUnprocessableEntity, "Only 525 ml on stock")
-	rec = a.post(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+	rec = a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"200"}})
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != svc {
@@ -1183,7 +1274,7 @@ func TestShoppingListNeeds(t *testing.T) {
 	expectNot(t, a.get("/shopping"), "already listed") // fully covered: no suggestion
 
 	// Listed for less than needed: still suggested, with what's listed.
-	if _, err := a.store.DeleteShopping(ctx, list[0].ID); err != nil {
+	if _, err := a.store.DeleteShopping(ctx, list[0].ID, cur(t, a.store, store.WhatShopping, list[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(oil)}, "quantity": {"1"}, "quantity_unit": {"ml"}}), http.StatusSeeOther)
@@ -1227,7 +1318,7 @@ func TestEditACount(t *testing.T) {
 	edit := "/movements/" + itoa(counts[0].ID)
 	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit count", `name="direction" value="added" checked`, `name="amount" value="100"`)
 	// It should have been a quick −: 100 ml taken away.
-	expect(t, a.post(edit, url.Values{"direction": {"removed"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"2026-10-29"}, "note": {"Quick adjust"}}),
+	expect(t, a.postV(edit, url.Values{"direction": {"removed"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"2026-10-29"}, "note": {"Quick adjust"}}),
 		http.StatusSeeOther)
 	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 425 {
 		t.Errorf("oil = %v, want 425", it.Quantity)
@@ -1244,13 +1335,13 @@ func TestBuyingSomethingYouAlreadyHave(t *testing.T) {
 	expect(t, a.get(page+"/bought"), http.StatusOK, "Already have it?", `action="`+page+`/link"`, "Add to this item")
 	expect(t, a.get("/items/new?shopping="+itoa(free)), http.StatusOK, "Already have it?")
 
-	rec := a.post(page+"/link", url.Values{"item_id": {itoa(oil)}})
+	rec := a.postV(page+"/link", url.Values{"item_id": {itoa(oil)}})
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != page+"/bought" {
 		t.Fatalf("location = %q", l)
 	}
 	expect(t, a.get(page+"/bought"), http.StatusOK, `name="amount" value="1"`, `value="l" selected`)
-	expect(t, a.post(page+"/bought", url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}), http.StatusSeeOther)
+	expect(t, a.postV(page+"/bought", url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 1525 {
 		t.Errorf("oil = %v, want 1525", it.Quantity)
 	}
@@ -1267,7 +1358,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expect(t, page, http.StatusOK, `action="`+path+`/archive"`)
 	expectNot(t, page, `action="`+path+`/delete"`)
 
-	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
 	page = a.get(path)
 	expect(t, page, http.StatusOK, "Archived", `action="`+path+`/restore"`, "Restore this vehicle to log services or add kits")
 	// Nothing new for it: no service, kit or item buttons, no odometer form.
@@ -1288,7 +1379,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "12\u202f000 km") {
 		t.Errorf("flash = %+v", f)
 	}
-	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/restore", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles"), http.StatusOK, `href="`+path+`"`)
 }
 
@@ -1369,7 +1460,7 @@ func TestArchivedItemHistoryAndExports(t *testing.T) {
 	ctx := context.Background()
 	pads := itemID(t, a.store, "Rear Brake")
 	moves, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: pads})
-	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+	if _, err := a.store.ArchiveItem(ctx, pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 	rec := a.get("/movements/" + itoa(moves[0].ID) + "/edit")
@@ -1377,13 +1468,14 @@ func TestArchivedItemHistoryAndExports(t *testing.T) {
 	if f := flashOf(t, rec); f.Kind != "error" {
 		t.Errorf("flash = %+v", f)
 	}
-	expect(t, a.post("/movements/"+itoa(moves[0].ID)+"/delete", nil), http.StatusSeeOther)
+	// A hand-made POST, as the page isn't shown.
+	expect(t, a.post("/movements/"+itoa(moves[0].ID)+"/delete", url.Values{"version": {strconv.Itoa(moves[0].Version)}}), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(ctx, pads); it.Quantity != 1 {
 		t.Errorf("quantity = %v", it.Quantity)
 	}
 
 	// An archived vehicle keeps its name in the exports.
-	if err := a.store.ArchiveVehicle(ctx, k390); err != nil {
+	if err := a.store.ArchiveVehicle(ctx, k390, cur(t, a.store, store.WhatVehicle, k390)); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, a.get("/stock/export.csv"), http.StatusOK, "KTM 390; KTM 1290")
@@ -1394,16 +1486,22 @@ func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	path := "/vehicles/" + itoa(k390)
-	expect(t, a.get(path+"/edit"), http.StatusOK, `name="odometer_was" value="10000"`)
+	edit := a.get(path + "/edit")
+	expect(t, edit, http.StatusOK, `name="odometer_was" value="10000"`)
+	version := formVersion(t, edit.Body.String(), path)
+	// A new reading, and a service that moves it on, while the form is
+	// open: neither makes the form stale.
 	expect(t, a.post(path+"/odometer", url.Values{"odometer_km": {"12000"}}), http.StatusSeeOther)
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"},
+		"odometer_km": {"12500"}}), http.StatusSeeOther)
 	expect(t, a.post(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
-		"odometer_km": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}}), http.StatusSeeOther)
-	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.OdometerKm != 12000 || v.Plate != "B-123" {
+		"odometer_km": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}, "version": {version}}), http.StatusSeeOther)
+	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.OdometerKm != 12500 || v.Plate != "B-123" {
 		t.Errorf("vehicle = %+v", v)
 	}
 	// Archived vehicles still show their kits.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}}), http.StatusSeeOther)
-	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, "<strong>1</strong> kit")
 }
 
@@ -1429,7 +1527,7 @@ func TestShoppingFlowsThatRaceOtherTabs(t *testing.T) {
 
 	// The entry is ticked off in another tab while the new-item form is open.
 	free, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Chain lube"})
-	if _, _, err := a.store.MarkBought(ctx, free, nil); err != nil {
+	if _, _, err := a.store.MarkBought(ctx, free, cur(t, a.store, store.WhatShopping, free), nil); err != nil {
 		t.Fatal(err)
 	}
 	form := url.Values{"shopping_id": {itoa(free)}, "name": {"Chain lube"}, "unit": {"piece"}, "quantity": {"1"}}
@@ -1442,17 +1540,21 @@ func TestShoppingFlowsThatRaceOtherTabs(t *testing.T) {
 
 	// "Add to this item" clicked twice.
 	oil := itemID(t, a.store, "Silkolene")
-	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Silkolene oil"})
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "silkolene 15w50 pro 4 xp"}) // its Bought page offers the item
 	link := "/shopping/" + itoa(entry) + "/link"
-	expect(t, a.post(link, url.Values{"item_id": {itoa(oil)}}), http.StatusSeeOther)
-	rec = a.post(link, url.Values{"item_id": {itoa(oil)}})
+	version := a.versionOf(link)
+	expect(t, a.post(link, url.Values{"item_id": {itoa(oil)}, "version": {version}}), http.StatusSeeOther)
+	rec = a.post(link, url.Values{"item_id": {itoa(oil)}, "version": {version}}) // from the same page
+	if f := flashOf(t, rec); f.Message != "" {
+		t.Errorf("second click flash = %+v", f)
+	}
 	if l := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || l != "/shopping/"+itoa(entry)+"/bought" {
 		t.Errorf("second click = %d %q", rec.Code, l)
 	}
 
 	// An item archived meanwhile can't be added.
 	pads := itemID(t, a.store, "Rear Brake")
-	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+	if _, err := a.store.ArchiveItem(ctx, pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(pads)}}), http.StatusUnprocessableEntity, "archived or deleted meanwhile")
@@ -1497,12 +1599,12 @@ func TestArchiveKitFlow(t *testing.T) {
 	expect(t, page, http.StatusOK, `action="`+kit+`/archive"`, "1 logged service")
 	expectNot(t, page, `action="`+kit+`/delete"`)
 
-	expect(t, a.post(kit+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.postV(kit+"/archive", nil), http.StatusSeeOther)
 	page = a.get(kit)
 	expect(t, page, http.StatusOK, "Archived", `action="`+kit+`/restore"`)
 	expectNot(t, page, "Do this service")
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service <span class=\"badge badge-muted\">Archived</span>")
-	expect(t, a.post(kit+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.postV(kit+"/restore", nil), http.StatusSeeOther)
 }
 
 func TestUndoAndRecentlyDeleted(t *testing.T) {
@@ -1516,7 +1618,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	svc := rec.Header().Get("Location")
 
 	// Deleting offers Undo in its message.
-	rec = a.post(svc+"/delete", nil)
+	rec = a.postV(svc+"/delete", nil)
 	f := flashOf(t, rec)
 	if f.Undo == 0 || !strings.Contains(f.Message, "Deleted Top up") {
 		t.Fatalf("flash = %+v", f)
@@ -1536,7 +1638,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	expect(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil), http.StatusSeeOther) // twice: a message, not a 500
 
 	// A restore that can't work explains why on the trash page.
-	f = flashOf(t, a.post(svc+"/delete", nil))
+	f = flashOf(t, a.postV(svc+"/delete", nil))
 	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"use"}, "amount": {"525"}}), http.StatusSeeOther)
 	rec = a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
 	if l := rec.Header().Get("Location"); l != "/trash" {
@@ -1549,7 +1651,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	// Ticking off and Bought offer Undo too; Empty clears the page.
 	pads := itemID(t, a.store, "Rear Brake")
 	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0)})
-	f = flashOf(t, a.post("/shopping/"+itoa(entry)+"/bought", url.Values{"amount": {"2"}}))
+	f = flashOf(t, a.postV("/shopping/"+itoa(entry)+"/bought", url.Values{"amount": {"2"}}))
 	if f.Undo == 0 {
 		t.Fatalf("bought flash = %+v", f)
 	}
@@ -1569,8 +1671,8 @@ func TestPurgeSaysWhatWentAlong(t *testing.T) {
 	v := rec.Header().Get("Location")
 	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(mustID(t, v))}, "name": {"Chain"}})
 	expect(t, rec, http.StatusSeeOther)
-	expect(t, a.post(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
-	f := flashOf(t, a.post(v+"/delete", nil))
+	expect(t, a.postV(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
+	f := flashOf(t, a.postV(v+"/delete", nil))
 	if f.Undo == 0 {
 		t.Fatalf("vehicle delete flash = %+v", f)
 	}
@@ -1594,7 +1696,7 @@ func TestRacesEndInMessages(t *testing.T) {
 	path := "/items/" + itoa(pads)
 
 	// Put on the list after it was archived in another tab.
-	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+	if _, err := a.store.ArchiveItem(ctx, pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 	rec := a.post(path+"/shopping", nil)
@@ -1602,13 +1704,13 @@ func TestRacesEndInMessages(t *testing.T) {
 	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "archived or deleted meanwhile") {
 		t.Errorf("flash = %+v", f)
 	}
-	if err := a.store.RestoreItem(ctx, pads); err != nil {
+	if err := a.store.RestoreItem(ctx, pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
 		t.Fatal(err)
 	}
 
 	// Bought, ticked off or removed twice.
 	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Zip ties"})
-	expect(t, a.post("/shopping/"+itoa(entry)+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV("/shopping/"+itoa(entry)+"/delete", nil), http.StatusSeeOther)
 	for _, p := range []string{"/delete", "/bought"} {
 		rec = a.post("/shopping/"+itoa(entry)+p, url.Values{"amount": {"1"}})
 		expect(t, rec, http.StatusSeeOther)
@@ -1626,7 +1728,7 @@ func TestRacesEndInMessages(t *testing.T) {
 	if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
 		t.Fatal(err)
 	}
-	rec = a.post(svc+"/delete", nil, "Referer", "http://example.com"+svc)
+	rec = a.postV(svc+"/delete", nil, "Referer", "http://example.com"+svc)
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != svc {
 		t.Errorf("went to %q, want back to %q", l, svc)
@@ -1687,8 +1789,8 @@ func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
 		"line_item": {itoa(pads), itoa(ring)}, "line_qty": {"1", "2"}})
 	expect(t, rec, http.StatusSeeOther)
-	kitTrash := flashOf(t, a.post(rec.Header().Get("Location")+"/delete", nil)).Undo
-	ringTrash := flashOf(t, a.post("/items/"+itoa(ring)+"/delete", nil)).Undo
+	kitTrash := flashOf(t, a.postV(rec.Header().Get("Location")+"/delete", nil)).Undo
+	ringTrash := flashOf(t, a.postV("/items/"+itoa(ring)+"/delete", nil)).Undo
 	if kitTrash == 0 || ringTrash == 0 {
 		t.Fatalf("trash ids %d, %d", kitTrash, ringTrash)
 	}

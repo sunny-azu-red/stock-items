@@ -6,12 +6,12 @@
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
     <a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
     {{if $it.Archived}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><button class="btn" type="submit">{{icon "archive-restore"}} Restore</button></form>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn" type="submit">{{icon "archive-restore"}} Restore</button></form>
     {{else if $d.Usage.InUse}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/archive" data-confirm="Archive {{$it.DisplayName}}? It leaves the stock list{{if $d.OnShopping}} and the shopping list{{end}}, but stays in {{$d.Usage}}. You can restore it."><button class="btn btn-danger" type="submit" title="It is used in {{$d.Usage}}, so it is archived instead of deleted">{{icon "archive"}} Archive</button></form>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/archive" data-confirm="Archive {{$it.DisplayName}}? It leaves the stock list{{if $d.OnShopping}} and the shopping list{{end}}, but stays in {{$d.Usage}}. You can restore it."><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-danger" type="submit" title="It is used in {{$d.Usage}}, so it is archived instead of deleted">{{icon "archive"}} Archive</button></form>
     {{end}}
     {{if not $d.Usage.InUse}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete" data-confirm="Delete {{$it.DisplayName}} and its history?"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete" data-confirm="Delete {{$it.DisplayName}} and its history?"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
     {{end}}
   </div>
   <div class="item-head-meta">

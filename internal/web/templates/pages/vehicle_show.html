@@ -72,15 +72,15 @@
     </section>
 
     {{if $v.Archived}}
-    <form method="post" action="/vehicles/{{$v.ID}}/restore">
+    <form method="post" action="/vehicles/{{$v.ID}}/restore"><input type="hidden" name="version" value="{{$v.Version}}">
       <button class="btn btn-block" type="submit">{{icon "archive-restore"}} Restore vehicle</button>
     </form>
     {{else if or $d.ServiceCount $d.KitCount}}
-    <form method="post" action="/vehicles/{{$v.ID}}/archive" data-confirm="Archive {{$v.Name}}? It leaves the vehicle lists, pickers and reminders. Its {{plural $d.ServiceCount "service"}} and {{plural $d.KitCount "kit"}} are kept, and you can restore it.">
+    <form method="post" action="/vehicles/{{$v.ID}}/archive" data-confirm="Archive {{$v.Name}}? It leaves the vehicle lists, pickers and reminders. Its {{plural $d.ServiceCount "service"}} and {{plural $d.KitCount "kit"}} are kept, and you can restore it."><input type="hidden" name="version" value="{{$v.Version}}">
       <button class="btn btn-danger btn-block" type="submit">{{icon "archive"}} Archive vehicle</button>
     </form>
     {{else}}
-    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Items stay on stock.">
+    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Items stay on stock."><input type="hidden" name="version" value="{{$v.Version}}">
       <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete vehicle</button>
     </form>
     {{end}}

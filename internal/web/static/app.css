@@ -285,6 +285,7 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: .4rem; padding: 0; 
 .form-section + .form-section { border-top: 1px solid var(--border); }
 .form-section h2 { font-size: .95rem; margin-bottom: .8rem; }
 .error-summary { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-sm); padding: .7rem .9rem; font-weight: 500; }
+.error-summary a { color: inherit; font-weight: 600; text-decoration: underline; }
 
 .segmented { display: inline-flex; flex-wrap: wrap; gap: .35rem; }
 .segmented label {

@@ -3,6 +3,8 @@
 <div class="page-head"><h1>{{if $d.IsNew}}New vehicle{{else}}Edit {{$f.Stored}}{{end}}</h1></div>
 
 <form class="card" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
+  {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
+  {{with $f.Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
   <div class="form-section">
     <div class="form-grid">

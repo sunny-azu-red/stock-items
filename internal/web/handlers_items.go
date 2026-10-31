@@ -40,6 +40,10 @@ type itemForm struct {
 	// Stored is the saved name while editing, for the heading: what is
 	// typed may be blank.
 	Stored string
+	// Version is the item's version as the edit form was opened, posted
+	// back unchanged; Stale is set when saving was refused for it.
+	Version int
+	Stale   *staleNote
 }
 
 type itemFormPage struct {
@@ -53,12 +57,15 @@ type itemFormPage struct {
 	SubUnits   []stock.SubUnit
 	SKUKinds   []stock.SKUKind
 	Matches    []stock.Item // for a new item from the shopping list: items with its name
+	// ShoppingVersion is the shopping entry's version, for its Matches
+	// buttons.
+	ShoppingVersion int
 }
 
 func itemFormFromItem(it stock.Item) itemForm {
 	f := itemForm{
 		ID: it.ID, Name: it.Name, Brand: it.Brand, Category: it.Category, Unit: string(it.Unit),
-		Location: it.Location, Notes: it.Notes, VehicleIDs: it.VehicleIDs, Stored: it.DisplayName(),
+		Location: it.Location, Notes: it.Notes, VehicleIDs: it.VehicleIDs, Stored: it.DisplayName(), Version: it.Version,
 	}
 	f.Quantity, f.QuantityUnit = stock.SplitForInput(it.Quantity, it.Unit)
 	f.QuantityWas = stock.FormatNumber(it.Quantity)
@@ -91,12 +98,12 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		QuantityWas: formText(r, "quantity_was"),
 		MinQuantity: formText(r, "min_quantity"), MinUnit: formText(r, "min_unit"), ExpiresOn: formText(r, "expires_on"),
 		Location: formText(r, "location"), Notes: formText(r, "notes"), VehicleIDs: parseIDs(r.PostForm["vehicle"]),
-		Errors: stock.Errors{},
+		Version: parseVersion(r), Errors: stock.Errors{},
 	}
 	unit := unitOrDefault(f.Unit)
 	in := stock.ItemInput{
 		Name: f.Name, Brand: f.Brand, Category: f.Category, Unit: stock.Unit(f.Unit),
-		Location: f.Location, Notes: f.Notes, VehicleIDs: append([]int64(nil), f.VehicleIDs...),
+		Location: f.Location, Notes: f.Notes, VehicleIDs: append([]int64(nil), f.VehicleIDs...), Version: f.Version,
 	}
 	if q, err := parseOptAmount(f.Quantity, unit, f.QuantityUnit); err != nil {
 		f.Errors.Add("quantity", err.Error())
@@ -222,6 +229,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	}
 	f.Category = q.Get("category")
 	f.Location = q.Get("location")
+	var shoppingVersion int
 	if id := parseOptID(q.Get("from")); id != nil {
 		// Duplicate: start from another item's fields; nothing is saved yet.
 		it, err := s.store.GetItem(r.Context(), *id)
@@ -240,6 +248,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 			return store.ErrNotFound
 		}
 		f.ShoppingID, f.Name, f.Notes, f.Unit = e.ID, e.FreeText, e.Note, string(e.ItemUnit)
+		shoppingVersion = e.Version
 		_, f.MinUnit = stock.SplitForInput(0, e.ItemUnit)
 		f.QuantityUnit = f.MinUnit
 		if e.Quantity != nil {
@@ -254,6 +263,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
 			return err
 		}
+		page.ShoppingVersion = shoppingVersion
 	}
 	s.render(w, r, http.StatusOK, "item_form", View{Title: "New item", Nav: "stock", Data: page})
 	return nil
@@ -308,6 +318,11 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
 			return err
 		}
+		e, err := s.store.GetShopping(r.Context(), f.ShoppingID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		page.ShoppingVersion = e.Version
 	}
 	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "New item", Nav: "stock", Data: page})
 	return nil
@@ -368,7 +383,8 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Saved "+displayInput(in))
 			return nil
 		}
-		if !formConflict(f.Errors, err) {
+		// Changed or deleted meanwhile: say so, and keep what was typed.
+		if f.Stale = staleForm(err, itemPath(id)+"/edit"); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -389,7 +405,13 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 func formConflict(errs stock.Errors, err error) bool {
 	var conflict *store.ConflictError
 	var short *store.InsufficientStockError
+	var stale *store.StaleError
 	switch {
+	case errors.As(err, &stale):
+		// Forms that carry a version show it as a banner (staleForm); this
+		// is for any other form, so it never reads as a missing reference.
+		errs.Add("form", stale.Error())
+		return true
 	case errors.As(err, &conflict):
 		errs.Add(conflict.Field, conflict.Message)
 		return true
@@ -419,13 +441,20 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
 	it, err := s.store.GetItem(r.Context(), id)
-	if err != nil {
+	if s.staleButton(w, r, s.gone(r, err, store.WhatItem, id), itemPath(id), "/stock") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	var conflict *store.ConflictError
-	trashID, err := s.store.DeleteItem(r.Context(), id)
-	if errors.As(err, &conflict) {
+	trashID, err := s.store.DeleteItem(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, itemPath(id), "/stock") {
+		return nil
+	} else if errors.As(err, &conflict) {
 		// Used since the page was opened: keep it and say why.
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "")
@@ -443,12 +472,19 @@ func (s *Server) itemArchive(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	it, err := s.store.GetItem(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	listTrash, err := s.store.ArchiveItem(r.Context(), id)
-	if err != nil {
+	it, err := s.store.GetItem(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatItem, id), itemPath(id), "/stock") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	listTrash, err := s.store.ArchiveItem(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, itemPath(id), "/stock") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	msg := "Archived " + it.DisplayName() + ". Its history stays; restore it any time."
@@ -464,11 +500,19 @@ func (s *Server) itemRestore(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	it, err := s.store.GetItem(r.Context(), id)
-	if err != nil {
+	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	if err := s.store.RestoreItem(r.Context(), id); err != nil {
+	it, err := s.store.GetItem(r.Context(), id)
+	if s.staleButton(w, r, s.gone(r, err, store.WhatItem, id), itemPath(id), "/stock") {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	err = s.store.RestoreItem(r.Context(), id, parseVersion(r))
+	if s.staleButton(w, r, err, itemPath(id), "/stock") {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Restored "+it.DisplayName())
@@ -481,6 +525,10 @@ type movementForm struct {
 	Kind, Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
 	ExpiresOn                                                        string // purchases only
 	Errors                                                           stock.Errors
+	// The shopping entry's version and a refusal for it, on the Bought
+	// form (see itemForm); the item page's stock changes don't have one.
+	Version int
+	Stale   *staleNote
 }
 
 type itemPage struct {

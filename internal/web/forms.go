@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
+	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 var errBadID = errors.New("invalid id")
@@ -223,4 +224,73 @@ func unitOrDefault(u string) stock.Unit {
 		return stock.Unit(u)
 	}
 	return stock.UnitPiece
+}
+
+// parseVersion reads the version an edit form or button carried (see
+// stock.Item.Version). A missing or invalid one is 0, which no record has,
+// so the store refuses it as stale.
+func parseVersion(r *http.Request) int {
+	v, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("version")))
+	if err != nil || v < 1 {
+		return 0
+	}
+	return v
+}
+
+// staleNote is the banner of an edit form refused because its record
+// changed or was deleted since it was opened. What was typed stays.
+type staleNote struct {
+	Message string
+	Href    string // where to go from here ("" for nowhere)
+	Link    string // the link's text
+}
+
+// staleForm turns a *store.StaleError into the banner of an edit form
+// whose fresh copy is at reload; nil for any other error.
+func staleForm(err error, reload string) *staleNote {
+	var stale *store.StaleError
+	if !errors.As(err, &stale) {
+		return nil
+	}
+	n := &staleNote{Message: stale.Error(), Href: reload, Link: "Reload"}
+	switch {
+	case stale.Gone && stale.InTrash:
+		n.Href, n.Link = "/trash", "Recently deleted"
+	case stale.Gone:
+		n.Href = ""
+	}
+	return n
+}
+
+// gone turns a page's ErrNotFound for the record a button acts on into
+// the store's explanation: deleted, and maybe in Recently deleted.
+func (s *Server) gone(r *http.Request, err error, what string, id int64) error {
+	if errors.Is(err, store.ErrNotFound) {
+		return s.store.Gone(r.Context(), what, id)
+	}
+	return err
+}
+
+// staleButton answers a button (delete, archive, restore, …) whose record
+// changed or was deleted since its page was shown: nothing was done, and
+// the user lands on the record as it is now (page), on Recently deleted,
+// or on list when it is gone for good. It reports whether err was that.
+func (s *Server) staleButton(w http.ResponseWriter, r *http.Request, err error, page, list string) bool {
+	var stale *store.StaleError
+	if !errors.As(err, &stale) {
+		return false
+	}
+	to, msg := page, stale.Error()
+	switch {
+	case stale.Gone && stale.InTrash:
+		to = "/trash"
+	case stale.Gone:
+		to = list
+	default:
+		msg = "This " + stale.What + " was changed since you opened it (another tab or person), so nothing was done. " +
+			"This is how it is now; try again if you still want to."
+	}
+	s.setFlash(w, "error", msg)
+	s.redirect(w, r, to, "")
+	return true
 }

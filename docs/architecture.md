@@ -24,8 +24,8 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 1. `http.ServeMux` routes using Go 1.22+ patterns (`POST /items/{id}/adjust`).
 2. Middleware (outermost first): panic recovery → request logging (`log/slog`) → security headers (CSP, `nosniff`, frame denial) → `http.CrossOriginProtection` (CSRF protection based on `Sec-Fetch-Site` / `Origin`).
-3. Handlers are `func(w, r) error`. `Server.wrap` turns `store.ErrNotFound` into a 404 page, a form over the size limit into a 413 page, a `store.ConflictError` on a POST into an error message back where the user was, a cancelled request into no response, and other errors into a logged 500.
-4. Forms are parsed into small `*Form` structs (raw strings, to re-render exactly what was typed) and converted into `stock.*Input` values. Validation lives in `stock` (`Normalize` + `Validate`). Errors re-render the page with status 422.
+3. Handlers are `func(w, r) error`. `Server.wrap` turns `store.ErrNotFound` into a 404 page, a form over the size limit into a 413 page, a `store.ConflictError` or `store.StaleError` on a POST into an error message back where the user was, a cancelled request into no response, and other errors into a logged 500.
+4. Forms are parsed into small `*Form` structs (raw strings, to re-render exactly what was typed) and converted into `stock.*Input` values. Validation lives in `stock` (`Normalize` + `Validate`). Errors re-render the page with status 422. Edit forms and record buttons post the record's `version`; the store refuses a stale one (`store.StaleError`), which an edit form shows as a banner with a Reload link, keeping what was typed, and a button as a message on the record's page.
 5. Success means **POST → 303 redirect → GET**, with a one-time flash message in a cookie. htmx requests get `HX-Redirect`, or a partial plus an `HX-Trigger` toast.
 
 ## Templates
@@ -45,6 +45,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 - **Quantities in base units** (pieces, ml, g) stored as `numeric(12,3)`. Conversion happens only at the edges.
 - **Stock ledger.** Every quantity change is a row in `stock_movements`, written in the same transaction as the quantity update. History, prices, stock value and "undo a service" all come from this.
 - **Items are grouped by their exact vehicle set.** "KTM 390 + KTM 1290" is one section and "KTM 390" another, which matches how people think about shared parts.
+- **Optimistic concurrency with versions.** Two tabs (or two people) editing the same record don't overwrite each other: each record has a `version`, forms carry it, and the store compares it under the row lock it takes anyway. Stock quantity and odometer readings don't change it, as they are deltas or readings that the forms already guard (`quantity_was`, `odometer_was`); restoring from the trash does, so a form opened before a delete can't save over the restored record.
 - **Archive instead of delete** for items, vehicles and kits that other records refer to, so history and spending never change behind the user's back.
 - **Deletes go to a trash.** Each delete stores a JSON snapshot of the rows it removes in `trash`, in the same transaction, which gives every delete an Undo and a *Recently deleted* page. Restoring re-inserts the rows with their ids and redoes their stock effect (`store/trash.go`). Permanently deleting an entry also deletes the entries that can't be restored without it.
 - **Photos in Postgres** (`bytea`, resized to 1600 px plus a 320 px thumbnail). A `pg_dump` is a complete backup.

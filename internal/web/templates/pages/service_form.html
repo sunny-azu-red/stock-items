@@ -11,6 +11,8 @@
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add a vehicle")}}</div>
 {{else}}
 <form class="card" method="post" action="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}" novalidate>
+  {{if $f.ID}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
+  {{with $f.Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}{{with index $e "parts"}}<p class="field-error mt">{{.}}</p>{{end}}</div>{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   <div class="form-section">

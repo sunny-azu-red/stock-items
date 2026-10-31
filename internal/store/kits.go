@@ -26,7 +26,7 @@ type KitFilter struct {
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
-		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at,
+		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at, k.version,
 		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
@@ -69,7 +69,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsDate *time.Time
 		var ls stock.ServiceRef
 		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.Notes, &k.ArchivedAt, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &k.LastOdometerKm)
+			&k.Notes, &k.ArchivedAt, &k.Version, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &k.LastOdometerKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			k.LastService = &ls
@@ -143,22 +143,27 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 	return id, err
 }
 
-// UpdateKit replaces a kit's fields and lines.
+// UpdateKit replaces a kit's fields and lines. A kit changed since
+// in.Version fails with a *StaleError.
 func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		// A kit can stay with its archived vehicle, but not move to one.
 		var was int64
-		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&was); err != nil {
-			return notFound(err)
+		var version int
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, version FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&was, &version)
+		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatKit, id); err != nil {
+			return err
 		}
 		if was != in.VehicleID {
 			if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 				return err
 			}
 		}
+		// A new version (its lines count as part of the kit): a form opened
+		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
 			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_km = $4, interval_months = $5, notes = $6,
-			       updated_at = now()
+			       updated_at = now(), version = version + 1
 			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
@@ -196,14 +201,17 @@ func (s *Store) KitServices(ctx context.Context, id int64) (int, error) {
 
 // DeleteKit removes a kit that was never used. A kit with logged services
 // fails with a *ConflictError and should be archived instead: deleting it
-// would cut the link from its services and lose its history.
-func (s *Store) DeleteKit(ctx context.Context, id int64) (trashID int64, err error) {
+// would cut the link from its services and lose its history. A kit
+// changed since version fails with a *StaleError.
+func (s *Store) DeleteKit(ctx context.Context, id int64, version int) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var name, vehicle string
-		if err := tx.QueryRow(ctx, `
-			SELECT k.name, v.name FROM service_kits k JOIN vehicles v ON v.id = k.vehicle_id WHERE k.id = $1 FOR UPDATE OF k`, id).
-			Scan(&name, &vehicle); err != nil {
-			return notFound(err)
+		var have int
+		err := tx.QueryRow(ctx, `
+			SELECT k.name, v.name, k.version FROM service_kits k JOIN vehicles v ON v.id = k.vehicle_id WHERE k.id = $1 FOR UPDATE OF k`, id).
+			Scan(&name, &vehicle, &have)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatKit, id); err != nil {
+			return err
 		}
 		var used bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_records WHERE kit_id = $1)`, id).Scan(&used); err != nil {
@@ -225,12 +233,17 @@ func (s *Store) DeleteKit(ctx context.Context, id int64) (trashID int64, err err
 }
 
 // ArchiveKit hides a kit from lists, reminders and suggestions while its
-// services keep it.
-func (s *Store) ArchiveKit(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id))
+// services keep it. A kit changed since version fails with a *StaleError.
+func (s *Store) ArchiveKit(ctx context.Context, id int64, version int) error {
+	// Archiving changes the kit's page: a new version.
+	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = COALESCE(archived_at, now()), version = version + 1
+		WHERE id = $1 AND version = $2`, id, version)
+	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
 }
 
-// RestoreKit brings an archived kit back.
-func (s *Store) RestoreKit(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL WHERE id = $1`, id))
+// RestoreKit brings an archived kit back. A kit changed since version
+// fails with a *StaleError.
+func (s *Store) RestoreKit(ctx context.Context, id int64, version int) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
 }

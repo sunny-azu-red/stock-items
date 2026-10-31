@@ -8,17 +8,19 @@
   </div>
 </div>
 {{if not $d.Entry.ItemID}}
-{{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Matches" $d.Matches)}}{{end}}
+{{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Version" $d.Entry.Version "Matches" $d.Matches)}}{{end}}
 <div class="card card-body{{if $d.Matches}} mt{{end}}">
   <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep on stock.</p>
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>
-    <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
+    <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><input type="hidden" name="version" value="{{$d.Entry.Version}}"><button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
     <a class="btn btn-primary" href="/items/new?shopping={{$d.Entry.ID}}">{{icon "package-plus"}} Add to stock as a new item</a>
   </div>
 </div>
 {{else}}
 <form class="card form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
+  <input type="hidden" name="version" value="{{$m.Version}}">
+  {{template "stale" $m.Stale}}
   {{template "error-summary" $e}}
   <div class="form-grid">
     <div class="field{{if index $e "amount"}} has-error{{end}}">

@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -311,6 +312,33 @@ func (s *Store) ListTrash(ctx context.Context) ([]stock.TrashEntry, error) {
 	})
 }
 
+// TrashThumb returns the thumbnail of a photo in the trash, from its
+// snapshot, so Recently deleted can tell several photos of one item apart.
+// A trash entry never changes, so the result can be cached for good.
+func (s *Store) TrashThumb(ctx context.Context, id int64) (Photo, error) {
+	var p Photo
+	var thumb string
+	err := s.pool.QueryRow(ctx, `
+		SELECT ph ->> 'content_type', ph ->> 'thumb', t.deleted_at
+		FROM trash t, jsonb_array_elements(t.payload -> 'item_photos') ph
+		WHERE t.id = $1 AND t.kind = $2 AND ph ->> 'thumb' IS NOT NULL LIMIT 1`, id, TrashPhoto).
+		Scan(&p.ContentType, &thumb, &p.UpdatedAt)
+	if err != nil {
+		return p, notFound(err)
+	}
+	// to_jsonb writes bytea as "\x" and hex digits.
+	p.Data, err = decodeHexBytea(thumb)
+	return p, err
+}
+
+// decodeHexBytea reads bytea in Postgres' hex output format.
+func decodeHexBytea(s string) ([]byte, error) {
+	if !strings.HasPrefix(s, `\x`) {
+		return nil, fmt.Errorf("bytea %.10q is not in hex format", s)
+	}
+	return hex.DecodeString(s[2:])
+}
+
 // CountTrash counts what can be restored.
 func (s *Store) CountTrash(ctx context.Context) (int, error) {
 	var n int
@@ -404,6 +432,7 @@ type Restored struct {
 	Kind     string
 	ID       int64
 	Label    string
+	Name     string // a restored photo's item, as named now
 	Dropped  int
 	Replaced int64
 }
@@ -439,7 +468,7 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		case TrashVehicle:
 			out.ID, err = restoreVehicle(ctx, tx, p, &out.Dropped)
 		case TrashPhoto:
-			out.ID, out.Replaced, err = restorePhoto(ctx, tx, p)
+			out.ID, out.Replaced, out.Name, err = restorePhoto(ctx, tx, p)
 		case TrashBought:
 			out.ID, err = undoBought(ctx, tx, p)
 		default:
@@ -485,7 +514,9 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	if err := needRows(ctx, tx, "vehicles", []int64{vehicleID}, "Its vehicle"); err != nil {
 		return 0, err
 	}
-	if err := checkActiveVehicle(ctx, tx, vehicleID); err != nil {
+	// The vehicle's lock before the parts, like every service change. An
+	// archived vehicle is fine: bringing back a past service isn't new work.
+	if _, _, err := lockVehicle(ctx, tx, vehicleID); err != nil {
 		return 0, err
 	}
 	// Its reading must still fit between the services logged since.
@@ -533,10 +564,9 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (i
 	if err != nil {
 		return 0, err
 	}
+	// An archived vehicle is fine: the kit comes back as it was, and new
+	// services for that vehicle stay refused.
 	if err := needRows(ctx, tx, "vehicles", []int64{kit.int64("vehicle_id")}, "Its vehicle"); err != nil {
-		return 0, err
-	}
-	if err := checkActiveVehicle(ctx, tx, kit.int64("vehicle_id")); err != nil {
 		return 0, err
 	}
 	if err := restoreRows(ctx, tx, "service_kits", encodeRows([]snapshotRow{kit})); err != nil {
@@ -647,21 +677,25 @@ func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	return v.int64("id"), restoreRows(ctx, tx, "item_vehicles", encodeRows(tags))
 }
 
-func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (itemID, replaced int64, err error) {
+func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (itemID, replaced int64, name string, err error) {
 	ph, err := one(p["item_photos"])
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	itemID = ph.int64("item_id")
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	// A photo the item has now trades places with it, so neither is lost
-	// (this is how replacing a photo is undone).
+	// (this is how replacing a photo is undone). trashPhoto locks the item.
 	if replaced, err = trashPhoto(ctx, tx, itemID, "replaced"); err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
-	return itemID, replaced, restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))
+	var brand, item string
+	if err := tx.QueryRow(ctx, `SELECT brand, name FROM items WHERE id = $1`, itemID).Scan(&brand, &item); err != nil {
+		return 0, 0, "", err
+	}
+	return itemID, replaced, displayName(brand, item), restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))
 }
 
 // undoBought takes back a purchase made by ticking an entry off: the

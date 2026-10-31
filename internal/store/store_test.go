@@ -2208,8 +2208,17 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatal(err)
 	}
-	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog != nil || *k.LastService.OdometerKm != 16500 {
-		t.Errorf("with a reading: %+v", k.LastService)
+	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerKm != 16500 || k.Due(ptr(17000), time.Now()).DueKm == nil ||
+		*k.Due(ptr(17000), time.Now()).DueKm != 16500+6000 {
+		t.Errorf("with a reading: %+v, due %+v", k.LastService, k.Due(ptr(17000), time.Now()))
+	}
+	// Removing the reading again counts from the odometer at log once more.
+	edit.OdometerKm = nil
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog == nil || *k.LastService.OdometerAtLog != 16000 {
+		t.Errorf("reading removed: %+v, want at log 16000", k.LastService)
 	}
 }
 
@@ -2425,10 +2434,9 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	wantConflict(t, "service", err, "KTM 390 is archived")
 	_, err = s.CreateKit(ctx, kin)
 	wantConflict(t, "kit", err, "KTM 390 is archived")
-	_, err = s.RestoreTrash(ctx, svcTrash)
-	wantConflict(t, "restore service", err, "KTM 390 is archived")
-	_, err = s.RestoreTrash(ctx, oldTrash)
-	wantConflict(t, "restore kit", err, "KTM 390 is archived")
+	// Bringing back a past service or kit isn't new work: Undo still works.
+	mustRestore(t, s, svcTrash)
+	mustRestore(t, s, oldTrash)
 	moved := stock.KitInput{VehicleID: v, Name: "Brakes"}
 	moved.Normalize()
 	otherKit := stock.KitInput{VehicleID: other, Name: "Brakes"}
@@ -2444,8 +2452,6 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	if err := s.RestoreVehicle(ctx, v, cur(t, s, store.WhatVehicle, v)); err != nil {
 		t.Fatal(err)
 	}
-	mustRestore(t, s, svcTrash)
-	mustRestore(t, s, oldTrash)
 }
 
 // A deleted service comes back only if its reading still fits between

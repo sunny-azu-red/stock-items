@@ -19,7 +19,7 @@
         <span><strong>{{.Kits}}</strong> {{if eq .Kits 1}}kit{{else}}kits{{end}}</span>
         <span><strong>{{km $v.OdometerKm}}</strong></span>
       </span>
-      {{with .Next}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}
+      {{with .Next}}{{if not .VehicleArchived}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}{{end}}
     </span>
   </a>
   {{end}}

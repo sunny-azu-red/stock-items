@@ -20,6 +20,24 @@ func (s *Server) trashList(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// trashThumb serves the thumbnail of a photo in the trash. A trash entry
+// never changes (restoring or purging removes it, and ids aren't reused),
+// so the browser may keep it for good.
+func (s *Server) trashThumb(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	p, err := s.store.TrashThumb(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", p.ContentType)
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	_, err = w.Write(p.Data)
+	return err
+}
+
 // restoredPath is the page that shows what a restore brought back.
 func restoredPath(res store.Restored) string {
 	switch res.Kind {
@@ -59,15 +77,20 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	msg := "Restored " + strings.TrimSuffix(res.Label, ".") + "."
-	if res.Kind == store.TrashBought {
+	switch res.Kind {
+	case store.TrashBought:
 		msg = "Took back buying " + strings.TrimPrefix(res.Label, "Bought: ") + ". It's back on the shopping list."
+	case store.TrashPhoto:
+		// Not "Restored Photo: X (replaced)": the label says why it went to
+		// the trash, which is no longer news.
+		msg = "Restored the photo of " + res.Name + "."
 	}
 	if res.Dropped > 0 {
 		msg += fmt.Sprintf(" Left out %d %s to things permanently deleted.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
 	}
 	if res.Replaced != 0 {
 		// The photo it took the place of went to the trash in turn.
-		s.redirectUndo(w, r, restoredPath(res), msg+" The photo it replaced is in Recently deleted.", res.Replaced)
+		s.redirectUndo(w, r, restoredPath(res), msg+" The newer photo is in Recently deleted.", res.Replaced)
 		return nil
 	}
 	s.redirect(w, r, restoredPath(res), msg)

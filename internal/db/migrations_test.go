@@ -22,7 +22,7 @@ import (
 // migrates all the way, and it can't be imported from here.)
 func migrationDB(t *testing.T) (*pgxpool.Pool, *goose.Provider) {
 	t.Helper()
-	cfg, err := config.Load()
+	dbCfg, err := config.LoadDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,16 +31,16 @@ func migrationDB(t *testing.T) (*pgxpool.Pool, *goose.Provider) {
 	}
 	buf := make([]byte, 6)
 	_, _ = rand.Read(buf)
-	cfg.DB.Schema = "test_" + hex.EncodeToString(buf)
+	dbCfg.Schema = "test_" + hex.EncodeToString(buf)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := Open(ctx, cfg.DB)
+	pool, err := Open(ctx, dbCfg)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := DropSchema(context.Background(), pool, cfg.DB.Schema); err != nil {
-			t.Errorf("drop schema %s: %v", cfg.DB.Schema, err)
+		if err := DropSchema(context.Background(), pool, dbCfg.Schema); err != nil {
+			t.Errorf("drop schema %s: %v", dbCfg.Schema, err)
 		}
 		pool.Close()
 	})

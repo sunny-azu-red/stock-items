@@ -208,9 +208,11 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		}
 		// A new version (its parts count as part of the service, and get new
 		// movement ids): a form opened before this save is stale now.
+		// odometer_at_log stays as it was logged: a reading added now wins
+		// over it, and removing that reading again falls back to it.
 		_, err = tx.Exec(ctx, `
 			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7,
-			       odometer_at_log = CASE WHEN $4::integer IS NULL THEN odometer_at_log END, version = version + 1
+			       version = version + 1
 			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound

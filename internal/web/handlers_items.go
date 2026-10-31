@@ -722,7 +722,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		var err error
 		if in.Kind == stock.MoveCorrection {
 			var delta float64
-			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *s.today(), f.FormKey)
+			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *in.OccurredOn, f.FormKey)
 			if err == nil && delta == 0 {
 				s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
 				return nil

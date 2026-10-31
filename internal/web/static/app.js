@@ -366,6 +366,9 @@
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-copy-url]");
     if (!btn) return;
+    // Ctrl/Cmd/Shift-click or a middle click (which Firefox reports to the
+    // document as a click) opens the text, as on any link.
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     var url = btn.getAttribute("data-copy-url");
     var text = fetch(url, { headers: { Accept: "text/plain" } })
@@ -468,6 +471,18 @@
   // Switch without a reload, then let the server remember it. Picking what
   // the system already shows clears the choice, so the app follows the
   // system again.
+  // applyTheme shows "light", "dark" or "system" (no choice).
+  function applyTheme(theme) {
+    var root = document.documentElement;
+    var meta = document.querySelector('meta[name="color-scheme"]');
+    if (theme === "system") {
+      root.removeAttribute("data-theme");
+      if (meta) meta.content = "light dark";
+    } else {
+      root.setAttribute("data-theme", theme);
+      if (meta) meta.content = theme;
+    }
+  }
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (!form.classList || !form.classList.contains("theme-toggle")) return;
@@ -475,16 +490,8 @@
     var theme = e.submitter && e.submitter.value;
     if (theme !== "light" && theme !== "dark") return;
     var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    var root = document.documentElement;
-    var meta = document.querySelector('meta[name="color-scheme"]');
-    if ((theme === "dark") === systemDark) {
-      root.removeAttribute("data-theme");
-      if (meta) meta.content = "light dark";
-      theme = "system";
-    } else {
-      root.setAttribute("data-theme", theme);
-      if (meta) meta.content = theme;
-    }
+    if ((theme === "dark") === systemDark) theme = "system";
+    applyTheme(theme);
     // The button that was clicked is now hidden; keep focus on the toggle.
     form.querySelectorAll("button").forEach(function (b) {
       if (b.offsetParent !== null) b.focus();
@@ -494,6 +501,15 @@
       headers: { "HX-Request": "true", "Content-Type": "application/x-www-form-urlencoded" },
       body: "theme=" + theme
     }).catch(function () { toast("Could not save the theme.", "error"); });
+  });
+  // A page that Back restores from the browser's page cache (pageshow with
+  // persisted) or reloads from its HTTP cache shows the theme it had when
+  // it was left; the choice may have changed on another page since. The
+  // cookie the server renders from says what it is now.
+  window.addEventListener("pageshow", function () {
+    var m = document.cookie.match(/(?:^|;\s*)theme=(light|dark)(?:;|$)/);
+    var theme = m ? m[1] : "system";
+    if (theme !== (document.documentElement.getAttribute("data-theme") || "system")) applyTheme(theme);
   });
 
   // ---- Keyboard shortcuts -------------------------------------------------

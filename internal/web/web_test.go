@@ -38,7 +38,7 @@ func newApp(t *testing.T) *testApp {
 	st := store.New(pool)
 	srv, err := New(st, Options{
 		Currency: "EUR", Version: "test",
-		SKUSearchURL: "https://duckduckgo.com/?q=", SKUSearchPrefix: "site:de",
+		SKUSearchURL: "https://duckduckgo.com/?q={q}", SKUSearchPrefix: "site:de",
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now:    func() time.Time { return time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC) },
 	})
@@ -503,6 +503,9 @@ func TestTheme(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != themeCookie || cookies[0].Value != "dark" || cookies[0].MaxAge <= 0 {
 		t.Fatalf("theme cookie = %+v", cookies)
+	}
+	if cookies[0].HttpOnly {
+		t.Error("theme cookie is HttpOnly: app.js can't re-apply it on a page Back restores")
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
@@ -1859,7 +1862,7 @@ func TestPhotoRestoreBeatsTheCache(t *testing.T) {
 	expect(t, cached, http.StatusOK, "new")
 
 	f := flashOf(t, a.post("/trash/"+itoa(replaced)+"/restore", nil))
-	if f.Undo == 0 || !strings.Contains(f.Message, "The photo it replaced is in Recently deleted.") {
+	if f.Undo == 0 || f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in Recently deleted." {
 		t.Errorf("restore flash = %+v", f)
 	}
 	req := httptest.NewRequest(http.MethodGet, photo, nil)

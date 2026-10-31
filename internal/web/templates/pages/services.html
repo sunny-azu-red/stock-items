@@ -4,10 +4,12 @@
     <h1>Services</h1>
     <p class="sub">Service kits with their reminders, and everything you have done.</p>
   </div>
+  {{if not $d.Archived}}
   <div class="actions">
     <a class="btn" href="/kits/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "list-checks"}} New kit</a>
     <a class="btn btn-primary" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
   </div>
+  {{end}}
 </div>
 
 {{if $d.Vehicles}}

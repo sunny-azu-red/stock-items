@@ -30,7 +30,8 @@
 
 {{define "ready-badge"}}{{if .Ready}}<span class="badge badge-ok">{{icon "check"}} Parts ready</span>{{else if eq .Lines 0}}<span class="badge badge-muted">No parts</span>{{else}}<span class="badge badge-danger">{{icon "x"}} {{plural .ShortLines "part"}} short</span>{{end}}{{end}}
 
-{{/* A kit as a clickable row: kitView */}}
+{{/* A kit as a clickable row: kitView. A kit of an archived vehicle shows
+     no reminder, like its own page: nothing is due on a vehicle no longer kept. */}}
 {{define "kit-row"}}
 <a class="kit-row" href="/kits/{{.Kit.ID}}">
   <span class="status-icon {{if .Readiness.Ready}}status-ok{{else}}status-short{{end}}">{{if .Readiness.Ready}}{{icon "check"}}{{else}}{{icon "list-checks"}}{{end}}</span>
@@ -38,11 +39,11 @@
     <span class="title">{{.Kit.Name}}</span>
     <span class="meta">
       <span class="chip" style="{{chipStyle .Kit.VehicleColor}}"><span class="dot"></span>{{.Kit.VehicleName}}</span>
-      {{with .Due.Summary}}<span>{{.}}</span>{{end}}
+      {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
       {{with .Kit.LastService}}<span>last {{date .PerformedOn}}</span>{{end}}
     </span>
   </span>
-  <span class="badges">{{template "due-badge" .Due}}{{template "ready-badge" .Readiness}}</span>
+  <span class="badges">{{if not .VehicleArchived}}{{template "due-badge" .Due}}{{end}}{{template "ready-badge" .Readiness}}</span>
 </a>
 {{end}}
 

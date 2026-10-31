@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -22,17 +23,24 @@ func TestSchema(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	good := Config{Currency: "EUR", SKUSearchURL: "https://www.google.com/search?q="}
+	good := Config{Currency: "EUR", SKUSearchURL: DefaultSKUSearchURL}
 	tests := []struct {
 		name string
 		edit func(*Config)
 		ok   bool
 	}{
 		{"defaults", func(*Config) {}, true},
-		{"other engine", func(c *Config) { c.SKUSearchURL = "http://duckduckgo.com/?q=" }, true},
+		{"other engine", func(c *Config) { c.SKUSearchURL = "http://duckduckgo.com/?q={q}" }, true},
 		{"lei", func(c *Config) { c.Currency = "lei" }, true},
-		{"no scheme", func(c *Config) { c.SKUSearchURL = "www.google.com/search?q=" }, false},
+		{"no scheme", func(c *Config) { c.SKUSearchURL = "www.google.com/search?q={q}" }, false},
 		{"script", func(c *Config) { c.SKUSearchURL = "javascript:alert(1)//" }, false},
+		{"placeholder in the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q={q}&lang=de" }, true},
+		{"placeholder in the path", func(c *Config) { c.SKUSearchURL = "https://parts.example.com/find/{q}" }, true},
+		{"the old form, ending in =", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search?q=" }, false},
+		{"no {q}", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search" }, false},
+		{"value after the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q=&lang=de" }, false},
+		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
+		{"placeholder without http", func(c *Config) { c.SKUSearchURL = "example.com/{q}" }, false},
 		{"long currency", func(c *Config) { c.Currency = "Romanian lei" }, false},
 	}
 	for _, tt := range tests {
@@ -41,6 +49,13 @@ func TestCheck(t *testing.T) {
 		if err := c.check(); (err == nil) != tt.ok {
 			t.Errorf("%s: check() = %v, want ok %v", tt.name, err, tt.ok)
 		}
+	}
+
+	// A URL in the old form gets the fixed value suggested.
+	c := good
+	c.SKUSearchURL = "https://www.google.com/search?q="
+	if err := c.check(); err == nil || !strings.Contains(err.Error(), "add it: https://www.google.com/search?q={q}") {
+		t.Errorf("old form: %v, want the fix suggested", err)
 	}
 }
 

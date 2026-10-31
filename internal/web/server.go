@@ -6,20 +6,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/sunny-azu-red/stock-items/internal/config"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 // Options configure the web server.
 type Options struct {
 	Currency string
-	// SKUSearchURL is the search URL a part number is appended to
-	// (default Google); SKUSearchPrefix is added to every such search.
+	// SKUSearchURL is the search URL of part number links (default
+	// Google): the number goes in place of its one {q}. SKUSearchPrefix is
+	// added to every such search.
 	SKUSearchURL    string
 	SKUSearchPrefix string
 	Version         string
@@ -64,7 +67,10 @@ func New(st *store.Store, opts Options) (*Server, error) {
 		s.currency = "EUR"
 	}
 	if s.skuSearch == "" {
-		s.skuSearch = "https://www.google.com/search?q="
+		s.skuSearch = config.DefaultSKUSearchURL
+	}
+	if strings.Count(s.skuSearch, "{q}") != 1 {
+		return nil, fmt.Errorf("SKUSearchURL %q must contain {q} once, where the part number goes", s.skuSearch)
 	}
 	s.skuSearchTitle = searchTitle(s.skuSearch, s.skuSearchPrefix)
 	var err error
@@ -151,6 +157,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /activity", h(s.activity))
 	mux.HandleFunc("GET /activity/export.csv", h(s.activityExportCSV))
 	mux.HandleFunc("GET /trash", h(s.trashList))
+	mux.HandleFunc("GET /trash/{id}/thumb", h(s.trashThumb))
 	mux.HandleFunc("POST /trash/{id}/restore", h(s.trashRestore))
 	mux.HandleFunc("POST /trash/{id}/purge", h(s.trashPurge))
 	mux.HandleFunc("POST /trash/empty", h(s.trashEmpty))

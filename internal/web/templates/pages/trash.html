@@ -17,6 +17,7 @@
   <ul class="list">
     {{range $entries}}
     <li>
+      {{if eq .Kind "photo"}}<img class="thumb" src="/trash/{{.ID}}/thumb" alt="" width="36" height="36" loading="lazy">{{end}}
       <span class="grow">
         <span class="title">{{.Label}}</span>
         <span class="meta">Deleted {{ago .DeletedAt}}</span>

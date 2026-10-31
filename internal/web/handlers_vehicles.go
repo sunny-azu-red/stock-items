@@ -402,21 +402,25 @@ func activeVehicles(vehicles []stock.Vehicle, keep ...int64) []stock.Vehicle {
 }
 
 // kitView is a kit with its computed readiness and due state.
+// VehicleArchived hides the reminder of a kit whose vehicle is archived.
 type kitView struct {
-	Kit       stock.Kit
-	Readiness stock.Readiness
-	Due       stock.Due
+	Kit             stock.Kit
+	Readiness       stock.Readiness
+	Due             stock.Due
+	VehicleArchived bool
 }
 
 // kitViews computes readiness and due state, most urgent first.
 func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView {
 	odo := map[int64]*int{}
+	archived := map[int64]bool{}
 	for _, v := range vehicles {
 		odo[v.ID] = v.OdometerKm
+		archived[v.ID] = v.Archived()
 	}
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
-		out[i] = kitView{Kit: k, Readiness: k.Readiness(), Due: k.Due(odo[k.VehicleID], s.now())}
+		out[i] = kitView{Kit: k, Readiness: k.Readiness(), Due: k.Due(odo[k.VehicleID], s.now()), VehicleArchived: archived[k.VehicleID]}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })
 	return out

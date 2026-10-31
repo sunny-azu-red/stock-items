@@ -25,7 +25,9 @@ func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	c := &http.Cookie{Name: themeCookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode}
+	// Not HttpOnly: app.js reads it to re-apply the theme on a page that
+	// Back restores from the browser's cache. It holds nothing secret.
+	c := &http.Cookie{Name: themeCookie, Path: "/", SameSite: http.SameSiteLaxMode}
 	switch v := r.PostFormValue("theme"); v {
 	case "light", "dark":
 		c.Value, c.MaxAge = v, 400*24*60*60 // the longest browsers keep a cookie

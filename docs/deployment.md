@@ -75,7 +75,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
    | `DB_PASSWORD` | | required |
    | `DB_PORT`, `DB_DATABASE`, `DB_SCHEMA`, `DB_USERNAME` | | default `5432`, `stock_items`, `public`, `postgres` |
    | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
-   | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q=` | default Google; part number links append the number to it. A full `http(s)://` URL, or the app won't start |
+   | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q={q}` | default `https://www.google.com/search?q={q}`. Part number links put the number in place of `{q}`, wherever it is (`https://example.com/search?q={q}&lang=de`). A full `http(s)://` URL with exactly one `{q}`, or the app won't start. A URL ending in `=` (the number used to be appended) is refused too, with the fixed value suggested: add `{q}` at the end |
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
    | `TZ` | `Europe/Berlin` | sets when "today" starts for reminders, date checks and spending; default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`) |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
@@ -114,6 +114,8 @@ Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=s
 ## Upgrades
 
 New migrations are applied automatically on start; to apply them separately, run `pitbox -migrate-only`. With systemd, stop the service, replace the binary and start it again. With Docker, see [Portainer](#portainer).
+
+**`APP_SKU_SEARCH_URL` now needs `{q}`.** Older versions appended the part number to a URL ending in `=`; this one puts it in place of `{q}` and refuses to start without one. If you set it (in `.env` or the stack's variables), add `{q}` at the end, e.g. `APP_SKU_SEARCH_URL=https://www.google.com/search?q={q}`. The start-up error says the same. Left unset, the new default already has it.
 
 ## Health check
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { chromium, expect, test, type Page } from "@playwright/test";
 
 // One realistic walk through the app, using the inventory from the
 // original request. Tests run in order and build on each other.
@@ -419,6 +419,107 @@ test("switch between light and dark theme", async ({ page }) => {
   await page.reload();
   await expect(html).not.toHaveAttribute("data-theme");
   await expect(page.getByRole("button", { name: "Switch to the dark theme" })).toBeVisible();
+});
+
+test("Back shows the theme chosen on the next page", async ({ page, browserName }, testInfo) => {
+  // Back shows the page as it was left, from the page cache or the HTTP
+  // cache, with the theme it had then; it must switch to the one chosen.
+  const check = async (p: Page, fromPageCache: boolean) => {
+    await p.emulateMedia({ colorScheme: "light" });
+    await p.goto("/stock");
+    await p.evaluate(() => {
+      window.addEventListener("pageshow", (e) => { (window as any).fromCache = e.persisted; });
+    });
+    await p.goto("/");
+    await p.getByRole("button", { name: "Switch to the dark theme" }).click();
+    await expect(p.locator("html")).toHaveAttribute("data-theme", "dark");
+    await p.goBack({ waitUntil: "commit" });
+    await expect(p).toHaveURL(/\/stock$/);
+    if (fromPageCache) expect(await p.evaluate(() => (window as any).fromCache)).toBe(true);
+    await expect(p.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(p.locator('meta[name="color-scheme"]')).toHaveAttribute("content", "dark");
+
+    // And back to following the system.
+    await p.goForward({ waitUntil: "commit" });
+    await p.getByRole("button", { name: "Switch to the light theme" }).click();
+    await expect(p.locator("html")).not.toHaveAttribute("data-theme");
+    await p.goBack({ waitUntil: "commit" });
+    await expect(p.locator("html")).not.toHaveAttribute("data-theme");
+  };
+  await check(page, false);
+
+  // Playwright turns Chromium's page cache off, and its headless shell
+  // has none; this full Chromium has it on.
+  test.skip(browserName !== "chromium");
+  const browser = await chromium.launch({ channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] });
+  try {
+    const context = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
+    await check(await context.newPage(), true);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
+  await page.goto("/stock");
+  const copy = page.getByRole("link", { name: "Copy as text" });
+  for (const how of [{ modifiers: ["ControlOrMeta" as const] }, { button: "middle" as const }]) {
+    const opened = context.waitForEvent("page");
+    await copy.click(how);
+    const tab = await opened;
+    await tab.waitForLoadState();
+    expect(tab.url()).toContain("/stock/export.txt");
+    await expect(tab.locator("body")).toContainText("Silkolene 15W50 PRO 4 XP");
+    await tab.close();
+  }
+  await expect(page).toHaveURL(/\/stock$/);
+  await expect(copy).not.toHaveAttribute("data-copied");
+});
+
+test("replaced photos show their thumbnails in Recently deleted", async ({ page }) => {
+  // Three photos of one item, in different colours.
+  const png = async (color: string) => Buffer.from(await page.evaluate((c) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const g = canvas.getContext("2d")!;
+    g.fillStyle = c;
+    g.fillRect(0, 0, 64, 64);
+    return canvas.toDataURL("image/png").split(",")[1];
+  }, color), "base64");
+  await page.goto("/stock");
+  await page.locator(".item-row a.item-name").filter({ hasText: "Hiflofiltro" }).click();
+  const item = page.url();
+  for (const [i, color] of ["#d32f2f", "#388e3c", "#1976d2"].entries()) {
+    const file = { name: `p${i}.png`, mimeType: "image/png", buffer: await png(color) };
+    await page.evaluate(() => { (window as any).before = true; });
+    await page.locator('input[type="file"][name="photo"]').setInputFiles(file); // sends itself
+    await page.waitForFunction(() => !(window as any).before); // the page after the upload
+    await expect(page).toHaveURL(item);
+    await expect(page.locator(".flash-success")).toContainText(i === 0 ? "Photo saved" : "Photo replaced");
+  }
+  // Undo the last replace: the second photo is back, the third in the trash.
+  await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Restored the photo of Hiflofiltro Oil Filter. The newer photo is in Recently deleted.");
+
+  await page.goto("/trash");
+  const photos = page.locator("li").filter({ hasText: "Photo: Hiflofiltro Oil Filter (replaced)" });
+  await expect(photos).toHaveCount(2);
+  const thumbs = photos.locator("img.thumb");
+  await expect(thumbs).toHaveCount(2);
+  const colours = [];
+  for (const img of await thumbs.all()) {
+    await expect(img).toHaveJSProperty("complete", true);
+    expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+    colours.push(await img.evaluate((el: HTMLImageElement) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      c.getContext("2d")!.drawImage(el, 0, 0, 1, 1);
+      return Array.from(c.getContext("2d")!.getImageData(0, 0, 1, 1).data.slice(0, 3));
+    }));
+  }
+  // Newest first: the third (blue), then the first (red).
+  expect(colours[0][2]).toBeGreaterThan(colours[0][0]);
+  expect(colours[1][0]).toBeGreaterThan(colours[1][2]);
 });
 
 test("no page scrolls sideways", async ({ page }) => {

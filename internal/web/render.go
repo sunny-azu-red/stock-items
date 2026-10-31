@@ -156,11 +156,7 @@ func (s *Server) funcs() template.FuncMap {
 		// skuSearch links a part number to the configured search engine,
 		// with the configured prefix (e.g. "site:de"), if any, added to the query.
 		"skuSearch": func(code string) template.URL {
-			q := code
-			if s.skuSearchPrefix != "" {
-				q += " " + s.skuSearchPrefix
-			}
-			return template.URL(s.skuSearch + url.QueryEscape(q))
+			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code))
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },
@@ -313,6 +309,24 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 
 // searchTitle says where part number links search: "Search on
 // google.com (site:de)".
+// skuSearchURL is the search link of a part number: the number (and the
+// prefix, if any) escaped and put in place of the {q} in base (New refuses
+// a base without exactly one). In the query it is query-escaped, so "A+B"
+// and "A&B=C" stay one value; in the path or the fragment it is
+// path-escaped, so "12/34" stays one segment.
+func skuSearchURL(base, prefix, code string) string {
+	q := code
+	if prefix != "" {
+		q += " " + prefix
+	}
+	before, after, _ := strings.Cut(base, "{q}")
+	query, _, _ := strings.Cut(before, "#")
+	if strings.Contains(query, "?") && len(query) == len(before) {
+		return before + url.QueryEscape(q) + after
+	}
+	return before + url.PathEscape(q) + after
+}
+
 func searchTitle(searchURL, prefix string) string {
 	title := "Search for this part number"
 	if u, err := url.Parse(searchURL); err == nil && u.Host != "" {

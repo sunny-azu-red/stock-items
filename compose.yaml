@@ -19,7 +19,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
       APP_CURRENCY: ${APP_CURRENCY:-EUR}
-      APP_SKU_SEARCH_URL: ${APP_SKU_SEARCH_URL:-https://www.google.com/search?q=}
+      APP_SKU_SEARCH_URL: ${APP_SKU_SEARCH_URL:-https://www.google.com/search?q={q}}
       APP_SKU_SEARCH_PREFIX: ${APP_SKU_SEARCH_PREFIX:-}
       # When "today" starts for reminders, date checks and spending. Unset,
       # the app uses the Docker host's zone (from the mount below).

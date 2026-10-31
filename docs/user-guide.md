@@ -74,6 +74,16 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 
 If you open a form, then change or delete the same thing in another tab (or someone else does), saving the first form changes nothing. It says *"This item was changed since you opened this (another tab or person). Reload to see the latest, then make your change again."* and keeps what you typed, so you can copy it before you click **Reload**. If it was deleted meanwhile, the message says so and links to Recently deleted. Buttons such as Delete, Archive, Restore (of something archived), Bought and the shopping list's remove behave the same: nothing happens, and you see the latest. Stock changes (+/-, purchases, uses, counts) and odometer readings don't count as changes here, so an open edit form still saves after them. A form opened before something was deleted and restored with Undo is out of date too: reload it.
 
+## A save that seems stuck
+
+When you press Save (or Add to stock, Take from stock, …), the button says **Saving…** until the next page opens. On a slow or patchy connection that can take a while. If you're still on the same page after 15 seconds, the button says **Still saving… try again**, and you can press it again. That's safe: every form is saved at most once.
+
+- If the first save didn't get through, pressing it again saves it now.
+- If the first save did go through (only its answer got lost), nothing is saved again: no second service, no second purchase, no parts taken twice. You go to what was saved, with the message *"This was saved already (the first Save went through), so it wasn't saved again."* Anything you changed in the form while you waited was **not** applied, so check the record and edit it if something should differ.
+- The same goes for a double click, or for going Back to a form you saved and pressing Save again. To add the same thing twice on purpose (two purchases of the same amount), open the form again for the second one.
+- If what you saved was deleted since, the message says so and takes you to Recently deleted. After undoing a Bought, its old form is out of date: reload it to buy again.
+- A form opened before Pitbox was updated to this behaviour isn't saved: it comes back with what you typed and *"This form was opened before Pitbox was updated, so it was not saved. Check it and save again."* Press Save once more.
+
 ## Tips
 
 - Decimals take a comma or a point: `1,5` and `1.5` are the same. Don't group thousands: a price of `1.500` or `1,500` is refused, because it could mean 1500 or 1.5, and so is a count in pieces, ml or g written that way (`1,500 ml`). Type `1500` or `1.5`. In L and kg, `1,500` is 1.5. The app prints thousands with a narrow space (`12 000 km`), which reads the same either way, and never shows three decimals: 1.5 L and 1.75 L, but 1 475 ml, and 1.23 g for 1.234 g.

@@ -151,6 +151,7 @@ type kitForm struct {
 	Stored                           string // the saved name while editing, for the heading
 	Version                          int    // as the edit form was opened (see itemForm)
 	Stale                            *staleNote
+	FormKey                          string // see itemForm
 	Errors                           stock.Errors
 }
 
@@ -199,12 +200,13 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	f := kitForm{
 		Name: formText(r, "name"), IntervalKm: formText(r, "interval_km"), IntervalMonths: formText(r, "interval_months"),
-		Notes: formText(r, "notes"), Version: parseVersion(r), Errors: stock.Errors{},
+		Notes: formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
+	checkFormKey(f.Errors, f.FormKey)
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID = *id
 	}
-	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Notes: f.Notes, Version: f.Version}
+	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
 	if in.IntervalKm, err = parseOptInt(f.IntervalKm); err != nil {
 		f.Errors.Add("interval_km", err.Error())
 	}
@@ -218,6 +220,8 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	return f, in, nil
 }
+
+func kitPath(id int64) string { return fmt.Sprintf("/kits/%d", id) }
 
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
@@ -242,6 +246,9 @@ func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatKit, kitPath, "/services"); done || err != nil {
+		return err
+	}
 	f, in, err := s.parseKitForm(r)
 	if err != nil {
 		return err
@@ -249,7 +256,10 @@ func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		id, err := s.store.CreateKit(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Created kit "+in.Name)
+			s.redirect(w, r, kitPath(id), "Created kit "+in.Name)
+			return nil
+		}
+		if s.savedAlready(w, r, err, kitPath, "/services") {
 			return nil
 		}
 		if !formConflict(f.Errors, err) {
@@ -279,6 +289,10 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Saved already comes first: the first save moved the version on.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatKit, kitPath, "/services"); done || err != nil {
+		return err
+	}
 	f, in, err := s.parseKitForm(r)
 	if err != nil {
 		return err
@@ -287,7 +301,10 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateKit(r.Context(), id, in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Saved kit "+in.Name)
+			s.redirect(w, r, kitPath(id), "Saved kit "+in.Name)
+			return nil
+		}
+		if s.savedAlready(w, r, err, kitPath, "/services") {
 			return nil
 		}
 		if f.Stale = staleForm(err, fmt.Sprintf("/kits/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {

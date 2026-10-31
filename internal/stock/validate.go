@@ -80,6 +80,9 @@ type ItemInput struct {
 	// Version is the item's version as the edit form was opened (see
 	// Item.Version); unused on create.
 	Version int
+	// FormKey is the form's one-time key: a repeat of a save that went
+	// through does nothing (see store.AlreadySavedError). "" for none.
+	FormKey string
 }
 
 // Bought reports whether a price or shop was given for the starting stock.
@@ -230,7 +233,8 @@ type VehicleInput struct {
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
-	Version      int // as the edit form was opened; unused on create
+	Version      int    // as the edit form was opened; unused on create
+	FormKey      string // see ItemInput.FormKey
 }
 
 // Normalize trims text fields and applies defaults.
@@ -294,6 +298,7 @@ type MovementInput struct {
 	// ExpiresOn is the best-before date of a purchased batch. When set, it
 	// replaces the item's expiry date.
 	ExpiresOn *time.Time
+	FormKey   string // see ItemInput.FormKey
 }
 
 // Validate checks the input.
@@ -349,7 +354,8 @@ type MovementEdit struct {
 	Supplier   string
 	Note       string
 	OccurredOn *time.Time
-	Version    int // the movement's version as the form was opened
+	Version    int    // the movement's version as the form was opened
+	FormKey    string // see ItemInput.FormKey
 }
 
 // ApplyEdit returns m corrected by e. A kind without a price and shop
@@ -417,7 +423,8 @@ type KitInput struct {
 	IntervalMonths *int
 	Notes          string
 	Lines          []KitLineInput
-	Version        int // as the edit form was opened; unused on create
+	Version        int    // as the edit form was opened; unused on create
+	FormKey        string // see ItemInput.FormKey
 }
 
 // KitLineInput is one item of a kit.
@@ -481,7 +488,8 @@ type ServiceInput struct {
 	Notes       string
 	LaborCost   *float64
 	Parts       []KitLineInput
-	Version     int // as the edit form was opened; unused on create
+	Version     int    // as the edit form was opened; unused on create
+	FormKey     string // see ItemInput.FormKey
 }
 
 // Normalize trims fields and merges duplicate parts.
@@ -531,6 +539,7 @@ type ShoppingInput struct {
 	Quantity *float64
 	Unit     Unit // of Quantity; for a linked item, the item's unit
 	Note     string
+	FormKey  string // see ItemInput.FormKey
 }
 
 // Normalize trims text fields and defaults the unit to pieces.

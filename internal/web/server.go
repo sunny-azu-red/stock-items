@@ -175,6 +175,8 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 		err := fn(w, r)
 		switch {
 		case err == nil:
+		case s.savedAlready(w, r, err, nil, s.back(r, "/")):
+			// A repeated form no handler expected: nothing was saved again.
 		case errors.As(err, new(*store.StaleError)) && r.Method == http.MethodPost:
 			// A form or button no handler expected to go stale: say so where
 			// the user was, as for a conflict (a gone record also matches

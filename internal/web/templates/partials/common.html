@@ -19,6 +19,11 @@
      deleted since it was opened: *staleNote, or nil for none. */}}
 {{define "stale"}}{{with .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} {{.Message}}{{with .Href}} <a href="{{.}}">{{$.Link}}</a>{{end}}</div>{{end}}{{end}}
 
+{{/* The one-time key of a form that creates or changes something (see
+     store.AlreadySavedError): the posted key when the form comes back with
+     errors, else a new one. */}}
+{{define "form-key"}}<input type="hidden" name="form_key" value="{{or . newFormKey}}">{{end}}
+
 {{define "empty"}}<div class="empty">{{icon .Icon}}<h2>{{.Title}}</h2>{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
 
 {{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}

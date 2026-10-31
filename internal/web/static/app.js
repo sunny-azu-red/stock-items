@@ -42,6 +42,33 @@
   // A double click on "Save" must not log a service (and take its parts from
   // stock) twice. Runs after the confirmation above. htmx forms (the quick
   // -/+ buttons) are meant to be clicked repeatedly and are left alone.
+  //
+  // A form with a one-time key (form_key) says "Saving…" on its button. Still
+  // on the page after 15 s (a slow or lost connection), it unlocks and says
+  // "Still saving… try again": the server saves a key at most once, so a
+  // retry of a save that went through only leads to what it saved.
+  var retryAfter = 15000;
+  var pending = []; // [form, button, timer, original button HTML]
+  function submitButton(form, submitter) {
+    // Enter "clicks" the hidden plain-save button of the new item form.
+    if (submitter && !submitter.classList.contains("sr-only")) return submitter;
+    return form.querySelector('button[type="submit"].btn-primary') ||
+      form.querySelector('button[type="submit"]:not(.sr-only)');
+  }
+  function label(btn, text) {
+    var icon = btn.querySelector("svg");
+    btn.textContent = "";
+    if (icon) btn.append(icon, " ");
+    btn.append(text);
+  }
+  function settle(form) {
+    pending = pending.filter(function (p) {
+      if (p[0] !== form) return true;
+      clearTimeout(p[2]);
+      if (p[1]) p[1].innerHTML = p[3];
+      return false;
+    });
+  }
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (e.defaultPrevented || form.method !== "post" || form.hasAttribute("hx-post") ||
@@ -51,12 +78,26 @@
       return;
     }
     form.dataset.submitting = "1";
+    if (!form.querySelector('input[name="form_key"]')) return;
+    var btn = submitButton(form, e.submitter);
+    var original = btn ? btn.innerHTML : "";
+    pending.forEach(function (p) {
+      if (p[0] === form && p[1] === btn) original = p[3]; // a retry: keep the first label
+    });
+    settle(form);
+    if (btn) label(btn, "Saving…");
+    var timer = setTimeout(function () {
+      delete form.dataset.submitting;
+      if (btn) label(btn, "Still saving… try again");
+    }, retryAfter);
+    pending.push([form, btn, timer, original]);
   });
   // Coming back with the back button restores the page as it was left.
   window.addEventListener("pageshow", function () {
     document.querySelectorAll("form[data-submitting]").forEach(function (f) {
       delete f.dataset.submitting;
     });
+    pending.slice().forEach(function (p) { settle(p[0]); });
   });
 
   // Typing in a form (other than the stock filters) marks the page as

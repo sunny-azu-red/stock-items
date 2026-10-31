@@ -164,6 +164,7 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },
+		"newFormKey":     newFormKey,
 		// photoLimit is checked by app.js before a photo is uploaded: the
 		// server's refusal of a larger one can arrive while the browser is
 		// still sending, and show as a connection error instead.

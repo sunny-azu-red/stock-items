@@ -11,6 +11,7 @@
 </div>
 <form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
   <input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$f.Version}}">
+  {{template "form-key" $f.FormKey}}
   {{/* What the change was, to show the form again if it is deleted meanwhile. */}}
   <input type="hidden" name="item_id" value="{{$m.ItemID}}"><input type="hidden" name="kind" value="{{$m.Kind}}">
   {{template "stale" $f.Stale}}

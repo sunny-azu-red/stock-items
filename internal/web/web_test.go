@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 	"github.com/sunny-azu-red/stock-items/internal/testdb"
@@ -26,12 +28,14 @@ import (
 type testApp struct {
 	t     *testing.T
 	store *store.Store
+	pool  *pgxpool.Pool
 	h     http.Handler
 }
 
 func newApp(t *testing.T) *testApp {
 	t.Helper()
-	st := store.New(testdb.New(t))
+	pool := testdb.New(t)
+	st := store.New(pool)
 	srv, err := New(st, Options{
 		Currency: "EUR", Version: "test",
 		SKUSearchURL: "https://duckduckgo.com/?q=", SKUSearchPrefix: "site:de",
@@ -41,7 +45,7 @@ func newApp(t *testing.T) *testApp {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &testApp{t: t, store: st, h: srv.Handler()}
+	return &testApp{t: t, store: st, pool: pool, h: srv.Handler()}
 }
 
 func (a *testApp) do(req *http.Request) *httptest.ResponseRecorder {
@@ -54,7 +58,16 @@ func (a *testApp) get(path string) *httptest.ResponseRecorder {
 	return a.do(httptest.NewRequest(http.MethodGet, path, nil))
 }
 
+// post sends form as a page opened just now would: with a new one-time
+// form key, unless form has one (an empty one to send none).
 func (a *testApp) post(path string, form url.Values, headers ...string) *httptest.ResponseRecorder {
+	if !form.Has("form_key") {
+		sent := url.Values{"form_key": {newFormKey()}}
+		for k, v := range form {
+			sent[k] = v
+		}
+		form = sent
+	}
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for i := 0; i+1 < len(headers); i += 2 {

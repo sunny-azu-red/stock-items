@@ -50,7 +50,8 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		in.Unit = stock.UnitPiece
 	}
 	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	// The list is where its forms return to, whatever became of the entry.
+	err := s.inFormTx(ctx, in.FormKey, "", &id, func(tx pgx.Tx) error {
 		if in.ItemID != nil {
 			// The item's entry before the item, like MarkBought, so the two
 			// can't deadlock.
@@ -161,9 +162,14 @@ func trashShopping(ctx context.Context, tx pgx.Tx, id int64) (int64, error) {
 // (purchase.ItemID is filled in from the entry). When less was bought than
 // the entry asks for, the entry stays on the list with the rest; left is
 // that remaining quantity (0 when the entry was removed). An entry changed
-// since version fails with a *StaleError.
+// since version fails with a *StaleError. The purchase's FormKey is the
+// Bought form's one-time key; undoing the purchase frees it.
 func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase *stock.MovementInput) (left float64, trashID int64, err error) {
-	err = s.inTx(ctx, func(tx pgx.Tx) error {
+	var key string
+	if purchase != nil {
+		key = purchase.FormKey
+	}
+	err = s.inFormTx(ctx, key, "", nil, func(tx pgx.Tx) error {
 		var itemID *int64
 		var qty *float64
 		var have int
@@ -193,7 +199,7 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 			if qty != nil {
 				left = math.Round((*qty-in.Delta)*1000) / 1000
 			}
-			if trashID, err = putBought(ctx, tx, id, before, movementID); err != nil {
+			if trashID, err = putBought(ctx, tx, id, before, movementID, in.FormKey); err != nil {
 				return err
 			}
 		} else if trashID, err = trashShopping(ctx, tx, id); err != nil {
@@ -215,8 +221,9 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 }
 
 // putBought records a purchase made by ticking an entry off, with the
-// entry as it was before, so it can be undone.
-func putBought(ctx context.Context, tx pgx.Tx, entryID int64, before json.RawMessage, movementID int64) (int64, error) {
+// entry as it was before, so it can be undone, and the key of the form
+// that made it, which undoing it frees.
+func putBought(ctx context.Context, tx pgx.Tx, entryID int64, before json.RawMessage, movementID int64, formKey string) (int64, error) {
 	var title string
 	err := tx.QueryRow(ctx, `
 		SELECT btrim(i.brand || ' ' || i.name) FROM shopping_entries e JOIN items i ON i.id = e.item_id WHERE e.id = $1`, entryID).Scan(&title)
@@ -224,7 +231,11 @@ func putBought(ctx context.Context, tx pgx.Tx, entryID int64, before json.RawMes
 		return 0, err
 	}
 	m, _ := json.Marshal(movementID)
-	return putTrash(ctx, tx, TrashBought, trashLabel("Bought", title), trashPayload{"shopping_entries": before, "movement_id": m})
+	p := trashPayload{"shopping_entries": before, "movement_id": m}
+	if formKey != "" {
+		p["form_key"], _ = json.Marshal(formKey)
+	}
+	return putTrash(ctx, tx, TrashBought, trashLabel("Bought", title), p)
 }
 
 // ItemsNamed returns the items, archived ones included, whose name or

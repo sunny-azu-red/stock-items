@@ -509,6 +509,60 @@ test("an edit saved in another tab first is not overwritten", async ({ page, con
   await other.close();
 });
 
+test("a save that seems stuck can be tried again, and saves once", async ({ page, context }) => {
+  test.setTimeout(60_000); // "try again" comes after 15 s, waited for real
+  // Chromium holds DevTools commands to a page while it navigates, so the
+  // form is opened in a window of this page, which watches it and clicks
+  // its button while the save is held.
+  await page.goto("/services");
+  const [form] = await Promise.all([
+    context.waitForEvent("page"),
+    page.evaluate(() => { (window as any).held = window.open("/services/new"); }),
+  ]);
+  await form.waitForLoadState();
+  await form.getByLabel("Vehicle", { exact: true }).selectOption({ label: "KTM 390" });
+  await form.getByLabel("What was done").fill("Chain clean (retried)");
+
+  // The first save is held on its way to the server. Once let go it is
+  // saved, and only then does the retry arrive, as after a slow network.
+  let release = () => {};
+  const released = new Promise<void>((r) => (release = r));
+  let firstSaved = () => {};
+  const saved = new Promise<void>((r) => (firstSaved = r));
+  let posts = 0;
+  await context.route("**/services", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    if (++posts === 1) {
+      await released;
+      // The browser gave up on it for the retry; it arrives anyway.
+      await page.request.fetch(route.request(), { maxRedirects: 0 });
+      firstSaved();
+      await route.abort().catch(() => {});
+      return;
+    }
+    await saved;
+    await route.continue();
+  });
+
+  const save = 'form[action="/services"] button.btn-primary';
+  const label = () => page.evaluate((s) => (window as any).held.document.querySelector(s).textContent.trim(), save);
+  const click = () => page.evaluate((s) => (window as any).held.document.querySelector(s).click(), save);
+  await click();
+  await expect.poll(label).toBe("Saving…");
+  await expect.poll(label, { timeout: 20_000 }).toBe("Still saving… try again");
+  await click();
+  await expect.poll(label).toBe("Saving…");
+  release();
+
+  await expect(form).toHaveURL(/\/services\/\d+$/);
+  await expect(form.locator(".flash-success")).toContainText("This was saved already");
+  expect(posts).toBe(2);
+  await context.unroute("**/services");
+  await form.close();
+  await page.goto("/services");
+  await expect(page.getByRole("link", { name: "Chain clean (retried)" })).toHaveCount(1);
+});
+
 // Last, so the item it adds doesn't change what the tests above see.
 test("Enter in the new item form saves the item", async ({ page }) => {
   await page.goto("/items/new");

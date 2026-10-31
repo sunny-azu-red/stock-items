@@ -75,7 +75,8 @@ func (s *Store) AddMovement(ctx context.Context, in stock.MovementInput) error {
 	if errs := in.Validate(); errs.Any() {
 		return errs
 	}
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	// The item's page is where its form returns to.
+	return s.inFormTx(ctx, in.FormKey, WhatItem, &in.ItemID, func(tx pgx.Tx) error {
 		_, err := applyStockChange(ctx, tx, in)
 		return err
 	})
@@ -100,10 +101,10 @@ func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (i
 // records the difference as a correction. The difference is worked out
 // under the row lock, so a change made by someone else in the meantime is
 // not undone. It returns the recorded change (0 when the stock already
-// matched).
-func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string, on time.Time) (float64, error) {
+// matched). formKey is the count form's one-time key (see inFormTx).
+func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string, on time.Time, formKey string) (float64, error) {
 	var delta float64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inFormTx(ctx, formKey, WhatItem, &itemID, func(tx pgx.Tx) error {
 		var qty float64
 		if err := tx.QueryRow(ctx, `SELECT quantity FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&qty); err != nil {
 			return notFound(err)
@@ -255,7 +256,7 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 // effect, so the ledger still adds up. A stock change changed or deleted
 // since e.Version fails with a *StaleError.
 func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEdit) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.inFormTx(ctx, e.FormKey, WhatMovement, &id, func(tx pgx.Tx) error {
 		m, err := lockVersionedMovement(ctx, tx, id, e.Version)
 		if err != nil {
 			return err

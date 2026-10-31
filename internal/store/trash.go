@@ -637,6 +637,17 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	if err := json.Unmarshal(p["movement_id"], &movementID); err != nil {
 		return 0, err
 	}
+	// Undone, the purchase was never made: the Bought form it came from may
+	// be saved again (if still current), rather than answer "saved already".
+	if raw, ok := p["form_key"]; ok {
+		var key string
+		if err := json.Unmarshal(raw, &key); err != nil {
+			return 0, err
+		}
+		if err := freeFormKey(ctx, tx, key); err != nil {
+			return 0, err
+		}
+	}
 	entryID, itemID := e.int64("id"), e.int64("item_id")
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
 		return 0, err

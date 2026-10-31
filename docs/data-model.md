@@ -10,6 +10,7 @@ vehicles ─┬─< item_vehicles >─┬─ items ─┬─< item_skus
           └─< service_records ────────────────────────────────────────┘
 items ─< shopping_entries (or free text)
 trash (JSON snapshots of deleted rows; no foreign keys)
+form_submissions (one-time form keys; no foreign keys)
 ```
 
 ## Tables
@@ -55,6 +56,8 @@ trash (JSON snapshots of deleted rows; no foreign keys)
 
 **version** (on `items`, `vehicles`, `service_kits`, `service_records`, `stock_movements`, `shopping_entries`; migration 00010): counts the changes to what the record's edit form or page shows, starting at 1. Edit forms and record buttons post it back, and the store refuses a stale one with `StaleError`. It moves on with an edit, archive or restore, a purchase's best-before date on the item, and any change to a shopping entry's quantity or note; it doesn't with stock quantity or odometer changes. SKUs, tags, kit lines and a service's parts count as part of their parent. A row restored from the trash gets its snapshot's version plus one (snapshots from before 00010 get 1). The migration's Down also strips `version` from trash snapshots, so the code before it can still restore them.
 
+**form_submissions** (migration 00011): the one-time keys of forms that were saved. `key` is the form's random key (32 hex characters), `result_id` the record the save made or changed (an item for the item page's stock forms; none for the shopping list), `created_at` when. Each create or edit claims its form's key as the first statement of its transaction (`store.inFormTx`): a key already there means the form was saved already, and nothing is done again. Undoing a Bought deletes its key, which the `bought` snapshot keeps as `form_key`, so its form isn't "saved already" afterwards. Claims delete keys older than a day (`created_at < now() - interval '1 day'`, an instant, so no time zone is involved), with `SKIP LOCKED` so they never wait for each other. The migration's Down drops the table and strips `form_key` from trash snapshots.
+
 ## Invariants
 
 1. `items.quantity` always equals `sum(stock_movements.delta)` for the item. Every change goes through `store.applyMovement` inside a transaction, and `store_test.go` asserts this after each scenario. The exceptions change recorded movements together with their effect, so the sum still holds:
@@ -67,6 +70,7 @@ trash (JSON snapshots of deleted rows; no foreign keys)
 5. Deleting a service deletes its `service` movements and puts the quantities back on stock. Editing a service (`store.UpdateService`) does the same for its old parts, takes the new ones, and redoes its odometer change, in one transaction; its vehicle can't change.
 6. A single movement other than `service` can be edited (amount, price, shop, date, note) or deleted; the item's quantity moves by the difference. The change is refused if the quantity would go below zero. A `correction` is edited as a signed change (added or took away, and how much), and `initial` stock that gets a price or shop becomes a `purchase` (`stock.ApplyEdit`).
 7. A form or button never acts on a record that changed or was deleted since it was shown: the record's `version` is compared under the row's lock.
+8. A create or edit form is saved at most once (within a day): its key is claimed in the transaction that saves it, before anything else, and a second claim of the same key waits for the first and then does nothing.
 
 ## Derived values (not stored)
 

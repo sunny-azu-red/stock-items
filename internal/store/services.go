@@ -101,7 +101,7 @@ func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, 
 // it had before is kept, so DeleteService can put it back.
 func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64, error) {
 	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func partIDs(parts []stock.KitLineInput) []int64 {
 // still adds up. A service changed or deleted since in.Version fails with
 // a *StaleError.
 func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		var kitWas *int64
 		var version int
 		err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id, version FROM service_records WHERE id = $1 FOR UPDATE`, id).

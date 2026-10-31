@@ -19,6 +19,7 @@ type movementEditForm struct {
 	Back                                                       string // page to return to
 	Version                                                    int    // as the form was opened (see itemForm)
 	Stale                                                      *staleNote
+	FormKey                                                    string // see itemForm
 	Errors                                                     stock.Errors
 }
 
@@ -102,7 +103,7 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
 		Removed: formText(r, "direction") == "removed", Back: postedBack(r, movementBack(m)),
-		Version: parseVersion(r), Errors: stock.Errors{}, Stale: staleForm(gone, ""),
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{}, Stale: staleForm(gone, ""),
 	}
 	if f.Stale == nil {
 		return gone
@@ -138,6 +139,17 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Saved already comes first: the first save moved the version on. A
+	// repeat returns where the form does, as the first save did.
+	posted := stock.Movement{}
+	if id := parseOptID(formText(r, "item_id")); id != nil {
+		posted.ItemID = *id
+	}
+	back := postedBack(r, movementBack(posted))
+	page := func(int64) string { return back }
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatMovement, page, back); done || err != nil {
+		return err
+	}
 	m, err := s.loadMovement(r)
 	if s.movementRefused(w, r, m, err) {
 		return nil
@@ -153,9 +165,10 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
 		Removed: formText(r, "direction") == "removed", Back: postedBack(r, itemPath(m.ItemID)),
-		Version: parseVersion(r), Errors: stock.Errors{},
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
-	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note, Removed: f.Removed, Version: f.Version}
+	checkFormKey(f.Errors, f.FormKey)
+	e := stock.MovementEdit{Supplier: f.Supplier, Note: f.Note, Removed: f.Removed, Version: f.Version, FormKey: f.FormKey}
 	if q, err := stock.ParseAmount(f.Amount, m.ItemUnit, f.AmountUnit); err != nil {
 		f.Errors.Add("amount", amountError(err, m.ItemUnit, "Enter an amount"))
 	} else {
@@ -175,6 +188,9 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 		err := s.store.UpdateMovement(r.Context(), m.ID, e)
 		if err == nil {
 			s.redirect(w, r, f.Back, "Updated the "+changeName(m.Kind))
+			return nil
+		}
+		if s.savedAlready(w, r, err, func(int64) string { return f.Back }, f.Back) {
 			return nil
 		}
 		if f.Stale = staleForm(err, fmt.Sprintf("/movements/%d/edit", m.ID)); f.Stale == nil && !movementConflict(f.Errors, err) {

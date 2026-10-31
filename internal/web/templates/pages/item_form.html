@@ -10,6 +10,7 @@
   {{if and $d.IsNew (not $f.ShoppingID)}}<button class="sr-only" type="submit" tabindex="-1" aria-hidden="true">Save item</button>{{end}}
   {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}"><input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{if $f.ShoppingID}}<input type="hidden" name="shopping_id" value="{{$f.ShoppingID}}">{{end}}
+  {{template "form-key" $f.FormKey}}
   {{with $f.Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
 

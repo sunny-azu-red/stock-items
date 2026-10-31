@@ -26,6 +26,7 @@ type serviceForm struct {
 	Stored      string // the saved title while editing, for the page title
 	Version     int    // as the edit form was opened (see itemForm)
 	Stale       *staleNote
+	FormKey     string // see itemForm
 	Errors      stock.Errors
 }
 
@@ -121,9 +122,10 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	f := serviceForm{
 		PerformedOn: formText(r, "performed_on"), OdometerKm: formText(r, "odometer_km"), Title: formText(r, "title"),
 		Notes: formText(r, "notes"), LaborCost: formText(r, "labor_cost"), KitName: formText(r, "kit_name"),
-		Version: parseVersion(r), Errors: stock.Errors{},
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
-	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, Version: f.Version}
+	checkFormKey(f.Errors, f.FormKey)
+	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID, in.VehicleID = *id, *id
 	}
@@ -171,6 +173,9 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatService, servicePath, "/services"); done || err != nil {
+		return err
+	}
 	f, in, err := s.parseServiceForm(r)
 	if err != nil {
 		return err
@@ -178,7 +183,11 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		id, err := s.store.CreateService(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/services/%d", id), "Logged "+in.Title)
+			s.redirect(w, r, servicePath(id), "Logged "+in.Title)
+			return nil
+		}
+		// Saved by a click before this one: its parts were taken once.
+		if s.savedAlready(w, r, err, servicePath, "/services") {
 			return nil
 		}
 		if !serviceConflict(f, err) {
@@ -187,6 +196,8 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 	return s.renderServiceForm(w, r, http.StatusUnprocessableEntity, f)
 }
+
+func servicePath(id int64) string { return fmt.Sprintf("/services/%d", id) }
 
 func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
@@ -221,6 +232,10 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Saved already comes first: the first save moved the version on.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatService, servicePath, "/services"); done || err != nil {
+		return err
+	}
 	f, in, err := s.parseServiceForm(r)
 	if err != nil {
 		return err
@@ -230,7 +245,10 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 		// The store keeps the service's vehicle, whatever was posted.
 		err := s.store.UpdateService(r.Context(), id, in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/services/%d", id), "Saved "+in.Title)
+			s.redirect(w, r, servicePath(id), "Saved "+in.Title)
+			return nil
+		}
+		if s.savedAlready(w, r, err, servicePath, "/services") {
 			return nil
 		}
 		// Changed or deleted meanwhile: say so, and keep what was typed.

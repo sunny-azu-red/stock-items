@@ -124,7 +124,7 @@ func (s *Store) GetKit(ctx context.Context, id int64) (stock.Kit, error) {
 // CreateKit stores a new kit and returns its id.
 func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error) {
 	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inFormTx(ctx, in.FormKey, WhatKit, &id, func(tx pgx.Tx) error {
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
@@ -146,7 +146,7 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 // UpdateKit replaces a kit's fields and lines. A kit changed since
 // in.Version fails with a *StaleError.
 func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.inFormTx(ctx, in.FormKey, WhatKit, &id, func(tx pgx.Tx) error {
 		// A kit can stay with its archived vehicle, but not move to one.
 		var was int64
 		var version int

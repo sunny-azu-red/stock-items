@@ -35,6 +35,7 @@
     <section class="card">
       <div class="card-head"><h2>{{icon "plus"}} Add to the list</h2></div>
       <form class="card-body form" method="post" action="/shopping" novalidate>
+        {{template "form-key" $d.Form.FormKey}}
         {{template "error-summary" $e}}
         <div class="form-grid">
           <div class="field{{if index $e "item_id"}} has-error{{end}}">

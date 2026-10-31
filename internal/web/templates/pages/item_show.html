@@ -35,7 +35,7 @@
             <div class="muted small">{{with $it.MinQuantity}}keep at least {{qty . $it.Unit}}{{else}}no minimum set{{end}}{{with $d.StockValue}} · worth about {{money .}}{{end}}</div>
           </div>
           {{if not (or $d.OnShopping $it.Archived)}}
-          <form method="post" action="/items/{{$it.ID}}/shopping"><button class="btn" type="submit">{{icon "shopping-cart"}} Add to shopping list</button></form>
+          <form method="post" action="/items/{{$it.ID}}/shopping">{{template "form-key" ""}}<button class="btn" type="submit">{{icon "shopping-cart"}} Add to shopping list</button></form>
           {{end}}
         </div>
       </div>
@@ -114,6 +114,8 @@
 {{define "move-form"}}{{$m := .Move}}{{$e := $m.Errors}}{{$active := eq $m.Kind .Kind}}
 <form class="card-body form" id="panel-{{.Kind}}" role="tabpanel" aria-labelledby="tab-{{.Kind}}" method="post" action="/items/{{.Item.ID}}/movements" {{if .Hidden}}hidden{{end}}>
   <input type="hidden" name="kind" value="{{.Kind}}">
+  {{/* Only the form that came back with errors keeps its key. */}}
+  {{template "form-key" (and $active $m.FormKey)}}
   {{if and $active $e}}{{template "error-summary" $e}}{{end}}
   <div class="form-grid">
     <div class="field{{if and $active (index $e "amount")}} has-error{{end}}">

@@ -170,7 +170,7 @@ func (s *Store) GetItem(ctx context.Context, id int64) (stock.Item, error) {
 // purchase or as "initial" stock (see stock.ItemInput.StartMovement).
 func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, error) {
 	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
 		var err error
 		id, err = createItem(ctx, tx, in)
 		return err
@@ -183,7 +183,7 @@ func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, erro
 // ErrNotFound when the entry is gone or is linked to an existing item.
 func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, in stock.ItemInput) (int64, error) {
 	var id int64
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
 		var itemID *int64
 		if err := tx.QueryRow(ctx, `SELECT item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&itemID); err != nil {
 			return notFound(err)
@@ -230,7 +230,7 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 // correction is dated on. An item changed since in.Version fails with a
 // *StaleError.
 func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on time.Time) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
 		var qty float64
 		var unit stock.Unit
 		var archived bool

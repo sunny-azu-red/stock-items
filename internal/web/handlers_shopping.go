@@ -15,6 +15,7 @@ import (
 type shoppingForm struct {
 	ItemID                         int64
 	FreeText, Quantity, Note, Unit string
+	FormKey                        string // see itemForm
 	Errors                         stock.Errors
 }
 
@@ -70,8 +71,12 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Unit: formText(r, "quantity_unit"),
-		Note: formText(r, "note"), Errors: stock.Errors{}}
-	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note}
+		Note: formText(r, "note"), FormKey: parseFormKey(r), Errors: stock.Errors{}}
+	if done, err := s.savedBefore(w, r, f.FormKey, "", nil, "/shopping"); done || err != nil {
+		return err
+	}
+	checkFormKey(f.Errors, f.FormKey)
+	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note, FormKey: f.FormKey}
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		it, err := s.store.GetItem(r.Context(), *id)
 		if err != nil {
@@ -112,6 +117,9 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		_, err := s.store.AddShopping(r.Context(), in)
 		if err == nil {
 			s.redirect(w, r, "/shopping", "Added to the shopping list")
+			return nil
+		}
+		if s.savedAlready(w, r, err, nil, "/shopping") {
 			return nil
 		}
 		if !errors.Is(err, store.ErrNotFound) {
@@ -258,6 +266,10 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Before the entry is looked at: the first save ticked it off.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), "", nil, "/shopping"); done || err != nil {
+		return err
+	}
 	e, err := s.store.GetShopping(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		s.shoppingGone(w, r)
@@ -288,9 +300,10 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	f := movementForm{
 		Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"), TotalPrice: formText(r, "total_price"),
 		Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"), Note: formText(r, "note"),
-		ExpiresOn: formText(r, "expires_on"), Version: parseVersion(r), Errors: stock.Errors{},
+		ExpiresOn: formText(r, "expires_on"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
-	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note}
+	checkFormKey(f.Errors, f.FormKey)
+	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note, FormKey: f.FormKey}
 	if q, err := stock.ParseAmount(f.Amount, e.ItemUnit, f.AmountUnit); err != nil || q <= 0 {
 		f.Errors.Add("amount", amountError(err, e.ItemUnit, "Enter how much you bought"))
 	} else {
@@ -320,6 +333,8 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
 			}
 			s.redirectUndo(w, r, "/shopping", msg, trashID)
+			return nil
+		} else if s.savedAlready(w, r, err, nil, "/shopping") {
 			return nil
 		} else if errors.Is(err, store.ErrNotFound) {
 			s.shoppingGone(w, r)

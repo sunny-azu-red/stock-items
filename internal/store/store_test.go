@@ -579,10 +579,10 @@ func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 		t.Errorf("after edited quantity: %v, want 8", it.Quantity)
 	}
 
-	if d, err := s.CorrectStock(ctx, id, 8, "count", time.Now()); err != nil || d != 0 {
+	if d, err := s.CorrectStock(ctx, id, 8, "count", time.Now(), ""); err != nil || d != 0 {
 		t.Errorf("CorrectStock to same = %v, %v", d, err)
 	}
-	if d, err := s.CorrectStock(ctx, id, 6, "count", time.Now()); err != nil || d != -2 {
+	if d, err := s.CorrectStock(ctx, id, 6, "count", time.Now(), ""); err != nil || d != -2 {
 		t.Errorf("CorrectStock to 6 = %v, %v", d, err)
 	}
 	// Deltas are rounded to the three decimals the ledger keeps.
@@ -1299,7 +1299,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 
 	// Counts and edited quantities are dated by the caller.
 	counted := time.Date(2029, 7, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := s.CorrectStock(ctx, id, 10, "", counted); err != nil {
+	if _, err := s.CorrectStock(ctx, id, 10, "", counted, ""); err != nil {
 		t.Fatal(err)
 	}
 	edited := time.Date(2029, 7, 2, 0, 0, 0, 0, time.UTC)
@@ -2350,7 +2350,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	_, _, delErr := s.DeleteMovement(ctx, use, cur(t, s, store.WhatMovement, use))
 	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
 	_, newSvcErr := s.CreateService(ctx, service(1))
-	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now())
+	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now(), "")
 	for what, err := range map[string]error{
 		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 1}),
 		"correct":         correctErr,
@@ -2698,7 +2698,7 @@ func TestVersions(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -100}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CorrectStock(ctx, oil, 800, "", time.Now()); err != nil {
+	if _, err := s.CorrectStock(ctx, oil, 800, "", time.Now(), ""); err != nil {
 		t.Fatal(err)
 	}
 	step(store.WhatItem, oil, 1, "after stock changes")

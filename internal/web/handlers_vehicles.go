@@ -24,6 +24,7 @@ type vehicleForm struct {
 	Stored                               string // the saved name while editing, for the heading
 	Version                              int    // as the edit form was opened (see itemForm)
 	Stale                                *staleNote
+	FormKey                              string // see itemForm
 	Errors                               stock.Errors
 }
 
@@ -47,11 +48,12 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
 		OdometerKm: formText(r, "odometer_km"), Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
-		Version: parseVersion(r), Errors: stock.Errors{},
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
+	checkFormKey(f.Errors, f.FormKey)
 	in := stock.VehicleInput{
 		Name: f.Name, Kind: stock.VehicleKind(f.Kind), Make: f.Make, Model: f.Model, Plate: f.Plate, VIN: f.VIN,
-		Color: f.Color, Notes: f.Notes, Version: f.Version,
+		Color: f.Color, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey,
 	}
 	var err error
 	if in.Year, err = parseOptInt(f.Year); err != nil {
@@ -69,6 +71,8 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	}
 	return f, in
 }
+
+func vehiclePath(id int64) string { return fmt.Sprintf("/vehicles/%d", id) }
 
 func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, status int, f vehicleForm, isNew bool) {
 	title := "New vehicle"
@@ -150,11 +154,17 @@ func (s *Server) vehicleCreate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
+		return err
+	}
 	f, in := parseVehicleForm(r)
 	if !f.Errors.Any() {
 		id, err := s.store.CreateVehicle(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Added "+in.Name)
+			s.redirect(w, r, vehiclePath(id), "Added "+in.Name)
+			return nil
+		}
+		if s.savedAlready(w, r, err, vehiclePath, "/vehicles") {
 			return nil
 		}
 		if !formConflict(f.Errors, err) {
@@ -186,12 +196,19 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Saved already comes first: the first save moved the version on.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
+		return err
+	}
 	f, in := parseVehicleForm(r)
 	f.ID = id
 	if !f.Errors.Any() {
 		err := s.store.UpdateVehicle(r.Context(), id, in)
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Saved "+in.Name)
+			s.redirect(w, r, vehiclePath(id), "Saved "+in.Name)
+			return nil
+		}
+		if s.savedAlready(w, r, err, vehiclePath, "/vehicles") {
 			return nil
 		}
 		if f.Stale = staleForm(err, fmt.Sprintf("/vehicles/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {

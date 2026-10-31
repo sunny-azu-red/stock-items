@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -292,5 +294,80 @@ func (s *Server) staleButton(w http.ResponseWriter, r *http.Request, err error, 
 	}
 	s.setFlash(w, "error", msg)
 	s.redirect(w, r, to, "")
+	return true
+}
+
+// formKeyRe matches the one-time keys newFormKey makes.
+var formKeyRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// newFormKey makes the one-time key of a form that creates or changes
+// something (see store.AlreadySavedError): 128 random bits.
+func newFormKey() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// parseFormKey reads the form's one-time key; "" when missing or invalid.
+func parseFormKey(r *http.Request) string {
+	if k := r.PostFormValue("form_key"); formKeyRe.MatchString(k) {
+		return k
+	}
+	return ""
+}
+
+// noFormKey refuses a form without a key, opened before keys were added
+// (or not from a page): it can't be told apart from a repeat of itself, so
+// rather than risk saving it twice (a service would take its parts again),
+// it re-renders with what was typed and a key, to save with one more
+// click.
+const noFormKey = "This form was opened before Pitbox was updated, so it was not saved. Check it and save again."
+
+// checkFormKey records noFormKey in errs when key is missing.
+func checkFormKey(errs stock.Errors, key string) {
+	if key == "" {
+		errs.Add("form", noFormKey)
+	}
+}
+
+// savedAlreadyMsg answers a form posted again after its first save went
+// through.
+const savedAlreadyMsg = "This was saved already (the first Save went through), so it wasn't saved again. " +
+	"Changes made in the form since weren't applied; check it here."
+
+// savedBefore answers a form whose key a finished save holds, before the
+// handler looks at anything that save changed: it reports whether it did
+// (see savedAlready). what is the kind of record the form saves.
+func (s *Server) savedBefore(w http.ResponseWriter, r *http.Request, key, what string, page func(int64) string, list string) (bool, error) {
+	err := s.store.FormSaved(r.Context(), key, what)
+	if s.savedAlready(w, r, err, page, list) {
+		return true, nil
+	}
+	return false, err
+}
+
+// savedAlready answers a *store.AlreadySavedError: nothing was saved this
+// time, and the user lands where the first save did, page(id) for the
+// record it saved, with a message saying so. A record deleted since leads
+// to Recently deleted, or to list. It reports whether err was that.
+func (s *Server) savedAlready(w http.ResponseWriter, r *http.Request, err error, page func(int64) string, list string) bool {
+	var saved *store.AlreadySavedError
+	if !errors.As(err, &saved) {
+		return false
+	}
+	switch {
+	case saved.Gone != nil && saved.Gone.InTrash:
+		s.setFlash(w, "error", "This was saved already, and deleted since; it's in Recently deleted.")
+		s.redirect(w, r, "/trash", "")
+	case saved.Gone != nil:
+		s.setFlash(w, "error", "This was saved already, and deleted since.")
+		s.redirect(w, r, list, "")
+	default:
+		to := list
+		if page != nil && saved.ID != 0 {
+			to = page(saved.ID)
+		}
+		s.redirect(w, r, to, savedAlreadyMsg)
+	}
 	return true
 }

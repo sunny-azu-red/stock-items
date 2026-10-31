@@ -20,6 +20,7 @@
 {{else}}
 <form class="card form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
   <input type="hidden" name="version" value="{{$m.Version}}">
+  {{template "form-key" $m.FormKey}}
   {{template "stale" $m.Stale}}
   {{template "error-summary" $e}}
   <div class="form-grid">

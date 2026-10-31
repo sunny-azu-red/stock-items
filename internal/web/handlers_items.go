@@ -44,6 +44,7 @@ type itemForm struct {
 	// back unchanged; Stale is set when saving was refused for it.
 	Version int
 	Stale   *staleNote
+	FormKey string // the form's one-time key, kept when it comes back with errors
 }
 
 type itemFormPage struct {
@@ -98,12 +99,14 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		QuantityWas: formText(r, "quantity_was"),
 		MinQuantity: formText(r, "min_quantity"), MinUnit: formText(r, "min_unit"), ExpiresOn: formText(r, "expires_on"),
 		Location: formText(r, "location"), Notes: formText(r, "notes"), VehicleIDs: parseIDs(r.PostForm["vehicle"]),
-		Version: parseVersion(r), Errors: stock.Errors{},
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
+	checkFormKey(f.Errors, f.FormKey)
 	unit := unitOrDefault(f.Unit)
 	in := stock.ItemInput{
 		Name: f.Name, Brand: f.Brand, Category: f.Category, Unit: stock.Unit(f.Unit),
 		Location: f.Location, Notes: f.Notes, VehicleIDs: append([]int64(nil), f.VehicleIDs...), Version: f.Version,
+		FormKey: f.FormKey,
 	}
 	if q, err := parseOptAmount(f.Quantity, unit, f.QuantityUnit); err != nil {
 		f.Errors.Add("quantity", err.Error())
@@ -273,6 +276,10 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// A repeat goes to the item, whatever the first save changed since.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatItem, itemPath, "/stock"); done || err != nil {
+		return err
+	}
 	f, in := parseItemForm(r, true, s.now())
 	if in.BoughtOn == nil {
 		in.BoughtOn = s.today()
@@ -284,6 +291,9 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 			id, err = s.store.CreateItemFromShopping(r.Context(), f.ShoppingID, in)
 		} else {
 			id, err = s.store.CreateItem(r.Context(), in)
+		}
+		if s.savedAlready(w, r, err, itemPath, "/stock") {
+			return nil
 		}
 		if f.ShoppingID != 0 && errors.Is(err, store.ErrNotFound) {
 			// Ticked off elsewhere, or this form was saved already. Keep what
@@ -375,12 +385,19 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	// Saved already comes first: the first save moved the version on.
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatItem, itemPath, "/stock"); done || err != nil {
+		return err
+	}
 	f, in := parseItemForm(r, false, s.now())
 	f.ID = id
 	if !f.Errors.Any() {
 		err := s.store.UpdateItem(r.Context(), id, in, *s.today())
 		if err == nil {
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Saved "+displayInput(in))
+			return nil
+		}
+		if s.savedAlready(w, r, err, itemPath, "/stock") {
 			return nil
 		}
 		// Changed or deleted meanwhile: say so, and keep what was typed.
@@ -529,6 +546,7 @@ type movementForm struct {
 	// form (see itemForm); the item page's stock changes don't have one.
 	Version int
 	Stale   *staleNote
+	FormKey string // see itemForm
 }
 
 type itemPage struct {
@@ -638,6 +656,9 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatItem, itemPath, "/stock"); done || err != nil {
+		return err
+	}
 	it, err := s.store.GetItem(r.Context(), id)
 	if err != nil {
 		return err
@@ -650,9 +671,10 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	f := movementForm{
 		Kind: formText(r, "kind"), Amount: formText(r, "amount"), AmountUnit: formText(r, "amount_unit"),
 		TotalPrice: formText(r, "total_price"), Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"),
-		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), Errors: stock.Errors{},
+		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
-	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Note: f.Note}
+	checkFormKey(f.Errors, f.FormKey)
+	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Note: f.Note, FormKey: f.FormKey}
 	switch in.Kind {
 	case stock.MovePurchase, stock.MoveUse, stock.MoveCorrection:
 	default:
@@ -700,7 +722,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		var err error
 		if in.Kind == stock.MoveCorrection {
 			var delta float64
-			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *s.today())
+			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *s.today(), f.FormKey)
 			if err == nil && delta == 0 {
 				s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
 				return nil
@@ -715,6 +737,9 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 				stock.MoveCorrection: "Stock corrected to " + stock.FormatQuantity(amount, it.Unit),
 			}[in.Kind]
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
+			return nil
+		}
+		if s.savedAlready(w, r, err, itemPath, "/stock") {
 			return nil
 		}
 		var short *store.InsufficientStockError
@@ -822,11 +847,21 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	back := s.back(r, itemPath(id))
+	key := parseFormKey(r)
+	if done, err := s.savedBefore(w, r, key, "", nil, back); done || err != nil {
+		return err
+	}
 	it, err := s.store.GetItem(r.Context(), id)
 	if err != nil {
 		return err
 	}
-	in := stock.ShoppingInput{ItemID: &id}
+	if key == "" {
+		s.setFlash(w, "error", noFormKey)
+		s.redirect(w, r, back, "")
+		return nil
+	}
+	in := stock.ShoppingInput{ItemID: &id, FormKey: key}
 	if q, err := parseOptAmount(formText(r, "quantity"), it.Unit, formText(r, "quantity_unit")); err == nil && q != nil && *q > 0 {
 		in.Quantity = q
 	}
@@ -840,14 +875,16 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 			in.Quantity, in.Note = &sugg[0].Quantity, strings.Join(sugg[0].Reasons, "; ")
 		}
 	}
-	if _, err := s.store.AddShopping(r.Context(), in); errors.Is(err, store.ErrNotFound) {
+	if _, err := s.store.AddShopping(r.Context(), in); s.savedAlready(w, r, err, nil, back) {
+		return nil
+	} else if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", it.DisplayName()+" was archived or deleted meanwhile")
-		s.redirect(w, r, s.back(r, fmt.Sprintf("/items/%d", id)), "")
+		s.redirect(w, r, back, "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, s.back(r, fmt.Sprintf("/items/%d", id)), it.DisplayName()+" is on the shopping list")
+	s.redirect(w, r, back, it.DisplayName()+" is on the shopping list")
 	return nil
 }
 

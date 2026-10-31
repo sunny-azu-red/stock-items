@@ -51,19 +51,22 @@ func vehicleConflict(err error) error {
 // CreateVehicle stores a new vehicle and returns its id.
 func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64, error) {
 	var id int64
-	err := s.pool.QueryRow(ctx, `
-		INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer_km, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-		in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes,
-	).Scan(&id)
-	return id, vehicleConflict(err)
+	err := s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer_km, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+			in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes,
+		).Scan(&id)
+		return vehicleConflict(err)
+	})
+	return id, err
 }
 
 // UpdateVehicle replaces a vehicle's fields. A changed odometer may not be
 // lower than a service's reading (see checkVehicleOdometer). A vehicle
 // changed since in.Version fails with a *StaleError.
 func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInput) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
 		// The lock the update takes anyway (and checkVehicleOdometer), first.
 		var version int
 		err := tx.QueryRow(ctx, `SELECT version FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&version)

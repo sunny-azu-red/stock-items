@@ -195,3 +195,79 @@ func TestVersionsMigration(t *testing.T) {
 	}
 	checkLedger(t, pool)
 }
+
+// 00011 adds the form keys table without touching anything else, and its
+// Down drops it and takes the form key out of Bought snapshots, which
+// the code before it doesn't know: Up → Down → Up.
+func TestFormSubmissionsMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+	before := dump(t, pool, "")
+	tableExists := func() bool {
+		t.Helper()
+		var has bool
+		if err := pool.QueryRow(ctx, `SELECT to_regclass('form_submissions') IS NOT NULL`).Scan(&has); err != nil {
+			t.Fatal(err)
+		}
+		return has
+	}
+
+	if _, err := provider.UpTo(ctx, 11); err != nil {
+		t.Fatal(err)
+	}
+	if !tableExists() {
+		t.Fatal("no form_submissions after Up")
+	}
+	if got := dump(t, pool, ""); got != before {
+		t.Errorf("Up changed data:\n%s\nwant\n%s", got, before)
+	}
+	checkLedger(t, pool)
+	// A key, an invalid one, and a Bought snapshot that keeps its form's key.
+	if _, err := pool.Exec(ctx, `INSERT INTO form_submissions (key, result_id) VALUES ('0123456789abcdef0123456789abcdef', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO form_submissions (key) VALUES ('not a key')`); err == nil {
+		t.Error("an invalid key was stored")
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO trash (kind, label, payload)
+		SELECT 'bought', 'Bought: snapshot', jsonb_build_object('shopping_entries', jsonb_agg(to_jsonb(e)), 'movement_id', 4,
+		                                                      'form_key', '0123456789abcdef0123456789abcdef')
+		FROM shopping_entries e WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	if tableExists() {
+		t.Error("form_submissions still there after Down")
+	}
+	if got := dump(t, pool, "Bought: snapshot"); got != before {
+		t.Errorf("Down changed data:\n%s\nwant\n%s", got, before)
+	}
+	var payload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Bought: snapshot'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, "form_key") || !strings.Contains(payload, `"movement_id": 4`) || !strings.Contains(payload, `"item_id": 1`) {
+		t.Errorf("snapshot after Down = %s", payload)
+	}
+
+	if _, err := provider.UpTo(ctx, 11); err != nil {
+		t.Fatal(err)
+	}
+	if !tableExists() {
+		t.Fatal("no form_submissions after Up again")
+	}
+	if got := dump(t, pool, "Bought: snapshot"); got != before {
+		t.Errorf("Up again changed data:\n%s\nwant\n%s", got, before)
+	}
+	checkLedger(t, pool)
+}

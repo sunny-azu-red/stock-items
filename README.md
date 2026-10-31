@@ -25,7 +25,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.
-- **Undo everything:** every delete (and Bought) has an Undo, and Recently deleted keeps it all until you empty it.
+- **Undo everything:** every delete (and Bought) has an Undo, and Recently deleted keeps it all until you empty it or delete an entry for good.
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Photos** of items (resized and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a phone in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).
@@ -40,7 +40,7 @@ Requirements: [Go](https://go.dev/dl/) 1.27.3+ and a PostgreSQL database (tested
 
 ```bash
 cp .env.example .env     # then fill in your database credentials
-go run ./cmd/pitbox # migrates the database and serves http://0.0.0.0:8080
+go run ./cmd/pitbox      # migrates the database and serves http://0.0.0.0:8080
 ```
 
 Open `http://<this-machine>:8080` from any device on your network. Start by adding your vehicles, then your items.
@@ -65,9 +65,9 @@ All settings come from environment variables or a `.env` file (real environment 
 | `DB_SCHEMA` | `public` | Postgres schema (tests use throwaway schemas) |
 | `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
-| `APP_CURRENCY` | `EUR` | Label shown next to prices |
-| `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q=` | Search engine for part number links; the number is appended |
-| `APP_SKU_SEARCH_PREFIX` | empty | Added to every part number search, e.g. `site:ro` |
+| `APP_CURRENCY` | `EUR` | Label shown next to prices (up to 10 characters) |
+| `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q=` | Search engine for part number links; the number is appended. Must be a full `http(s)://` URL |
+| `APP_SKU_SEARCH_PREFIX` | empty | Added to every part number search, e.g. `site:de` |
 | `TZ` | system zone | When "today" starts (reminders, date checks, spending). Set it in Docker, whose default is UTC |
 
 `.env` is git-ignored. Never commit it.
@@ -92,4 +92,4 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC), [htmx](https://htmx.org) (BSD-2-Clause).
+MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC). Includes [htmx](https://htmx.org) (Zero-Clause BSD).

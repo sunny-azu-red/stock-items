@@ -7,7 +7,7 @@ The app is a single static binary. Templates, CSS, JavaScript and migrations are
 ## Build
 
 ```bash
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe --always --dirty)" \
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always --dirty)" \
   -o bin/pitbox ./cmd/pitbox
 ```
 
@@ -57,9 +57,9 @@ journalctl -u pitbox -f
 
 ## Run with Docker
 
-The image is distroless, runs as a non-root user and is about 29 MB (7 MB to download). It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
+The image is distroless and runs as a non-root user. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
-CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry Pi): `latest` and `sha-<commit>` for every push to `master`, `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
+CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry Pi): `latest` for every push to `master`, `sha-<commit>` for every push, and `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
 
 ### Portainer
 
@@ -74,8 +74,8 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
    | `DB_HOST` | `192.168.1.10` | required: the Postgres server's LAN address |
    | `DB_PASSWORD` | | required |
    | `DB_PORT`, `DB_DATABASE`, `DB_SCHEMA`, `DB_USERNAME` | | default `5432`, `stock_items`, `public`, `postgres` |
-   | `APP_CURRENCY` | `LEI` | default `EUR` |
-   | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q=` | default Google; part number links append the number to it |
+   | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
+   | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q=` | default Google; part number links append the number to it. A full `http(s)://` URL, or the app won't start |
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
    | `TZ` | `Europe/Bucharest` | default `UTC`; sets when "today" starts for reminders, date checks and spending |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
@@ -92,7 +92,10 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
 
 ### Docker Compose or plain Docker
 
-With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values):
+With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values). Two things differ from running the binary with the same file:
+
+- `DB_HOST` must be the Postgres server's LAN address, not `127.0.0.1` as in `.env.example`: inside the container that is the container itself.
+- `HOST` and `PORT` are ignored; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host.
 
 ```bash
 docker compose up -d                       # or: docker compose pull && docker compose up -d
@@ -101,7 +104,7 @@ docker compose up -d                       # or: docker compose pull && docker c
 To build the image yourself instead of pulling it:
 
 ```bash
-docker build -t pitbox --build-arg VERSION=$(git describe --always) .
+docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) .
 docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env pitbox
 ```
 
@@ -128,4 +131,4 @@ You can also download the current stock as CSV from the Stock page.
 
 ## HTTPS (optional)
 
-The app speaks plain HTTP. Putting it behind Caddy or nginx with a certificate (for example from your router or an internal CA) enables the browser's modern clipboard API. Copying already works over plain HTTP through a fallback. HTTPS would also allow future camera-based barcode scanning.
+The app speaks plain HTTP. Putting it behind Caddy or nginx with a certificate (for example from your router or an internal CA) enables the browser's modern clipboard API. Copying works over plain HTTP through a fallback in most browsers; where it doesn't (Safari), the text opens to copy by hand. HTTPS would also allow future camera-based barcode scanning.

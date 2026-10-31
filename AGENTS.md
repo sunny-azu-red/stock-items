@@ -39,12 +39,13 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 
 - **Never commit `.env`** or print its secrets. `.env.example` holds placeholders only.
 - **Never run tests or experiments against the `public` schema.** Use `internal/testdb` (schemas `test_*`) or `DB_SCHEMA=e2e_*`. `db.DropSchema` refuses anything else. Keep it that way.
-- **Migrations are append-only.** Add `internal/db/migrations/0000N_description.sql` (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
+- **Migrations are append-only.** Add `internal/db/migrations/0000N_short_description.sql` (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
 - **Quantities are stored in base units:** pieces, millilitres, grams. Convert only at the edges with `stock.ParseAmount` and `stock.FormatQuantity`.
-- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The exceptions undo or fix a recorded entry together with its effect: `DeleteService`/`UpdateService`, and `UpdateMovement`/`DeleteMovement`, which go through `reviseMovement`.)
+- **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The exceptions undo or fix a recorded entry together with its effect: `DeleteService`/`UpdateService`; `UpdateMovement`/`DeleteMovement`, which go through `reviseMovement`; and `RestoreTrash`, including undoing a Bought.)
 - **Money figures (last price, stock value, spending) read only `purchase` movements.** Stock the user paid for must be recorded as a purchase, never as `initial` or `correction`.
-- **Every user delete goes to the trash.** Take a snapshot with `snapshot`/`putTrash` (`internal/store/trash.go`) in the same transaction and return the trash id; restoring is `RestoreTrash`, the third ledger exception.
+- **Every user delete goes to the trash.** Take a snapshot with `snapshot`/`putTrash` (`internal/store/trash.go`) in the same transaction and return the trash id; restoring is `RestoreTrash` (a ledger exception, above).
 - **Don't hard-delete what other records depend on.** Items with purchases, service usage or kit lines, vehicles with services or kits, and kits with services are archived (`archived_at`), not deleted; `ListItems` and `ListKits` hide them by default, and web lists use `activeVehicles`.
+- **Archived means no new work, enforced in the store.** Stock changes to an archived item, and new services or kits for an archived vehicle (or with an archived kit), fail with a `ConflictError` inside the transaction; the pages only hide the buttons. A service edit may keep an archived part as it was.
 - Business rules belong in `internal/stock` (pure, unit tested). SQL belongs in `internal/store`. HTTP and HTML belong in `internal/web`.
 - Forms must work without JavaScript (plain POST and redirect). htmx and `app.js` only enhance.
 - Build URLs with query strings in templates using the `withQuery` helper. Otherwise `html/template` escapes `=` in pre-encoded query strings.

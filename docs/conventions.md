@@ -16,8 +16,12 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Never hard-delete a row that other records depend on through a cascade. Refuse it and offer an archive instead, as `DeleteItem` does, so history, services and spending don't change behind the user's back.
 - Write all SQL in `internal/store`. Use positional parameters (`$1`), never string-concatenated values. Dynamic filters go through the `sqlArgs` helper.
 - Writes that touch more than one row run in `Store.inTx`.
-- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The exceptions fix mistakes by changing a recorded entry together with its effect: `DeleteService` and `UpdateService` (return a service's parts through `returnServiceParts`; an update then takes the new ones through `applyMovement`), and `UpdateMovement`/`DeleteMovement` (revise one movement through `reviseMovement`, which moves the stock by the difference under the item's row lock and refuses to go below zero).
-- Lock several items in id order inside one transaction, so concurrent requests cannot deadlock.
+- Every change to an item's quantity goes through `applyMovement`, so the ledger stays complete. The exceptions change a recorded entry together with its effect:
+  - `DeleteService` and `UpdateService` return a service's parts through `returnServiceParts`; an update then takes the new ones through `applyMovement`.
+  - `UpdateMovement`/`DeleteMovement` revise one movement through `reviseMovement`, which moves the stock by the difference under the item's row lock and refuses to go below zero.
+  - `RestoreTrash` puts rows back with their effect (`takeMovements`, `adjustStock`), and undoing a Bought takes its purchase back through `reviseMovement`.
+- Lock several items in id order inside one transaction, so concurrent requests cannot deadlock. Lock items `FOR NO KEY UPDATE` (only `DeleteItem` takes `FOR UPDATE`): inserting a kit line or movement holds a key-share lock on the item, which `FOR UPDATE` would conflict with. A shopping entry is locked before its item.
+- Archived things take no new work, and the store enforces it inside the transaction, not just the pages: no stock changes to an archived item (a service edit may keep an archived part as it was), no new services or kits for an archived vehicle, no newly chosen archived kit.
 
 ## Domain
 

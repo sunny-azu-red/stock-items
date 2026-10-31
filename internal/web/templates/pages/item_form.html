@@ -6,6 +6,8 @@
 
 {{if $d.Matches}}<div class="mb">{{template "shopping-matches" (dict "EntryID" $f.ShoppingID "Matches" $d.Matches)}}</div>{{end}}
 <form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
+  {{/* Enter submits with the first submit button in the form: make that a plain save, not "Save & add another". Out of sight, focus and the accessibility tree. */}}
+  {{if and $d.IsNew (not $f.ShoppingID)}}<button class="sr-only" type="submit" tabindex="-1" aria-hidden="true">Save item</button>{{end}}
   {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}">{{end}}
   {{if $f.ShoppingID}}<input type="hidden" name="shopping_id" value="{{$f.ShoppingID}}">{{end}}
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
@@ -134,9 +136,8 @@
 
   <div class="form-section form-actions">
     <a class="btn btn-ghost spacer" href="{{if $f.ShoppingID}}/shopping{{else if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
-    {{/* First in the source, so Enter saves the item; CSS shows it last. */}}
-    <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>
     {{if and $d.IsNew (not $f.ShoppingID)}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>
   </div>
 </form>
 {{end}}

@@ -45,7 +45,7 @@
       <h2 class="mb">{{icon "gauge"}} Odometer</h2>
       {{if $v.Archived}}
       <p>{{km $v.OdometerKm}}</p>
-      <p class="hint mt">Restore this vehicle to update its odometer, log services or add kits.</p>
+      <p class="hint mt">Restore this vehicle to log services or add kits.</p>
       {{else}}
       <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
         <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="km" aria-label="Odometer in km">

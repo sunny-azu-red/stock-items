@@ -154,7 +154,7 @@ func addMonths(t time.Time, n int) time.Time {
 	return time.Date(first.Year(), first.Month(), min(d, last), 0, 0, 0, 0, t.Location())
 }
 
-// Summary describes the due date in words, e.g. "in 1,200 km or 45 days".
+// Summary describes the due date in words, e.g. "in 1 200 km · in 45 days".
 func (d Due) Summary() string {
 	var parts []string
 	if d.KmLeft != nil {

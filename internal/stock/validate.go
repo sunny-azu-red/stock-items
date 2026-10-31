@@ -140,7 +140,7 @@ func (in ItemInput) Validate() Errors {
 		errs.Add("quantity", "Enter how much you bought")
 	}
 	if !validMoney(in.TotalPrice) {
-		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
+		errs.Add("total_price", "Enter a price between 0 and "+FormatInt(MaxMoney))
 	}
 	if in.MinQuantity != nil && *in.MinQuantity < 0 {
 		errs.Add("min_quantity", "Minimum cannot be negative")
@@ -312,7 +312,7 @@ func (in MovementInput) Validate() Errors {
 		errs.Add("kind", "Unknown movement type")
 	}
 	if !validMoney(in.TotalPrice) {
-		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
+		errs.Add("total_price", "Enter a price between 0 and "+FormatInt(MaxMoney))
 	} else if (in.TotalPrice != nil || in.Supplier != "") && in.Kind != MovePurchase {
 		// Spending reads only purchases, so a price anywhere else would be
 		// stored but never counted.
@@ -347,9 +347,9 @@ type MovementEdit struct {
 	OccurredOn *time.Time
 }
 
-// ApplyEdit returns m corrected by e. Fields a kind doesn't have are kept
-// as they were (a use's price). Initial stock that gets
-// a price or shop becomes a purchase, as when an item is created.
+// ApplyEdit returns m corrected by e. A kind without a price and shop
+// (a use, a count) is saved without them. Initial stock that gets a price
+// or shop becomes a purchase, as when an item is created.
 func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 	errs := Errors{}
 	if !m.Editable() {
@@ -500,7 +500,7 @@ func (in ServiceInput) Validate() Errors {
 		errs.Add("odometer_km", "Odometer cannot be negative")
 	}
 	if !validMoney(in.LaborCost) {
-		errs.Add("labor_cost", "Enter a cost between 0 and 100,000,000")
+		errs.Add("labor_cost", "Enter a cost between 0 and "+FormatInt(MaxMoney))
 	}
 	for i, l := range in.Parts {
 		if l.Quantity <= 0 {

@@ -111,6 +111,14 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
 			return err
 		}
+		// The vehicle is locked (checkActiveVehicle); then the parts, in id
+		// order, before checking whether any is archived.
+		if err := lockItems(ctx, tx, partIDs(in.Parts)); err != nil {
+			return err
+		}
+		if err := checkArchivedParts(ctx, tx, 0, in.Parts); err != nil {
+			return err
+		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost, odometer_at_log)
 			VALUES ($1, $2, $3, $4, $5, $6, $7,
@@ -123,15 +131,21 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err != nil {
 			return err
 		}
-		if err := checkArchivedParts(ctx, tx, id, in.Parts); err != nil {
-			return err
-		}
 		if err := takeServiceParts(ctx, tx, id, in); err != nil {
 			return err
 		}
 		return moveOdometer(ctx, tx, id, in.VehicleID, in.OdometerKm)
 	})
 	return id, err
+}
+
+// partIDs lists the items of a service's parts.
+func partIDs(parts []stock.KitLineInput) []int64 {
+	ids := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		ids = append(ids, p.ItemID)
+	}
+	return ids
 }
 
 // UpdateService changes a logged service. Its vehicle stays; everything
@@ -147,6 +161,11 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			Scan(&in.VehicleID, &kitWas); err != nil {
 			return notFound(err)
 		}
+		// The service, its vehicle, then its parts: the order every service
+		// change locks in, so none can deadlock with another.
+		if _, _, err := lockVehicle(ctx, tx, in.VehicleID); err != nil {
+			return err
+		}
 		// The service keeps its kit even if the kit has moved to another
 		// vehicle since; only a newly chosen kit must fit the vehicle.
 		if in.KitID == nil || kitWas == nil || *in.KitID != *kitWas {
@@ -158,14 +177,15 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			return err
 		}
 		// Lock the old and new parts together in id order, like CreateService.
-		ids := make([]int64, 0, len(in.Parts))
-		for _, p := range in.Parts {
-			ids = append(ids, p.ItemID)
-		}
-		if _, err := tx.Exec(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT id FROM items
 			WHERE id = ANY($2) OR id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
-			ORDER BY id FOR NO KEY UPDATE`, id, ids); err != nil {
+			ORDER BY id FOR NO KEY UPDATE`, id, partIDs(in.Parts))
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
 			return err
 		}
 		if err := checkArchivedParts(ctx, tx, id, in.Parts); err != nil {
@@ -177,7 +197,7 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		if err := restoreOdometer(ctx, tx, id); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `
+		_, err = tx.Exec(ctx, `
 			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7,
 			       odometer_at_log = CASE WHEN $4::integer IS NULL THEN odometer_at_log END
 			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
@@ -188,6 +208,10 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			return err
 		}
 		if err := takeServiceParts(ctx, tx, id, in); err != nil {
+			return err
+		}
+		// A part the service now takes less of gets the rest back.
+		if err := refuseOverMax(ctx, tx, ids); err != nil {
 			return err
 		}
 		return moveOdometer(ctx, tx, id, in.VehicleID, in.OdometerKm)
@@ -215,18 +239,28 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 	return nil
 }
 
-// checkActiveVehicle refuses to log services or add kits for an archived
-// vehicle, which lists and reminders no longer show.
+// checkActiveVehicle locks a vehicle (see lockVehicle) and refuses to log
+// services or add kits for it if it is archived, as lists and reminders no
+// longer show it. The lock keeps it from being archived meanwhile.
 func checkActiveVehicle(ctx context.Context, tx pgx.Tx, id int64) error {
-	var name string
-	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT name, archived_at IS NOT NULL FROM vehicles WHERE id = $1`, id).Scan(&name, &archived); err != nil {
-		return notFound(err)
+	name, archived, err := lockVehicle(ctx, tx, id)
+	if err != nil {
+		return err
 	}
 	if archived {
 		return &ConflictError{Field: "form", Message: name + " is archived; restore it first."}
 	}
 	return nil
+}
+
+// lockVehicle locks a vehicle FOR NO KEY UPDATE (inserting a service or kit
+// holds a KEY SHARE lock on it, which FOR UPDATE would conflict with).
+// Service changes lock the vehicle before any parts, so they can't
+// deadlock with each other over the odometer.
+func lockVehicle(ctx context.Context, tx pgx.Tx, id int64) (name string, archived bool, err error) {
+	err = tx.QueryRow(ctx, `SELECT name, archived_at IS NOT NULL FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).
+		Scan(&name, &archived)
+	return name, archived, notFound(err)
 }
 
 // checkArchivedParts refuses to take an archived item for a service, or a
@@ -293,8 +327,8 @@ func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.
 }
 
 // returnServiceParts puts a service's parts back on stock and deletes
-// their movements. The caller holds the item locks. Like adjustStock, it
-// refuses to leave more than the maximum on stock.
+// their movements. The caller holds the item locks, and checks the
+// maximum on stock once it is done (refuseOverMax).
 func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
@@ -302,20 +336,24 @@ func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 		WHERE i.id = m.item_id`, serviceID); err != nil {
 		return err
 	}
+	_, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, serviceID)
+	return err
+}
+
+// refuseOverMax fails if any of the items has more than the maximum on
+// stock, like adjustStock: after parts came back from a service.
+func refuseOverMax(ctx context.Context, tx pgx.Tx, ids []int64) error {
 	var brand, name string
 	var unit stock.Unit
-	err := tx.QueryRow(ctx, `
-		SELECT brand, name, unit FROM items
-		WHERE quantity > $2 AND id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
-		ORDER BY id LIMIT 1`, serviceID, stock.MaxQuantity).Scan(&brand, &name, &unit)
-	if err == nil {
-		return &ConflictError{Field: "form", Message: displayName(brand, name) + " would have more than " + stock.FormatQuantity(stock.MaxQuantity, unit)}
+	err := tx.QueryRow(ctx, `SELECT brand, name, unit FROM items WHERE id = ANY($1) AND quantity > $2 ORDER BY id LIMIT 1`,
+		ids, stock.MaxQuantity).Scan(&brand, &name, &unit)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, serviceID)
-	return err
+	return &ConflictError{Field: "form", Message: displayName(brand, name) + " would have more than " + stock.FormatQuantity(stock.MaxQuantity, unit)}
 }
 
 // moveOdometer moves the vehicle's odometer forward to a service's
@@ -368,12 +406,16 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 func (s *Store) DeleteService(ctx context.Context, id int64) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var title, vehicle string
+		var vehicleID int64
 		var on time.Time
-		// Lock the service first, then its items, like UpdateService.
+		// Lock the service, its vehicle, then its items, like UpdateService.
 		if err := tx.QueryRow(ctx, `
-			SELECT sr.title, sr.performed_on, v.name FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
-			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicle); err != nil {
+			SELECT sr.title, sr.performed_on, sr.vehicle_id, v.name FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
+			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicleID, &vehicle); err != nil {
 			return notFound(err)
+		}
+		if _, _, err := lockVehicle(ctx, tx, vehicleID); err != nil {
+			return err
 		}
 		p, err := snapshot(ctx, tx, id, [2]string{"service_records", "id"}, [2]string{"stock_movements", "service_record_id"})
 		if err != nil {
@@ -382,13 +424,21 @@ func (s *Store) DeleteService(ctx context.Context, id int64) (trashID int64, err
 		if trashID, err = putTrash(ctx, tx, TrashService, trashLabel("Service", title, vehicle, day(on)), p); err != nil {
 			return err
 		}
-		// Lock the items in id order first, like CreateService.
-		if _, err := tx.Exec(ctx, `
+		// Lock the items in id order, like CreateService.
+		rows, err := tx.Query(ctx, `
 			SELECT id FROM items WHERE id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
-			ORDER BY id FOR NO KEY UPDATE`, id); err != nil {
+			ORDER BY id FOR NO KEY UPDATE`, id)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
 			return err
 		}
 		if err := returnServiceParts(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := refuseOverMax(ctx, tx, ids); err != nil {
 			return err
 		}
 		if err := restoreOdometer(ctx, tx, id); err != nil {

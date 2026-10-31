@@ -73,8 +73,8 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report
 
-  # Publishes ghcr.io/<owner>/pitbox for amd64 and arm64: `latest` and
-  # `sha-<commit>` from master, `1.2.3` and `1.2` from a v1.2.3 tag.
+  # Publishes ghcr.io/<owner>/pitbox for amd64 and arm64: `latest` from
+  # master, `sha-<commit>` from every push, `1.2.3` and `1.2` from a v1.2.3 tag.
   image:
     needs: test
     if: github.event_name == 'push'

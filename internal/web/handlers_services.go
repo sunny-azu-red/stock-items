@@ -278,6 +278,7 @@ type servicesPage struct {
 	Services  []stock.ServiceRecord
 	Vehicles  []stock.Vehicle
 	VehicleID int64
+	Archived  bool    // the filtered vehicle is archived: no new services
 	Labor     float64 // labour cost of all the services logged (for the vehicle filter), not just this page
 	Total     int     // how many services are logged (for the filter)
 	Page      int
@@ -310,6 +311,11 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	p.Vehicles = activeVehicles(p.Vehicles, p.VehicleID)
+	for _, v := range p.Vehicles {
+		if v.ID == p.VehicleID {
+			p.Archived = v.Archived()
+		}
+	}
 	kits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID})
 	if err != nil {
 		return err

@@ -162,19 +162,8 @@ func (s *Server) funcs() template.FuncMap {
 			}
 			return template.URL(s.skuSearch + url.QueryEscape(q))
 		},
-		// skuSearchTitle says where skuSearch links go: "Search on
-		// google.com (site:de)".
-		"skuSearchTitle": func() string {
-			title := "Search for this part number"
-			if u, err := url.Parse(s.skuSearch); err == nil && u.Host != "" {
-				title = "Search on " + strings.TrimPrefix(u.Hostname(), "www.")
-			}
-			if s.skuSearchPrefix != "" {
-				title += " (" + s.skuSearchPrefix + ")"
-			}
-			return title
-		},
-		"emptyLine": func() lineRow { return lineRow{} },
+		"skuSearchTitle": func() string { return s.skuSearchTitle },
+		"emptyLine":      func() lineRow { return lineRow{} },
 		// photoLimit is checked by app.js before a photo is uploaded: the
 		// server's refusal of a larger one can arrive while the browser is
 		// still sending, and show as a connection error instead.
@@ -319,6 +308,19 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 		return
 	}
 	http.Redirect(w, r, url, http.StatusSeeOther)
+}
+
+// searchTitle says where part number links search: "Search on
+// google.com (site:de)".
+func searchTitle(searchURL, prefix string) string {
+	title := "Search for this part number"
+	if u, err := url.Parse(searchURL); err == nil && u.Host != "" {
+		title = "Search on " + strings.TrimPrefix(u.Hostname(), "www.")
+	}
+	if prefix != "" {
+		title += " (" + prefix + ")"
+	}
+	return title
 }
 
 // toast attaches a toast message to an htmx response.

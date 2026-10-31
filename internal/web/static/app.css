@@ -279,7 +279,6 @@ select.input { cursor: pointer; }
 .combo-list li:hover, .combo-list li[aria-selected="true"] { background: var(--surface-2); }
 .form-actions { display: flex; gap: .5rem; justify-content: flex-end; flex-wrap: wrap; padding-top: .25rem; }
 .form-actions .spacer { margin-right: auto; }
-.form-actions .btn-primary { order: 1; } /* last on screen, but first in the source where Enter picks it */
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 legend { font-weight: 600; font-size: .85rem; margin-bottom: .4rem; padding: 0; }
 .form-section { padding: 1.1rem 1.2rem; }

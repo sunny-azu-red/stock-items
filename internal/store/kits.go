@@ -34,7 +34,11 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log FROM service_records sr
+			-- The reading when it was logged says where the service was done
+			-- only if it was logged within a week of being done.
+			SELECT sr.id, sr.performed_on, sr.odometer_km,
+			       CASE WHEN sr.created_at::date - sr.performed_on <= 7 THEN sr.odometer_at_log END AS odometer_at_log
+			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
 			ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
 		) ls ON true

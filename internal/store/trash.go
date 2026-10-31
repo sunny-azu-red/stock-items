@@ -248,7 +248,9 @@ func refuseArchived(ctx context.Context, tx pgx.Tx, ids []int64) error {
 
 // takeMovements applies the stock effect of snapshot movements and puts
 // them back. Every item that would go below zero is reported at once.
-func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow) error {
+// Archived items are refused unless ofService: a service's parts move
+// with it, as when it is edited or deleted.
+func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow, ofService bool) error {
 	var ids []int64
 	for _, m := range moves {
 		ids = append(ids, m.int64("item_id"))
@@ -261,8 +263,10 @@ func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow) error {
 	if err := lockItems(ctx, tx, ids); err != nil {
 		return err
 	}
-	if err := refuseArchived(ctx, tx, ids); err != nil {
-		return err
+	if !ofService {
+		if err := refuseArchived(ctx, tx, ids); err != nil {
+			return err
+		}
 	}
 	var shorts ShortPartsError
 	for _, m := range moves {
@@ -474,7 +478,7 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	if err != nil {
 		return 0, err
 	}
-	if err := takeMovements(ctx, tx, moves); err != nil {
+	if err := takeMovements(ctx, tx, moves, true); err != nil {
 		return 0, err
 	}
 	id := rec.int64("id")
@@ -514,7 +518,7 @@ func restoreMovement(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
 		return 0, err
 	}
-	return itemID, takeMovements(ctx, tx, []snapshotRow{m})
+	return itemID, takeMovements(ctx, tx, []snapshotRow{m}, false)
 }
 
 func restoreShopping(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
@@ -599,12 +603,10 @@ func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error)
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
 		return 0, err
 	}
-	var has bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM item_photos WHERE item_id = $1)`, itemID).Scan(&has); err != nil {
+	// A photo the item has now trades places with it, so neither is lost
+	// (this is how replacing a photo is undone).
+	if _, err := trashPhoto(ctx, tx, itemID); err != nil && !errors.Is(err, ErrNotFound) {
 		return 0, err
-	}
-	if has {
-		return 0, &ConflictError{Field: "form", Message: "The item has another photo now; remove it first."}
 	}
 	return itemID, restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))
 }

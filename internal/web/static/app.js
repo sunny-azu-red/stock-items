@@ -51,8 +51,6 @@
       return;
     }
     form.dataset.submitting = "1";
-    // A submit that never got an answer (no network) mustn't lock the form.
-    setTimeout(function () { delete form.dataset.submitting; }, 10000);
   });
   // Coming back with the back button restores the page as it was left.
   window.addEventListener("pageshow", function () {
@@ -336,9 +334,13 @@
     if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
       // Handing the clipboard a promise keeps this click's permission
       // while the text loads; Safari refuses a write made after the fetch.
-      var blob = text.then(function (t) { return new Blob([t], { type: "text/plain" }); });
-      copied = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })])
-        .catch(function () { return text.then(copyText); });
+      try {
+        var blob = text.then(function (t) { return new Blob([t], { type: "text/plain" }); });
+        copied = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })])
+          .catch(function () { return text.then(copyText); });
+      } catch (err) { // a ClipboardItem that takes no promise
+        copied = text.then(copyText);
+      }
     } else {
       copied = text.then(copyText);
     }

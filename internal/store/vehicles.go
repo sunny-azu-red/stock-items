@@ -134,14 +134,11 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, km *int) err
 // checkServiceOdometer refuses a service reading lower than one logged on
 // an earlier day, or higher than one logged on a later day. Services of
 // the same day aren't compared; except skips the service being edited.
+// The caller holds the vehicle's lock (lockVehicle), so two services saved
+// at once take turns and can't both pass.
 func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, except int64) error {
 	if in.OdometerKm == nil {
 		return nil
-	}
-	// The vehicle's lock makes two services saved at once take turns, so
-	// they can't both pass. NO KEY UPDATE, like moveOdometer.
-	if _, err := tx.Exec(ctx, `SELECT id FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, in.VehicleID); err != nil {
-		return err
 	}
 	km, day := *in.OdometerKm, stock.DateOnly(in.PerformedOn)
 	var other int

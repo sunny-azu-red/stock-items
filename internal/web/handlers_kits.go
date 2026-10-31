@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -291,11 +292,11 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	k, err := s.store.GetKit(r.Context(), id)
-	if err != nil {
-		return err
+	// Deleted meanwhile, the form still shows what was typed.
+	f.Stored = cmp.Or(f.Name, "kit")
+	if k, err := s.store.GetKit(r.Context(), id); err == nil {
+		f.Stored = k.Name
 	}
-	f.Stored = k.Name
 	return s.renderKitForm(w, r, http.StatusUnprocessableEntity, f, false)
 }
 
@@ -408,7 +409,7 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	n, missing := 0, 0
 	for _, l := range k.Lines {
 		if short := l.Short(); short > 0 && !l.Archived {
-			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "For "+k.VehicleName+": "+k.Name)
+			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "Short for "+k.VehicleName+": "+k.Name) // the note suggestions give
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return err
 			}

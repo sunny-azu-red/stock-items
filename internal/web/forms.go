@@ -66,18 +66,18 @@ var moneyRe = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$`)
 // comma. "1.500" is refused: a price copied from a shop that groups
 // thousands with a point would otherwise be saved 1000 times too small.
 func parseOptMoney(s string) (*float64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
+	typed := strings.TrimSpace(s) // quoted in errors as typed
+	if typed == "" {
 		return nil, nil
 	}
-	if err := stock.CheckAmbiguous(s); err != nil {
+	if err := stock.CheckAmbiguous(typed); err != nil {
 		return nil, err
 	}
-	s = strings.ReplaceAll(s, ",", ".")
+	s = strings.ReplaceAll(typed, ",", ".")
 	// Plain digits only: ParseFloat would also take "NaN", "Inf" and "1e9".
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil || !moneyRe.MatchString(s) {
-		return nil, fmt.Errorf("%q is not a valid amount", s)
+		return nil, fmt.Errorf("%q is not a valid amount", typed)
 	}
 	return &f, nil
 }

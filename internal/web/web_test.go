@@ -1269,7 +1269,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 
 	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
 	page = a.get(path)
-	expect(t, page, http.StatusOK, "Archived", `action="`+path+`/restore"`, "Restore this vehicle to update its odometer")
+	expect(t, page, http.StatusOK, "Archived", `action="`+path+`/restore"`, "Restore this vehicle to log services or add kits")
 	// Nothing new for it: no service, kit or item buttons, no odometer form.
 	expectNot(t, page, `href="/services/new?vehicle=`, `href="/kits/new?vehicle=`, `href="/items/new?vehicle=`, `action="`+path+`/odometer"`)
 	expectNot(t, a.get("/vehicles"), `href="`+path+`"`)
@@ -1672,6 +1672,30 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 		expect(t, a.get(tt.path+"/edit"), http.StatusOK, "<title>"+tt.want)
 		page := a.post(tt.path, url.Values{"vehicle_id": {itoa(k390)}, "unit": {"piece"}, "quantity": {"1"}, "performed_on": {"2026-10-29"}})
 		expect(t, page, http.StatusUnprocessableEntity, "<title>"+tt.want)
+		if tt.path != svc { // a service's heading is "Edit service · vehicle"
+			expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.want+"</h1>")
+		}
+	}
+}
+
+// A restore that had to drop links to things deleted for good says so.
+func TestRestoreSaysWhatItLeftOut(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ring := itemID(t, a.store, "O-Ring")
+	pads := itemID(t, a.store, "Rear Brake")
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
+		"line_item": {itoa(pads), itoa(ring)}, "line_qty": {"1", "2"}})
+	expect(t, rec, http.StatusSeeOther)
+	kitTrash := flashOf(t, a.post(rec.Header().Get("Location")+"/delete", nil)).Undo
+	ringTrash := flashOf(t, a.post("/items/"+itoa(ring)+"/delete", nil)).Undo
+	if kitTrash == 0 || ringTrash == 0 {
+		t.Fatalf("trash ids %d, %d", kitTrash, ringTrash)
+	}
+	expect(t, a.post("/trash/"+itoa(ringTrash)+"/purge", nil), http.StatusSeeOther)
+	msg := flashOf(t, a.post("/trash/"+itoa(kitTrash)+"/restore", nil)).Message
+	if msg != "Restored Kit: Brakes (KTM 390). Left out 1 link to things deleted for good." {
+		t.Errorf("flash = %q", msg)
 	}
 }
 

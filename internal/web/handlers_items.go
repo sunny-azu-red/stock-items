@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -371,11 +372,11 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	it, err := s.store.GetItem(r.Context(), id)
-	if err != nil {
-		return err
+	// Deleted meanwhile, the form still shows what was typed.
+	f.Stored = cmp.Or(strings.TrimSpace(f.Brand+" "+f.Name), "item")
+	if it, err := s.store.GetItem(r.Context(), id); err == nil {
+		f.Stored = it.DisplayName()
 	}
-	f.Stored = it.DisplayName()
 	page, err := s.itemFormPage(r, f, false)
 	if err != nil {
 		return err
@@ -856,8 +857,13 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
 		return nil
 	}
-	if err := s.store.SetPhoto(r.Context(), id, "image/jpeg", full, thumb); err != nil {
+	replaced, err := s.store.SetPhoto(r.Context(), id, "image/jpeg", full, thumb)
+	if err != nil {
 		return err
+	}
+	if replaced != 0 {
+		s.redirectUndo(w, r, fmt.Sprintf("/items/%d", id), "Photo replaced", replaced)
+		return nil
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Photo saved")
 	return nil

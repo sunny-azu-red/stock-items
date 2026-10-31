@@ -455,11 +455,12 @@ func TestShoppingList(t *testing.T) {
 func TestPhotos(t *testing.T) {
 	s, ctx := newStore(t)
 	id := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
-	if err := s.SetPhoto(ctx, id, "image/jpeg", []byte("full"), []byte("thumb")); err != nil {
-		t.Fatal(err)
+	if replaced, err := s.SetPhoto(ctx, id, "image/jpeg", []byte("full"), []byte("thumb")); err != nil || replaced != 0 {
+		t.Fatalf("first photo: %d, %v", replaced, err)
 	}
-	if err := s.SetPhoto(ctx, id, "image/jpeg", []byte("full2"), []byte("thumb2")); err != nil {
-		t.Fatal(err)
+	replaced, err := s.SetPhoto(ctx, id, "image/jpeg", []byte("full2"), []byte("thumb2"))
+	if err != nil || replaced == 0 {
+		t.Fatalf("replacing: %d, %v; want the old one in the trash", replaced, err)
 	}
 	p, err := s.GetPhoto(ctx, id, true)
 	if err != nil || string(p.Data) != "thumb2" {
@@ -468,7 +469,16 @@ func TestPhotos(t *testing.T) {
 	if !mustGet(t, s, id).HasPhoto {
 		t.Error("HasPhoto should be true")
 	}
-	if err := s.SetPhoto(ctx, 987654, "image/jpeg", []byte("x"), []byte("x")); !errors.Is(err, store.ErrNotFound) {
+	// Undoing the replace swaps them: the old one is back, the new one in
+	// the trash.
+	mustRestore(t, s, replaced)
+	if p, _ := s.GetPhoto(ctx, id, true); string(p.Data) != "thumb" {
+		t.Errorf("after undo: thumb = %q", p.Data)
+	}
+	if entries, _ := s.ListTrash(ctx); len(entries) != 1 || entries[0].Kind != store.TrashPhoto {
+		t.Errorf("trash = %+v, want the newer photo", entries)
+	}
+	if _, err := s.SetPhoto(ctx, 987654, "image/jpeg", []byte("x"), []byte("x")); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 	if _, err := s.DeletePhoto(ctx, id); err != nil {
@@ -1855,7 +1865,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetPhoto(ctx, id, "image/jpeg", []byte{0xff, 0xd8, 1, 2}, []byte{0xff, 0xd8}); err != nil {
+	if _, err := s.SetPhoto(ctx, id, "image/jpeg", []byte{0xff, 0xd8, 1, 2}, []byte{0xff, 0xd8}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2097,6 +2107,23 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 		t.Errorf("due = %+v, want ok at 22 000 km", d)
 	}
 
+	// One logged long after it was done says nothing about where it was
+	// done: km count from the last reading again.
+	back := logService(time.Now().AddDate(0, 0, 1).AddDate(0, -1, 0), nil)
+	if err := s.UpdateService(ctx, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service",
+		PerformedOn: time.Now().AddDate(0, -2, 0)}); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ = s.GetKit(ctx, kit); k.LastService.ID != back || k.LastService.OdometerAtLog != nil {
+		t.Errorf("backdated: last service = %+v, want %d without a reading at log", k.LastService, back)
+	}
+	if _, err := s.DeleteService(ctx, back); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateService(ctx, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
 	// Editing the service later keeps the reading it was logged at, and a
 	// reading entered on it wins.
 	if err := s.SetOdometer(ctx, v, 17000); err != nil {
@@ -2251,7 +2278,6 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	before := mustGet(t, s, filter).Quantity
 
 	_, _, delErr := s.DeleteMovement(ctx, use)
-	_, restoreSvcErr := s.RestoreTrash(ctx, serviceTrash)
 	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
 	_, newSvcErr := s.CreateService(ctx, service(1))
 	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now())
@@ -2261,7 +2287,6 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 		"edit a change":   s.UpdateMovement(ctx, use, stock.MovementEdit{Amount: 2}),
 		"delete a change": delErr,
 		"restore change":  restoreUseErr,
-		"restore service": restoreSvcErr,
 		"new service":     newSvcErr,
 		"more in service": s.UpdateService(ctx, svc, service(2)),
 	} {
@@ -2270,6 +2295,16 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	if got := mustGet(t, s, filter).Quantity; got != before {
 		t.Errorf("archived stock changed: %v, want %v", got, before)
 	}
+
+	// A deleted service comes back with its parts, archived or not, as its
+	// delete gave them back: like an edit, it may keep them as they were.
+	if _, err := s.RestoreTrash(ctx, serviceTrash); err != nil {
+		t.Errorf("restore a service whose part was archived since: %v", err)
+	}
+	if got := mustGet(t, s, filter).Quantity; got != before-1 {
+		t.Errorf("after restoring the service: %v, want %v", got, before-1)
+	}
+	before = mustGet(t, s, filter).Quantity
 
 	// Editing the service otherwise still works, archived part and all.
 	edit := service(1)
@@ -2430,6 +2465,11 @@ func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: bolt, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
 		t.Fatal(err)
 	}
+	// An edit that leaves the parts as they were is fine.
+	in.Title = "Bolts, checked"
+	if err := s.UpdateService(ctx, svc, in); err != nil {
+		t.Errorf("title edit near the maximum: %v", err)
+	}
 	_, err = s.DeleteService(ctx, svc)
 	wantConflict(t, "delete", err, "Bolt would have more than")
 	if _, err := s.GetService(ctx, svc); err != nil {
@@ -2493,4 +2533,48 @@ func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
 	if k, _ := s.GetKit(ctx, oilKit); len(k.Lines) != 1 || k.Lines[0].ItemID != keep {
 		t.Errorf("kit lines = %+v", k.Lines)
 	}
+}
+
+// Services with readings take the vehicle's lock before their parts, as
+// deleting one does, so logging and deleting at once can't deadlock.
+func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
+	s, ctx := newStore(t)
+	km := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	vin.Normalize()
+	v, _ := s.CreateVehicle(ctx, vin)
+	a := mustItem(t, s, stock.ItemInput{Name: "A", Unit: stock.UnitPiece, Quantity: 1000})
+	b := mustItem(t, s, stock.ItemInput{Name: "B", Unit: stock.UnitPiece, Quantity: 1000})
+	var reading sync.Mutex
+	next := km
+	var wg sync.WaitGroup
+	errs := make(chan error, 200)
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 15 {
+				reading.Lock()
+				next += 10
+				r := next
+				reading.Unlock()
+				in := stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(), OdometerKm: &r,
+					Parts: []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}}
+				id, err := s.CreateService(ctx, in)
+				if err != nil {
+					errs <- err
+					continue
+				}
+				if _, err := s.DeleteService(ctx, id); err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	assertLedger(t, s)
 }

@@ -36,6 +36,7 @@ type Server struct {
 	currency        string
 	skuSearch       string
 	skuSearchPrefix string
+	skuSearchTitle  string // where part number links search, for their tooltips
 	version         string
 	assetHashes     map[string]string
 	now             func() time.Time
@@ -65,6 +66,7 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	if s.skuSearch == "" {
 		s.skuSearch = "https://www.google.com/search?q="
 	}
+	s.skuSearchTitle = searchTitle(s.skuSearch, s.skuSearchPrefix)
 	var err error
 	if s.assetHashes, err = hashAssets(); err != nil {
 		return nil, err

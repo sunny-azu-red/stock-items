@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -195,11 +196,11 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	v, err := s.store.GetVehicle(r.Context(), id)
-	if err != nil {
-		return err
+	// Deleted meanwhile, the form still shows what was typed.
+	f.Stored = cmp.Or(f.Name, "vehicle")
+	if v, err := s.store.GetVehicle(r.Context(), id); err == nil {
+		f.Stored = v.Name
 	}
-	f.Stored = v.Name
 	s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, false)
 	return nil
 }

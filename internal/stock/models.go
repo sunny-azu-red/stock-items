@@ -296,7 +296,7 @@ type ServiceRef struct {
 	PerformedOn time.Time
 	OdometerKm  *int
 	// OdometerAtLog is the vehicle's reading when a service without its
-	// own reading was logged.
+	// own reading was logged, if that was within a week of doing it.
 	OdometerAtLog *int
 }
 

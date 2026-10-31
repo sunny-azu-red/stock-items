@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -57,12 +58,12 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		s.redirect(w, r, "/trash", "")
 		return nil
 	}
-	msg := "Restored " + res.Label
+	msg := "Restored " + res.Label + "."
 	if res.Kind == store.TrashBought {
-		msg = "Undone: " + res.Label + ". It's back on the shopping list."
+		msg = "Took back buying " + strings.TrimPrefix(res.Label, "Bought: ") + ". It's back on the shopping list."
 	}
 	if res.Dropped > 0 {
-		msg += fmt.Sprintf(". Left out %d %s to things deleted for good.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
+		msg += fmt.Sprintf(" Left out %d %s to things deleted for good.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
 	}
 	s.redirect(w, r, restoredPath(res), msg)
 	return nil
@@ -74,7 +75,11 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	others, err := s.store.PurgeTrash(r.Context(), id)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, store.ErrNotFound) {
+		s.setFlash(w, "error", "That was restored or deleted for good already")
+		s.redirect(w, r, "/trash", "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	msg := "Deleted for good"

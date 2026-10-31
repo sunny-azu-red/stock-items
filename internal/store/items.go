@@ -331,6 +331,11 @@ func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, er
 // it fails with a *ConflictError and should be archived instead.
 func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		// The shopping entry the delete cascades to before the item, like
+		// MarkBought, so the two can't deadlock.
+		if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id); err != nil {
+			return err
+		}
 		var name, brand string
 		if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand); err != nil {
 			return notFound(err)

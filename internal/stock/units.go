@@ -99,18 +99,19 @@ var amountRe = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?
 // number like "1,500" is refused as ambiguous (see CheckAmbiguous); in L
 // and kg it is read as a decimal.
 func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
-	s = strings.ToLower(strings.TrimSpace(s))
+	typed := strings.TrimSpace(s) // quoted in errors as typed
+	s = strings.ToLower(typed)
 	if s == "" {
 		return 0, ErrEmpty
 	}
 	s = strings.ReplaceAll(s, ",", ".")
 	m := amountRe.FindStringSubmatch(s)
 	if m == nil {
-		return 0, fmt.Errorf("%q is not a valid amount", s)
+		return 0, fmt.Errorf("%q is not a valid amount", typed)
 	}
 	n, err := strconv.ParseFloat(m[1], 64)
 	if err != nil {
-		return 0, fmt.Errorf("%q is not a valid amount", s)
+		return 0, fmt.Errorf("%q is not a valid amount", typed)
 	}
 	sub, ok := suffixes[m[2]]
 	if !ok {
@@ -187,13 +188,13 @@ func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 func FormatQuantity(q float64, u Unit) string {
 	switch u {
 	case UnitML:
-		if useLargeUnit(q) {
-			return FormatNumber(q/1000) + " L"
+		if useLargeUnit(round2(q)) {
+			return FormatNumber(round2(q)/1000) + " L"
 		}
 		return formatSmall(q) + " ml"
 	case UnitGram:
-		if useLargeUnit(q) {
-			return FormatNumber(q/1000) + " kg"
+		if useLargeUnit(round2(q)) {
+			return FormatNumber(round2(q)/1000) + " kg"
 		}
 		return formatSmall(q) + " g"
 	default:
@@ -204,12 +205,14 @@ func FormatQuantity(q float64, u Unit) string {
 // formatSmall is formatGrouped to two decimals; a little that would show
 // as nothing shows as "<0.01".
 func formatSmall(q float64) string {
-	r := math.Round(q*100) / 100
-	if r == 0 && q != 0 {
+	r := round2(q)
+	if r == 0 && q > 0 {
 		return "<0.01"
 	}
 	return formatGrouped(r)
 }
+
+func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
 // formatGrouped is FormatNumber with thousands separators: "1 234.5".
 func formatGrouped(f float64) string {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -270,4 +271,158 @@ func TestFormSubmissionsMigration(t *testing.T) {
 		t.Errorf("Up again changed data:\n%s\nwant\n%s", got, before)
 	}
 	checkLedger(t, pool)
+}
+
+// amountColumns are the columns 00012 takes to two decimals.
+var amountColumns = [][2]string{{"items", "quantity"}, {"items", "min_quantity"}, {"item_skus", "pack_size"},
+	{"service_kit_lines", "quantity"}, {"stock_movements", "delta"}, {"shopping_entries", "quantity"}}
+
+// trailingZeros matches the zeros a numeric's scale adds (1525.500), so
+// dumps taken with three and two decimals compare by value.
+var (
+	trailingZeros = regexp.MustCompile(`(\.[0-9]*[1-9])0+([,}\]])`)
+	zeroFraction  = regexp.MustCompile(`\.0+([,}\]])`)
+)
+
+func byValue(dump string) string {
+	return zeroFraction.ReplaceAllString(trailingZeros.ReplaceAllString(dump, "$1$2"), "$1")
+}
+
+// scales returns the number of decimals each amount column keeps.
+func scales(t *testing.T, pool *pgxpool.Pool) map[string]int {
+	t.Helper()
+	out := map[string]int{}
+	for _, c := range amountColumns {
+		var scale int
+		if err := pool.QueryRow(context.Background(), `SELECT numeric_scale FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`, c[0], c[1]).Scan(&scale); err != nil {
+			t.Fatal(err)
+		}
+		out[c[0]+"."+c[1]] = scale
+	}
+	return out
+}
+
+func expectScales(t *testing.T, pool *pgxpool.Pool, want int) {
+	t.Helper()
+	for col, got := range scales(t, pool) {
+		if got != want {
+			t.Errorf("%s keeps %d decimals, want %d", col, got, want)
+		}
+	}
+}
+
+// 00012 takes every amount column to two decimals without changing a
+// value, and back: Up → Down → Up on data shaped like the real one. Its
+// guard stops it, changing nothing, when an amount finer than 0.01 is in
+// a table or a trash snapshot, rather than let the new type round it.
+func TestAmountsMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 11); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+	// A snapshot with amounts in it: a deleted stock change and its item's
+	// part numbers, as the store takes them.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO trash (kind, label, payload)
+		SELECT 'item', 'Item: snapshot', jsonb_build_object('items', (SELECT jsonb_agg(to_jsonb(i)) FROM items i WHERE id = 2),
+		       'item_skus', (SELECT jsonb_agg(to_jsonb(s)) FROM item_skus s WHERE item_id = 2),
+		       'stock_movements', (SELECT jsonb_agg(to_jsonb(m)) FROM stock_movements m WHERE item_id = 2), 'movement_id', 4)`); err != nil {
+		t.Fatal(err)
+	}
+	checkLedger(t, pool)
+	expectScales(t, pool, 3)
+	before := byValue(dump(t, pool, ""))
+	same := func(step string) {
+		t.Helper()
+		if got := byValue(dump(t, pool, "")); got != before {
+			t.Errorf("%s changed data:\n%s\nwant\n%s", step, got, before)
+		}
+		checkLedger(t, pool)
+	}
+
+	if _, err := provider.UpTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	expectScales(t, pool, 2)
+	same("Up")
+	// Postgres keeps it so from now on (rounding what it is given).
+	var q float64
+	if err := pool.QueryRow(ctx, `UPDATE items SET quantity = 1.234 WHERE id = 3 RETURNING quantity::float8`).Scan(&q); err != nil || q != 1.23 {
+		t.Errorf("1.234 stored as %v (%v)", q, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE items SET quantity = 399.25 WHERE id = 3`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 11); err != nil {
+		t.Fatal(err)
+	}
+	expectScales(t, pool, 3)
+	same("Down")
+	if _, err := provider.UpTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	expectScales(t, pool, 2)
+	same("Up again")
+	if _, err := provider.DownTo(ctx, 11); err != nil {
+		t.Fatal(err)
+	}
+
+	// The guard: a finer amount anywhere stops the migration, naming where.
+	for _, tt := range []struct {
+		name, seed, undo string
+		want             []string
+	}{
+		{"in a table",
+			`UPDATE items SET quantity = quantity + 0.005 WHERE id = 3;
+			 INSERT INTO stock_movements (item_id, kind, delta, occurred_on) VALUES (3, 'correction', 0.005, '2026-10-01');
+			 UPDATE item_skus SET pack_size = 2.125 WHERE id = 1`,
+			`UPDATE items SET quantity = quantity - 0.005 WHERE id = 3;
+			 DELETE FROM stock_movements WHERE delta = 0.005;
+			 UPDATE item_skus SET pack_size = 2 WHERE id = 1`,
+			[]string{"items.quantity: 1 row (e.g. 399.255)", "stock_movements.delta: 1 row (e.g. 0.005)",
+				"item_skus.pack_size: 1 row (e.g. 2.125)"}},
+		{"in a trash snapshot",
+			`INSERT INTO trash (kind, label, payload) VALUES ('movement', 'Stock change: fine',
+			   '{"stock_movements": [{"id": 50, "item_id": 3, "kind": "use", "delta": -0.005}, {"id": 51, "item_id": 3, "kind": "use", "delta": -1.5}],
+			     "movement_id": 1.5, "items": [{"id": 3, "quantity": 2, "min_quantity": 0.125}]}')`,
+			`DELETE FROM trash WHERE label = 'Stock change: fine'`,
+			[]string{"trash snapshots, stock_movements.delta: 1 row (e.g. -0.005)", "trash snapshots, items.min_quantity: 1 row (e.g. 0.125)"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := pool.Exec(ctx, tt.seed); err != nil {
+				t.Fatal(err)
+			}
+			checkLedger(t, pool)
+			seeded := dump(t, pool, "")
+			_, err := provider.UpTo(ctx, 12)
+			if err == nil {
+				t.Fatal("the migration went through with an amount finer than 0.01")
+			}
+			for _, w := range append(tt.want, "Migration 00012", "nothing was changed") {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error does not say %q: %v", w, err)
+				}
+			}
+			if v, err := provider.GetDBVersion(ctx); err != nil || v != 11 {
+				t.Errorf("version after the guard = %d, %v; want 11", v, err)
+			}
+			expectScales(t, pool, 3)
+			if got := dump(t, pool, ""); got != seeded {
+				t.Errorf("the guard changed data:\n%s\nwant\n%s", got, seeded)
+			}
+			if _, err := pool.Exec(ctx, tt.undo); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if _, err := provider.UpTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	same("Up after fixing")
 }

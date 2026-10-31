@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 
 	"github.com/jackc/pgx/v5"
 
@@ -90,7 +89,8 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 // adding up (used for kit shortfalls and low stock suggestions). changed
 // reports whether the list changed: it doesn't when the entry already
 // asks for as much. Missing and archived items are refused with
-// ErrNotFound.
+// ErrNotFound, and an amount the item's unit can't hold (fractional
+// pieces, finer than 0.01 ml or g) with stock.Errors.
 func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, note string) (changed bool, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		// Entry, then item, like AddShopping; FOR SHARE keeps the item from
@@ -99,11 +99,16 @@ func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, n
 			return err
 		}
 		var archived bool
-		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, itemID).Scan(&archived); err != nil {
+		var unit stock.Unit
+		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL, unit FROM items WHERE id = $1 FOR SHARE`, itemID).Scan(&archived, &unit); err != nil {
 			return notFound(err)
 		}
 		if archived {
 			return ErrNotFound
+		}
+		// The unit read under the lock: the amount came from a hidden field.
+		if err := stock.CheckQuantity(qty, unit); err != nil {
+			return stock.Errors{"quantity": err.Error()}
 		}
 		// A new version when the entry changes, like AddShopping.
 		tag, err := tx.Exec(ctx, `
@@ -191,13 +196,13 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 			}
 			// Rounded like applyMovement rounds it, so left matches what was
 			// recorded.
-			in.Delta = math.Round(in.Delta*1000) / 1000
+			in.Delta = stock.RoundQty(in.Delta)
 			movementID, err := applyStockChange(ctx, tx, in)
 			if err != nil {
 				return err
 			}
 			if qty != nil {
-				left = math.Round((*qty-in.Delta)*1000) / 1000
+				left = stock.RoundQty(*qty - in.Delta)
 			}
 			if trashID, err = putBought(ctx, tx, id, before, movementID, in.FormKey); err != nil {
 				return err

@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,9 +19,10 @@ import (
 // the item through the foreign key, which FOR UPDATE would conflict with,
 // so a kit saved while a service takes the same parts could deadlock.
 func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int64, error) {
-	// The columns keep three decimals. Rounding here (not in the database)
+	// The columns keep two decimals. Rounding here (not in the database)
 	// makes the stored delta exactly the change applied to the quantity.
-	in.Delta = math.Round(in.Delta*1000) / 1000
+	// (The pages refuse finer amounts; see stock.ParseAmount.)
+	in.Delta = stock.RoundQty(in.Delta)
 	if in.Delta == 0 {
 		return 0, stock.Errors{"amount": "Amount must not be zero"}
 	}
@@ -40,7 +40,7 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 	if archived && in.Kind != stock.MoveService {
 		return 0, archivedError(brand, name)
 	}
-	if qty+in.Delta < -0.0005 {
+	if qty+in.Delta < -0.005 { // below zero, not just float noise
 		return 0, &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
 	}
 	if qty+in.Delta > stock.MaxQuantity {
@@ -118,7 +118,7 @@ func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, n
 
 // correctTo records a correction from qty (read under lock) to target.
 func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string, on time.Time) (float64, error) {
-	delta := math.Round((target-qty)*1000) / 1000
+	delta := stock.RoundQty(target - qty)
 	if delta == 0 {
 		return 0, nil
 	}
@@ -249,7 +249,7 @@ func lockVersionedMovement(ctx context.Context, tx pgx.Tx, id int64, version int
 // instead (0 for not at all). Together with updating or deleting the
 // movement row, this keeps quantity equal to the sum of the ledger.
 func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta float64) error {
-	qty := math.Round((m.qty-m.Delta+delta)*1000) / 1000
+	qty := stock.RoundQty(m.qty - m.Delta + delta)
 	if qty < 0 {
 		return &InsufficientStockError{ItemID: m.ItemID, ItemName: m.ItemName, Unit: m.ItemUnit, Have: m.qty, Need: m.Delta - delta}
 	}
@@ -278,7 +278,7 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 		if errs.Any() {
 			return errs
 		}
-		in.Delta = math.Round(in.Delta*1000) / 1000
+		in.Delta = stock.RoundQty(in.Delta)
 		if in.Delta == 0 {
 			return stock.Errors{"amount": "Amount must not be zero"}
 		}

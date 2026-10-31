@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -225,7 +224,7 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 		Scan(&qty, &name, &brand, &unit); err != nil {
 		return notFound(err)
 	}
-	next := math.Round((qty+delta)*1000) / 1000
+	next := stock.RoundQty(qty + delta)
 	if next < 0 {
 		return &InsufficientStockError{ItemID: itemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -delta}
 	}
@@ -453,6 +452,9 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		if err := json.Unmarshal([]byte(raw), &p); err != nil {
 			return err
 		}
+		if err := checkSnapshotAmounts(p); err != nil {
+			return err
+		}
 		var err error
 		switch out.Kind {
 		case TrashService:
@@ -481,6 +483,37 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		return err
 	})
 	return out, err
+}
+
+// amountColumns are the snapshot columns holding amounts: numeric(12,2)
+// since migration 00012.
+var amountColumns = []string{"quantity", "min_quantity", "delta", "pack_size"}
+
+// checkSnapshotAmounts refuses a snapshot holding an amount finer than
+// 0.01. Restoring casts the numbers into the columns' type, which would
+// round it, and the stock is moved by the unrounded delta: the ledger
+// could stop adding up. Migration 00012 made sure no snapshot holds one,
+// and snapshots since come from two-decimal columns; this keeps it so.
+func checkSnapshotAmounts(p trashPayload) error {
+	for _, raw := range p {
+		rows, err := decodeRows(raw)
+		if err != nil {
+			continue // not a table's rows (e.g. movement_id)
+		}
+		for _, r := range rows {
+			for _, col := range amountColumns {
+				n, ok := r[col].(json.Number)
+				if !ok {
+					continue
+				}
+				if f, err := n.Float64(); err != nil || stock.CheckQuantity(f, stock.UnitML) != nil {
+					return &ConflictError{Field: "form", Message: "It holds an amount finer than 0.01 (" + n.String() +
+						"), which Pitbox doesn't store, so it can't be restored."}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // restoreConflict turns database errors of a restore into messages.

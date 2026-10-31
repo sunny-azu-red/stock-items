@@ -57,7 +57,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		for _, p := range rec.Parts {
 			for i := range items {
 				if items[i].ID == p.ItemID {
-					items[i].Quantity += p.Quantity
+					items[i].Quantity = stock.RoundQty(items[i].Quantity + p.Quantity)
 				}
 			}
 		}

@@ -86,7 +86,8 @@ When you press Save (or Add to stock, Take from stock, …), the button says **S
 
 ## Tips
 
-- Decimals take a comma or a point: `1,5` and `1.5` are the same. Don't group thousands: a price of `1.500` or `1,500` is refused, because it could mean 1500 or 1.5, and so is a count in pieces, ml or g written that way (`1,500 ml`). Type `1500` or `1.5`. In L and kg, `1,500` is 1.5. The app prints thousands with a narrow space (`12 000 km`), which reads the same either way, and never shows three decimals: 1.5 L and 1.75 L, but 1 475 ml, and 1.23 g for 1.234 g.
+- Decimals take a comma or a point: `1,5` and `1.5` are the same. Don't group thousands: a price of `1.500` or `1,500` is refused, because it could mean 1500 or 1.5, and so is a count in pieces, ml or g written that way (`1,500 ml`). Type `1500` or `1.5`. In L and kg, `1,500` is 1.5. The app prints thousands with a narrow space (`12 000 km`), which reads the same either way, and never shows three decimals: 1.5 L and 1.75 L, but 1 475 ml.
+- Amounts take at most two decimals of ml or g, and pieces are whole. A finer amount isn't rounded: the form comes back with what you typed and says why. `0.234 g` gets *"use at most two decimals of g"*, and `1.0004` pieces *"pieces must be a whole number"*. In L and kg you can type more decimals, as long as they come to two of ml or g: `1.2345 kg` is 1234.5 g, but `1.234567 kg` gets *"1.234567 kg is 1234.567 g: use at most two decimals of g"*.
 - Photos help to recognise similar parts: open an item → **Add photo** (up to 15 MB). Phone photos are rotated and resized automatically. **Replace photo** and **Remove** are on the same spot; both can be undone.
 - A USB or Bluetooth barcode scanner "types" into the search box. Put EAN codes in the SKU list and scanning finds the item.
 - Shortcuts: `/` searches stock from any page, `n` opens a new item.

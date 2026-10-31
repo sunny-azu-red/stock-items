@@ -3,7 +3,6 @@ package web
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -148,8 +147,9 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 		if err != nil || i >= len(qtys) {
 			continue
 		}
+		// Not rounded: EnsureShopping refuses fractional pieces and amounts
+		// finer than 0.01 ml or g, as ParseAmount does for typed ones.
 		q, err := strconv.ParseFloat(qtys[i], 64)
-		q = math.Round(q*1000) / 1000 // the column keeps three decimals
 		if err != nil || !(q > 0 && q <= stock.MaxQuantity) {
 			continue
 		}
@@ -158,8 +158,9 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 			note = strings.TrimSpace(notes[i])
 		}
 		changed, err := s.store.EnsureShopping(r.Context(), id, q, note)
-		if errors.Is(err, store.ErrNotFound) {
-			continue // deleted or archived in the meantime
+		var invalid stock.Errors
+		if errors.Is(err, store.ErrNotFound) || errors.As(err, &invalid) {
+			continue // deleted or archived in the meantime, or a forged amount
 		}
 		if err != nil {
 			return err

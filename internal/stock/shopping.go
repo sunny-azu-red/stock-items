@@ -33,7 +33,7 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64) []Sug
 			s = &Suggestion{Item: it}
 			sugg[it.ID] = s
 		}
-		s.Quantity = max(s.Quantity, round3(qty))
+		s.Quantity = max(s.Quantity, RoundQty(qty))
 		s.Reasons = append(s.Reasons, reason)
 	}
 	for _, it := range items {

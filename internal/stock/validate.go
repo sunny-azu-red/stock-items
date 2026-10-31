@@ -581,7 +581,7 @@ func mergeLines(lines []KitLineInput) []KitLineInput {
 			continue
 		}
 		if i, ok := idx[l.ItemID]; ok {
-			out[i].Quantity = round3(out[i].Quantity + l.Quantity)
+			out[i].Quantity = RoundQty(out[i].Quantity + l.Quantity)
 			continue
 		}
 		idx[l.ItemID] = len(out)

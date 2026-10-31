@@ -585,10 +585,15 @@ func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 	if d, err := s.CorrectStock(ctx, id, 6, "count", time.Now(), ""); err != nil || d != -2 {
 		t.Errorf("CorrectStock to 6 = %v, %v", d, err)
 	}
-	// Deltas are rounded to the three decimals the ledger keeps.
+	// Deltas are rounded to the two decimals the ledger keeps (the pages
+	// refuse finer amounts; direct calls get them rounded).
 	var short *store.InsufficientStockError
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -6.0005}); !errors.As(err, &short) {
-		t.Errorf("use 6.0005 of 6: want InsufficientStockError, got %v", err)
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -6.006}); !errors.As(err, &short) {
+		t.Errorf("use 6.006 (6.01) of 6: want InsufficientStockError, got %v", err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -0.0049}); err == nil ||
+		!strings.Contains(err.Error(), "must not be zero") {
+		t.Errorf("use 0.0049 (0): want a zero amount refused, got %v", err)
 	}
 	assertLedger(t, s)
 }
@@ -2774,6 +2779,49 @@ func TestVersions(t *testing.T) {
 	step(store.WhatShopping, entry, 4, "after the Undo")
 	if _, err := s.DeleteShopping(ctx, entry, 3); !errors.As(err, &stale) || stale.Gone {
 		t.Errorf("delete with the version before the Undo: %v", err)
+	}
+	assertLedger(t, s)
+}
+
+// A snapshot holding an amount finer than 0.01 (only possible by hand
+// since migration 00012) is not restored: the column would round it while
+// the stock moved by the exact amount, and the ledger would stop adding up.
+func TestRestoreRefusesAmountsFinerThanTwoDecimals(t *testing.T) {
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -250.5}); err != nil {
+		t.Fatal(err)
+	}
+	moves, err := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+	if err != nil || len(moves) != 1 {
+		t.Fatalf("uses: %v, %v", moves, err)
+	}
+	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	setDelta := func(d string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{stock_movements,0,delta}', $2::jsonb) WHERE id = $1`,
+			trashID, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setDelta("-250.505")
+	var conflict *store.ConflictError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) || !strings.Contains(err.Error(), "finer than 0.01 (-250.505)") {
+		t.Fatalf("restore of -250.505: want a ConflictError, got %v", err)
+	}
+	if it := mustGet(t, s, oil); it.Quantity != 1000 {
+		t.Errorf("oil after the refused restore = %v, want 1000", it.Quantity)
+	}
+	assertLedger(t, s)
+	// Two decimals, written with a third zero as numeric(12,3) did: fine.
+	setDelta("-250.500")
+	mustRestore(t, s, trashID)
+	if it := mustGet(t, s, oil); it.Quantity != 749.5 {
+		t.Errorf("oil after the restore = %v, want 749.5", it.Quantity)
 	}
 	assertLedger(t, s)
 }

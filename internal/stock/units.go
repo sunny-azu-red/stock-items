@@ -87,7 +87,7 @@ func findSubUnit(value string) (SubUnit, bool) {
 var ErrEmpty = errors.New("empty amount")
 
 // MaxQuantity is the largest amount (in base units) one item can hold or
-// one input can carry. It keeps sums well inside the numeric(12,3) columns.
+// one input can carry. It keeps sums well inside the numeric(12,2) columns.
 const MaxQuantity = 100_000_000
 
 var amountRe = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?$`)
@@ -95,9 +95,11 @@ var amountRe = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?
 // ParseAmount parses a user typed amount such as "2", "525 ml", "1,5 L" or
 // "400g" into the base unit of u. A suffix in the text wins over subUnit
 // (the value of a unit selector next to the input); with neither, the base
-// unit is assumed. Pieces must be whole numbers. In pieces, ml and g a
-// number like "1,500" is refused as ambiguous (see CheckAmbiguous); in L
-// and kg it is read as a decimal.
+// unit is assumed. Pieces must be whole numbers, and ml and g take at most
+// two decimals (see CheckQuantity), also when typed in L or kg: "1.2345 L"
+// is 1234.5 ml, "1.234567 L" is refused. Nothing is rounded away. In
+// pieces, ml and g a number like "1,500" is refused as ambiguous (see
+// CheckAmbiguous); in L and kg it is read as a decimal.
 func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	typed := strings.TrimSpace(s) // quoted in errors as typed
 	s = strings.ToLower(typed)
@@ -136,14 +138,64 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 			return 0, err
 		}
 	}
-	v := round3(n * factor)
+	v := n * factor
 	if v > MaxQuantity {
 		return 0, errors.New("that amount is too large")
 	}
-	if u == UnitPiece && v != math.Trunc(v) {
-		return 0, errors.New("pieces must be a whole number")
+	// Checked before rounding, so "1.0004" pieces is refused, not read as 1.
+	if err := CheckQuantity(v, u); err != nil {
+		if factor != 1 && u != UnitPiece {
+			return 0, fmt.Errorf("%s %s is %s %s: %w", m[1], findLabel(sub), shiftPoint(m[1], factor), u, err)
+		}
+		return 0, err
 	}
-	return v, nil
+	return RoundQty(v), nil
+}
+
+// CheckQuantity reports why q, in the base unit u, can't be stored: pieces
+// must be whole, and ml and g take at most two decimals (the columns are
+// numeric(12,2)). It never rounds; RoundQty only takes off float noise.
+func CheckQuantity(q float64, u Unit) error {
+	if u == UnitPiece && q != math.Trunc(q) {
+		return errors.New("pieces must be a whole number")
+	}
+	// q*100 is a whole number, give or take float noise (far below 0.0001
+	// up to MaxQuantity).
+	if c := q * 100; math.Abs(c-math.Round(c)) > 1e-4 {
+		return fmt.Errorf("use at most two decimals of %s", u)
+	}
+	return nil
+}
+
+// RoundQty rounds an amount in base units to the two decimals it is
+// stored with. Amounts computed from stored ones (sums, differences, L
+// times 1000) only need it to drop float noise such as 0.30000000000000004.
+func RoundQty(f float64) float64 {
+	return math.Round(f*100) / 100
+}
+
+// findLabel is the display label of a sub unit value ("l" → "L").
+func findLabel(value string) string {
+	su, _ := findSubUnit(value)
+	return su.Label
+}
+
+// shiftPoint multiplies a plain decimal number by factor (a power of ten)
+// without float rounding: shiftPoint("1.23456", 1000) is "1234.56".
+func shiftPoint(num string, factor float64) string {
+	places := int(math.Round(math.Log10(factor)))
+	whole, frac, _ := strings.Cut(num, ".")
+	for len(frac) < places {
+		frac += "0"
+	}
+	whole = strings.TrimLeft(whole+frac[:places], "0")
+	if whole == "" {
+		whole = "0"
+	}
+	if frac = frac[places:]; frac != "" {
+		return whole + "." + frac
+	}
+	return whole
 }
 
 // groupedRe matches a number that reads as a whole number with a thousands
@@ -184,17 +236,18 @@ func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 
 // FormatQuantity renders a base unit quantity for people:
 // "6x", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg". Like L and kg,
-// ml and g show at most two decimals, as "1.234 g" reads as 1234 g.
+// ml and g show at most two decimals, as stored ("1.234 g" would read as
+// 1234 g).
 func FormatQuantity(q float64, u Unit) string {
 	switch u {
 	case UnitML:
-		if useLargeUnit(round2(q)) {
-			return FormatNumber(round2(q)/1000) + " L"
+		if useLargeUnit(RoundQty(q)) {
+			return FormatNumber(RoundQty(q)/1000) + " L"
 		}
 		return formatSmall(q) + " ml"
 	case UnitGram:
-		if useLargeUnit(round2(q)) {
-			return FormatNumber(round2(q)/1000) + " kg"
+		if useLargeUnit(RoundQty(q)) {
+			return FormatNumber(RoundQty(q)/1000) + " kg"
 		}
 		return formatSmall(q) + " g"
 	default:
@@ -205,7 +258,7 @@ func FormatQuantity(q float64, u Unit) string {
 // formatSmall is formatGrouped to two decimals; a little that would show
 // as nothing shows as "<0.01".
 func formatSmall(q float64) string {
-	r := round2(q)
+	r := RoundQty(q)
 	if r == 0 {
 		if q > 0 {
 			return "<0.01"
@@ -214,8 +267,6 @@ func formatSmall(q float64) string {
 	}
 	return formatGrouped(r)
 }
-
-func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
 // formatGrouped is FormatNumber with thousands separators: "1 234.5".
 func formatGrouped(f float64) string {
@@ -241,36 +292,28 @@ func FormatDelta(q float64, u Unit) string {
 
 // SplitForInput turns a base quantity into an input value and sub unit,
 // picking the larger unit when it reads better (1500 ml -> "1.5", "l").
-// The value parses back to exactly q.
+// The value parses back to exactly q (a stored amount, so with at most
+// two decimals, which never read as a thousands group).
 func SplitForInput(q float64, u Unit) (string, string) {
 	switch u {
 	case UnitML:
 		if useLargeUnit(q) {
 			return FormatNumber(q / 1000), "l"
 		}
-		return exactInput(q), "ml"
+		return FormatNumber(q), "ml"
 	case UnitGram:
 		if useLargeUnit(q) {
 			return FormatNumber(q / 1000), "kg"
 		}
-		return exactInput(q), "g"
+		return FormatNumber(q), "g"
 	default:
 		return FormatNumber(q), "pcs"
 	}
 }
 
-// exactInput is FormatNumber with a trailing zero where the number would
-// otherwise be refused as ambiguous on the way back: "1.2340" ml, not
-// "1.234" (which could mean 1234).
-func exactInput(q float64) string {
-	s := FormatNumber(q)
-	if CheckAmbiguous(s) != nil {
-		s += "0"
-	}
-	return s
-}
-
-// FormatNumber prints up to three decimals without trailing zeros.
+// FormatNumber prints up to three decimals without trailing zeros. Stored
+// amounts have at most two; the third is for numbers people typed, such as
+// the 999.999 an error message quotes.
 func FormatNumber(f float64) string {
 	return strconv.FormatFloat(round3(f), 'f', -1, 64)
 }
@@ -291,10 +334,11 @@ func DefaultStep(u Unit) float64 {
 // be at least 1000 and a multiple of 10, so it takes at most two decimals.
 // Three ("1.475 L") would read as 1475 L where a point groups thousands.
 func useLargeUnit(q float64) bool {
-	q = math.Abs(round3(q))
+	q = math.Abs(RoundQty(q))
 	return q >= 1000 && math.Mod(q, 10) == 0
 }
 
+// round3 is FormatNumber's rounding, not an amount's (see RoundQty).
 func round3(f float64) float64 {
 	return math.Round(f*1000) / 1000
 }

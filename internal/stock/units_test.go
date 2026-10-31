@@ -32,6 +32,12 @@ func TestParseAmount(t *testing.T) {
 		{"12.25 ml", UnitML, "", 12.25},
 		{"1500.5 g", UnitGram, "", 1500.5},
 		{"1000", UnitPiece, "", 1000},
+		{"0.23 g", UnitGram, "", 0.23},
+		{"1.2345 kg", UnitGram, "", 1234.5}, // two decimals of g once in g
+		{"1.23456 l", UnitML, "", 1234.56},  // the most L can take
+		{"99999999.99 ml", UnitML, "", 99999999.99},
+		{"2.00", UnitPiece, "", 2}, // zero decimals are whole
+		{"0.00001 l", UnitML, "", 0.01},
 	}
 	for _, tt := range tests {
 		got, err := ParseAmount(tt.in, tt.unit, tt.sub)
@@ -69,6 +75,12 @@ func TestParseAmountErrors(t *testing.T) {
 		{"1.000", UnitPiece, ""},
 		{"12,000 pcs", UnitPiece, ""},
 		{"12.125 ml", UnitML, ""},
+		{"0.234", UnitGram, ""},       // three decimals of g
+		{"0.001 ml", UnitML, ""},      // finer than 0.01 ml
+		{"1.234567 kg", UnitGram, ""}, // 1234.567 g
+		{"0.000001 l", UnitML, ""},    // 0.001 ml
+		{"1.0004", UnitPiece, ""},     // not rounded to 1 first
+		{"2.0000001", UnitPiece, ""},
 	}
 	for _, tt := range tests {
 		if _, err := ParseAmount(tt.in, tt.unit, tt.sub); err == nil {
@@ -77,6 +89,66 @@ func TestParseAmountErrors(t *testing.T) {
 	}
 	if _, err := ParseAmount("  ", UnitML, ""); !errors.Is(err, ErrEmpty) {
 		t.Errorf("blank input: want ErrEmpty, got %v", err)
+	}
+}
+
+// The reasons say what to type instead; one typed in L or kg says what
+// it comes to in ml or g.
+func TestParseAmountFinerThanTwoDecimals(t *testing.T) {
+	tests := []struct {
+		in   string
+		unit Unit
+		sub  string
+		want string
+	}{
+		{"0.234", UnitGram, "g", "use at most two decimals of g"},
+		{"0,001 ml", UnitML, "", "use at most two decimals of ml"},
+		{"1.234567 kg", UnitGram, "", "1.234567 kg is 1234.567 g: use at most two decimals of g"},
+		{"0.000001", UnitML, "l", "0.000001 L is 0.001 ml: use at most two decimals of ml"},
+		{".0000015 l", UnitML, "", ".0000015 L is 0.0015 ml: use at most two decimals of ml"},
+		{"1.0004", UnitPiece, "", "pieces must be a whole number"},
+	}
+	for _, tt := range tests {
+		_, err := ParseAmount(tt.in, tt.unit, tt.sub)
+		if err == nil || err.Error() != tt.want {
+			t.Errorf("ParseAmount(%q, %s, %q) = %v, want %q", tt.in, tt.unit, tt.sub, err, tt.want)
+		}
+	}
+}
+
+// sum adds at run time, with float noise: 0.1 + 0.2 is 0.30000000000000004
+// (a constant expression would be exact).
+func sum(a, b float64) float64 { return a + b }
+
+func TestCheckQuantity(t *testing.T) {
+	tests := []struct {
+		q    float64
+		unit Unit
+		ok   bool
+	}{
+		{2, UnitPiece, true},
+		{1.0004, UnitPiece, false},
+		{0.5, UnitPiece, false},
+		{0.23, UnitGram, true},
+		{sum(0.1, 0.2), UnitML, true}, // float noise is no third decimal
+		{sum(1234.56, 0.01), UnitML, true},
+		{0.234, UnitGram, false},
+		{0.005, UnitML, false},
+		{99999999.99, UnitML, true},
+		{99999999.995, UnitML, false},
+	}
+	for _, tt := range tests {
+		if err := CheckQuantity(tt.q, tt.unit); (err == nil) != tt.ok {
+			t.Errorf("CheckQuantity(%v, %s) = %v, want ok %v", tt.q, tt.unit, err, tt.ok)
+		}
+	}
+}
+
+func TestRoundQty(t *testing.T) {
+	for in, want := range map[float64]float64{sum(0.1, 0.2): 0.3, sum(1234.56, 0.01): 1234.57, -6.006: -6.01, 0.004: 0, 1234.56: 1234.56} {
+		if got := RoundQty(in); got != want {
+			t.Errorf("RoundQty(%v) = %v, want %v", in, got, want)
+		}
 	}
 }
 
@@ -161,10 +233,14 @@ func TestSplitForInput(t *testing.T) {
 		{525, UnitML, "525", "ml"},
 		{3, UnitPiece, "3", "pcs"},
 		{2500, UnitGram, "2.5", "kg"},
-		{1475, UnitML, "1475", "ml"},    // ungrouped, so it parses back
-		{1.234, UnitML, "1.2340", "ml"}, // "1.234" would be refused as ambiguous
-		{12.345, UnitGram, "12.3450", "g"},
+		{1475, UnitML, "1475", "ml"}, // ungrouped, so it parses back
+		{1.23, UnitML, "1.23", "ml"}, // two decimals never read as a thousands group
+		{12.34, UnitGram, "12.34", "g"},
+		{1234.5, UnitGram, "1234.5", "g"},
+		{1230, UnitML, "1.23", "l"},
+		{99999999.99, UnitML, "99999999.99", "ml"},
 		{0.5, UnitGram, "0.5", "g"},
+		{0.01, UnitML, "0.01", "ml"},
 	}
 	for _, tt := range tests {
 		v, s := SplitForInput(tt.q, tt.unit)

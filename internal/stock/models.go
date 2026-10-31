@@ -322,7 +322,7 @@ func (l KitLine) Short() float64 {
 	if l.Have >= l.Need {
 		return 0
 	}
-	return round3(l.Need - l.Have)
+	return RoundQty(l.Need - l.Have)
 }
 
 // ServiceRecord is a performed service job.

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"math"
 	"slices"
 	"time"
 
@@ -333,7 +332,7 @@ func checkArchivedParts(ctx context.Context, tx pgx.Tx, serviceID int64, parts [
 		if err := rows.Scan(&id, &brand, &name, &had); err != nil {
 			return err
 		}
-		if math.Round(want[id]*1000) != math.Round(had*1000) {
+		if stock.RoundQty(want[id]) != stock.RoundQty(had) {
 			return archivedError(brand, name)
 		}
 	}

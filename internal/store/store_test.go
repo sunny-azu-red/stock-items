@@ -2175,3 +2175,179 @@ func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
 		t.Errorf("archive off the list = %d, %v", trashID, err)
 	}
 }
+
+func wantConflict(t *testing.T, what string, err error, contains string) {
+	t.Helper()
+	var conflict *store.ConflictError
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Message, contains) {
+		t.Errorf("%s: want ConflictError %q, got %v", what, contains, err)
+	}
+}
+
+// The store itself refuses stock changes to an archived item, not just
+// the pages: they would change stock nothing shows.
+func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 5})
+	bolt := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5})
+	service := func(qty float64) stock.ServiceInput {
+		in := stock.ServiceInput{VehicleID: v, Title: "Oil service", PerformedOn: time.Now(),
+			Parts: []stock.KitLineInput{{ItemID: filter, Quantity: qty}, {ItemID: bolt, Quantity: 1}}}
+		in.Normalize()
+		return in
+	}
+	svc, err := s.CreateService(ctx, service(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUse, Delta: -1}); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
+	use := moves[0].ID
+	_, useTrash, err := s.DeleteMovement(ctx, use)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serviceTrash, err := s.DeleteService(ctx, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err = s.CreateService(ctx, service(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUse, Delta: -1}); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ = s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
+	use = moves[0].ID
+	if _, err := s.ArchiveItem(ctx, filter); err != nil {
+		t.Fatal(err)
+	}
+	before := mustGet(t, s, filter).Quantity
+
+	_, _, delErr := s.DeleteMovement(ctx, use)
+	_, restoreSvcErr := s.RestoreTrash(ctx, serviceTrash)
+	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
+	_, newSvcErr := s.CreateService(ctx, service(1))
+	_, correctErr := s.CorrectStock(ctx, filter, 10, "")
+	for what, err := range map[string]error{
+		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 1}),
+		"correct":         correctErr,
+		"edit a change":   s.UpdateMovement(ctx, use, stock.MovementEdit{Amount: 2}),
+		"delete a change": delErr,
+		"restore change":  restoreUseErr,
+		"restore service": restoreSvcErr,
+		"new service":     newSvcErr,
+		"more in service": s.UpdateService(ctx, svc, service(2)),
+	} {
+		wantConflict(t, what, err, "Filter is archived")
+	}
+	if got := mustGet(t, s, filter).Quantity; got != before {
+		t.Errorf("archived stock changed: %v, want %v", got, before)
+	}
+
+	// Editing the service otherwise still works, archived part and all.
+	edit := service(1)
+	edit.Title = "Oil service, checked bolts"
+	edit.Parts[1].Quantity = 2
+	if err := s.UpdateService(ctx, svc, edit); err != nil {
+		t.Fatalf("edit keeping the archived part: %v", err)
+	}
+	if got := mustGet(t, s, filter).Quantity; got != before {
+		t.Errorf("archived stock changed by the edit: %v, want %v", got, before)
+	}
+	assertLedger(t, s)
+}
+
+// Nothing new is logged for an archived vehicle or with an archived kit.
+func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	other := mustVehicle(t, s, "Duke")
+	kin := stock.KitInput{VehicleID: v, Name: "Chain"}
+	kin.Normalize()
+	kit, _ := s.CreateKit(ctx, kin)
+	old, _ := s.CreateKit(ctx, kin)
+	oldTrash, err := s.DeleteKit(ctx, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcIn := stock.ServiceInput{VehicleID: v, Title: "Chain clean", PerformedOn: time.Now()}
+	svcIn.Normalize()
+	svc, _ := s.CreateService(ctx, svcIn)
+	svcTrash, err := s.DeleteService(ctx, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ArchiveKit(ctx, kit); err != nil {
+		t.Fatal(err)
+	}
+	withKit := svcIn
+	withKit.KitID = &kit
+	_, err = s.CreateService(ctx, withKit)
+	wantConflict(t, "service with an archived kit", err, "kit is archived")
+
+	if err := s.ArchiveVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.CreateService(ctx, svcIn)
+	wantConflict(t, "service", err, "KTM 390 is archived")
+	_, err = s.CreateKit(ctx, kin)
+	wantConflict(t, "kit", err, "KTM 390 is archived")
+	_, err = s.RestoreTrash(ctx, svcTrash)
+	wantConflict(t, "restore service", err, "KTM 390 is archived")
+	_, err = s.RestoreTrash(ctx, oldTrash)
+	wantConflict(t, "restore kit", err, "KTM 390 is archived")
+	moved := stock.KitInput{VehicleID: v, Name: "Brakes"}
+	moved.Normalize()
+	otherKit := stock.KitInput{VehicleID: other, Name: "Brakes"}
+	otherKit.Normalize()
+	brakes, _ := s.CreateKit(ctx, otherKit)
+	wantConflict(t, "move a kit to it", s.UpdateKit(ctx, brakes, moved), "KTM 390 is archived")
+
+	// A kit staying with its archived vehicle can still be edited.
+	kin.Name = "Chain kit"
+	if err := s.UpdateKit(ctx, kit, kin); err != nil {
+		t.Errorf("edit a kit of an archived vehicle: %v", err)
+	}
+	if err := s.RestoreVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, svcTrash)
+	mustRestore(t, s, oldTrash)
+}
+
+// A deleted service comes back only if its reading still fits between
+// the services logged since.
+func TestRestoredServiceKeepsTheOdometerInOrder(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	day := func(n int) time.Time { return time.Date(2026, 10, n, 0, 0, 0, 0, time.UTC) }
+	logAt := func(on time.Time, km int) int64 {
+		t.Helper()
+		in := stock.ServiceInput{VehicleID: v, Title: "Check", PerformedOn: on, OdometerKm: &km}
+		in.Normalize()
+		id, err := s.CreateService(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first := logAt(day(10), 5000)
+	trashID, err := s.DeleteService(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := logAt(day(12), 4000)
+	_, err = s.RestoreTrash(ctx, trashID)
+	wantConflict(t, "restore", err, "logged on 12 Oct 2026, after this service")
+
+	if _, err := s.DeleteService(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+}

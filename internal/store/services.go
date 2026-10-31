@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"time"
 
@@ -101,6 +102,9 @@ func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, 
 func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
+			return err
+		}
 		if err := checkServiceKit(ctx, tx, in); err != nil {
 			return err
 		}
@@ -117,6 +121,9 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 			return ErrNotFound
 		}
 		if err != nil {
+			return err
+		}
+		if err := checkArchivedParts(ctx, tx, id, in.Parts); err != nil {
 			return err
 		}
 		if err := takeServiceParts(ctx, tx, id, in); err != nil {
@@ -161,6 +168,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			ORDER BY id FOR NO KEY UPDATE`, id, ids); err != nil {
 			return err
 		}
+		if err := checkArchivedParts(ctx, tx, id, in.Parts); err != nil {
+			return err
+		}
 		if err := returnServiceParts(ctx, tx, id); err != nil {
 			return err
 		}
@@ -184,19 +194,75 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 	})
 }
 
-// checkServiceKit refuses a kit that belongs to another vehicle.
+// checkServiceKit refuses a kit that belongs to another vehicle or is
+// archived.
 func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) error {
 	if in.KitID == nil {
 		return nil
 	}
 	var kitVehicle int64
-	if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1`, *in.KitID).Scan(&kitVehicle); err != nil {
+	var archived bool
+	if err := tx.QueryRow(ctx, `SELECT vehicle_id, archived_at IS NOT NULL FROM service_kits WHERE id = $1`, *in.KitID).
+		Scan(&kitVehicle, &archived); err != nil {
 		return notFound(err)
 	}
 	if kitVehicle != in.VehicleID {
 		return &ConflictError{Field: "kit_id", Message: "This kit belongs to another vehicle"}
 	}
+	if archived {
+		return &ConflictError{Field: "form", Message: "This kit is archived; restore it first."}
+	}
 	return nil
+}
+
+// checkActiveVehicle refuses to log services or add kits for an archived
+// vehicle, which lists and reminders no longer show.
+func checkActiveVehicle(ctx context.Context, tx pgx.Tx, id int64) error {
+	var name string
+	var archived bool
+	if err := tx.QueryRow(ctx, `SELECT name, archived_at IS NOT NULL FROM vehicles WHERE id = $1`, id).Scan(&name, &archived); err != nil {
+		return notFound(err)
+	}
+	if archived {
+		return &ConflictError{Field: "form", Message: name + " is archived; restore it first."}
+	}
+	return nil
+}
+
+// checkArchivedParts refuses to take an archived item for a service, or a
+// different amount of one than the service took before (serviceID 0 for
+// a new service): editing an old service whose part was archived since
+// still works as long as that part stays as it was.
+func checkArchivedParts(ctx context.Context, tx pgx.Tx, serviceID int64, parts []stock.KitLineInput) error {
+	want := map[int64]float64{}
+	ids := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		want[p.ItemID] += p.Quantity
+		ids = append(ids, p.ItemID)
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT i.id, i.brand, i.name, COALESCE(-old.total, 0)::float8
+		FROM items i
+		LEFT JOIN (SELECT item_id, sum(delta) AS total FROM stock_movements WHERE service_record_id = $1 GROUP BY item_id) old
+		       ON old.item_id = i.id
+		WHERE i.archived_at IS NOT NULL AND (i.id = ANY($2) OR old.item_id IS NOT NULL)
+		ORDER BY i.id`, serviceID, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var brand, name string
+		var had float64
+		if err := rows.Scan(&id, &brand, &name, &had); err != nil {
+			return err
+		}
+		if math.Round(want[id]*1000) != math.Round(had*1000) {
+			return archivedError(brand, name)
+		}
+	}
+	return rows.Err()
 }
 
 // takeServiceParts takes a service's parts from stock, in item id order

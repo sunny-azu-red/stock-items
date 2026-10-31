@@ -28,10 +28,16 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error
 	var qty float64
 	var name, brand string
 	var unit stock.Unit
-	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
-		Scan(&qty, &name, &brand, &unit)
+	var archived bool
+	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
+		Scan(&qty, &name, &brand, &unit, &archived)
 	if err != nil {
 		return notFound(err)
+	}
+	// Services check archived parts themselves (checkArchivedParts): an
+	// edit may take an archived part again, as long as no more or less.
+	if archived && in.Kind != stock.MoveService {
+		return archivedError(brand, name)
 	}
 	if qty+in.Delta < -0.0005 {
 		return &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
@@ -52,6 +58,11 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		in.ItemID, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, occurred, in.ServiceRecordID)
 	return err
+}
+
+// archivedError refuses a stock change to an archived item.
+func archivedError(brand, name string) error {
+	return &ConflictError{Field: "form", Message: displayName(brand, name) + " is archived; restore it first."}
 }
 
 // AddMovement records a stock change (purchase, use, correction).
@@ -169,21 +180,26 @@ type lockedMovement struct {
 	qty float64
 }
 
-// lockMovement locks a stock change and its item for revising.
+// lockMovement locks a stock change and its item for revising. An
+// archived item's changes are refused, like new ones.
 func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, error) {
 	var m lockedMovement
 	var brand, name string
+	var archived bool
 	err := tx.QueryRow(ctx, `
-		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, m.kind, m.delta, m.total_price, m.supplier,
-		       m.note, m.occurred_on, m.service_record_id
+		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, i.archived_at IS NOT NULL, m.kind, m.delta,
+		       m.total_price, m.supplier, m.note, m.occurred_on, m.service_record_id
 		FROM stock_movements m JOIN items i ON i.id = m.item_id
 		WHERE m.id = $1 FOR NO KEY UPDATE`, id).
-		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
-			&m.Note, &m.OccurredOn, &m.ServiceRecordID)
+		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &archived, &m.Kind, &m.Delta, &m.TotalPrice,
+			&m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID)
 	if err != nil {
 		return m, notFound(err)
 	}
 	m.ItemName = displayName(brand, name)
+	if archived {
+		return m, archivedError(brand, name)
+	}
 	if !m.Editable() {
 		return m, &ConflictError{Field: "form", Message: "Parts used by a service are changed by editing the service"}
 	}

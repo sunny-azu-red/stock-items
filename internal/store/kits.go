@@ -121,6 +121,9 @@ func (s *Store) GetKit(ctx context.Context, id int64) (stock.Kit, error) {
 func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
+			return err
+		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO service_kits (vehicle_id, name, interval_km, interval_months, notes)
 			VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -139,6 +142,16 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 // UpdateKit replaces a kit's fields and lines.
 func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
+		// A kit can stay with its archived vehicle, but not move to one.
+		var was int64
+		if err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&was); err != nil {
+			return notFound(err)
+		}
+		if was != in.VehicleID {
+			if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
+				return err
+			}
+		}
 		tag, err := tx.Exec(ctx, `
 			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_km = $4, interval_months = $5, notes = $6,
 			       updated_at = now()

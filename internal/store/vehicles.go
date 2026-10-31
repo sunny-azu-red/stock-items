@@ -138,6 +138,11 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 	if in.OdometerKm == nil {
 		return nil
 	}
+	// The vehicle's lock makes two services saved at once take turns, so
+	// they can't both pass. NO KEY UPDATE, like moveOdometer.
+	if _, err := tx.Exec(ctx, `SELECT id FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, in.VehicleID); err != nil {
+		return err
+	}
 	km, day := *in.OdometerKm, stock.DateOnly(in.PerformedOn)
 	var other int
 	var on time.Time

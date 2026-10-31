@@ -119,14 +119,23 @@ func encodeRows(rows []snapshotRow) json.RawMessage {
 	return b
 }
 
+// int64, float and string read a column, giving the zero value for a null
+// or missing one.
 func (r snapshotRow) int64(col string) int64 {
-	n, _ := r[col].(json.Number).Int64()
-	return n
+	n, _ := r[col].(json.Number)
+	v, _ := n.Int64()
+	return v
 }
 
 func (r snapshotRow) float(col string) float64 {
-	f, _ := r[col].(json.Number).Float64()
-	return f
+	n, _ := r[col].(json.Number)
+	v, _ := n.Float64()
+	return v
+}
+
+func (r snapshotRow) string(col string) string {
+	s, _ := r[col].(string)
+	return s
 }
 
 // inTrash matches a payload holding a row of table $1 whose column $2 is
@@ -220,6 +229,21 @@ func lockItems(ctx context.Context, tx pgx.Tx, ids []int64) error {
 	return err
 }
 
+// refuseArchived fails if any of the items is archived: stock changes come
+// back only to items in use.
+func refuseArchived(ctx context.Context, tx pgx.Tx, ids []int64) error {
+	var brand, name string
+	err := tx.QueryRow(ctx, `SELECT brand, name FROM items WHERE id = ANY($1) AND archived_at IS NOT NULL ORDER BY id LIMIT 1`, ids).
+		Scan(&brand, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return archivedError(brand, name)
+}
+
 // takeMovements applies the stock effect of snapshot movements and puts
 // them back. Every item that would go below zero is reported at once.
 func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow) error {
@@ -233,6 +257,9 @@ func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow) error {
 		return err
 	}
 	if err := lockItems(ctx, tx, ids); err != nil {
+		return err
+	}
+	if err := refuseArchived(ctx, tx, ids); err != nil {
 		return err
 	}
 	var shorts ShortPartsError
@@ -365,7 +392,26 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	if err := needRows(ctx, tx, "vehicles", []int64{rec.int64("vehicle_id")}, "Its vehicle"); err != nil {
+	vehicleID := rec.int64("vehicle_id")
+	if err := needRows(ctx, tx, "vehicles", []int64{vehicleID}, "Its vehicle"); err != nil {
+		return 0, err
+	}
+	if err := checkActiveVehicle(ctx, tx, vehicleID); err != nil {
+		return 0, err
+	}
+	// Its reading must still fit between the services logged since.
+	performed, err := time.Parse(time.DateOnly, rec.string("performed_on"))
+	if err != nil {
+		return 0, err
+	}
+	var reading *int
+	if km, ok := rec["odometer_km"].(json.Number); ok {
+		n, _ := km.Int64()
+		v := int(n)
+		reading = &v
+	}
+	in := stock.ServiceInput{VehicleID: vehicleID, PerformedOn: performed, OdometerKm: reading}
+	if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
 		return 0, err
 	}
 	// A kit deleted for good since: keep the service without it.
@@ -389,13 +435,7 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 		return 0, err
 	}
 	id := rec.int64("id")
-	var reading *int
-	if km, ok := rec["odometer_km"].(json.Number); ok {
-		n, _ := km.Int64()
-		v := int(n)
-		reading = &v
-	}
-	return id, moveOdometer(ctx, tx, id, rec.int64("vehicle_id"), reading)
+	return id, moveOdometer(ctx, tx, id, vehicleID, reading)
 }
 
 func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
@@ -404,6 +444,9 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 		return 0, err
 	}
 	if err := needRows(ctx, tx, "vehicles", []int64{kit.int64("vehicle_id")}, "Its vehicle"); err != nil {
+		return 0, err
+	}
+	if err := checkActiveVehicle(ctx, tx, kit.int64("vehicle_id")); err != nil {
 		return 0, err
 	}
 	if err := restoreRows(ctx, tx, "service_kits", encodeRows([]snapshotRow{kit})); err != nil {
@@ -427,13 +470,6 @@ func restoreMovement(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 	itemID := m.int64("item_id")
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
 		return 0, err
-	}
-	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1`, itemID).Scan(&archived); err != nil {
-		return 0, err
-	}
-	if archived {
-		return 0, &ConflictError{Field: "form", Message: "Restore its item first."}
 	}
 	return itemID, takeMovements(ctx, tx, []snapshotRow{m})
 }

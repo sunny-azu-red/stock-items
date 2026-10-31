@@ -81,7 +81,7 @@
       {{if $it.SKUs}}
       <table class="table sku-table">
         <tbody>
-        {{range $it.SKUs}}<tr><td><a class="sku-link" href="{{skuSearch .Code}}" target="_blank" rel="noopener noreferrer" title="Search on Google (.ro)">{{.Code}}</a></td><td>{{.Kind.Label}}{{with .Label}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
+        {{range $it.SKUs}}<tr><td><a class="sku-link" href="{{skuSearch .Code}}" target="_blank" rel="noopener noreferrer" title="{{skuSearchTitle}}">{{.Code}}</a></td><td>{{.Kind.Label}}{{with .Label}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
         </tbody>
       </table>
       {{else}}<div class="card-body muted small">No part numbers yet. <a href="/items/{{$it.ID}}/edit">Add some</a> to find this item by SKU.</div>{{end}}

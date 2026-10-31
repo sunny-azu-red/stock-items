@@ -134,8 +134,9 @@
 
   <div class="form-section form-actions">
     <a class="btn btn-ghost spacer" href="{{if $f.ShoppingID}}/shopping{{else if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
-    {{if and $d.IsNew (not $f.ShoppingID)}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
+    {{/* First in the source, so Enter saves the item; CSS shows it last. */}}
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>
+    {{if and $d.IsNew (not $f.ShoppingID)}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
   </div>
 </form>
 {{end}}

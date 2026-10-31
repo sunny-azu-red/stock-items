@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -199,7 +200,8 @@ func TestItemFormFlow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	loc := rec.Header().Get("Location")
 	expect(t, a.get(loc), http.StatusOK, "Motul 7100 10W50", "4 L", "104100", "keep at least 1 L",
-		`href="https://duckduckgo.com/?q=104100&#43;site%3Aro" target="_blank"`)
+		`href="https://duckduckgo.com/?q=104100&#43;site%3Aro" target="_blank"`, `title="Search on duckduckgo.com (site:ro)"`)
+	expect(t, a.get("/stock"), http.StatusOK, `— Search on duckduckgo.com (site:ro)"`)
 
 	it, err := a.store.GetItem(context.Background(), itemID(t, a.store, "104098"))
 	if err != nil {
@@ -255,6 +257,25 @@ func TestMovementsAndAdjust(t *testing.T) {
 	expect(t, rec, http.StatusOK, `id="item-`+itoa(oil)+`"`, "1.1 L")
 	if !strings.Contains(rec.Header().Get("HX-Trigger"), "toast") {
 		t.Errorf("missing toast trigger: %v", rec.Header())
+	}
+	// Header values are read as Latin-1: anything else is escaped.
+	pads := stock.ItemInput{Name: "Plăcuțe frână", Unit: stock.UnitPiece, Quantity: 1199}
+	pads.Normalize()
+	padsID, err := a.store.CreateItem(context.Background(), pads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trigger := a.post("/items/"+itoa(padsID)+"/adjust", url.Values{"dir": {"up"}}, "HX-Request", "true").Header().Get("HX-Trigger")
+	for _, r := range trigger {
+		if r >= utf8.RuneSelf {
+			t.Errorf("HX-Trigger %q is not ASCII", trigger)
+			break
+		}
+	}
+	var decoded struct{ Toast struct{ Message string } }
+	if err := json.Unmarshal([]byte(trigger), &decoded); err != nil || !strings.Contains(decoded.Toast.Message, "Plăcuțe frână") ||
+		!strings.Contains(decoded.Toast.Message, "1\u202f200") {
+		t.Errorf("toast = %q, %v", decoded.Toast.Message, err)
 	}
 	// Without htmx it redirects back.
 	req := httptest.NewRequest(http.MethodPost, path+"/adjust", strings.NewReader("dir=up"))

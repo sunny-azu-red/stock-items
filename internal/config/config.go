@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/joho/godotenv"
 )
@@ -75,7 +76,20 @@ func Load() (Config, error) {
 		SKUSearchURL:    env("APP_SKU_SEARCH_URL", "https://www.google.com/search?q="),
 		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
 	}
-	return cfg, nil
+	return cfg, cfg.check()
+}
+
+// check refuses settings that would otherwise only show up later, as
+// broken part number links or an odd price label.
+func (c Config) check() error {
+	u, err := url.Parse(c.SKUSearchURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("APP_SKU_SEARCH_URL must be a full http(s) URL such as https://www.google.com/search?q=, not %q", c.SKUSearchURL)
+	}
+	if utf8.RuneCountInString(c.Currency) > 10 {
+		return fmt.Errorf("APP_CURRENCY %q is too long (at most 10 characters)", c.Currency)
+	}
+	return nil
 }
 
 // schema treats "public" as no schema: the database's own search_path then

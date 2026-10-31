@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
@@ -159,6 +161,18 @@ func (s *Server) funcs() template.FuncMap {
 				q += " " + s.skuSearchPrefix
 			}
 			return template.URL(s.skuSearch + url.QueryEscape(q))
+		},
+		// skuSearchTitle says where skuSearch links go: "Search on
+		// google.com (site:de)".
+		"skuSearchTitle": func() string {
+			title := "Search for this part number"
+			if u, err := url.Parse(s.skuSearch); err == nil && u.Host != "" {
+				title = "Search on " + strings.TrimPrefix(u.Hostname(), "www.")
+			}
+			if s.skuSearchPrefix != "" {
+				title += " (" + s.skuSearchPrefix + ")"
+			}
+			return title
 		},
 		"emptyLine": func() lineRow { return lineRow{} },
 		"subUnits":  func() []stock.SubUnit { return stock.SubUnits },
@@ -306,7 +320,23 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 // toast attaches a toast message to an htmx response.
 func toast(w http.ResponseWriter, kind, msg string) {
 	b, _ := json.Marshal(map[string]any{"toast": map[string]string{"kind": kind, "message": msg}})
-	w.Header().Set("HX-Trigger", string(b))
+	w.Header().Set("HX-Trigger", asciiJSON(b))
+}
+
+// asciiJSON escapes everything but ASCII in JSON as \uXXXX. Browsers read
+// header values as Latin-1, so "Plăcuțe" sent as UTF-8 turned to mojibake.
+func asciiJSON(b []byte) string {
+	var sb strings.Builder
+	for _, r := range string(b) {
+		if r < utf8.RuneSelf {
+			sb.WriteRune(r)
+			continue
+		}
+		for _, u := range utf16.Encode([]rune{r}) {
+			fmt.Fprintf(&sb, `\u%04x`, u)
+		}
+	}
+	return sb.String()
 }
 
 func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }

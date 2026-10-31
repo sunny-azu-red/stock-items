@@ -28,17 +28,14 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	var args sqlArgs
 	sql := `
 		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at, k.version,
-		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log,
+		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log, ls.created_at,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
 		        ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1)
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			-- The reading when it was logged says where the service was done
-			-- only if it was logged within a week of being done.
-			SELECT sr.id, sr.performed_on, sr.odometer_km,
-			       CASE WHEN sr.created_at::date - sr.performed_on <= 7 THEN sr.odometer_at_log END AS odometer_at_log
+			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
 			ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
@@ -67,12 +64,18 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	kits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Kit, error) {
 		var k stock.Kit
 		var lsID *int64
-		var lsDate *time.Time
+		var lsDate, lsLogged *time.Time
 		var ls stock.ServiceRef
 		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.Notes, &k.ArchivedAt, &k.Version, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &k.LastOdometerKm)
+			&k.Notes, &k.ArchivedAt, &k.Version, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &lsLogged, &k.LastOdometerKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
+			// The reading when it was logged says where the service was
+			// done only if it was logged within a week of being done, the
+			// day it was logged counted in the app's zone (time.Local).
+			if lsLogged == nil || !stock.LoggedSoonAfter(*lsLogged, *lsDate, time.Local) {
+				ls.OdometerAtLog = nil
+			}
 			k.LastService = &ls
 		}
 		return k, err

@@ -53,7 +53,7 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 		return 0, err
 	}
 	// The pages always pass the app's date; this is for direct store calls.
-	occurred := time.Now()
+	occurred := appToday()
 	if in.OccurredOn != nil {
 		occurred = *in.OccurredOn
 	}

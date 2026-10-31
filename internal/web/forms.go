@@ -91,6 +91,10 @@ func parseOptDate(s string) (*time.Time, error) {
 	if s == "" {
 		return nil, nil
 	}
+	// A calendar day, kept as midnight UTC like stock.DateOnly and a date
+	// read from the database, so it compares with today's and is stored
+	// as the day typed. Not time.ParseInLocation: midnight in the app's
+	// zone would be another day, or hours off, once in UTC.
 	t, err := time.Parse("2006-01-02", s)
 	if err != nil {
 		return nil, fmt.Errorf("%q is not a valid date", s)
@@ -98,8 +102,8 @@ func parseOptDate(s string) (*time.Time, error) {
 	return &t, nil
 }
 
-// today is the app's current date, the default for stock changes made
-// without one (the database and server clock may disagree with it).
+// today is the app's current date, in its zone, the default for stock
+// changes made without one (the database's day may disagree with it).
 func (s *Server) today() *time.Time {
 	d := stock.DateOnly(s.now())
 	return &d

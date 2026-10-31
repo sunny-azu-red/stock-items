@@ -26,8 +26,8 @@ type ItemFilter struct {
 	Expiring bool // with stock left and expired or expiring within ExpiringDays
 	InStock  bool // quantity > 0
 	Sort     string
-	// Today is the date "expiring" is counted from (default: the database's
-	// current date).
+	// Today is the date "expiring" is counted from (default: today in the
+	// app's zone).
 	Today time.Time
 	// Archived chooses between active items ("", the default), archived
 	// ones (ArchivedOnly) or both (ArchivedAll). Lookups by IDs always
@@ -113,11 +113,12 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 		where = append(where, "i.min_quantity IS NOT NULL AND i.quantity < i.min_quantity")
 	}
 	if f.Expiring {
-		today := "current_date"
-		if !f.Today.IsZero() {
-			today = args.add(stock.DateOnly(f.Today)) + "::date"
+		today := f.Today
+		if today.IsZero() {
+			today = appToday()
 		}
-		where = append(where, "i.quantity > 0 AND i.expires_on IS NOT NULL AND i.expires_on <= "+today+" + "+args.add(ExpiringDays)+"::int")
+		where = append(where, "i.quantity > 0 AND i.expires_on IS NOT NULL AND i.expires_on <= "+
+			args.add(stock.DateOnly(today))+"::date + "+args.add(ExpiringDays)+"::int")
 	}
 	if f.InStock {
 		where = append(where, "i.quantity > 0")

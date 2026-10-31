@@ -27,7 +27,8 @@ type Options struct {
 	SKUSearchPrefix string
 	Version         string
 	Logger          *slog.Logger
-	// Now overrides the clock (tests).
+	// Now overrides the clock (tests). Its times are shown in the app's
+	// zone, time.Local.
 	Now func() time.Time
 }
 
@@ -63,6 +64,10 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	if s.now == nil {
 		s.now = time.Now
 	}
+	// "Today" and every time shown are the app's zone (time.Local, which
+	// main sets from TZ), whatever zone the clock's time comes in.
+	clock := s.now
+	s.now = func() time.Time { return clock().In(time.Local) }
 	if s.currency == "" {
 		s.currency = "EUR"
 	}

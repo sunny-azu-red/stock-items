@@ -21,13 +21,18 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Open creates a connection pool. When cfg.Schema is set, the schema is
-// created if needed and used as the search_path for every connection.
+// Open creates a connection pool whose sessions use UTC. When cfg.Schema
+// is set, the schema is created if needed and used as the search_path for
+// every connection.
 func Open(ctx context.Context, cfg config.DB) (*pgxpool.Pool, error) {
 	pcfg, err := pgxpool.ParseConfig(cfg.URL())
 	if err != nil {
 		return nil, fmt.Errorf("parse db config: %w", err)
 	}
+	// Timestamps are instants: pinning the session to UTC keeps anything
+	// in SQL from deciding a calendar day in the database server's zone.
+	// Days are decided in Go, in the app's zone (see AGENTS.md).
+	pcfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
 	if cfg.Schema != "" {
 		// Quoted, so a name like "e2e_x,public" cannot widen the search path.
 		pcfg.ConnConfig.RuntimeParams["search_path"] = pgx.Identifier{cfg.Schema}.Sanitize()

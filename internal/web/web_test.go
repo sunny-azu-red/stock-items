@@ -34,13 +34,19 @@ type testApp struct {
 
 func newApp(t *testing.T) *testApp {
 	t.Helper()
+	return newAppAt(t, func() time.Time { return time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC) })
+}
+
+// newAppAt is newApp with the given clock.
+func newAppAt(t *testing.T, now func() time.Time) *testApp {
+	t.Helper()
 	pool := testdb.New(t)
 	st := store.New(pool)
 	srv, err := New(st, Options{
 		Currency: "EUR", Version: "test",
 		SKUSearchURL: "https://duckduckgo.com/?q={q}", SKUSearchPrefix: "site:de",
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Now:    func() time.Time { return time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC) },
+		Now:    now,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -374,7 +374,11 @@ func (e ShoppingEntry) Title() string {
 	return e.FreeText
 }
 
-// DateOnly truncates t to midnight UTC of its calendar date.
+// DateOnly truncates t to midnight UTC of its calendar date in t's own
+// location. That is how calendar days are kept: pgx reads a date column
+// as midnight UTC, and time.Now() is in time.Local, the app's zone, so
+// DateOnly(time.Now()) is today there. For an instant read from the
+// database, convert it to the app's zone first (t.In(loc)).
 func DateOnly(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)

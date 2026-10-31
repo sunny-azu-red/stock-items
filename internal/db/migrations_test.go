@@ -426,3 +426,109 @@ func TestAmountsMigration(t *testing.T) {
 	}
 	same("Up after fixing")
 }
+
+// dateDefaults returns the defaults of the two date columns 00013 changes.
+func dateDefaults(t *testing.T, pool *pgxpool.Pool) [2]string {
+	t.Helper()
+	var out [2]string
+	for i, c := range [][2]string{{"service_records", "performed_on"}, {"stock_movements", "occurred_on"}} {
+		var def *string
+		if err := pool.QueryRow(context.Background(), `SELECT column_default FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`, c[0], c[1]).Scan(&def); err != nil {
+			t.Fatal(err)
+		}
+		if def != nil {
+			out[i] = *def
+		}
+	}
+	return out
+}
+
+// 00013 takes current_date away as the default of a service's and a stock
+// change's date, without changing any data, and Down puts it back:
+// Up → Down → Up on data shaped like the real one.
+func TestNoDatabaseDatesMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+	checkLedger(t, pool)
+	before := dump(t, pool, "")
+	if got := dateDefaults(t, pool); got != [2]string{"CURRENT_DATE", "CURRENT_DATE"} {
+		t.Fatalf("defaults before = %q", got)
+	}
+	// An insert without a date (rolled back): refused after Up, dated by
+	// the database after Down.
+	undated := func() error {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		_, err = tx.Exec(ctx, `INSERT INTO stock_movements (item_id, kind, delta) VALUES (1, 'use', -1)`)
+		return err
+	}
+	same := func(step string) {
+		t.Helper()
+		if got := dump(t, pool, ""); got != before {
+			t.Errorf("%s changed data:\n%s\nwant\n%s", step, got, before)
+		}
+		checkLedger(t, pool)
+	}
+
+	if _, err := provider.UpTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+	if got := dateDefaults(t, pool); got != [2]string{} {
+		t.Errorf("defaults after Up = %q, want none", got)
+	}
+	if err := undated(); err == nil || !strings.Contains(err.Error(), "occurred_on") {
+		t.Errorf("an undated stock change after Up: %v, want a not-null error", err)
+	}
+	same("Up")
+
+	if _, err := provider.DownTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	if got := dateDefaults(t, pool); got != [2]string{"CURRENT_DATE", "CURRENT_DATE"} {
+		t.Errorf("defaults after Down = %q", got)
+	}
+	if err := undated(); err != nil {
+		t.Errorf("an undated stock change after Down: %v", err)
+	}
+	same("Down")
+
+	if _, err := provider.UpTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+	if got := dateDefaults(t, pool); got != [2]string{} {
+		t.Errorf("defaults after Up again = %q, want none", got)
+	}
+	same("Up again")
+}
+
+// Every session Open makes is in UTC, whatever the server's default:
+// nothing in SQL can then decide a day in the database's zone.
+func TestOpenPinsTheSessionToUTC(t *testing.T) {
+	pool, _ := migrationDB(t)
+	ctx := context.Background()
+	conns := make([]*pgxpool.Conn, 3) // more than one connection of the pool
+	for i := range conns {
+		c, err := pool.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conns[i] = c
+		var tz string
+		if err := c.QueryRow(ctx, `SHOW timezone`).Scan(&tz); err != nil || tz != "UTC" {
+			t.Errorf("connection %d: timezone = %q, %v; want UTC", i, tz, err)
+		}
+	}
+	for _, c := range conns {
+		c.Release()
+	}
+}

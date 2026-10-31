@@ -92,6 +92,21 @@ type Due struct {
 // DueSoonDays is how many days ahead a date based service counts as "soon".
 const DueSoonDays = 30
 
+// LogWindowDays is how soon after a service it must be logged for the
+// vehicle's odometer reading at the time to say where it was done.
+const LogWindowDays = 7
+
+// LoggedSoonAfter reports whether a service done on performedOn (a
+// calendar day) was logged at loggedAt (an instant) within LogWindowDays
+// of being done. The day it was logged is counted in loc, the app's zone,
+// never the database's: just after local midnight is already the next day.
+// A service dated after it was logged (tomorrow, at most) counts.
+func LoggedSoonAfter(loggedAt, performedOn time.Time, loc *time.Location) bool {
+	// Both are midnight UTC, so a DST change can't make a day 23 hours.
+	days := DateOnly(loggedAt.In(loc)).Sub(DateOnly(performedOn)) / (24 * time.Hour)
+	return days <= LogWindowDays
+}
+
 // Due computes when the kit's service is next due, given the vehicle's
 // current odometer reading and today's date.
 func (k Kit) Due(currentKm *int, today time.Time) Due {

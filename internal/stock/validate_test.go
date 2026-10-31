@@ -191,6 +191,10 @@ func TestMovementInputValidate(t *testing.T) {
 		{"purchase sets best before", MovementInput{Kind: MovePurchase, Delta: 1, ExpiresOn: &time.Time{}}, true},
 		{"use cannot set best before", MovementInput{Kind: MoveUse, Delta: -1, ExpiresOn: &time.Time{}}, false},
 		{"correction cannot set best before", MovementInput{Kind: MoveCorrection, Delta: 1, ExpiresOn: &time.Time{}}, false},
+		{"purchase has a price and shop", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(5.0), Supplier: "Moto shop"}, true},
+		{"use has no price", MovementInput{Kind: MoveUse, Delta: -1, TotalPrice: ptr(5.0)}, false},
+		{"correction has no shop", MovementInput{Kind: MoveCorrection, Delta: 1, Supplier: "Moto shop"}, false},
+		{"initial stock has no price", MovementInput{Kind: MoveInitial, Delta: 1, TotalPrice: ptr(5.0)}, false},
 	}
 	for _, c := range cases {
 		if got := !c.in.Validate().Any(); got != c.ok {

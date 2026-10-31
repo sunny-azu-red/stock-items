@@ -11,19 +11,20 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
 
-// applyMovement changes an item's quantity and records the movement. It
-// must run inside a transaction so the ledger and quantity never diverge.
+// applyMovement changes an item's quantity and records the movement,
+// returning its id. It must run inside a transaction so the ledger and
+// quantity never diverge.
 //
 // Items are locked FOR NO KEY UPDATE throughout the store (only DeleteItem
 // takes FOR UPDATE): saving a kit or a movement holds a KEY SHARE lock on
 // the item through the foreign key, which FOR UPDATE would conflict with,
 // so a kit saved while a service takes the same parts could deadlock.
-func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error {
+func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int64, error) {
 	// The columns keep three decimals. Rounding here (not in the database)
 	// makes the stored delta exactly the change applied to the quantity.
 	in.Delta = math.Round(in.Delta*1000) / 1000
 	if in.Delta == 0 {
-		return stock.Errors{"amount": "Amount must not be zero"}
+		return 0, stock.Errors{"amount": "Amount must not be zero"}
 	}
 	var qty float64
 	var name, brand string
@@ -32,32 +33,34 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error
 	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
 		Scan(&qty, &name, &brand, &unit, &archived)
 	if err != nil {
-		return notFound(err)
+		return 0, notFound(err)
 	}
 	// Services check archived parts themselves (checkArchivedParts): an
 	// edit may take an archived part again, as long as no more or less.
 	if archived && in.Kind != stock.MoveService {
-		return archivedError(brand, name)
+		return 0, archivedError(brand, name)
 	}
 	if qty+in.Delta < -0.0005 {
-		return &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
+		return 0, &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
 	}
 	if qty+in.Delta > stock.MaxQuantity {
-		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " on stock"}
+		return 0, stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " on stock"}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE items SET quantity = quantity + $2, updated_at = now() WHERE id = $1`,
 		in.ItemID, in.Delta); err != nil {
-		return err
+		return 0, err
 	}
+	// The pages always pass the app's date; this is for direct store calls.
 	occurred := time.Now()
 	if in.OccurredOn != nil {
 		occurred = *in.OccurredOn
 	}
-	_, err = tx.Exec(ctx, `
+	var id int64
+	err = tx.QueryRow(ctx, `
 		INSERT INTO stock_movements (item_id, kind, delta, total_price, supplier, note, occurred_on, service_record_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		in.ItemID, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, occurred, in.ServiceRecordID)
-	return err
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		in.ItemID, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, occurred, in.ServiceRecordID).Scan(&id)
+	return id, err
 }
 
 // archivedError refuses a stock change to an archived item.
@@ -70,27 +73,30 @@ func (s *Store) AddMovement(ctx context.Context, in stock.MovementInput) error {
 	if errs := in.Validate(); errs.Any() {
 		return errs
 	}
-	return s.inTx(ctx, func(tx pgx.Tx) error { return applyStockChange(ctx, tx, in) })
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		_, err := applyStockChange(ctx, tx, in)
+		return err
+	})
 }
 
 // applyStockChange applies a movement and, for a purchase with a
-// best-before date, sets the item's expiry to the new batch's date.
-func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error {
-	if err := applyMovement(ctx, tx, in); err != nil {
-		return err
+// best-before date, sets the item's expiry to the new batch's date. It
+// returns the movement's id.
+func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int64, error) {
+	id, err := applyMovement(ctx, tx, in)
+	if err != nil || in.ExpiresOn == nil {
+		return id, err
 	}
-	if in.ExpiresOn == nil {
-		return nil
-	}
-	_, err := tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now() WHERE id = $1`, in.ItemID, *in.ExpiresOn)
-	return err
+	_, err = tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now() WHERE id = $1`, in.ItemID, *in.ExpiresOn)
+	return id, err
 }
 
-// CorrectStock sets an item's quantity to a counted amount and records the
-// difference as a correction. The difference is worked out under the row
-// lock, so a change made by someone else in the meantime is not undone. It
-// returns the recorded change (0 when the stock already matched).
-func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string) (float64, error) {
+// CorrectStock sets an item's quantity to a counted amount on day on and
+// records the difference as a correction. The difference is worked out
+// under the row lock, so a change made by someone else in the meantime is
+// not undone. It returns the recorded change (0 when the stock already
+// matched).
+func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string, on time.Time) (float64, error) {
 	var delta float64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
@@ -98,19 +104,20 @@ func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, n
 			return notFound(err)
 		}
 		var err error
-		delta, err = correctTo(ctx, tx, itemID, qty, count, note)
+		delta, err = correctTo(ctx, tx, itemID, qty, count, note, on)
 		return err
 	})
 	return delta, err
 }
 
 // correctTo records a correction from qty (read under lock) to target.
-func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string) (float64, error) {
+func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string, on time.Time) (float64, error) {
 	delta := math.Round((target-qty)*1000) / 1000
 	if delta == 0 {
 		return 0, nil
 	}
-	return delta, applyMovement(ctx, tx, stock.MovementInput{ItemID: itemID, Kind: stock.MoveCorrection, Delta: delta, Note: note})
+	_, err := applyMovement(ctx, tx, stock.MovementInput{ItemID: itemID, Kind: stock.MoveCorrection, Delta: delta, Note: note, OccurredOn: &on})
+	return delta, err
 }
 
 // MovementFilter narrows ListMovements.
@@ -290,7 +297,7 @@ type Stats struct {
 }
 
 // GetStats computes the dashboard money figures, with the last 12 months
-// counted back from today.
+// counted back from today (a purchase dated tomorrow is not counted yet).
 func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 	var st Stats
 	err := s.pool.QueryRow(ctx, `
@@ -301,9 +308,9 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
 		            WHERE i.archived_at IS NULL), 0)::float8,
 		  (COALESCE((SELECT sum(total_price) FROM stock_movements
-		             WHERE kind = 'purchase' AND occurred_on > $1::date - interval '12 months'), 0)
+		             WHERE kind = 'purchase' AND occurred_on > $1::date - interval '12 months' AND occurred_on <= $1::date), 0)
 		 + COALESCE((SELECT sum(labor_cost) FROM service_records
-		             WHERE performed_on > $1::date - interval '12 months'), 0))::float8`, stock.DateOnly(today)).
+		             WHERE performed_on > $1::date - interval '12 months' AND performed_on <= $1::date), 0))::float8`, stock.DateOnly(today)).
 		Scan(&st.StockValue, &st.Spent12m)
 	return st, err
 }

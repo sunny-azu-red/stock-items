@@ -273,7 +273,7 @@ func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.
 	slices.SortFunc(parts, func(a, b stock.KitLineInput) int { return cmp.Compare(a.ItemID, b.ItemID) })
 	var shorts ShortPartsError
 	for _, p := range parts {
-		err := applyMovement(ctx, tx, stock.MovementInput{
+		_, err := applyMovement(ctx, tx, stock.MovementInput{
 			ItemID: p.ItemID, Kind: stock.MoveService, Delta: -p.Quantity,
 			Note: in.Title, OccurredOn: &in.PerformedOn, ServiceRecordID: &serviceID,
 		})
@@ -293,7 +293,8 @@ func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.
 }
 
 // returnServiceParts puts a service's parts back on stock and deletes
-// their movements. The caller holds the item locks.
+// their movements. The caller holds the item locks. Like adjustStock, it
+// refuses to leave more than the maximum on stock.
 func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE items i SET quantity = i.quantity - m.total, updated_at = now()
@@ -301,7 +302,19 @@ func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 		WHERE i.id = m.item_id`, serviceID); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, serviceID)
+	var brand, name string
+	var unit stock.Unit
+	err := tx.QueryRow(ctx, `
+		SELECT brand, name, unit FROM items
+		WHERE quantity > $2 AND id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
+		ORDER BY id LIMIT 1`, serviceID, stock.MaxQuantity).Scan(&brand, &name, &unit)
+	if err == nil {
+		return &ConflictError{Field: "form", Message: displayName(brand, name) + " would have more than " + stock.FormatQuantity(stock.MaxQuantity, unit)}
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM stock_movements WHERE service_record_id = $1`, serviceID)
 	return err
 }
 

@@ -153,7 +153,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 
 	upd := stock.ItemInput{Name: "15W50 PRO 4 XP", Brand: "Silkolene", Unit: stock.UnitML, Quantity: 1500,
 		SKUs: []stock.SKU{{Code: "80086", Kind: stock.SKUManufacturer}}, VehicleIDs: []int64{a}}
-	if err := s.UpdateItem(ctx, id, upd); err != nil {
+	if err := s.UpdateItem(ctx, id, upd, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	it = mustGet(t, s, id)
@@ -167,7 +167,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 
 	upd.Unit = stock.UnitPiece
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "unit" {
+	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
 		t.Errorf("unit change with history: want conflict, got %v", err)
 	}
 	assertLedger(t, s)
@@ -178,7 +178,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 	if _, err := s.GetItem(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
-	if err := s.UpdateItem(ctx, id, upd); !errors.Is(err, store.ErrNotFound) {
+	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update missing: want ErrNotFound, got %v", err)
 	}
 }
@@ -488,24 +488,24 @@ func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	form := stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5, QuantityWas: ptr(5.0), Notes: "NGK"}
-	if err := s.UpdateItem(ctx, id, form); err != nil {
+	if err := s.UpdateItem(ctx, id, form, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 3 || it.Notes != "NGK" {
 		t.Errorf("after untouched quantity: %v (%q), want 3", it.Quantity, it.Notes)
 	}
 	form.Quantity = 8
-	if err := s.UpdateItem(ctx, id, form); err != nil {
+	if err := s.UpdateItem(ctx, id, form, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 8 {
 		t.Errorf("after edited quantity: %v, want 8", it.Quantity)
 	}
 
-	if d, err := s.CorrectStock(ctx, id, 8, "count"); err != nil || d != 0 {
+	if d, err := s.CorrectStock(ctx, id, 8, "count", time.Now()); err != nil || d != 0 {
 		t.Errorf("CorrectStock to same = %v, %v", d, err)
 	}
-	if d, err := s.CorrectStock(ctx, id, 6, "count"); err != nil || d != -2 {
+	if d, err := s.CorrectStock(ctx, id, 6, "count", time.Now()); err != nil || d != -2 {
 		t.Errorf("CorrectStock to 6 = %v, %v", d, err)
 	}
 	// Deltas are rounded to the three decimals the ledger keeps.
@@ -526,14 +526,14 @@ func TestUnitLockedOnceUsedInKitOrShoppingList(t *testing.T) {
 	}
 	in.Unit = stock.UnitPiece
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, in); !errors.As(err, &conflict) || conflict.Field != "unit" {
+	if err := s.UpdateItem(ctx, id, in, time.Now()); !errors.As(err, &conflict) || conflict.Field != "unit" {
 		t.Errorf("unit change of an item in a kit: want conflict, got %v", err)
 	}
 	other := mustItem(t, s, stock.ItemInput{Name: "Grease", Unit: stock.UnitGram})
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &other, Quantity: ptr(400.0)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateItem(ctx, other, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece}); !errors.As(err, &conflict) {
+	if err := s.UpdateItem(ctx, other, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece}, time.Now()); !errors.As(err, &conflict) {
 		t.Errorf("unit change of an item on the list: want conflict, got %v", err)
 	}
 }
@@ -1209,8 +1209,30 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 	if got := mustList(t, s, store.ItemFilter{Expiring: true}); len(got) != 0 {
 		t.Errorf("expiring today = %v", ids(got))
 	}
+	// A purchase dated the day after doesn't count yet.
+	dayAfter := later.AddDate(0, 0, 1)
+	id := mustList(t, s, store.ItemFilter{})[0].ID
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase,
+		Delta: 1, TotalPrice: ptr(5.0), OccurredOn: &dayAfter}); err != nil {
+		t.Fatal(err)
+	}
 	if st, _ := s.GetStats(ctx, later); st.Spent12m != 10 {
 		t.Errorf("spent in the 12 months before %s = %v, want 10", later.Format("2006-01-02"), st.Spent12m)
+	}
+
+	// Counts and edited quantities are dated by the caller.
+	counted := time.Date(2029, 7, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := s.CorrectStock(ctx, id, 10, "", counted); err != nil {
+		t.Fatal(err)
+	}
+	edited := time.Date(2029, 7, 2, 0, 0, 0, 0, time.UTC)
+	in := stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 12, ExpiresOn: &expires}
+	if err := s.UpdateItem(ctx, id, in, edited); err != nil {
+		t.Fatal(err)
+	}
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id, Kind: stock.MoveCorrection})
+	if len(moves) != 2 || !moves[0].OccurredOn.Equal(edited) || !moves[1].OccurredOn.Equal(counted) {
+		t.Errorf("corrections = %+v", moves)
 	}
 }
 
@@ -1485,12 +1507,12 @@ func TestArchivedItemQuantityCantBeEdited(t *testing.T) {
 		t.Fatal(err)
 	}
 	upd := stock.ItemInput{Name: "Pads (old)", Unit: stock.UnitPiece, Quantity: 3, QuantityWas: ptr(3.0)}
-	if err := s.UpdateItem(ctx, id, upd); err != nil {
+	if err := s.UpdateItem(ctx, id, upd, time.Now()); err != nil {
 		t.Errorf("renaming an archived item: %v", err)
 	}
 	upd.Quantity = 5
 	var conflict *store.ConflictError
-	if err := s.UpdateItem(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "quantity" {
+	if err := s.UpdateItem(ctx, id, upd, time.Now()); !errors.As(err, &conflict) || conflict.Field != "quantity" {
 		t.Errorf("changing an archived item's quantity: want conflict, got %v", err)
 	}
 	if it := mustGet(t, s, id); it.Quantity != 3 {
@@ -2232,7 +2254,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	_, restoreSvcErr := s.RestoreTrash(ctx, serviceTrash)
 	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
 	_, newSvcErr := s.CreateService(ctx, service(1))
-	_, correctErr := s.CorrectStock(ctx, filter, 10, "")
+	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now())
 	for what, err := range map[string]error{
 		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 1}),
 		"correct":         correctErr,
@@ -2364,7 +2386,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.Unit, in.Quantity = stock.UnitML, 0
-	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, in), "including in Recently deleted")
+	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, in, time.Now()), "including in Recently deleted")
 	if err := s.PurgeTrash(ctx, trashID); err != nil {
 		t.Fatal(err)
 	}
@@ -2379,7 +2401,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err := s.UpdateItem(ctx, id, in)
+		err := s.UpdateItem(ctx, id, in, time.Now())
 		if qty != nil {
 			wantConflict(t, "with a deleted list entry", err, "including in Recently deleted")
 			if err := s.PurgeTrash(ctx, trashID); err != nil {
@@ -2392,4 +2414,26 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 	if it := mustGet(t, s, id); it.Unit != stock.UnitML {
 		t.Errorf("unit = %s", it.Unit)
 	}
+}
+
+// Deleting a service gives its parts back, but not past the maximum.
+func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	bolt := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5})
+	in := stock.ServiceInput{VehicleID: v, Title: "Bolts", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: bolt, Quantity: 5}}}
+	in.Normalize()
+	svc, err := s.CreateService(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: bolt, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.DeleteService(ctx, svc)
+	wantConflict(t, "delete", err, "Bolt would have more than")
+	if _, err := s.GetService(ctx, svc); err != nil {
+		t.Errorf("service should stay: %v", err)
+	}
+	assertLedger(t, s)
 }

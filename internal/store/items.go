@@ -213,7 +213,7 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 		return 0, err
 	}
 	if in.Quantity > 0 {
-		if err := applyMovement(ctx, tx, in.StartMovement(id)); err != nil {
+		if _, err := applyMovement(ctx, tx, in.StartMovement(id)); err != nil {
 			return 0, err
 		}
 	}
@@ -226,8 +226,9 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 // changed since the form was opened). Changing the unit is refused once the
 // item has history or is used in a kit or on the shopping list, as those
 // amounts would no longer make sense, and so is a change while any of
-// those is in the trash, as it would come back in the old unit.
-func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) error {
+// those is in the trash, as it would come back in the old unit. A
+// correction is dated on.
+func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on time.Time) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
 		var unit stock.Unit
@@ -269,7 +270,7 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 			return err
 		}
 		if quantityEdited {
-			if _, err := correctTo(ctx, tx, id, qty, in.Quantity, "Edited quantity"); err != nil {
+			if _, err := correctTo(ctx, tx, id, qty, in.Quantity, "Edited quantity", on); err != nil {
 				return err
 			}
 		}

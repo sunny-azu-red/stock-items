@@ -167,16 +167,15 @@ func (s *Store) MarkBought(ctx context.Context, id int64, purchase *stock.Moveme
 			if errs := in.Validate(); errs.Any() {
 				return errs
 			}
-			if err := applyStockChange(ctx, tx, in); err != nil {
+			// Rounded like applyMovement rounds it, so left matches what was
+			// recorded.
+			in.Delta = math.Round(in.Delta*1000) / 1000
+			movementID, err := applyStockChange(ctx, tx, in)
+			if err != nil {
 				return err
 			}
 			if qty != nil {
 				left = math.Round((*qty-in.Delta)*1000) / 1000
-			}
-			// The item is locked, so its newest movement is this purchase.
-			var movementID int64
-			if err := tx.QueryRow(ctx, `SELECT max(id) FROM stock_movements WHERE item_id = $1`, in.ItemID).Scan(&movementID); err != nil {
-				return err
 			}
 			if trashID, err = putBought(ctx, tx, id, before, movementID); err != nil {
 				return err

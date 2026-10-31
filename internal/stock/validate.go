@@ -313,6 +313,10 @@ func (in MovementInput) Validate() Errors {
 	}
 	if !validMoney(in.TotalPrice) {
 		errs.Add("total_price", "Enter a price between 0 and 100,000,000")
+	} else if (in.TotalPrice != nil || in.Supplier != "") && in.Kind != MovePurchase {
+		// Spending reads only purchases, so a price anywhere else would be
+		// stored but never counted.
+		errs.Add("total_price", "Only a purchase has a price or shop")
 	}
 	if in.ExpiresOn != nil && in.Kind != MovePurchase {
 		errs.Add("expires_on", "Only a purchase can set the best-before date")
@@ -371,6 +375,8 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 		if in.Kind == MoveInitial && (in.TotalPrice != nil || in.Supplier != "") {
 			in.Kind = MovePurchase
 		}
+	} else {
+		in.TotalPrice, in.Supplier = nil, "" // not shown on the form
 	}
 	for k, v := range in.Validate() {
 		errs.Add(k, v)

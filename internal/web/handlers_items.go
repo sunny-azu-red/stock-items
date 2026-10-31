@@ -359,7 +359,7 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 	f, in := parseItemForm(r, false, s.now())
 	f.ID = id
 	if !f.Errors.Any() {
-		err := s.store.UpdateItem(r.Context(), id, in)
+		err := s.store.UpdateItem(r.Context(), id, in, *s.today())
 		if err == nil {
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Saved "+displayInput(in))
 			return nil
@@ -595,7 +595,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		TotalPrice: formText(r, "total_price"), Supplier: formText(r, "supplier"), OccurredOn: formText(r, "occurred_on"),
 		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), Errors: stock.Errors{},
 	}
-	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Supplier: f.Supplier, Note: f.Note}
+	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Note: f.Note}
 	switch in.Kind {
 	case stock.MovePurchase, stock.MoveUse, stock.MoveCorrection:
 	default:
@@ -618,11 +618,6 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	default:
 		in.Delta = amount
 	}
-	if p, err := parseOptMoney(f.TotalPrice); err != nil {
-		f.Errors.Add("total_price", err.Error())
-	} else {
-		in.TotalPrice = p
-	}
 	if d, err := parseEventDate(f.OccurredOn, s.now()); err != nil {
 		f.Errors.Add("occurred_on", err.Error())
 	} else if d != nil {
@@ -630,7 +625,14 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		in.OccurredOn = s.today()
 	}
+	// Only the Bought form has a price, shop and best-before date.
 	if in.Kind == stock.MovePurchase {
+		in.Supplier = f.Supplier
+		if p, err := parseOptMoney(f.TotalPrice); err != nil {
+			f.Errors.Add("total_price", err.Error())
+		} else {
+			in.TotalPrice = p
+		}
 		if d, err := parseOptDate(f.ExpiresOn); err != nil {
 			f.Errors.Add("expires_on", err.Error())
 		} else {
@@ -641,7 +643,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		var err error
 		if in.Kind == stock.MoveCorrection {
 			var delta float64
-			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note)
+			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *s.today())
 			if err == nil && delta == 0 {
 				s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
 				return nil

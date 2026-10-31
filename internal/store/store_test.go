@@ -1920,7 +1920,7 @@ func TestTrashPurgeAndEmpty(t *testing.T) {
 	if len(entries) != 3 || entries[0].Label != "Item: C" {
 		t.Fatalf("trash = %+v", entries)
 	}
-	if err := s.PurgeTrash(ctx, entries[0].ID); err != nil {
+	if _, err := s.PurgeTrash(ctx, entries[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.RestoreTrash(ctx, entries[0].ID); !errors.Is(err, store.ErrNotFound) {
@@ -2387,7 +2387,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 	}
 	in.Unit, in.Quantity = stock.UnitML, 0
 	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, in, time.Now()), "including in Recently deleted")
-	if err := s.PurgeTrash(ctx, trashID); err != nil {
+	if _, err := s.PurgeTrash(ctx, trashID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2404,7 +2404,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 		err := s.UpdateItem(ctx, id, in, time.Now())
 		if qty != nil {
 			wantConflict(t, "with a deleted list entry", err, "including in Recently deleted")
-			if err := s.PurgeTrash(ctx, trashID); err != nil {
+			if _, err := s.PurgeTrash(ctx, trashID); err != nil {
 				t.Fatal(err)
 			}
 		} else if err != nil {
@@ -2436,4 +2436,61 @@ func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 		t.Errorf("service should stay: %v", err)
 	}
 	assertLedger(t, s)
+}
+
+// Purging an item or vehicle for good also purges what could only be
+// restored with it; restores say what links they had to leave out.
+func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	kin := stock.KitInput{VehicleID: v, Name: "Chain"}
+	kin.Normalize()
+	kit, _ := s.CreateKit(ctx, kin)
+	kitTrash, err := s.DeleteKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vehicleTrash, err := s.DeleteVehicle(ctx, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := mustVehicle(t, s, "Duke")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitPiece, Quantity: 3})
+	keep := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece})
+	okin := stock.KitInput{VehicleID: other, Name: "Oil", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 1}, {ItemID: keep, Quantity: 1}}}
+	okin.Normalize()
+	oilKit, _ := s.CreateKit(ctx, okin)
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil})
+	_, moveTrash, err := s.DeleteMovement(ctx, moves[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oilKitTrash, err := s.DeleteKit(ctx, oilKit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemTrash, err := s.DeleteItem(ctx, oil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n, err := s.PurgeTrash(ctx, vehicleTrash); err != nil || n != 1 {
+		t.Errorf("purge vehicle = %d, %v; want its kit too", n, err)
+	}
+	if n, err := s.PurgeTrash(ctx, itemTrash); err != nil || n != 1 {
+		t.Errorf("purge item = %d, %v; want its stock change too", n, err)
+	}
+	for _, id := range []int64{kitTrash, moveTrash} {
+		if _, err := s.RestoreTrash(ctx, id); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("entry %d should be gone with what it needed: %v", id, err)
+		}
+	}
+	// The other kit only listed the oil: it comes back without that line.
+	res := mustRestore(t, s, oilKitTrash)
+	if res.Dropped != 1 {
+		t.Errorf("dropped = %d, want 1", res.Dropped)
+	}
+	if k, _ := s.GetKit(ctx, oilKit); len(k.Lines) != 1 || k.Lines[0].ItemID != keep {
+		t.Errorf("kit lines = %+v", k.Lines)
+	}
 }

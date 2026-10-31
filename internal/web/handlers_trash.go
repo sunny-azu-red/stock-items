@@ -61,6 +61,9 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 	if res.Kind == store.TrashBought {
 		msg = "Undone: " + res.Label + ". It's back on the shopping list."
 	}
+	if res.Dropped > 0 {
+		msg += fmt.Sprintf(". Left out %d %s to things deleted for good.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
+	}
 	s.redirect(w, r, restoredPath(res), msg)
 	return nil
 }
@@ -70,10 +73,15 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.PurgeTrash(r.Context(), id); err != nil && !errors.Is(err, store.ErrNotFound) {
+	others, err := s.store.PurgeTrash(r.Context(), id)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
-	s.redirect(w, r, "/trash", "Deleted for good")
+	msg := "Deleted for good"
+	if others > 0 {
+		msg += fmt.Sprintf(", with %d more %s that needed it", others, pluralWord(others, "entry", "entries"))
+	}
+	s.redirect(w, r, "/trash", msg)
 	return nil
 }
 

@@ -1536,3 +1536,25 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	expect(t, a.get("/trash"), http.StatusOK, "Nothing deleted")
 	expectNot(t, a.get("/"), "Recently deleted (")
 }
+
+func TestPurgeSaysWhatWentAlong(t *testing.T) {
+	a := newApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"Old bike"}, "kind": {"motorcycle"}})
+	expect(t, rec, http.StatusSeeOther)
+	v := rec.Header().Get("Location")
+	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(mustID(t, v))}, "name": {"Chain"}})
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.post(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
+	f := flashOf(t, a.post(v+"/delete", nil))
+	if f.Undo == 0 {
+		t.Fatalf("vehicle delete flash = %+v", f)
+	}
+	expect(t, a.get("/trash"), http.StatusOK, "Its deleted services and kits go too.")
+	rec = a.post("/trash/"+itoa(f.Undo)+"/purge", nil)
+	if msg := flashOf(t, rec).Message; msg != "Deleted for good, with 1 more entry that needed it" {
+		t.Errorf("flash = %q", msg)
+	}
+	if n, _ := a.store.CountTrash(context.Background()); n != 0 {
+		t.Errorf("trash = %d", n)
+	}
+}

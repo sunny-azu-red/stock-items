@@ -184,18 +184,20 @@ func needRows(ctx context.Context, tx pgx.Tx, table string, ids []int64, what st
 }
 
 // linked keeps the rows whose col refers to a row of table. Links to rows
-// deleted for good are dropped; one to a row in the trash stops the
-// restore until that row is restored (see needRow).
-func linked(ctx context.Context, tx pgx.Tx, rows []snapshotRow, col, table string) ([]snapshotRow, error) {
+// deleted for good are dropped and counted in *dropped; one to a row in
+// the trash stops the restore until that row is restored (see needRow).
+func linked(ctx context.Context, tx pgx.Tx, rows []snapshotRow, col, table string, dropped *int) ([]snapshotRow, error) {
 	var out []snapshotRow
 	for _, r := range rows {
 		gone, err := needRow(ctx, tx, table, r.int64(col))
 		if err != nil {
 			return nil, err
 		}
-		if !gone {
-			out = append(out, r)
+		if gone {
+			*dropped++
+			continue
 		}
+		out = append(out, r)
 	}
 	return out, nil
 }
@@ -300,9 +302,46 @@ func (s *Store) CountTrash(ctx context.Context) (int, error) {
 	return n, err
 }
 
-// PurgeTrash deletes one entry for good.
-func (s *Store) PurgeTrash(ctx context.Context, id int64) error {
-	return checkAffected(s.pool.Exec(ctx, `DELETE FROM trash WHERE id = $1`, id))
+// hardLinks are the columns that tie a trash entry to an item or vehicle
+// it can't be restored without (kit lines and tags are dropped instead).
+var hardLinks = map[string][][2]string{
+	"items":    {{"stock_movements", "item_id"}, {"item_photos", "item_id"}, {"shopping_entries", "item_id"}},
+	"vehicles": {{"service_records", "vehicle_id"}, {"service_kits", "vehicle_id"}},
+}
+
+// PurgeTrash deletes one entry for good, together with the entries that
+// could only be restored with it: purging an item takes its deleted stock
+// changes and list entries along, a vehicle its deleted services and
+// kits. others counts those. Only items and vehicles are needed that way,
+// so one level is all there is.
+func (s *Store) PurgeTrash(ctx context.Context, id int64) (others int, err error) {
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var raw string
+		if err := tx.QueryRow(ctx, `DELETE FROM trash WHERE id = $1 RETURNING payload::text`, id).Scan(&raw); err != nil {
+			return notFound(err)
+		}
+		var p trashPayload
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			return err
+		}
+		for _, parent := range []string{"items", "vehicles"} {
+			rows, err := decodeRows(p[parent])
+			if err != nil {
+				return err
+			}
+			for _, r := range rows {
+				for _, link := range hardLinks[parent] {
+					tag, err := tx.Exec(ctx, `DELETE FROM trash WHERE payload @> `+inTrash, link[0], link[1], r.int64("id"))
+					if err != nil {
+						return err
+					}
+					others += int(tag.RowsAffected())
+				}
+			}
+		}
+		return nil
+	})
+	return others, err
 }
 
 // EmptyTrash deletes everything in the trash for good.
@@ -312,11 +351,14 @@ func (s *Store) EmptyTrash(ctx context.Context) error {
 }
 
 // Restored says what a restore brought back: its kind and the id of the
-// page to show (the item for a stock change or photo).
+// page to show (the item for a stock change or photo). Dropped counts the
+// links it lost to things deleted for good since: kit lines and tags, or
+// a service's kit.
 type Restored struct {
-	Kind  string
-	ID    int64
-	Label string
+	Kind    string
+	ID      int64
+	Label   string
+	Dropped int
 }
 
 // RestoreTrash puts a deleted thing back and removes it from the trash.
@@ -338,17 +380,17 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		var err error
 		switch out.Kind {
 		case TrashService:
-			out.ID, err = restoreService(ctx, tx, p)
+			out.ID, err = restoreService(ctx, tx, p, &out.Dropped)
 		case TrashKit:
-			out.ID, err = restoreKit(ctx, tx, p)
+			out.ID, err = restoreKit(ctx, tx, p, &out.Dropped)
 		case TrashMovement:
 			out.ID, err = restoreMovement(ctx, tx, p)
 		case TrashShopping:
 			out.ID, err = restoreShopping(ctx, tx, p)
 		case TrashItem:
-			out.ID, err = restoreItem(ctx, tx, p)
+			out.ID, err = restoreItem(ctx, tx, p, &out.Dropped)
 		case TrashVehicle:
-			out.ID, err = restoreVehicle(ctx, tx, p)
+			out.ID, err = restoreVehicle(ctx, tx, p, &out.Dropped)
 		case TrashPhoto:
 			out.ID, err = restorePhoto(ctx, tx, p)
 		case TrashBought:
@@ -387,7 +429,7 @@ func one(raw json.RawMessage) (snapshotRow, error) {
 	return rows[0], nil
 }
 
-func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
+func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (int64, error) {
 	rec, err := one(p["service_records"])
 	if err != nil {
 		return 0, err
@@ -422,6 +464,7 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 		}
 		if gone {
 			rec["kit_id"] = nil
+			*dropped++
 		}
 	}
 	if err := restoreRows(ctx, tx, "service_records", encodeRows([]snapshotRow{rec})); err != nil {
@@ -438,7 +481,7 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 	return id, moveOdometer(ctx, tx, id, vehicleID, reading)
 }
 
-func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
+func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (int64, error) {
 	kit, err := one(p["service_kits"])
 	if err != nil {
 		return 0, err
@@ -456,7 +499,7 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if lines, err = linked(ctx, tx, lines, "item_id", "items"); err != nil {
+	if lines, err = linked(ctx, tx, lines, "item_id", "items", dropped); err != nil {
 		return 0, err
 	}
 	return kit.int64("id"), restoreRows(ctx, tx, "service_kit_lines", encodeRows(lines))
@@ -501,7 +544,7 @@ func restoreShopping(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 	return e.int64("id"), restoreRows(ctx, tx, "shopping_entries", encodeRows([]snapshotRow{e}))
 }
 
-func restoreItem(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
+func restoreItem(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (int64, error) {
 	it, err := one(p["items"])
 	if err != nil {
 		return 0, err
@@ -517,7 +560,7 @@ func restoreItem(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	if tags, err = linked(ctx, tx, tags, "vehicle_id", "vehicles"); err != nil {
+	if tags, err = linked(ctx, tx, tags, "vehicle_id", "vehicles", dropped); err != nil {
 		return 0, err
 	}
 	if err := restoreRows(ctx, tx, "item_vehicles", encodeRows(tags)); err != nil {
@@ -526,7 +569,7 @@ func restoreItem(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) 
 	return it.int64("id"), restoreRows(ctx, tx, "shopping_entries", p["shopping_entries"])
 }
 
-func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
+func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (int64, error) {
 	v, err := one(p["vehicles"])
 	if err != nil {
 		return 0, err
@@ -541,7 +584,7 @@ func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	if tags, err = linked(ctx, tx, tags, "item_id", "items"); err != nil {
+	if tags, err = linked(ctx, tx, tags, "item_id", "items", dropped); err != nil {
 		return 0, err
 	}
 	return v.int64("id"), restoreRows(ctx, tx, "item_vehicles", encodeRows(tags))

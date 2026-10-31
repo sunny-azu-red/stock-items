@@ -1232,32 +1232,84 @@ func TestVehicleCountsActiveItems(t *testing.T) {
 	}
 }
 
-func TestPartsOfADeletedVehiclesServiceCanBeFixed(t *testing.T) {
+// A service's parts always point at it: the database refuses to delete a
+// service (or the vehicle it cascades from) while it has parts, and every
+// store path returns or moves the parts before the service.
+func TestServicePartsAlwaysPointAtTheirService(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
 	k390 := mustVehicle(t, s, "KTM 390")
-	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
-	in := stock.ServiceInput{VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 4000})
+	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 2})
+	in := stock.ServiceInput{VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(),
+		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}}}
 	in.Normalize()
-	if _, err := s.CreateService(ctx, in); err != nil {
+	svc, err := s.CreateService(ctx, in)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// Vehicles with services can no longer be deleted, but older versions
-	// deleted them, leaving the service's parts without a service.
-	if _, err := pool.Exec(ctx, `DELETE FROM vehicles WHERE id = $1`, k390); err != nil {
+	onStock := func(wantOil, wantFilter float64) {
+		t.Helper()
+		if o, f := mustGet(t, s, oil).Quantity, mustGet(t, s, filter).Quantity; o != wantOil || f != wantFilter {
+			t.Errorf("oil %v, filter %v; want %v, %v", o, f, wantOil, wantFilter)
+		}
+		var off int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM stock_movements
+			WHERE (kind = 'service') <> (service_record_id IS NOT NULL)`).Scan(&off); err != nil || off != 0 {
+			t.Errorf("%d stock changes break the rule (%v)", off, err)
+		}
+		assertLedger(t, s)
+	}
+	onStock(2300, 1)
+
+	for _, sql := range []string{`DELETE FROM service_records WHERE id = $1`, `DELETE FROM vehicles WHERE id = (SELECT vehicle_id FROM service_records WHERE id = $1)`} {
+		if _, err := pool.Exec(ctx, sql, svc); err == nil || !strings.Contains(err.Error(), "stock_movements_service_record_id_fkey") {
+			t.Errorf("%s: %v, want it refused", sql, err)
+		}
+	}
+	var conflict *store.ConflictError
+	if _, err := s.DeleteVehicle(ctx, k390, cur(t, s, store.WhatVehicle, k390)); !errors.As(err, &conflict) {
+		t.Errorf("delete a vehicle with a service: %v, want a ConflictError", err)
+	}
+
+	upd := in
+	upd.Parts = []stock.KitLineInput{{ItemID: oil, Quantity: 1500}}
+	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, upd)); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
-	if len(moves) != 1 || !moves[0].Editable() {
-		t.Fatalf("orphaned service movement = %+v", moves)
-	}
-	if err := s.UpdateMovement(ctx, moves[0].ID, editV(t, s, moves[0].ID, stock.MovementEdit{Amount: 1500})); err != nil {
+	onStock(2500, 2)
+
+	trashID, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if it := mustGet(t, s, oil); it.Quantity != 500 {
-		t.Errorf("quantity = %v, want 500", it.Quantity)
+	onStock(4000, 2)
+	mustRestore(t, s, trashID)
+	onStock(2500, 2)
+	if r, err := s.GetService(ctx, svc); err != nil || len(r.Parts) != 1 {
+		t.Errorf("restored service = %+v, %v", r, err)
 	}
-	assertLedger(t, s)
+
+	trashID, err = s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PurgeTrash(ctx, trashID); err != nil {
+		t.Fatal(err)
+	}
+	onStock(4000, 2)
+	// With no services left, the vehicle goes, and then for good.
+	vehicleTrash, err := s.DeleteVehicle(ctx, k390, cur(t, s, store.WhatVehicle, k390))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PurgeTrash(ctx, vehicleTrash); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.CountTrash(ctx); n != 0 {
+		t.Errorf("trash = %d, want empty", n)
+	}
+	onStock(4000, 2)
 }
 
 func TestSearchIgnoresCodesOfJustOneCharacter(t *testing.T) {

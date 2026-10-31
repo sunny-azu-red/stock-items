@@ -1725,6 +1725,56 @@ func TestPurgeSaysWhatWentAlong(t *testing.T) {
 	}
 }
 
+// A service's parts go and come back with it over HTTP: deleted, undone,
+// deleted again, and purged along with its vehicle, the ledger adds up.
+func TestServicePartsGoWithTheirService(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	had := a.quantity(t, oil)
+	rec := a.post("/vehicles", url.Values{"name": {"Spare bike"}, "kind": {"motorcycle"}})
+	expect(t, rec, http.StatusSeeOther)
+	v := rec.Header().Get("Location")
+	rec = a.post("/services", url.Values{"vehicle_id": {itoa(mustID(t, v))}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil)}, "part_qty": {"25"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	if got := a.quantity(t, oil); got != had-25 {
+		t.Fatalf("oil = %v, want %v", got, had-25)
+	}
+
+	// A vehicle with a service isn't deleted (its page has no Delete; a
+	// post from a page opened before the service still is refused).
+	version := strconv.Itoa(cur(t, a.store, store.WhatVehicle, mustID(t, v)))
+	if f := flashOf(t, a.post(v+"/delete", url.Values{"version": {version}})); f.Kind != "error" || !strings.Contains(f.Message, "Archive it instead") {
+		t.Errorf("vehicle delete flash = %+v", f)
+	}
+	f := flashOf(t, a.postV(svc+"/delete", nil))
+	if f.Undo == 0 || a.quantity(t, oil) != had {
+		t.Fatalf("service delete: flash %+v, oil %v", f, a.quantity(t, oil))
+	}
+	a.ledger(t)
+	expect(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil), http.StatusSeeOther)
+	if got := a.quantity(t, oil); got != had-25 {
+		t.Errorf("oil after Undo = %v, want %v", got, had-25)
+	}
+	expect(t, a.get(svc), http.StatusOK, "Top up")
+	a.ledger(t)
+
+	expect(t, a.postV(svc+"/delete", nil), http.StatusSeeOther)
+	f = flashOf(t, a.postV(v+"/delete", nil))
+	if f.Undo == 0 {
+		t.Fatalf("vehicle delete flash = %+v", f)
+	}
+	if msg := flashOf(t, a.post("/trash/"+itoa(f.Undo)+"/purge", nil)).Message; msg != "Permanently deleted, with 1 more entry that needed it" {
+		t.Errorf("purge flash = %q", msg)
+	}
+	if got := a.quantity(t, oil); got != had {
+		t.Errorf("oil after the purge = %v, want %v", got, had)
+	}
+	a.ledger(t)
+}
+
 // Posts about things that changed meanwhile, say in another tab, end in
 // a message where the user was, not an error page.
 func TestRacesEndInMessages(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -531,4 +532,192 @@ func TestOpenPinsTheSessionToUTC(t *testing.T) {
 	for _, c := range conns {
 		c.Release()
 	}
+}
+
+// serviceParts is realShape's service taking its kit's oil (after a
+// purchase that covers it), and a deleted service with its parts in the
+// trash, as DeleteService snapshots them.
+const serviceParts = `
+INSERT INTO stock_movements (item_id, kind, delta, total_price, supplier, occurred_on) VALUES (2, 'purchase', 2000, 39.80, 'Moto shop', '2026-04-20');
+INSERT INTO stock_movements (item_id, kind, delta, note, occurred_on, service_record_id) VALUES (2, 'service', -1700, 'Oil service', '2026-05-01', 1);
+UPDATE items SET quantity = quantity + 300 WHERE id = 2;
+INSERT INTO trash (kind, label, payload) VALUES ('service', 'Service: Chain', '{
+  "service_records": [{"id": 70, "vehicle_id": 1, "kit_id": null, "performed_on": "2026-06-01", "title": "Chain", "notes": "", "version": 1}],
+  "stock_movements": [{"id": 71, "item_id": 3, "kind": "service", "delta": -20, "note": "Chain", "occurred_on": "2026-06-01", "service_record_id": 70, "version": 1}]}');
+`
+
+// serviceFK returns what deleting a service does to its parts' foreign
+// key ('r' restrict, 'n' set null), and whether the CHECK is there.
+func serviceFK(t *testing.T, pool *pgxpool.Pool) (onDelete string, check bool) {
+	t.Helper()
+	err := pool.QueryRow(context.Background(), `
+		SELECT (SELECT confdeltype::text FROM pg_constraint WHERE conname = 'stock_movements_service_record_id_fkey'
+		          AND conrelid = 'stock_movements'::regclass),
+		       EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_movements_service_record_check'
+		          AND conrelid = 'stock_movements'::regclass)`).Scan(&onDelete, &check)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return onDelete, check
+}
+
+// refused runs sql in a transaction that is rolled back, and returns its
+// error.
+func refused(t *testing.T, pool *pgxpool.Pool, sql string) error {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, err = tx.Exec(ctx, sql)
+	return err
+}
+
+// 00014 makes a service's parts point at it for good: a CHECK that only
+// they do, and a foreign key that refuses to delete a service (or the
+// vehicle it cascades from) while it has parts, instead of leaving them
+// without one. Up → Down → Up changes no data, and the guard stops it,
+// changing nothing, when a row or a trash snapshot breaks the rule.
+func TestServicePartsMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape+serviceParts); err != nil {
+		t.Fatal(err)
+	}
+	checkLedger(t, pool)
+	before := dump(t, pool, "")
+	same := func(step string) {
+		t.Helper()
+		if got := dump(t, pool, ""); got != before {
+			t.Errorf("%s changed data:\n%s\nwant\n%s", step, got, before)
+		}
+		checkLedger(t, pool)
+	}
+	if onDelete, check := serviceFK(t, pool); onDelete != "n" || check {
+		t.Fatalf("before: on delete %q, check %v", onDelete, check)
+	}
+
+	if _, err := provider.UpTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	if onDelete, check := serviceFK(t, pool); onDelete != "r" || !check {
+		t.Errorf("after Up: on delete %q, check %v; want restrict and the check", onDelete, check)
+	}
+	same("Up")
+	for _, tt := range []struct{ name, sql, want string }{
+		{"delete a service with parts", `DELETE FROM service_records WHERE id = 1`, "stock_movements_service_record_id_fkey"},
+		{"delete its vehicle", `DELETE FROM vehicles WHERE id = 1`, "stock_movements_service_record_id_fkey"},
+		{"a service part without a service", `INSERT INTO stock_movements (item_id, kind, delta, occurred_on) VALUES (1, 'service', -1, '2026-06-01')`,
+			"stock_movements_service_record_check"},
+		{"a use pointing at a service", `INSERT INTO stock_movements (item_id, kind, delta, occurred_on, service_record_id) VALUES (1, 'use', -1, '2026-06-01', 1)`,
+			"stock_movements_service_record_check"},
+		{"take a part from its service", `UPDATE stock_movements SET service_record_id = NULL WHERE kind = 'service'`,
+			"stock_movements_service_record_check"},
+	} {
+		if err := refused(t, pool, tt.sql); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: %v, want it refused by %s", tt.name, err, tt.want)
+		}
+	}
+	// What the store does still works: the parts go first, then the
+	// service; a vehicle without services goes as before.
+	if err := refused(t, pool, `DELETE FROM stock_movements WHERE service_record_id = 1; DELETE FROM service_records WHERE id = 1`); err != nil {
+		t.Errorf("delete a service after its parts: %v", err)
+	}
+	if err := refused(t, pool, `DELETE FROM vehicles WHERE id = 3`); err != nil {
+		t.Errorf("delete a vehicle without services: %v", err)
+	}
+
+	if _, err := provider.DownTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+	if onDelete, check := serviceFK(t, pool); onDelete != "n" || check {
+		t.Errorf("after Down: on delete %q, check %v; want set null and no check", onDelete, check)
+	}
+	same("Down")
+	if _, err := provider.UpTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	if onDelete, check := serviceFK(t, pool); onDelete != "r" || !check {
+		t.Errorf("after Up again: on delete %q, check %v", onDelete, check)
+	}
+	same("Up again")
+	if _, err := provider.DownTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+
+	// The guard. The first orphan is made as before 00014: deleting a
+	// vehicle straight in the database set its service's parts to no service.
+	var orphan, stray int64
+	for _, tt := range []struct {
+		name, seed, undo string
+		want             func() []string
+	}{
+		{"a part of a deleted vehicle's service",
+			`INSERT INTO vehicles (name) VALUES ('Sold bike');
+			 INSERT INTO service_records (vehicle_id, performed_on, title) SELECT id, '2026-07-01', 'Brakes' FROM vehicles WHERE name = 'Sold bike';
+			 INSERT INTO stock_movements (item_id, kind, delta, occurred_on, service_record_id)
+			   SELECT 1, 'service', -1, '2026-07-01', id FROM service_records WHERE title = 'Brakes';
+			 UPDATE items SET quantity = quantity - 1 WHERE id = 1;
+			 DELETE FROM vehicles WHERE name = 'Sold bike'`,
+			`UPDATE items SET quantity = quantity + 1 WHERE id = 1;
+			 DELETE FROM stock_movements WHERE kind = 'service' AND service_record_id IS NULL`,
+			func() []string {
+				return []string{"service parts without a service: stock_movements " + strconv.FormatInt(orphan, 10)}
+			}},
+		{"a use pointing at a service",
+			`INSERT INTO stock_movements (item_id, kind, delta, occurred_on, service_record_id) VALUES (3, 'use', -0.25, '2026-07-02', 1);
+			 UPDATE items SET quantity = quantity - 0.25 WHERE id = 3`,
+			`UPDATE items SET quantity = quantity + 0.25 WHERE id = 3;
+			 DELETE FROM stock_movements WHERE kind = 'use' AND service_record_id IS NOT NULL`,
+			func() []string {
+				return []string{"other stock changes pointing at a service: stock_movements " + strconv.FormatInt(stray, 10)}
+			}},
+		{"in trash snapshots",
+			`INSERT INTO trash (id, kind, label, payload) OVERRIDING SYSTEM VALUE VALUES
+			   (900, 'movement', 'Stock change: orphan', '{"stock_movements": [{"id": 80, "item_id": 1, "kind": "service", "delta": -1, "service_record_id": null}], "movement_id": 80}'),
+			   (901, 'item', 'Item: no id', '{"items": [{"id": 9}], "stock_movements": [{"id": 81, "item_id": 9, "kind": "service", "delta": -1}]}'),
+			   (902, 'item', 'Item: stray', '{"items": [{"id": 8}], "stock_movements": [{"id": 82, "item_id": 8, "kind": "use", "delta": -1, "service_record_id": 1}]}')`,
+			`DELETE FROM trash WHERE id >= 900`,
+			func() []string { return []string{"trash snapshots holding such stock changes: trash 900, 901, 902"} }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := pool.Exec(ctx, tt.seed); err != nil {
+				t.Fatal(err)
+			}
+			_ = pool.QueryRow(ctx, `SELECT COALESCE(max(id), 0) FROM stock_movements WHERE kind = 'service' AND service_record_id IS NULL`).Scan(&orphan)
+			_ = pool.QueryRow(ctx, `SELECT COALESCE(max(id), 0) FROM stock_movements WHERE kind <> 'service' AND service_record_id IS NOT NULL`).Scan(&stray)
+			checkLedger(t, pool)
+			seeded := dump(t, pool, "")
+			_, err := provider.UpTo(ctx, 14)
+			if err == nil {
+				t.Fatal("the migration went through")
+			}
+			for _, w := range append(tt.want(), "Migration 00014", "nothing was changed") {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error does not say %q: %v", w, err)
+				}
+			}
+			if v, err := provider.GetDBVersion(ctx); err != nil || v != 13 {
+				t.Errorf("version after the guard = %d, %v; want 13", v, err)
+			}
+			if onDelete, check := serviceFK(t, pool); onDelete != "n" || check {
+				t.Errorf("after the guard: on delete %q, check %v", onDelete, check)
+			}
+			if got := dump(t, pool, ""); got != seeded {
+				t.Errorf("the guard changed data:\n%s\nwant\n%s", got, seeded)
+			}
+			if _, err := pool.Exec(ctx, tt.undo); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if _, err := provider.UpTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	same("Up after fixing")
 }

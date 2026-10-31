@@ -185,6 +185,9 @@ func TestMovementInputValidate(t *testing.T) {
 		{"correction either way", MovementInput{Kind: MoveCorrection, Delta: -1}, true},
 		{"zero", MovementInput{Kind: MoveCorrection, Delta: 0}, false},
 		{"unknown kind", MovementInput{Kind: "theft", Delta: -1}, false},
+		{"service part", MovementInput{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))}, true},
+		{"service part without its service", MovementInput{Kind: MoveService, Delta: -1}, false},
+		{"use with a service", MovementInput{Kind: MoveUse, Delta: -1, ServiceRecordID: ptr(int64(3))}, false},
 		{"negative price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(-1.0)}, false},
 		{"NaN price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(math.NaN())}, false},
 		{"huge price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(1e12)}, false},
@@ -271,8 +274,6 @@ func TestApplyEdit(t *testing.T) {
 			MovementEdit{Amount: 1, TotalPrice: ptr(-1.0)}, MovePurchase, 1, ptr(-1.0), "total_price"},
 		{"service parts are not edited here", Movement{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))},
 			MovementEdit{Amount: 1}, "", 0, nil, "form"},
-		{"parts of a deleted vehicle's service can be fixed", Movement{Kind: MoveService, Delta: -1},
-			MovementEdit{Amount: 2}, MoveService, -2, nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

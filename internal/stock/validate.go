@@ -320,6 +320,11 @@ func (in MovementInput) Validate() Errors {
 	default:
 		errs.Add("kind", "Unknown movement type")
 	}
+	// A service's parts always belong to it, and nothing else does (a
+	// CHECK constraint in the database too).
+	if (in.Kind == MoveService) != (in.ServiceRecordID != nil) {
+		errs.Add("kind", "Parts used by a service are recorded with the service")
+	}
 	if !validMoney(in.TotalPrice) {
 		errs.Add("total_price", "Enter a price between 0 and "+FormatInt(MaxMoney))
 	} else if (in.TotalPrice != nil || in.Supplier != "") && in.Kind != MovePurchase {
@@ -336,10 +341,9 @@ func (in MovementInput) Validate() Errors {
 }
 
 // Editable reports whether a stock change can be edited or deleted on
-// its own. Parts used by a service are changed through the service; one
-// left without its service (service_record_id is ON DELETE SET NULL) can
-// still be fixed on its own.
-func (m Movement) Editable() bool { return m.Kind != MoveService || m.ServiceRecordID == nil }
+// its own. Parts used by a service are changed through the service, which
+// they always belong to (the database enforces it).
+func (m Movement) Editable() bool { return m.Kind != MoveService }
 
 // TakesPrice reports whether a stock change can carry a price and shop.
 func (m Movement) TakesPrice() bool { return m.Kind == MovePurchase || m.Kind == MoveInitial }
@@ -370,7 +374,7 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 	}
 	in := MovementInput{
 		ItemID: m.ItemID, Kind: m.Kind, Delta: m.Delta, TotalPrice: m.TotalPrice, Supplier: m.Supplier,
-		Note: strings.TrimSpace(e.Note), OccurredOn: &m.OccurredOn, ServiceRecordID: m.ServiceRecordID,
+		Note: strings.TrimSpace(e.Note), OccurredOn: &m.OccurredOn,
 	}
 	if e.OccurredOn != nil {
 		in.OccurredOn = e.OccurredOn
@@ -379,7 +383,7 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 		errs.Add("amount", "Amount must be greater than zero")
 	}
 	in.Delta = e.Amount
-	if m.Kind == MoveUse || m.Kind == MoveService || (m.Kind == MoveCorrection && e.Removed) {
+	if m.Kind == MoveUse || (m.Kind == MoveCorrection && e.Removed) {
 		in.Delta = -e.Amount
 	}
 	if m.TakesPrice() {

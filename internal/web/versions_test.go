@@ -529,6 +529,7 @@ func TestUndoPathsStillWork(t *testing.T) {
 			if got := r.note(a, action); got != "Back again" {
 				t.Errorf("%s: saved %q after the Undo", r.name, got)
 			}
+			a.ledger(t)
 		}
 	})
 

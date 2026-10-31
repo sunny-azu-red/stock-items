@@ -98,7 +98,7 @@ func goneError(ctx context.Context, q queryRower, what string, id int64) error {
 	return &StaleError{What: what, Gone: true, InTrash: trashed}
 }
 
-// lockedVersion handles the error of a SELECT … FOR UPDATE that read a
+// lockedVersion handles the error of a SELECT … FOR [NO KEY] UPDATE that read a
 // row and its version: a row that is not there is gone, and one with
 // another version than want is stale.
 func lockedVersion(ctx context.Context, q queryRower, err error, have, want int, what string, id int64) error {
@@ -258,13 +258,13 @@ func normalizeCode(q string) string {
 	return b.String()
 }
 
-// sqlArgs collects positional query arguments.
 // appToday is today in the app's zone, for a store call made without a
 // date. main sets time.Local to it (TZ, else the machine's zone). SQL never
 // works a day out itself (current_date): the session is in UTC, which
 // isn't the app's day around midnight.
 func appToday() time.Time { return stock.DateOnly(time.Now()) }
 
+// sqlArgs collects positional query arguments.
 type sqlArgs []any
 
 func (a *sqlArgs) add(v any) string {

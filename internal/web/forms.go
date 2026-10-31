@@ -320,11 +320,10 @@ func parseFormKey(r *http.Request) string {
 	return ""
 }
 
-// noFormKey refuses a form without a key, opened before keys were added
-// (or not from a page): it can't be told apart from a repeat of itself, so
-// rather than risk saving it twice (a service would take its parts again),
-// it re-renders with what was typed and a key, to save with one more
-// click.
+// noFormKey refuses a form posted without a key: it can't be told apart
+// from a repeat of itself, so rather than risk saving it twice (a service
+// would take its parts again), it re-renders with what was typed and a
+// key, to save with one more click.
 const noFormKey = "This form was opened before Pitbox was updated, so it was not saved. Check it and save again."
 
 // checkFormKey records noFormKey in errs when key is missing.

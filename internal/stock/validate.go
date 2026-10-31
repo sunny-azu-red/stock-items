@@ -336,8 +336,9 @@ func (in MovementInput) Validate() Errors {
 }
 
 // Editable reports whether a stock change can be edited or deleted on
-// its own. Parts used by a service are changed through the service, unless
-// the service is gone (its vehicle was deleted).
+// its own. Parts used by a service are changed through the service; one
+// left without its service (service_record_id is ON DELETE SET NULL) can
+// still be fixed on its own.
 func (m Movement) Editable() bool { return m.Kind != MoveService || m.ServiceRecordID == nil }
 
 // TakesPrice reports whether a stock change can carry a price and shop.

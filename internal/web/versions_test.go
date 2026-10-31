@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -31,11 +30,7 @@ func openForm(t *testing.T, a *testApp, page, action string) string {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s = %d", page, rec.Code)
 	}
-	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(action) + `"[^>]*>(.*?)</form>`).FindStringSubmatch(rec.Body.String())
-	if form == nil {
-		t.Fatalf("%s has no form posting to %s", page, action)
-	}
-	if v := regexp.MustCompile(`name="version" value="([0-9]+)"`).FindStringSubmatch(form[1]); v != nil {
+	if v := versionField.FindStringSubmatch(formsPosting(t, rec.Body.String(), action)[0]); v != nil {
 		return v[1]
 	}
 	return ""

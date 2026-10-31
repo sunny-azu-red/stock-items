@@ -181,7 +181,9 @@ func (s *Server) Handler() http.Handler {
 // handlerFunc is an http handler that can fail.
 type handlerFunc func(http.ResponseWriter, *http.Request) error
 
-// wrap converts errors into error pages.
+// wrap answers a handler's error: an error page (404, 413, 500…), or for
+// a POST a message back where the user was (stale, conflict, saved
+// already).
 func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := fn(w, r)

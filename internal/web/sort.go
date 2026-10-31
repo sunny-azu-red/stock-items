@@ -81,14 +81,6 @@ func (o sortOrder) Dir() string {
 	return "asc"
 }
 
-// IsDefault reports whether o is the page's default order.
-func (o sortOrder) IsDefault() bool {
-	if o.spec == nil {
-		return true
-	}
-	return o.Key == o.spec.Default && o.Desc == o.spec.natural(o.Key)
-}
-
 // Natural reports whether o runs in its key's natural direction.
 func (o sortOrder) Natural() bool { return o.Desc == o.spec.natural(o.Key) }
 

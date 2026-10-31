@@ -33,13 +33,9 @@ func formKeys(t *testing.T, a *testApp, page, action string) []string {
 // keysIn returns the keys of the forms posting to action in body.
 func keysIn(t *testing.T, body, action string) []string {
 	t.Helper()
-	forms := regexp.MustCompile(`(?s)<form[^>]*action="`+regexp.QuoteMeta(action)+`"[^>]*>(.*?)</form>`).FindAllStringSubmatch(body, -1)
-	if forms == nil {
-		t.Fatalf("no form posts to %s", action)
-	}
 	var keys []string
-	for _, f := range forms {
-		if k := regexp.MustCompile(`name="form_key" value="([0-9a-f]{32})"`).FindStringSubmatch(f[1]); k != nil {
+	for _, f := range formsPosting(t, body, action) {
+		if k := regexp.MustCompile(`name="form_key" value="([0-9a-f]{32})"`).FindStringSubmatch(f); k != nil {
 			keys = append(keys, k[1])
 		}
 	}

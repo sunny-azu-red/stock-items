@@ -195,15 +195,27 @@ func (a *testApp) versionOf(action string) string {
 	return formVersion(a.t, rec.Body.String(), action)
 }
 
+// formsPosting returns the inside of each form in body that posts to
+// action, in page order; it fails when there is none.
+func formsPosting(t *testing.T, body, action string) []string {
+	t.Helper()
+	var forms []string
+	for _, m := range regexp.MustCompile(`(?s)<form[^>]*action="`+regexp.QuoteMeta(action)+`"[^>]*>(.*?)</form>`).FindAllStringSubmatch(body, -1) {
+		forms = append(forms, m[1])
+	}
+	if forms == nil {
+		t.Fatalf("no form posts to %s", action)
+	}
+	return forms
+}
+
+var versionField = regexp.MustCompile(`name="version" value="([0-9]+)"`)
+
 // formVersion finds the form posting to action in a page and returns its
 // version field.
 func formVersion(t *testing.T, body, action string) string {
 	t.Helper()
-	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(action) + `"[^>]*>(.*?)</form>`).FindStringSubmatch(body)
-	if form == nil {
-		t.Fatalf("no form posts to %s", action)
-	}
-	v := regexp.MustCompile(`name="version" value="([0-9]+)"`).FindStringSubmatch(form[1])
+	v := versionField.FindStringSubmatch(formsPosting(t, body, action)[0])
 	if v == nil {
 		t.Fatalf("the form posting to %s carries no version", action)
 	}

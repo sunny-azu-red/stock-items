@@ -11,8 +11,8 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
-// stockFilter is the stock page filter, kept in the URL so every view can
-// be bookmarked and shared.
+// stockFilter is the stock page filter, kept in the URL, so every view is
+// a plain link that works without JavaScript and with Back.
 type stockFilter struct {
 	VehicleIDs []int64
 	MatchAll   bool

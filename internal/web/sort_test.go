@@ -249,7 +249,7 @@ func TestStockSortBy(t *testing.T) {
 	}
 	expect(t, a.get("/stock?q=oil&sort=quantity"), http.StatusOK, `href="/stock?sort=quantity">clear filters</a>`)
 
-	// Old links keep working: Recently changed starts newest first.
+	// Without a direction, Recently changed starts newest first.
 	expect(t, a.get("/stock?sort=recent"), http.StatusOK,
 		`<option value="recent" selected>`, `<input type="radio" id="dir-desc" name="dir" value="desc" checked>`, "Newest first")
 	// Unknown values: by name, A to Z.

@@ -173,7 +173,7 @@
 {{end}}
 
 {{/* Items already on stock with a free-text shopping entry's name:
-     dict "EntryID" int64 "Matches" []Item */}}
+     dict "EntryID" int64 "Version" int "Matches" []Item */}}
 {{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}
 <div class="card card-body">
   <p><strong>Already have it?</strong> Add this purchase to the item instead of creating a new one.</p>

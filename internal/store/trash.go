@@ -78,9 +78,8 @@ func putTrash(ctx context.Context, tx pgx.Tx, kind, label string, p trashPayload
 // restoreRows inserts snapshot rows back into table with their ids. Only
 // the columns in the snapshot are set, so columns added since get their
 // defaults. A restored row of a versioned table comes back with a new
-// version, so a form opened before it was deleted can't save over it
-// (snapshots from before versions get the default, 1, and such a form
-// carried none).
+// version, so a form opened before it was deleted can't save over it (a
+// snapshot without one gets the default, 1).
 func restoreRows(ctx context.Context, tx pgx.Tx, table string, rows json.RawMessage) error {
 	decoded, err := decodeRows(rows)
 	if err != nil || len(decoded) == 0 {

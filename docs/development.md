@@ -26,8 +26,9 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 | Layer | Where | Needs DB | Run |
 |---|---|---|---|
 | Domain rules (units, grouping, export, due dates…) | `internal/stock/*_test.go` | no | `go test ./internal/stock/` |
-| Store (SQL, transactions, ledger invariant) | `internal/store/store_test.go` | yes | `go test ./internal/store/` |
-| HTTP handlers and templates | `internal/web/web_test.go` | yes | `go test ./internal/web/` |
+| Migrations, UTC sessions | `internal/db/migrations_test.go` | yes | `go test ./internal/db/` |
+| Store (SQL, transactions, ledger invariant, lock order, SQL without zones) | `internal/store/*_test.go` | yes | `go test ./internal/store/` |
+| HTTP handlers and templates (versions, form keys, sorting) | `internal/web/*_test.go` | yes | `go test ./internal/web/` |
 | Browser end-to-end, desktop and phone | `e2e/tests/*.spec.ts` | yes | `cd e2e && npx playwright test` |
 
 - Each DB test gets a fresh, migrated schema `test_<random>` that is dropped when the test ends. Without `DB_HOST` (and no `.env`) these tests are skipped.
@@ -46,10 +47,10 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 
 1. **Schema change?** Add a new migration file. Don't edit old ones.
 2. **Rules** go in `internal/stock` with table-driven tests.
-3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx`, and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
+3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx` (`inFormTx` for a form's save), and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.
 5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed.
-6. Add a case to `web_test.go`, and to the e2e spec for anything interactive.
+6. Add a case to `web_test.go` (and to `versions_test.go` and `formkeys_test.go` for a new form or button), and to the e2e spec for anything interactive.
 7. Run `scripts/check.sh` and `npx playwright test`.
 
 ## Screenshots

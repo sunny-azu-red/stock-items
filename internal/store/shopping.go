@@ -89,30 +89,32 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 // asks for as much. Missing and archived items are refused with
 // ErrNotFound.
 func (s *Store) EnsureShopping(ctx context.Context, itemID int64, qty float64, note string) (changed bool, err error) {
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO shopping_entries (item_id, quantity, note)
-		SELECT id, $2, $3 FROM items WHERE id = $1 AND archived_at IS NULL
-		ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
-		SET quantity = excluded.quantity,
-		    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
-		                WHEN shopping_entries.note = '' THEN excluded.note
-		                ELSE shopping_entries.note || '; ' || excluded.note END
-		WHERE shopping_entries.quantity IS NULL OR shopping_entries.quantity < excluded.quantity`,
-		itemID, qty, note)
-	if err != nil {
-		return false, err
-	}
-	if tag.RowsAffected() > 0 {
-		return true, nil
-	}
-	// Nothing written: either the entry already covers it, or the item
-	// can't go on the list.
-	var active bool
-	err = s.pool.QueryRow(ctx, `SELECT archived_at IS NULL FROM items WHERE id = $1`, itemID).Scan(&active)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !active) {
-		return false, ErrNotFound
-	}
-	return false, err
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		// Entry, then item, like AddShopping; FOR SHARE keeps the item from
+		// being archived meanwhile.
+		if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, itemID); err != nil {
+			return err
+		}
+		var archived bool
+		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, itemID).Scan(&archived); err != nil {
+			return notFound(err)
+		}
+		if archived {
+			return ErrNotFound
+		}
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO shopping_entries (item_id, quantity, note) VALUES ($1, $2, $3)
+			ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
+			SET quantity = excluded.quantity,
+			    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
+			                WHEN shopping_entries.note = '' THEN excluded.note
+			                ELSE shopping_entries.note || '; ' || excluded.note END
+			WHERE shopping_entries.quantity IS NULL OR shopping_entries.quantity < excluded.quantity`,
+			itemID, qty, note)
+		changed = tag.RowsAffected() > 0 // nothing written: the entry already asks for as much
+		return err
+	})
+	return changed, err
 }
 
 // DeleteShopping removes an entry.

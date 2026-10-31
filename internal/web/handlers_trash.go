@@ -58,7 +58,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		s.redirect(w, r, "/trash", "")
 		return nil
 	}
-	msg := "Restored " + res.Label + "."
+	msg := "Restored " + strings.TrimSuffix(res.Label, ".") + "."
 	if res.Kind == store.TrashBought {
 		msg = "Took back buying " + strings.TrimPrefix(res.Label, "Bought: ") + ". It's back on the shopping list."
 	}

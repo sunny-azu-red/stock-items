@@ -128,6 +128,7 @@ func TestFormatQuantity(t *testing.T) {
 		{1.234, UnitGram, "1.23 g"}, // not "1.234 g", which reads as 1234 g
 		{1234.567, UnitML, "1 234.57 ml"},
 		{0.004, UnitML, "<0.01 ml"},
+		{-0.004, UnitML, "0 ml"},
 		{999.996, UnitML, "1 L"}, // rounds to 1000, shown like it
 		{1500, UnitPiece, "1 500x"},
 	}

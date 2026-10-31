@@ -605,7 +605,7 @@ func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error)
 	}
 	// A photo the item has now trades places with it, so neither is lost
 	// (this is how replacing a photo is undone).
-	if _, err := trashPhoto(ctx, tx, itemID); err != nil && !errors.Is(err, ErrNotFound) {
+	if _, err := trashPhoto(ctx, tx, itemID); err != nil {
 		return 0, err
 	}
 	return itemID, restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))

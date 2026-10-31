@@ -187,6 +187,11 @@ func vehicleUsage(ctx context.Context, q queryRower, id int64) (services, kits i
 // kits and labour costs.
 func (s *Store) DeleteVehicle(ctx context.Context, id int64) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		// The tags the delete cascades to before the vehicle: saving an item
+		// replaces its tags, then checks each tag's vehicle (KEY SHARE).
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM item_vehicles WHERE vehicle_id = $1 FOR UPDATE`, id); err != nil {
+			return err
+		}
 		var name string
 		if err := tx.QueryRow(ctx, `SELECT name FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&name); err != nil {
 			return notFound(err)

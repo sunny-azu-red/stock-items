@@ -22,7 +22,7 @@
         <span class="meta">Deleted {{ago .DeletedAt}}</span>
       </span>
       <form class="inline-form" method="post" action="/trash/{{.ID}}/restore"><button class="btn btn-sm btn-primary" type="submit">{{icon "undo-2"}} Restore</button></form>
-      <form class="inline-form" method="post" action="/trash/{{.ID}}/purge" data-confirm="Delete this for good?{{if eq .Kind "item"}} Deleted stock changes, services and list entries that used it go too.{{else if eq .Kind "vehicle"}} Its deleted services and kits go too.{{end}}"><button class="icon-btn" type="submit" aria-label="Delete {{.Label}} for good" title="Delete for good">{{icon "x"}}</button></form>
+      <form class="inline-form" method="post" action="/trash/{{.ID}}/purge" data-confirm="Delete this for good?{{if eq .Kind "item"}} Deleted stock changes, services, photos and list entries that used it go too.{{else if eq .Kind "vehicle"}} Its deleted services and kits go too.{{end}}"><button class="icon-btn" type="submit" aria-label="Delete {{.Label}} for good" title="Delete for good">{{icon "x"}}</button></form>
     </li>
     {{end}}
   </ul>

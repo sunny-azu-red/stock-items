@@ -34,7 +34,7 @@ type Config struct {
 	// SKUSearchURL is the search engine URL that a part number is appended
 	// to, e.g. "https://www.google.com/search?q=".
 	SKUSearchURL string
-	// SKUSearchPrefix is added to every part number search, e.g. "site:ro".
+	// SKUSearchPrefix is added to every part number search, e.g. "site:de".
 	SKUSearchPrefix string
 }
 

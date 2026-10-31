@@ -2578,3 +2578,34 @@ func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+// Photo uploads lock the item first, as deleting it does: uploads and a
+// delete at once neither deadlock nor trip over each other's rows.
+func TestPhotoUploadsAndDeletesTakeTurns(t *testing.T) {
+	s, ctx := newStore(t)
+	for range 5 {
+		id := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+		var wg sync.WaitGroup
+		errs := make(chan error, 8)
+		for g := range 4 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var err error
+				if g == 3 {
+					_, err = s.DeleteItem(ctx, id)
+				} else {
+					_, err = s.SetPhoto(ctx, id, "image/jpeg", []byte{byte(g)}, []byte{byte(g)})
+				}
+				if err != nil && !errors.Is(err, store.ErrNotFound) {
+					errs <- err
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			t.Error(err)
+		}
+	}
+}

@@ -206,8 +206,11 @@ func FormatQuantity(q float64, u Unit) string {
 // as nothing shows as "<0.01".
 func formatSmall(q float64) string {
 	r := round2(q)
-	if r == 0 && q > 0 {
-		return "<0.01"
+	if r == 0 {
+		if q > 0 {
+			return "<0.01"
+		}
+		return "0" // not "-0" for a tiny negative
 	}
 	return formatGrouped(r)
 }

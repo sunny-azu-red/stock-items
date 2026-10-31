@@ -19,7 +19,7 @@ type Photo struct {
 func (s *Store) SetPhoto(ctx context.Context, itemID int64, contentType string, image, thumb []byte) (replacedTrashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		if replacedTrashID, err = trashPhoto(ctx, tx, itemID); err != nil {
+		if replacedTrashID, err = trashPhoto(ctx, tx, itemID, "replaced"); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO item_photos (item_id, content_type, image, thumb) VALUES ($1, $2, $3, $4)`,
@@ -44,7 +44,7 @@ func (s *Store) GetPhoto(ctx context.Context, itemID int64, thumb bool) (Photo, 
 // DeletePhoto removes an item's photo, keeping it in the trash.
 func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		trashID, err = trashPhoto(ctx, tx, itemID)
+		trashID, err = trashPhoto(ctx, tx, itemID, "")
 		if err == nil && trashID == 0 {
 			return ErrNotFound
 		}
@@ -54,10 +54,11 @@ func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, e
 }
 
 // trashPhoto moves an item's photo to the trash, returning 0 when it has
-// none (ErrNotFound when the item is gone). It locks the item first, as
-// deleting the item does before cascading to its photo, so the two can't
-// deadlock, and two uploads at once take turns.
-func trashPhoto(ctx context.Context, tx pgx.Tx, itemID int64) (int64, error) {
+// none (ErrNotFound when the item is gone). A detail ("replaced") goes in
+// the label, telling it apart from the photo that took its place. It
+// locks the item first, as deleting the item does before cascading to its
+// photo, so the two can't deadlock, and two uploads at once take turns.
+func trashPhoto(ctx context.Context, tx pgx.Tx, itemID int64, detail string) (int64, error) {
 	var name, brand string
 	if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand); err != nil {
 		return 0, notFound(err)
@@ -70,7 +71,7 @@ func trashPhoto(ctx context.Context, tx pgx.Tx, itemID int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	trashID, err := putTrash(ctx, tx, TrashPhoto, trashLabel("Photo", displayName(brand, name)), p)
+	trashID, err := putTrash(ctx, tx, TrashPhoto, trashLabel("Photo", displayName(brand, name), detail), p)
 	if err != nil {
 		return 0, err
 	}

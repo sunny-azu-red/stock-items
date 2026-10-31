@@ -46,7 +46,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		var short *store.InsufficientStockError
 		switch {
 		case errors.Is(err, store.ErrNotFound):
-			s.setFlash(w, "error", "That was restored or deleted for good already")
+			s.setFlash(w, "error", "That was restored or permanently deleted already")
 		case errors.As(err, &conflict):
 			s.setFlash(w, "error", "Can't restore: "+conflict.Message)
 		case errors.As(err, &short):
@@ -63,7 +63,12 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		msg = "Took back buying " + strings.TrimPrefix(res.Label, "Bought: ") + ". It's back on the shopping list."
 	}
 	if res.Dropped > 0 {
-		msg += fmt.Sprintf(" Left out %d %s to things deleted for good.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
+		msg += fmt.Sprintf(" Left out %d %s to things permanently deleted.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
+	}
+	if res.Replaced != 0 {
+		// The photo it took the place of went to the trash in turn.
+		s.redirectUndo(w, r, restoredPath(res), msg+" The photo it replaced is in Recently deleted.", res.Replaced)
+		return nil
 	}
 	s.redirect(w, r, restoredPath(res), msg)
 	return nil
@@ -76,13 +81,13 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 	}
 	others, err := s.store.PurgeTrash(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		s.setFlash(w, "error", "That was restored or deleted for good already")
+		s.setFlash(w, "error", "That was restored or permanently deleted already")
 		s.redirect(w, r, "/trash", "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	msg := "Deleted for good"
+	msg := "Permanently deleted"
 	if others > 0 {
 		msg += fmt.Sprintf(", with %d more %s that needed it", others, pluralWord(others, "entry", "entries"))
 	}

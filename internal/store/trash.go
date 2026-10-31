@@ -177,7 +177,7 @@ func needRows(ctx context.Context, tx pgx.Tx, table string, ids []int64, what st
 			return err
 		}
 		if gone {
-			return &ConflictError{Field: "form", Message: what + " has been deleted for good."}
+			return &ConflictError{Field: "form", Message: what + " has been permanently deleted."}
 		}
 	}
 	return nil
@@ -357,12 +357,14 @@ func (s *Store) EmptyTrash(ctx context.Context) error {
 // Restored says what a restore brought back: its kind and the id of the
 // page to show (the item for a stock change or photo). Dropped counts the
 // links it lost to things deleted for good since: kit lines and tags, or
-// a service's kit.
+// a service's kit. Replaced is the trash id of the photo a restored photo
+// took the place of (0 when the item had none).
 type Restored struct {
-	Kind    string
-	ID      int64
-	Label   string
-	Dropped int
+	Kind     string
+	ID       int64
+	Label    string
+	Dropped  int
+	Replaced int64
 }
 
 // RestoreTrash puts a deleted thing back and removes it from the trash.
@@ -396,7 +398,7 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		case TrashVehicle:
 			out.ID, err = restoreVehicle(ctx, tx, p, &out.Dropped)
 		case TrashPhoto:
-			out.ID, err = restorePhoto(ctx, tx, p)
+			out.ID, out.Replaced, err = restorePhoto(ctx, tx, p)
 		case TrashBought:
 			out.ID, err = undoBought(ctx, tx, p)
 		default:
@@ -594,21 +596,21 @@ func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	return v.int64("id"), restoreRows(ctx, tx, "item_vehicles", encodeRows(tags))
 }
 
-func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
+func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (itemID, replaced int64, err error) {
 	ph, err := one(p["item_photos"])
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	itemID := ph.int64("item_id")
+	itemID = ph.int64("item_id")
 	if err := needRows(ctx, tx, "items", []int64{itemID}, "Its item"); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	// A photo the item has now trades places with it, so neither is lost
 	// (this is how replacing a photo is undone).
-	if _, err := trashPhoto(ctx, tx, itemID); err != nil {
-		return 0, err
+	if replaced, err = trashPhoto(ctx, tx, itemID, "replaced"); err != nil {
+		return 0, 0, err
 	}
-	return itemID, restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))
+	return itemID, replaced, restoreRows(ctx, tx, "item_photos", encodeRows([]snapshotRow{ph}))
 }
 
 // undoBought takes back a purchase made by ticking an entry off: the

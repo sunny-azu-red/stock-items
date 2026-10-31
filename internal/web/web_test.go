@@ -1576,7 +1576,7 @@ func TestPurgeSaysWhatWentAlong(t *testing.T) {
 	}
 	expect(t, a.get("/trash"), http.StatusOK, "Its deleted services and kits go too.")
 	rec = a.post("/trash/"+itoa(f.Undo)+"/purge", nil)
-	if msg := flashOf(t, rec).Message; msg != "Deleted for good, with 1 more entry that needed it" {
+	if msg := flashOf(t, rec).Message; msg != "Permanently deleted, with 1 more entry that needed it" {
 		t.Errorf("flash = %q", msg)
 	}
 	if n, _ := a.store.CountTrash(context.Background()); n != 0 {
@@ -1678,7 +1678,7 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 	}
 }
 
-// A restore that had to drop links to things deleted for good says so.
+// A restore that had to drop links to things permanently deleted says so.
 func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
@@ -1694,7 +1694,7 @@ func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 	}
 	expect(t, a.post("/trash/"+itoa(ringTrash)+"/purge", nil), http.StatusSeeOther)
 	msg := flashOf(t, a.post("/trash/"+itoa(kitTrash)+"/restore", nil)).Message
-	if msg != "Restored Kit: Brakes (KTM 390). Left out 1 link to things deleted for good." {
+	if msg != "Restored Kit: Brakes (KTM 390). Left out 1 link to things permanently deleted." {
 		t.Errorf("flash = %q", msg)
 	}
 }
@@ -1723,4 +1723,36 @@ func TestAccessibilityDetails(t *testing.T) {
 		page.AddCookie(c)
 	}
 	expect(t, a.do(page), http.StatusOK, `class="flash flash-error" role="alert"`)
+}
+
+// Undoing a photo replace shows the old photo again, though it is older
+// than the one the browser has cached, and offers to undo the swap.
+func TestPhotoRestoreBeatsTheCache(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	ctx := context.Background()
+	if _, err := a.store.SetPhoto(ctx, oil, "image/jpeg", []byte("old"), []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := a.store.SetPhoto(ctx, oil, "image/jpeg", []byte("new"), []byte("new"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := "/items/" + itoa(oil) + "/photo"
+	cached := a.get(photo)
+	expect(t, cached, http.StatusOK, "new")
+
+	f := flashOf(t, a.post("/trash/"+itoa(replaced)+"/restore", nil))
+	if f.Undo == 0 || !strings.Contains(f.Message, "The photo it replaced is in Recently deleted.") {
+		t.Errorf("restore flash = %+v", f)
+	}
+	req := httptest.NewRequest(http.MethodGet, photo, nil)
+	req.Header.Set("If-None-Match", cached.Header().Get("ETag"))
+	req.Header.Set("If-Modified-Since", cached.Header().Get("Last-Modified"))
+	expect(t, a.do(req), http.StatusOK, "old")
+
+	// Undo swaps them back.
+	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	expect(t, a.get(photo), http.StatusOK, "new")
 }

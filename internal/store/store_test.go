@@ -471,12 +471,13 @@ func TestPhotos(t *testing.T) {
 	}
 	// Undoing the replace swaps them: the old one is back, the new one in
 	// the trash.
-	mustRestore(t, s, replaced)
+	res := mustRestore(t, s, replaced)
 	if p, _ := s.GetPhoto(ctx, id, true); string(p.Data) != "thumb" {
 		t.Errorf("after undo: thumb = %q", p.Data)
 	}
-	if entries, _ := s.ListTrash(ctx); len(entries) != 1 || entries[0].Kind != store.TrashPhoto {
-		t.Errorf("trash = %+v, want the newer photo", entries)
+	entries, _ := s.ListTrash(ctx)
+	if len(entries) != 1 || entries[0].Kind != store.TrashPhoto || entries[0].ID != res.Replaced || entries[0].Label != "Photo: Pads (replaced)" {
+		t.Errorf("trash = %+v, restored = %+v; want the newer photo", entries, res)
 	}
 	if _, err := s.SetPhoto(ctx, 987654, "image/jpeg", []byte("x"), []byte("x")); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)

@@ -901,6 +901,9 @@ func (s *Server) itemPhoto(w http.ResponseWriter, r *http.Request) error {
 	}
 	w.Header().Set("Content-Type", p.ContentType)
 	w.Header().Set("Cache-Control", "private, max-age=0, must-revalidate")
+	// Restoring a photo brings back an older one, which If-Modified-Since
+	// alone would take for the cached newer one. The tag tells them apart.
+	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, p.UpdatedAt.UnixMicro()))
 	http.ServeContent(w, r, "", p.UpdatedAt, bytes.NewReader(p.Data))
 	return nil
 }

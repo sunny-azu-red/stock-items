@@ -46,7 +46,7 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 
 1. **Schema change?** Add a new migration file. Don't edit old ones.
 2. **Rules** go in `internal/stock` with table-driven tests.
-3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx`, and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, or two requests can deadlock. Refuse archived things in the store, not just in the page.
+3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx`, and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.
 5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed.
 6. Add a case to `web_test.go`, and to the e2e spec for anything interactive.

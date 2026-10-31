@@ -95,7 +95,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for amd64 and arm64 (Raspberry
 With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values). Two things differ from running the binary with the same file:
 
 - `DB_HOST` must be the Postgres server's LAN address, not `127.0.0.1` as in `.env.example`: inside the container that is the container itself.
-- `HOST` and `PORT` are ignored; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host.
+- Compose ignores `HOST` and `PORT`; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host. Plain `docker run --env-file` passes them through, so leave them out of that file (or match `-p` to `PORT`).
 
 ```bash
 docker compose up -d                       # or: docker compose pull && docker compose up -d

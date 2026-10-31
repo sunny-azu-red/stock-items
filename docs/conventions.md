@@ -20,8 +20,8 @@ These rules keep the app simple, safe and consistent. They apply to people and c
   - `DeleteService` and `UpdateService` return a service's parts through `returnServiceParts`; an update then takes the new ones through `applyMovement`.
   - `UpdateMovement`/`DeleteMovement` revise one movement through `reviseMovement`, which moves the stock by the difference under the item's row lock and refuses to go below zero.
   - `RestoreTrash` puts rows back with their effect (`takeMovements`, `adjustStock`), and undoing a Bought takes its purchase back through `reviseMovement`.
-- Lock several items in id order inside one transaction, so concurrent requests cannot deadlock. Lock items `FOR NO KEY UPDATE` (only `DeleteItem` takes `FOR UPDATE`): inserting a kit line or movement holds a key-share lock on the item, which `FOR UPDATE` would conflict with. A shopping entry is locked before its item.
-- Archived things take no new work, and the store enforces it inside the transaction, not just the pages: no stock changes to an archived item (a service edit may keep an archived part as it was), no new services or kits for an archived vehicle, no newly chosen archived kit.
+- Lock several items in id order inside one transaction, so concurrent requests cannot deadlock. Lock items `FOR NO KEY UPDATE` to change them (only `DeleteItem` takes `FOR UPDATE`), or `FOR SHARE` to only check them (`AddShopping`): inserting a kit line or movement holds a key-share lock on the item, which `FOR UPDATE` would conflict with. The order is: a service row, its vehicle (`lockVehicle`), then items; a shopping entry before its item.
+- Archived things take no new work, and the store enforces it inside the transaction, not just the pages: no stock changes to an archived item (a service's own parts move with it when it is edited, deleted or restored), no new services or kits for an archived vehicle, no newly chosen archived kit. Kit lines may name archived items.
 
 ## Domain
 

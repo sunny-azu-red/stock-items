@@ -24,7 +24,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 1. `http.ServeMux` routes using Go 1.22+ patterns (`POST /items/{id}/adjust`).
 2. Middleware (outermost first): panic recovery → request logging (`log/slog`) → security headers (CSP, `nosniff`, frame denial) → `http.CrossOriginProtection` (CSRF protection based on `Sec-Fetch-Site` / `Origin`).
-3. Handlers are `func(w, r) error`. `Server.wrap` turns `store.ErrNotFound` into a 404 page, a `store.ConflictError` on a POST into an error message back where the user was, and other errors into a logged 500.
+3. Handlers are `func(w, r) error`. `Server.wrap` turns `store.ErrNotFound` into a 404 page, a form over the size limit into a 413 page, a `store.ConflictError` on a POST into an error message back where the user was, a cancelled request into no response, and other errors into a logged 500.
 4. Forms are parsed into small `*Form` structs (raw strings, to re-render exactly what was typed) and converted into `stock.*Input` values. Validation lives in `stock` (`Normalize` + `Validate`). Errors re-render the page with status 422.
 5. Success means **POST → 303 redirect → GET**, with a one-time flash message in a cookie. htmx requests get `HX-Redirect`, or a partial plus an `HX-Trigger` toast.
 

@@ -5,7 +5,7 @@
     <p class="sub">What to buy before the next job. Marking an entry bought adds it to stock.</p>
   </div>
   <div class="actions">
-    {{if $d.Entries}}<button class="btn" type="button" data-copy-url="/shopping/export.txt">{{icon "copy"}} Copy as text</button>{{end}}
+    {{if $d.Entries}}<a class="btn" href="/shopping/export.txt" data-copy-url="/shopping/export.txt">{{icon "copy"}} Copy as text</a>{{end}}
   </div>
 </div>
 

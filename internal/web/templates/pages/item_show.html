@@ -68,7 +68,7 @@
       <div class="flex mt">
         <form method="post" action="/items/{{$it.ID}}/photo" enctype="multipart/form-data" class="flex">
           <label class="btn btn-sm">{{icon "camera"}} {{if $it.HasPhoto}}Replace photo{{else}}Add photo{{end}}
-            <input class="sr-only" type="file" name="photo" accept="image/*" data-autosubmit>
+            {{with photoLimit}}<input class="sr-only" type="file" name="photo" accept="image/*" data-autosubmit data-max-bytes="{{.Bytes}}" data-too-large="{{.Message}}">{{end}}
           </label>
           <noscript><button class="btn btn-sm" type="submit">Upload</button></noscript>
         </form>

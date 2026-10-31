@@ -254,12 +254,18 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	e, err := s.store.GetShopping(r.Context(), id)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
+		s.shoppingGone(w, r)
+		return nil
+	} else if err != nil {
 		return err
 	}
 	if e.ItemID == nil {
 		_, trashID, err := s.store.MarkBought(r.Context(), id, nil)
-		if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			s.shoppingGone(w, r)
+			return nil
+		} else if err != nil {
 			return err
 		}
 		s.redirectUndo(w, r, "/shopping", "Ticked off "+e.Title(), trashID)
@@ -301,6 +307,9 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 			}
 			s.redirectUndo(w, r, "/shopping", msg, trashID)
 			return nil
+		} else if errors.Is(err, store.ErrNotFound) {
+			s.shoppingGone(w, r)
+			return nil
 		} else if !formConflict(f.Errors, err) {
 			return err
 		}
@@ -316,11 +325,21 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	trashID, err := s.store.DeleteShopping(r.Context(), id)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
+		s.shoppingGone(w, r)
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirectUndo(w, r, "/shopping", "Removed from the shopping list", trashID)
 	return nil
+}
+
+// shoppingGone answers a post about an entry that was ticked off or
+// removed meanwhile, say in another tab, with a message instead of a 404.
+func (s *Server) shoppingGone(w http.ResponseWriter, r *http.Request) {
+	s.setFlash(w, "error", "That entry is no longer on the list")
+	s.redirect(w, r, "/shopping", "")
 }
 
 func (s *Server) shoppingExportText(w http.ResponseWriter, r *http.Request) error {

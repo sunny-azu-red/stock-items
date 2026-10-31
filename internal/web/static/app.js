@@ -127,6 +127,13 @@
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-autosubmit]")) {
+      var max = Number(e.target.getAttribute("data-max-bytes"));
+      var file = e.target.files && e.target.files[0];
+      if (max && file && file.size > max) {
+        toast(e.target.getAttribute("data-too-large"), "error");
+        e.target.value = "";
+        return;
+      }
       var f = e.target.form;
       if (f.requestSubmit) f.requestSubmit(); else f.submit();
     }
@@ -309,19 +316,29 @@
       ok ? resolve() : reject(new Error("copy failed"));
     });
   }
+  // <a href="….txt" data-copy-url> copies that text; without JS (or when
+  // copying fails) the link shows it instead.
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-copy-url]");
     if (!btn) return;
     e.preventDefault();
     var url = btn.getAttribute("data-copy-url");
-    fetch(url, { headers: { Accept: "text/plain" } })
+    var text = fetch(url, { headers: { Accept: "text/plain" } })
       .then(function (r) { if (!r.ok) throw new Error(r.statusText); return r.text(); })
-      .then(function (text) {
-        btn.setAttribute("data-copied", text);
-        return copyText(text);
-      })
+      .then(function (t) { btn.setAttribute("data-copied", t); return t; });
+    var copied;
+    if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+      // Handing the clipboard a promise keeps this click's permission
+      // while the text loads; Safari refuses a write made after the fetch.
+      var blob = text.then(function (t) { return new Blob([t], { type: "text/plain" }); });
+      copied = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })])
+        .catch(function () { return text.then(copyText); });
+    } else {
+      copied = text.then(copyText);
+    }
+    copied
       .then(function () { toast("Copied to clipboard"); })
-      .catch(function () { window.open(url, "_blank"); });
+      .catch(function () { window.location.href = url; });
   });
 
   // ---- More part numbers --------------------------------------------------

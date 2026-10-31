@@ -55,7 +55,7 @@
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>
         <a class="btn btn-sm {{if eq $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "list")}}">List</a>
       </span>
-      <button class="btn btn-sm" type="button" data-copy-url="{{withQuery "/stock/export.txt" $f.Encode}}" title="Copy this view as plain text">{{icon "copy"}} Copy as text</button>
+      <a class="btn btn-sm" href="{{withQuery "/stock/export.txt" $f.Encode}}" data-copy-url="{{withQuery "/stock/export.txt" $f.Encode}}" title="Copy this view as plain text">{{icon "copy"}} Copy as text</a>
       <a class="btn btn-sm" href="{{withQuery "/stock/export.csv" $f.Encode}}" title="Download as CSV">{{icon "download"}} CSV</a>
     </div>
   </div>

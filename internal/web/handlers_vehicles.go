@@ -261,21 +261,22 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	back := s.back(r, fmt.Sprintf("/vehicles/%d", id))
 	km, err := parseOptInt(formText(r, "odometer_km"))
 	if err != nil || km == nil || *km < 0 || *km > stock.MaxOdometerKm {
 		s.setFlash(w, "error", "Enter the odometer reading in km")
-		http.Redirect(w, r, fmt.Sprintf("/vehicles/%d", id), http.StatusSeeOther)
+		s.redirect(w, r, back, "")
 		return nil
 	}
 	var conflict *store.ConflictError
 	if err := s.store.SetOdometer(r.Context(), id, *km); errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
-		s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "")
+		s.redirect(w, r, back, "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, s.back(r, fmt.Sprintf("/vehicles/%d", id)), "Odometer set to "+stock.FormatKm(*km))
+	s.redirect(w, r, back, "Odometer set to "+stock.FormatKm(*km))
 	return nil
 }
 

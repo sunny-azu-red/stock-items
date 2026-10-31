@@ -783,7 +783,11 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 			in.Quantity, in.Note = &sugg[0].Quantity, strings.Join(sugg[0].Reasons, "; ")
 		}
 	}
-	if _, err := s.store.AddShopping(r.Context(), in); err != nil {
+	if _, err := s.store.AddShopping(r.Context(), in); errors.Is(err, store.ErrNotFound) {
+		s.setFlash(w, "error", it.DisplayName()+" was archived or deleted meanwhile")
+		s.redirect(w, r, s.back(r, fmt.Sprintf("/items/%d", id)), "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	s.redirect(w, r, s.back(r, fmt.Sprintf("/items/%d", id)), it.DisplayName()+" is on the shopping list")
@@ -795,6 +799,10 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 const (
 	maxPhotoBytes      = 15 << 20
 	photoUploadTimeout = 5 * time.Minute
+	photoTooLarge      = "The photo is too large (max 15 MB)"
+	// maxPhotoFileBytes leaves room for the form around the file, for the
+	// check app.js makes before uploading.
+	maxPhotoFileBytes = maxPhotoBytes - 64<<10
 )
 
 func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
@@ -812,7 +820,7 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 		msg := "Choose a photo to upload"
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
-			msg = "The photo is too large (max 15 MB)"
+			msg = photoTooLarge
 		}
 		s.setFlash(w, "error", msg)
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)

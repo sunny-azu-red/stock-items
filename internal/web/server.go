@@ -175,6 +175,14 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 		case err == nil:
 		case errors.Is(err, store.ErrNotFound), errors.Is(err, errBadID):
 			s.notFound(w, r)
+		case errors.As(err, new(*store.ConflictError)) && r.Method == http.MethodPost:
+			// A conflict no handler expected, such as something archived
+			// meanwhile in another tab: say so where the user was rather
+			// than show an error page.
+			var conflict *store.ConflictError
+			errors.As(err, &conflict)
+			s.setFlash(w, "error", conflict.Message)
+			s.redirect(w, r, s.back(r, "/"), "")
 		case errors.As(err, new(*http.MaxBytesError)):
 			s.render(w, r, http.StatusRequestEntityTooLarge, "error", View{Title: "Too large", Data: errorPage{
 				Code: 413, Title: "Too large", Message: "That form was too large to save. Shorten the notes and try again.",

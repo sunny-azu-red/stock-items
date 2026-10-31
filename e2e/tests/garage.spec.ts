@@ -92,7 +92,8 @@ test("set up vehicles and the example inventory", async ({ page }) => {
   await expect(page.locator(".tile").filter({ hasText: "Items" })).toContainText("13");
 });
 
-test("filter stock by vehicle and copy it as text", async ({ page }, testInfo) => {
+test("filter stock by vehicle and copy it as text", async ({ page, context }, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/stock");
   await expect(page.locator(".section")).toHaveCount(3);
 
@@ -104,9 +105,12 @@ test("filter stock by vehicle and copy it as text", async ({ page }, testInfo) =
   await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
   await page.screenshot({ path: testInfo.outputPath("stock-ktm390.png"), fullPage: true });
 
-  const copy = page.getByRole("button", { name: "Copy as text" });
+  // A link to the text, which JS copies instead of opening.
+  const copy = page.getByRole("link", { name: "Copy as text" });
   await copy.click();
   await expect(copy).toHaveAttribute("data-copied", /KTM 390\n-{12}\n/);
+  await expect(page.locator(".toast")).toContainText("Copied to clipboard");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   const text = await copy.getAttribute("data-copied");
   expect(text).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   expect(text).toContain("KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6x - OEM Oil Filter O-Ring");
@@ -460,4 +464,13 @@ test("screenshots", async ({ page }, testInfo) => {
     await page.goto(url);
     await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}.png`, fullPage: true });
   }
+});
+
+// Last, so the item it adds doesn't change what the tests above see.
+test("Enter in the new item form saves the item", async ({ page }) => {
+  await page.goto("/items/new");
+  await page.getByLabel("Name", { exact: true }).fill("Brake cleaner");
+  await page.getByLabel("Name", { exact: true }).press("Enter");
+  await expect(page).toHaveURL(/\/items\/\d+$/);
+  await expect(page.locator("h1")).toContainText("Brake cleaner");
 });

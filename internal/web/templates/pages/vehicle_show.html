@@ -27,7 +27,7 @@
     <div class="results-head">
       <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">({{$d.ItemCount}})</span></h2>
       <div class="flex">
-        <button class="btn btn-sm" type="button" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</button>
+        <a class="btn btn-sm" href="{{withQuery "/stock/export.txt" $d.StockQuery}}" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</a>
         <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Open in stock →</a>
       </div>
     </div>

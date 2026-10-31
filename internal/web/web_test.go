@@ -140,7 +140,8 @@ func TestPagesRenderWithData(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 
 	expect(t, a.get("/"), http.StatusOK, "KTM 390", "Dashboard")
-	expect(t, a.get("/stock"), http.StatusOK, "Rear Brake Pads", "Shared", "Copy as text")
+	// Copy as text is a link to the text, so it works without JS too.
+	expect(t, a.get("/stock"), http.StatusOK, "Rear Brake Pads", "Shared", `href="/stock/export.txt" data-copy-url="/stock/export.txt"`)
 	expect(t, a.get("/stock?view=list&sort=quantity"), http.StatusOK, "Hiflofiltro")
 	expect(t, a.get("/vehicles"), http.StatusOK, "KTM 1290")
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Service kits", "Silkolene")
@@ -1577,5 +1578,57 @@ func TestPurgeSaysWhatWentAlong(t *testing.T) {
 	}
 	if n, _ := a.store.CountTrash(context.Background()); n != 0 {
 		t.Errorf("trash = %d", n)
+	}
+}
+
+// Posts about things that changed meanwhile, say in another tab, end in
+// a message where the user was, not an error page.
+func TestRacesEndInMessages(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake")
+	path := "/items/" + itoa(pads)
+
+	// Put on the list after it was archived in another tab.
+	if _, err := a.store.ArchiveItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+	rec := a.post(path+"/shopping", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "archived or deleted meanwhile") {
+		t.Errorf("flash = %+v", f)
+	}
+	if err := a.store.RestoreItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+
+	// Bought, ticked off or removed twice.
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Zip ties"})
+	expect(t, a.post("/shopping/"+itoa(entry)+"/delete", nil), http.StatusSeeOther)
+	for _, p := range []string{"/delete", "/bought"} {
+		rec = a.post("/shopping/"+itoa(entry)+p, url.Values{"amount": {"1"}})
+		expect(t, rec, http.StatusSeeOther)
+		if f := flashOf(t, rec); f.Kind != "error" || f.Message != "That entry is no longer on the list" {
+			t.Errorf("%s: flash = %+v", p, f)
+		}
+	}
+
+	// A store conflict no handler expects: deleting a service would give
+	// back more than the maximum.
+	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(pads)}, "part_qty": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
+		t.Fatal(err)
+	}
+	rec = a.post(svc+"/delete", nil, "Referer", "http://example.com"+svc)
+	expect(t, rec, http.StatusSeeOther)
+	if l := rec.Header().Get("Location"); l != svc {
+		t.Errorf("went to %q, want back to %q", l, svc)
+	}
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "would have more than") {
+		t.Errorf("flash = %+v", f)
 	}
 }

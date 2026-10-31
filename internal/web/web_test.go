@@ -916,6 +916,14 @@ func TestArchiveItemFlow(t *testing.T) {
 
 	expect(t, a.post(path+"/restore", nil), http.StatusSeeOther)
 	expect(t, a.get("/stock"), http.StatusOK, "15W50 PRO 4 XP")
+
+	// On the shopping list: archiving says where the entry went.
+	expect(t, a.post(path+"/shopping", nil), http.StatusSeeOther)
+	rec = a.post(path+"/archive", nil)
+	if f := flashOf(t, rec); !strings.Contains(f.Message, "shopping list entry is in Recently deleted") {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get("/trash"), http.StatusOK, "Shopping list: ")
 }
 
 func mustID(t *testing.T, path string) int64 {

@@ -158,7 +158,7 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		if _, err := tx.Exec(ctx, `
 			SELECT id FROM items
 			WHERE id = ANY($2) OR id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
-			ORDER BY id FOR UPDATE`, id, ids); err != nil {
+			ORDER BY id FOR NO KEY UPDATE`, id, ids); err != nil {
 			return err
 		}
 		if err := returnServiceParts(ctx, tx, id); err != nil {
@@ -306,7 +306,7 @@ func (s *Store) DeleteService(ctx context.Context, id int64) (trashID int64, err
 		// Lock the items in id order first, like CreateService.
 		if _, err := tx.Exec(ctx, `
 			SELECT id FROM items WHERE id IN (SELECT item_id FROM stock_movements WHERE service_record_id = $1)
-			ORDER BY id FOR UPDATE`, id); err != nil {
+			ORDER BY id FOR NO KEY UPDATE`, id); err != nil {
 			return err
 		}
 		if err := returnServiceParts(ctx, tx, id); err != nil {

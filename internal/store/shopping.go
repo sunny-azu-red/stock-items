@@ -52,6 +52,11 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 	var id int64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		if in.ItemID != nil {
+			// The item's entry before the item, like MarkBought, so the two
+			// can't deadlock.
+			if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, *in.ItemID); err != nil {
+				return err
+			}
 			// FOR SHARE: an item being archived right now waits, or is seen
 			// archived, so it can't end up back on the list.
 			var archived bool
@@ -252,7 +257,7 @@ func (s *Store) LinkShopping(ctx context.Context, entryID, itemID int64) (id int
 			return err
 		}
 		var itemUnit stock.Unit
-		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&itemUnit); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&itemUnit); err != nil {
 			return notFound(err)
 		}
 		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL WHERE id = $1`, itemID); err != nil {

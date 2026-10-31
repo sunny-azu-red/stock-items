@@ -438,13 +438,13 @@ func (s *Server) itemArchive(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	removed, err := s.store.ArchiveItem(r.Context(), id)
+	listTrash, err := s.store.ArchiveItem(r.Context(), id)
 	if err != nil {
 		return err
 	}
 	msg := "Archived " + it.DisplayName() + ". Its history stays; restore it any time."
-	if removed {
-		msg = "Archived " + it.DisplayName() + " and took it off the shopping list. Its history stays; restore it any time."
+	if listTrash != 0 {
+		msg = "Archived " + it.DisplayName() + ". Its history stays; restore it any time. Its shopping list entry is in Recently deleted."
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
 	return nil

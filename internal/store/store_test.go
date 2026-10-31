@@ -1039,9 +1039,9 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 		t.Fatalf("delete used item: want ConflictError, got %v", err)
 	}
 
-	removed, err := s.ArchiveItem(ctx, filter)
-	if err != nil || !removed {
-		t.Fatalf("archive = %v, %v; want it taken off the shopping list", removed, err)
+	listTrash, err := s.ArchiveItem(ctx, filter)
+	if err != nil || listTrash == 0 {
+		t.Fatalf("archive = %v, %v; want it taken off the shopping list", listTrash, err)
 	}
 	if got := ids(mustList(t, s, store.ItemFilter{})); !slices.Equal(got, []string{"Spare bolt"}) {
 		t.Errorf("active items = %v", got)
@@ -2094,5 +2094,84 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	}
 	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog != nil || *k.LastService.OdometerKm != 16500 {
 		t.Errorf("with a reading: %+v", k.LastService)
+	}
+}
+
+// Saving a kit holds key-share locks on its items (the foreign key) while
+// services lock the same items; neither may deadlock the other.
+func TestKitSavesAndServicesDoNotDeadlock(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "KTM 390")
+	a := mustItem(t, s, stock.ItemInput{Name: "A", Unit: stock.UnitPiece, Quantity: 1000})
+	b := mustItem(t, s, stock.ItemInput{Name: "B", Unit: stock.UnitPiece, Quantity: 1000})
+	kin := stock.KitInput{VehicleID: v, Name: "Kit"}
+	kin.Normalize()
+	kit, err := s.CreateKit(ctx, kin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 80)
+	for g := range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lines := []stock.KitLineInput{{ItemID: b, Quantity: 1}, {ItemID: a, Quantity: 1}}
+			for range 20 {
+				var err error
+				if g%2 == 0 {
+					in := stock.KitInput{VehicleID: v, Name: "Kit", Lines: lines}
+					err = s.UpdateKit(ctx, kit, in)
+				} else {
+					_, err = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(),
+						Parts: []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}})
+				}
+				if err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	assertLedger(t, s)
+}
+
+// Archiving an item that is on the shopping list puts its entry in the
+// trash, from where it comes back once the item is restored.
+func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
+	s, ctx := newStore(t)
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0), Note: "front"}); err != nil {
+		t.Fatal(err)
+	}
+	trashID, err := s.ArchiveItem(ctx, pads)
+	if err != nil || trashID == 0 {
+		t.Fatalf("archive = %d, %v", trashID, err)
+	}
+	if list, _ := s.ListShopping(ctx); len(list) != 0 {
+		t.Errorf("list = %+v", list)
+	}
+	var conflict *store.ConflictError
+	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) {
+		t.Errorf("restore while archived: want ConflictError, got %v", err)
+	}
+	if err := s.RestoreItem(ctx, pads); err != nil {
+		t.Fatal(err)
+	}
+	mustRestore(t, s, trashID)
+	list, _ := s.ListShopping(ctx)
+	if len(list) != 1 || *list[0].Quantity != 2 || list[0].Note != "front" {
+		t.Errorf("list = %+v", list)
+	}
+	// Not on the list: nothing goes to the trash.
+	if _, err := s.DeleteShopping(ctx, list[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if trashID, err := s.ArchiveItem(ctx, pads); err != nil || trashID != 0 {
+		t.Errorf("archive off the list = %d, %v", trashID, err)
 	}
 }

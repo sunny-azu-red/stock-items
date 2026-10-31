@@ -198,7 +198,7 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 	var qty float64
 	var name, brand string
 	var unit stock.Unit
-	if err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR UPDATE`, itemID).
+	if err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).
 		Scan(&qty, &name, &brand, &unit); err != nil {
 		return notFound(err)
 	}
@@ -216,7 +216,7 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 // lockItems locks items in id order, so restores can't deadlock with
 // services or each other.
 func lockItems(ctx context.Context, tx pgx.Tx, ids []int64) error {
-	_, err := tx.Exec(ctx, `SELECT id FROM items WHERE id = ANY($1) ORDER BY id FOR UPDATE`, ids)
+	_, err := tx.Exec(ctx, `SELECT id FROM items WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE`, ids)
 	return err
 }
 
@@ -556,7 +556,7 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 		return 0, err
 	}
 	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&archived); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&archived); err != nil {
 		return 0, err
 	}
 	if archived {

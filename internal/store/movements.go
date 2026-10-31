@@ -13,6 +13,11 @@ import (
 
 // applyMovement changes an item's quantity and records the movement. It
 // must run inside a transaction so the ledger and quantity never diverge.
+//
+// Items are locked FOR NO KEY UPDATE throughout the store (only DeleteItem
+// takes FOR UPDATE): saving a kit or a movement holds a KEY SHARE lock on
+// the item through the foreign key, which FOR UPDATE would conflict with,
+// so a kit saved while a service takes the same parts could deadlock.
 func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error {
 	// The columns keep three decimals. Rounding here (not in the database)
 	// makes the stored delta exactly the change applied to the quantity.
@@ -23,7 +28,7 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) error
 	var qty float64
 	var name, brand string
 	var unit stock.Unit
-	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR UPDATE`, in.ItemID).
+	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
 		Scan(&qty, &name, &brand, &unit)
 	if err != nil {
 		return notFound(err)
@@ -78,7 +83,7 @@ func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, n
 	var delta float64
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		var qty float64
-		if err := tx.QueryRow(ctx, `SELECT quantity FROM items WHERE id = $1 FOR UPDATE`, itemID).Scan(&qty); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT quantity FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&qty); err != nil {
 			return notFound(err)
 		}
 		var err error
@@ -172,7 +177,7 @@ func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, err
 		SELECT m.id, m.item_id, i.brand, i.name, i.unit, i.quantity, m.kind, m.delta, m.total_price, m.supplier,
 		       m.note, m.occurred_on, m.service_record_id
 		FROM stock_movements m JOIN items i ON i.id = m.item_id
-		WHERE m.id = $1 FOR UPDATE`, id).
+		WHERE m.id = $1 FOR NO KEY UPDATE`, id).
 		Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.qty, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
 			&m.Note, &m.OccurredOn, &m.ServiceRecordID)
 	if err != nil {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -230,7 +231,7 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput) er
 		var qty float64
 		var unit stock.Unit
 		var archived bool
-		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR UPDATE`, id).
+		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, id).
 			Scan(&qty, &unit, &archived)
 		if err != nil {
 			return notFound(err)
@@ -348,19 +349,35 @@ func (s *Store) DeleteItem(ctx context.Context, id int64) (trashID int64, err er
 }
 
 // ArchiveItem hides an item from stock, pickers and suggestions while
-// keeping its history, services, kits and spending. It also takes the
-// item off the shopping list; removed reports whether it was on it.
-func (s *Store) ArchiveItem(ctx context.Context, id int64) (removed bool, err error) {
+// keeping its history, services, kits and spending. Its shopping list
+// entry, if any, goes to the trash; listTrashID is that trash entry (0
+// when it wasn't on the list).
+func (s *Store) ArchiveItem(ctx context.Context, id int64) (listTrashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		err := checkAffected(tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id))
+		// The entry before the item, like MarkBought, so the two can't deadlock.
+		if _, err := tx.Exec(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id); err != nil {
+			return err
+		}
+		if err := checkAffected(tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()) WHERE id = $1`, id)); err != nil {
+			return err
+		}
+		// Looked up again under the item's lock: an AddShopping that held
+		// the item has committed its entry by now.
+		var entryID int64
+		err := tx.QueryRow(ctx, `SELECT id FROM shopping_entries WHERE item_id = $1 FOR UPDATE`, id).Scan(&entryID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE item_id = $1`, id)
-		removed = tag.RowsAffected() > 0
+		if listTrashID, err = trashShopping(ctx, tx, entryID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID)
 		return err
 	})
-	return removed, err
+	return listTrashID, err
 }
 
 // RestoreItem brings an archived item back.

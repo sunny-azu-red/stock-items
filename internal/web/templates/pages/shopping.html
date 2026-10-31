@@ -37,7 +37,7 @@
       <form class="card-body form" method="post" action="/shopping" novalidate>
         {{template "error-summary" $e}}
         <div class="form-grid">
-          <div class="field">
+          <div class="field{{if index $e "item_id"}} has-error{{end}}">
             <label for="item_id">Item on stock</label>
             <select class="input" id="item_id" name="item_id" data-unit-source>
               <option value="">— or describe it below —</option>

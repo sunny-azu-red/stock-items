@@ -10,15 +10,17 @@
   </div>
   <div class="actions">
     <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
+    {{if not $v.Archived}}
     <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
     <a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
+    {{end}}
   </div>
 </div>
 
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2><a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} New kit</a></div>
+      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not $v.Archived}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} New kit</a>{{end}}</div>
       {{if $d.Kits}}{{range $d.Kits}}{{if not .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}
       {{range $d.Kits}}{{if .Kit.Archived}}<a class="kit-row muted" href="/kits/{{.Kit.ID}}"><span class="status-icon">{{icon "archive"}}</span><span class="grow">{{.Kit.Name}} <span class="badge badge-muted">Archived</span></span></a>{{end}}{{end}}
       {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
@@ -34,18 +36,23 @@
     {{if $d.Sections}}
       {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" true)}}{{end}}
     {{else}}
-      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing on stock for this vehicle" "Href" (print "/items/new?vehicle=" $v.ID) "Action" "Add an item")}}</div>
+      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing on stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add an item")}}</div>
     {{end}}
   </div>
 
   <div class="stack">
     <section class="card card-pad">
       <h2 class="mb">{{icon "gauge"}} Odometer</h2>
+      {{if $v.Archived}}
+      <p>{{km $v.OdometerKm}}</p>
+      <p class="hint mt">Restore this vehicle to update its odometer, log services or add kits.</p>
+      {{else}}
       <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
         <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="km" aria-label="Odometer in km">
         <button class="btn" type="submit">Update</button>
       </form>
       <p class="hint mt">Used for km-based service reminders. Logging a service also updates it.</p>
+      {{end}}
     </section>
 
     <section class="card card-pad">

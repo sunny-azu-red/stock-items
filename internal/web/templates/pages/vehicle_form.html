@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <a class="back" href="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
-<div class="page-head"><h1>{{if $d.IsNew}}New vehicle{{else}}Edit {{$f.Name}}{{end}}</h1></div>
+<div class="page-head"><h1>{{if $d.IsNew}}New vehicle{{else}}Edit {{$f.Stored}}{{end}}</h1></div>
 
 <form class="card" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
   {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}

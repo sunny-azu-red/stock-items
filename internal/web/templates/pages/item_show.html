@@ -43,13 +43,13 @@
       <div class="card-body muted small">Restore this item to record purchases, uses or counts.</div>
       {{else}}
       <div class="tabs" role="tablist">
-        <button type="button" role="tab" id="tab-purchase" aria-controls="panel-purchase" aria-selected="{{if or (eq $m.Kind "purchase") (eq $m.Kind "")}}true{{else}}false{{end}}">{{icon "package-plus"}} Bought</button>
-        <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true{{else}}false{{end}}">{{icon "minus"}} Used</button>
-        <button type="button" role="tab" id="tab-correction" aria-controls="panel-correction" aria-selected="{{if eq $m.Kind "correction"}}true{{else}}false{{end}}">{{icon "list-checks"}} Count</button>
+        <button type="button" role="tab" id="tab-purchase" aria-controls="panel-purchase" aria-selected="{{if or (eq $m.Kind "purchase") (eq $m.Kind "")}}true"{{else}}false" tabindex="-1"{{end}}>{{icon "package-plus"}} Bought</button>
+        <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true"{{else}}false" tabindex="-1"{{end}}>{{icon "minus"}} Used</button>
+        <button type="button" role="tab" id="tab-correction" aria-controls="panel-correction" aria-selected="{{if eq $m.Kind "correction"}}true"{{else}}false" tabindex="-1"{{end}}>{{icon "list-checks"}} Count</button>
       </div>
-      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
-      {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (ne $m.Kind "use"))}}
-      {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Hidden" (ne $m.Kind "correction"))}}
+      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
+      {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (ne $m.Kind "use"))}}
+      {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (ne $m.Kind "correction"))}}
       {{end}}
     </section>
 
@@ -127,10 +127,10 @@
     {{if eq .Kind "purchase"}}
     <div class="field{{if and $active (index $e "total_price")}} has-error{{end}}">
       {{if eq .Item.Unit "piece"}}
-      <div class="label-row"><label for="price-{{.Kind}}">Total price</label>{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</div>
+      <div class="label-row"><label for="price-{{.Kind}}">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</div>
       <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
       {{else}}
-      <label for="price-{{.Kind}}">Total price</label>
+      <label for="price-{{.Kind}}">Total price ({{.Currency}})</label>
       <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional">
       {{end}}
       {{if $active}}{{template "err" (index $e "total_price")}}{{end}}

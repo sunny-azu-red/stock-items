@@ -261,7 +261,7 @@ func (in VehicleInput) Validate() Errors {
 		errs.Add("year", "Year must be between 1900 and 2100")
 	}
 	if !colorRe.MatchString(in.Color) {
-		errs.Add("color", "Color must look like #ff6600")
+		errs.Add("color", "Colour must look like #ff6600")
 	}
 	if in.OdometerKm != nil && *in.OdometerKm < 0 {
 		errs.Add("odometer_km", "Odometer cannot be negative")

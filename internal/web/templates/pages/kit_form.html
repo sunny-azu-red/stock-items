@@ -2,7 +2,7 @@
 <a class="back" href="{{if $d.IsNew}}{{if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}{{else}}/kits/{{$f.ID}}{{end}}">{{icon "arrow-left"}} Back</a>
 <div class="page-head">
   <div>
-    <h1>{{if $d.IsNew}}New service kit{{else}}Edit {{$f.Name}}{{end}}</h1>
+    <h1>{{if $d.IsNew}}New service kit{{else}}Edit {{$f.Stored}}{{end}}</h1>
     <p class="sub">The parts a recurring job needs. You will see at a glance what is on the shelf and what to buy.</p>
   </div>
 </div>

@@ -1268,7 +1268,10 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expectNot(t, page, `action="`+path+`/delete"`)
 
 	expect(t, a.post(path+"/archive", nil), http.StatusSeeOther)
-	expect(t, a.get(path), http.StatusOK, "Archived", `action="`+path+`/restore"`)
+	page = a.get(path)
+	expect(t, page, http.StatusOK, "Archived", `action="`+path+`/restore"`, "Restore this vehicle to update its odometer")
+	// Nothing new for it: no service, kit or item buttons, no odometer form.
+	expectNot(t, page, `href="/services/new?vehicle=`, `href="/kits/new?vehicle=`, `href="/items/new?vehicle=`, `action="`+path+`/odometer"`)
 	expectNot(t, a.get("/vehicles"), `href="`+path+`"`)
 	expect(t, a.get("/vehicles"), http.StatusOK, "1 archived vehicle")
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, `href="`+path+`"`)
@@ -1631,4 +1634,69 @@ func TestRacesEndInMessages(t *testing.T) {
 	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "would have more than") {
 		t.Errorf("flash = %+v", f)
 	}
+}
+
+// An empty list under a filter or past the last page says so, rather
+// than that nothing was ever logged.
+func TestEmptyStatesFollowFilters(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"}}),
+		http.StatusSeeOther)
+	expect(t, a.get("/services?page=9"), http.StatusOK, "Nothing on this page", `href="/services"`)
+	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "Nothing logged for this vehicle yet",
+		`href="/services/new?vehicle=`+itoa(k1290)+`"`)
+	expect(t, a.get("/activity?page=9"), http.StatusOK, "Nothing on this page", `href="/activity"`)
+	expect(t, a.get("/activity?kind=correction"), http.StatusOK, "Nothing of this kind yet", "Show everything")
+	expectNot(t, a.get("/activity?kind=correction"), "No activity yet")
+}
+
+// Blanking the name of something being edited keeps its saved name in
+// the heading and title.
+func TestEditHeadingsKeepTheSavedName(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	for _, tt := range []struct{ path, want string }{
+		{"/items/" + itoa(pads), "Edit OEM Rear Brake Pads"},
+		{"/vehicles/" + itoa(k390), "Edit KTM 390"},
+		{kit, "Edit Brakes"},
+		{svc, "Edit Chain clean"},
+	} {
+		expect(t, a.get(tt.path+"/edit"), http.StatusOK, "<title>"+tt.want)
+		page := a.post(tt.path, url.Values{"vehicle_id": {itoa(k390)}, "unit": {"piece"}, "quantity": {"1"}, "performed_on": {"2026-10-29"}})
+		expect(t, page, http.StatusUnprocessableEntity, "<title>"+tt.want)
+	}
+}
+
+func TestAccessibilityDetails(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	pads := itemID(t, a.store, "Rear Brake")
+	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" placeholder="optional" aria-describedby="price-tip"`)
+	// Only the selected tab is in the tab order; the price label names the currency.
+	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-purchase" aria-controls="panel-purchase" aria-selected="true">`,
+		`id="tab-use" aria-controls="panel-use" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
+	// A fixed vehicle has no <label for> pointing at nothing.
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
+	expect(t, rec, http.StatusSeeOther)
+	edit := a.get(rec.Header().Get("Location") + "/edit")
+	expect(t, edit, http.StatusOK, `<span class="label">Vehicle</span>`)
+	expectNot(t, edit, `for="vehicle_id"`)
+	// The item picker is marked when it is what's wrong.
+	expect(t, a.post("/shopping", url.Values{"item_id": {"999999"}}), http.StatusUnprocessableEntity,
+		`<div class="field has-error">
+            <label for="item_id">`)
+	// Error messages are announced at once.
+	page := httptest.NewRequest(http.MethodGet, "/trash", nil)
+	for _, c := range a.post("/trash/999/restore", nil).Result().Cookies() {
+		page.AddCookie(c)
+	}
+	expect(t, a.do(page), http.StatusOK, `class="flash flash-error" role="alert"`)
 }

@@ -20,6 +20,7 @@ type vehicleForm struct {
 	Name, Kind, Make, Model, Year        string
 	Plate, VIN, Color, OdometerKm, Notes string
 	OdometerWas                          string // as the edit form was opened
+	Stored                               string // the saved name while editing, for the heading
 	Errors                               stock.Errors
 }
 
@@ -34,7 +35,7 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
 		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm), Notes: v.Notes,
-		OdometerWas: optIntString(v.OdometerKm),
+		OdometerWas: optIntString(v.OdometerKm), Stored: v.Name,
 	}
 }
 
@@ -69,7 +70,7 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, status int, f vehicleForm, isNew bool) {
 	title := "New vehicle"
 	if !isNew {
-		title = "Edit " + f.Name
+		title = "Edit " + f.Stored
 	}
 	s.render(w, r, status, "vehicle_form", View{Title: title, Nav: "vehicles", Data: vehicleFormPage{
 		Form: f, IsNew: isNew, Kinds: stock.VehicleKinds, Palette: palette,
@@ -194,6 +195,11 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
+	v, err := s.store.GetVehicle(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	f.Stored = v.Name
 	s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, false)
 	return nil
 }

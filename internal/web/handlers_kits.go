@@ -147,6 +147,7 @@ type kitForm struct {
 	Name, IntervalKm, IntervalMonths string
 	Notes                            string
 	Lines                            []lineRow
+	Stored                           string // the saved name while editing, for the heading
 	Errors                           stock.Errors
 }
 
@@ -180,7 +181,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	}
 	title := "New service kit"
 	if !isNew {
-		title = "Edit " + f.Name
+		title = "Edit " + f.Stored
 	}
 	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
 		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), ItemGroups: itemOptions(items, vehicle),
@@ -217,7 +218,7 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
-		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, IntervalKm: optIntString(k.IntervalKm),
+		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalKm: optIntString(k.IntervalKm),
 		IntervalMonths: optIntString(k.IntervalMonths), Notes: k.Notes,
 	}
 	for _, l := range k.Lines {
@@ -290,6 +291,11 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
+	k, err := s.store.GetKit(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	f.Stored = k.Name
 	return s.renderKitForm(w, r, http.StatusUnprocessableEntity, f, false)
 }
 

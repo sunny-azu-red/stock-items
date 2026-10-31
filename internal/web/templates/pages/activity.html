@@ -16,6 +16,8 @@
 </div>
 <section class="card">
   {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item))}}
+  {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
+  {{else if $d.Kind}}{{template "empty" (dict "Icon" "history" "Title" "Nothing of this kind yet" "Href" (withQuery "/activity" ($d.KindQuery "")) "Action" "Show everything" "ActionIcon" "history")}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}
 </section>
 {{if or $d.More (gt $d.Page 1)}}

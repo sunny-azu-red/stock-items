@@ -36,6 +36,9 @@ type itemForm struct {
 	VehicleIDs                     []int64
 	SKUs                           []skuRow
 	Errors                         stock.Errors
+	// Stored is the saved name while editing, for the heading: what is
+	// typed may be blank.
+	Stored string
 }
 
 type itemFormPage struct {
@@ -54,7 +57,7 @@ type itemFormPage struct {
 func itemFormFromItem(it stock.Item) itemForm {
 	f := itemForm{
 		ID: it.ID, Name: it.Name, Brand: it.Brand, Category: it.Category, Unit: string(it.Unit),
-		Location: it.Location, Notes: it.Notes, VehicleIDs: it.VehicleIDs,
+		Location: it.Location, Notes: it.Notes, VehicleIDs: it.VehicleIDs, Stored: it.DisplayName(),
 	}
 	f.Quantity, f.QuantityUnit = stock.SplitForInput(it.Quantity, it.Unit)
 	f.QuantityWas = stock.FormatNumber(it.Quantity)
@@ -344,7 +347,7 @@ func (s *Server) itemEdit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "item_form", View{Title: "Edit " + it.DisplayName(), Nav: "stock", Data: page})
+	s.render(w, r, http.StatusOK, "item_form", View{Title: "Edit " + page.Form.Stored, Nav: "stock", Data: page})
 	return nil
 }
 
@@ -368,11 +371,16 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
+	it, err := s.store.GetItem(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	f.Stored = it.DisplayName()
 	page, err := s.itemFormPage(r, f, false)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "Edit item", Nav: "stock", Data: page})
+	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "Edit " + f.Stored, Nav: "stock", Data: page})
 	return nil
 }
 

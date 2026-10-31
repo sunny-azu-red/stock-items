@@ -16,11 +16,12 @@
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
-        <label for="vehicle_id">Vehicle</label>
         {{if or $f.KitID $f.ID}}
-          <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
-          <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{if $f.KitID}} <span class="muted small">kit: {{$f.KitName}}</span>{{end}}</div>
+        <span class="label">Vehicle</span>
+        <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
+        <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{if $f.KitID}} <span class="muted small">kit: {{$f.KitName}}</span>{{end}}</div>
         {{else}}
+        <label for="vehicle_id">Vehicle</label>
         <select class="input" id="vehicle_id" name="vehicle_id">
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}

@@ -51,6 +51,8 @@
       return;
     }
     form.dataset.submitting = "1";
+    // A submit that never got an answer (no network) mustn't lock the form.
+    setTimeout(function () { delete form.dataset.submitting; }, 10000);
   });
   // Coming back with the back button restores the page as it was left.
   window.addEventListener("pageshow", function () {
@@ -64,6 +66,10 @@
   var dirty = false;
   document.addEventListener("input", function (e) {
     if (e.target.form && e.target.form.method === "post") dirty = true;
+  });
+  // A form sent back with errors still holds what was typed, unsaved.
+  document.querySelectorAll('form[method="post"]').forEach(function (f) {
+    if (f.querySelector(".has-error, .error-summary")) dirty = true;
   });
 
   // ---- Repeating form rows ------------------------------------------------

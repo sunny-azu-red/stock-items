@@ -107,9 +107,15 @@ func run() error {
 	case <-ctx.Done():
 		stop() // a second Ctrl+C kills the process right away
 		logger.Info("shutting down")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Under Docker's 10 s grace period, so the app stops on its own terms.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		if err := httpServer.Shutdown(shutdownCtx); errors.Is(err, context.DeadlineExceeded) {
+			// A request still running, like a slow photo upload, is cut off:
+			// a normal stop, not a failure.
+			logger.Warn("shutdown timed out; closing open connections")
+			return httpServer.Close()
+		} else if err != nil {
 			return fmt.Errorf("shutdown: %w", err)
 		}
 	}

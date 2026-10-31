@@ -22,6 +22,7 @@ type serviceForm struct {
 	Notes       string
 	LaborCost   string
 	Parts       []lineRow
+	Stored      string // the saved title while editing, for the page title
 	Errors      stock.Errors
 }
 
@@ -70,7 +71,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	p.ItemGroups = itemOptions(items, p.Vehicle)
 	title := "Log service"
 	if f.ID != 0 {
-		title = "Edit " + f.Title
+		title = "Edit " + f.Stored
 	}
 	s.render(w, r, status, "service_form", View{Title: title, Nav: "services", Data: p})
 	return nil
@@ -194,7 +195,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, PerformedOn: rec.PerformedOn.Format("2006-01-02"),
-		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes,
+		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Stored: rec.Title,
 	}
 	if rec.KitID != nil {
 		f.KitID = *rec.KitID
@@ -224,7 +225,7 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	f.ID, f.VehicleID = id, rec.VehicleID // the vehicle can't change
+	f.ID, f.VehicleID, f.Stored = id, rec.VehicleID, rec.Title // the vehicle can't change
 	if !f.Errors.Any() {
 		err := s.store.UpdateService(r.Context(), id, in)
 		if err == nil {
@@ -277,7 +278,7 @@ type servicesPage struct {
 	Services  []stock.ServiceRecord
 	Vehicles  []stock.Vehicle
 	VehicleID int64
-	Labor     float64 // labour cost of all logged services shown
+	Labor     float64 // labour cost of all the services logged (for the vehicle filter), not just this page
 	Total     int     // how many services are logged (for the filter)
 	Page      int
 	More      bool // there are older services

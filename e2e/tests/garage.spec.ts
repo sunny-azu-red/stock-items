@@ -464,17 +464,33 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
   await page.goto("/stock");
   const copy = page.getByRole("link", { name: "Copy as text" });
-  for (const how of [{ modifiers: ["ControlOrMeta" as const] }, { button: "middle" as const }]) {
-    const opened = context.waitForEvent("page");
-    await copy.click(how);
-    const tab = await opened;
-    await tab.waitForLoadState();
-    expect(tab.url()).toContain("/stock/export.txt");
-    await expect(tab.locator("body")).toContainText("Silkolene 15W50 PRO 4 XP");
-    await tab.close();
+  // app.js must leave a modified or middle click to the browser, which then
+  // opens the link like any other. Opening the tab is the browser's part:
+  // waiting for it from a real Ctrl-click timed out now and then in
+  // headless Chromium on CI. So: does app.js take the click over (a window
+  // listener runs after the document's, sees, and stops the navigation)?
+  const takenOver = (init: MouseEventInit) => copy.evaluate((a, init) => {
+    let seen: boolean | undefined;
+    window.addEventListener("click", (e) => { seen = e.defaultPrevented; e.preventDefault(); }, { once: true });
+    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ...init }));
+    return seen;
+  }, init);
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+    expect(await takenOver(init), JSON.stringify(init)).toBe(false);
   }
   await expect(page).toHaveURL(/\/stock$/);
   await expect(copy).not.toHaveAttribute("data-copied");
+
+  // What the opened tab shows: the link's own URL, the text.
+  const tab = await context.newPage();
+  await tab.goto((await copy.getAttribute("href"))!);
+  expect(tab.url()).toContain("/stock/export.txt");
+  await expect(tab.locator("body")).toContainText("Silkolene 15W50 PRO 4 XP");
+  await tab.close();
+
+  // A plain click is app.js's to copy. (This one, made by a script, may not
+  // write the clipboard, and then the page shows the text: so it comes last.)
+  expect(await takenOver({})).toBe(true);
 });
 
 test("replaced photos show their thumbnails in the trash", async ({ page }) => {

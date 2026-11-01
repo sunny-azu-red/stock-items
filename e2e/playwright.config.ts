@@ -6,7 +6,7 @@ import * as path from "node:path";
 // (e2e_*), which is dropped and re-created on start. Database credentials
 // come from ../.env or the environment, exactly like the app.
 const goBin = path.join(os.homedir(), ".local", "go", "bin");
-// SCREENSHOT_VERSION (a commit hash, from scripts/screenshots.sh) fixes the
+// SCREENSHOT_VERSION (a pinned hash, from scripts/screenshots.sh) fixes the
 // version the sidebar shows, so retaken screenshots change only with the pages.
 const version = process.env.SCREENSHOT_VERSION ?? "";
 if (version && !/^[0-9a-f]{7,40}$/.test(version)) throw new Error(`SCREENSHOT_VERSION ${version} is not a commit hash`);

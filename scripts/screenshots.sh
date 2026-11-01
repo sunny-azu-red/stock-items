@@ -9,9 +9,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The sidebar shows a commit (below): the pages must be that commit's code.
+# The screenshots must show committed code.
 if [ -n "$(git status --porcelain -- . ':!docs/screenshots')" ]; then
-  echo "Commit your changes first: the screenshots show the version of the last commit."
+  echo "Commit your changes first: the screenshots must show committed code."
   git status --short -- . ':!docs/screenshots'
   exit 1
 fi
@@ -21,9 +21,9 @@ command -v vips >/dev/null || { echo "vips not found: sudo apt install libvips-t
 shots=$(mktemp -d)
 trap 'rm -rf "$shots"' EXIT
 
-# The sidebar shows the last commit that changed the app, not HEAD: a docs,
-# test or script commit then leaves every screenshot as it was.
-version=$(git log -1 --format=%H -- cmd internal go.mod go.sum ':!*_test.go' | cut -c1-7)
+# The sidebar shows a pinned version, not a real one: it looks like a commit,
+# but a commit then changes only the screenshots of the pages it changed.
+version=6b1ea22
 echo "==> e2e tests with screenshots (version $version)"
 (cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" npx playwright test)
 

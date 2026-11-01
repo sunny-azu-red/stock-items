@@ -625,7 +625,7 @@ func TestEmptyStatesFollowFilters(t *testing.T) {
 	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "Nothing logged for this vehicle yet",
 		`href="/services/new?vehicle=`+itoa(k1290)+`"`)
 	expect(t, a.get("/activity?page=9"), http.StatusOK, "Nothing on this page", `href="/activity"`)
-	expect(t, a.get("/activity?kind=correction"), http.StatusOK, "Nothing of this kind yet", "Show everything")
+	expect(t, a.get("/activity?kind=correction"), http.StatusOK, "Nothing matches these filters", "Show everything")
 	expectNot(t, a.get("/activity?kind=correction"), "No activity yet")
 }
 

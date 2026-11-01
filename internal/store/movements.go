@@ -133,6 +133,8 @@ type MovementFilter struct {
 	ID     int64
 	ItemID int64
 	Kind   stock.MovementKind
+	// Year keeps only stock changes dated in that year (0 for any).
+	Year   int
 	Limit  int
 	Offset int // skip this many, for paging
 	// Sort is one of the MoveSort* keys (anything else sorts by date), and
@@ -209,6 +211,10 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	}
 	if f.Kind != "" {
 		sql += " AND m.kind = " + args.add(f.Kind)
+	}
+	if f.Year != 0 {
+		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
+		sql += " AND m.occurred_on >= " + args.add(from) + "::date AND m.occurred_on < " + args.add(from.AddDate(1, 0, 0)) + "::date"
 	}
 	sql += " ORDER BY " + movementOrder(&args, f.Sort, f.Desc)
 	if f.Limit > 0 {
@@ -409,6 +415,20 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 		             WHERE performed_on >= $1::date AND performed_on <= $2::date), 0))::float8`, yearStart, day).
 		Scan(&st.StockValue, &st.SpentThisYear)
 	return st, err
+}
+
+// MovementYears returns the years from the newest stock change back to
+// the oldest (none when there are none).
+func (s *Store) MovementYears(ctx context.Context) ([]int, error) {
+	var first, last *time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT min(occurred_on), max(occurred_on) FROM stock_movements`).Scan(&first, &last); err != nil || first == nil {
+		return nil, err
+	}
+	var years []int
+	for y := last.Year(); y >= first.Year(); y-- {
+		years = append(years, y)
+	}
+	return years, nil
 }
 
 // CountPurchases returns how many purchases have been recorded for an item.

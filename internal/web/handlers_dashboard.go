@@ -79,6 +79,8 @@ type activityPage struct {
 	Movements []stock.Movement
 	Kind      string
 	Kinds     []stock.MovementKind
+	Year      int         // 0 for every year
+	Years     []int       // newest first, for the year chips
 	Item      *stock.Item // set when showing one item's history
 	Page      int         // 1 is the newest
 	More      bool        // there are older entries
@@ -89,13 +91,22 @@ type activityPage struct {
 const activityPageSize = 200
 
 // KindQuery is the query string for the given kind ("" for all), keeping
-// the item filter and the sort, and starting at the first page.
-func (p activityPage) KindQuery(kind string) string { return p.kindValues(kind).Encode() }
+// the year, the item filter and the sort, and starting at the first page.
+func (p activityPage) KindQuery(kind string) string { return p.filterValues(kind, p.Year).Encode() }
 
-func (p activityPage) kindValues(kind string) url.Values {
+// YearQuery is KindQuery for a year (0 for all), keeping the kind.
+func (p activityPage) YearQuery(year int) string { return p.filterValues(p.Kind, year).Encode() }
+
+// AllQuery drops the kind and the year, keeping the item filter and the sort.
+func (p activityPage) AllQuery() string { return p.filterValues("", 0).Encode() }
+
+func (p activityPage) filterValues(kind string, year int) url.Values {
 	q := p.Sort.Values()
 	if kind != "" {
 		q.Set("kind", kind)
+	}
+	if year != 0 {
+		q.Set("year", strconv.Itoa(year))
 	}
 	if p.Item != nil {
 		q.Set("item", strconv.FormatInt(p.Item.ID, 10))
@@ -119,14 +130,14 @@ func (p activityPage) SortNote() string {
 	return words[0] + words[1]
 }
 
-// Heads are the table's column headers, keeping the kind and item filters.
+// Heads are the table's column headers, keeping the kind, year and item filters.
 func (p activityPage) Heads() sortHeads {
-	return sortHeads{Order: p.Sort, Path: "/activity", Query: p.kindValues(p.Kind)}
+	return sortHeads{Order: p.Sort, Path: "/activity", Query: p.filterValues(p.Kind, p.Year)}
 }
 
 // PageQuery is the query string for page n with the current filters.
 func (p activityPage) PageQuery(n int) string {
-	q := p.kindValues(p.Kind)
+	q := p.filterValues(p.Kind, p.Year)
 	if n > 1 {
 		q.Set("page", strconv.Itoa(n))
 	}
@@ -142,6 +153,15 @@ func activityKind(r *http.Request) stock.MovementKind {
 		return kind
 	}
 	return ""
+}
+
+// activityYear reads the ?year= filter, ignoring anything but a year.
+func activityYear(r *http.Request) int {
+	y, err := strconv.Atoi(r.URL.Query().Get("year"))
+	if err != nil || y < 1 || y > 9999 {
+		return 0
+	}
+	return y
 }
 
 // activityItem reads the ?item= filter; nil for all items.
@@ -162,8 +182,18 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Item: item, Page: parsePage(r), Sort: activitySorts.parse(r.URL.Query())}
-	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize,
+	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Year: activityYear(r), Item: item, Page: parsePage(r),
+		Sort: activitySorts.parse(r.URL.Query())}
+	if p.Years, err = s.store.MovementYears(r.Context()); err != nil {
+		return err
+	}
+	// A year with nothing in it yet (this year's first days) still gets
+	// its chip, so the filter shows.
+	if p.Year != 0 && !slices.Contains(p.Years, p.Year) {
+		p.Years = append(p.Years, p.Year)
+		slices.SortFunc(p.Years, func(a, b int) int { return b - a })
+	}
+	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Year: p.Year, Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize,
 		Sort: p.Sort.Key, Desc: p.Sort.Desc}
 	if item != nil {
 		f.ItemID = item.ID
@@ -190,7 +220,7 @@ func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	order := activitySorts.parse(r.URL.Query())
-	f := store.MovementFilter{Kind: activityKind(r), Sort: order.Key, Desc: order.Desc}
+	f := store.MovementFilter{Kind: activityKind(r), Year: activityYear(r), Sort: order.Key, Desc: order.Desc}
 	if item != nil {
 		f.ItemID = item.ID
 	}

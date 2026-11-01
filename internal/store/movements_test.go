@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -148,6 +149,36 @@ func TestSpentThisYear(t *testing.T) {
 	// On 1 January only that day counts.
 	if st, _ := s.GetStats(ctx, day(2030, 1, 1)); st.SpentThisYear != 30 {
 		t.Errorf("spent on 1 January = %v, want 30", st.SpentThisYear)
+	}
+}
+
+func TestMovementsOfAYear(t *testing.T) {
+	s, ctx := newStore(t)
+	if years, err := s.MovementYears(ctx); err != nil || len(years) != 0 {
+		t.Errorf("years with no stock changes = %v, %v", years, err)
+	}
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+	for _, on := range []time.Time{
+		time.Date(2028, 6, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2029, 12, 31, 0, 0, 0, 0, time.UTC),
+		time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC),
+		time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC),
+	} {
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &on}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moves, err := s.ListMovements(ctx, store.MovementFilter{Year: 2030})
+	if err != nil || len(moves) != 2 || moves[0].OccurredOn.Year() != 2030 || moves[1].OccurredOn.Year() != 2030 {
+		t.Errorf("stock changes of 2030 = %+v, %v", moves, err)
+	}
+	if all, _ := s.ListMovements(ctx, store.MovementFilter{}); len(all) != 5 {
+		t.Errorf("stock changes of every year = %d, want 5", len(all))
+	}
+	// 2029's one entry and the empty years between count too.
+	if years, err := s.MovementYears(ctx); err != nil || !slices.Equal(years, []int{2031, 2030, 2029, 2028}) {
+		t.Errorf("years = %v, %v", years, err)
 	}
 }
 

@@ -28,9 +28,14 @@ func TestDashboardSpentThisYear(t *testing.T) {
 	}
 
 	// This year's purchase and labour, not last year's purchase; the tile
-	// opens the purchases.
+	// opens this year's purchases.
 	rec := a.get("/")
-	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=purchase">`, "Spent in 2026", "50.00 EUR")
+	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=purchase&amp;year=2026">`, "Spent in 2026", "50.00 EUR")
 	expectNot(t, rec, "57.00 EUR", "12 months")
-	expect(t, a.get("/activity?kind=purchase"), http.StatusOK, "31 Dec 2025", "1 Jan 2026")
+	purchases := a.get("/activity?kind=purchase&year=2026")
+	expect(t, purchases, http.StatusOK, "1 Jan 2026")
+	expectNot(t, purchases, "31 Dec 2025")
+
+	// The stock value opens what is in stock.
+	expect(t, rec, http.StatusOK, `<a class="card tile" href="/stock?instock=1">`)
 }

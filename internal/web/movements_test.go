@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
@@ -198,4 +199,39 @@ func TestActivityPagesAndItemHistory(t *testing.T) {
 	if n := strings.Count(csv.Body.String(), "\n"); n != 207 { // header + 205 + initial stock
 		t.Errorf("csv lines = %d, want 207", n)
 	}
+}
+
+func TestActivityYearFilter(t *testing.T) {
+	a := newApp(t) // the app's day is 29 Oct 2026
+	a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	for _, c := range []struct {
+		on   time.Time
+		note string
+	}{{time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), "New Year's Eve"}, {time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "New Year's Day"}} {
+		if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, TotalPrice: ptr(5.0), Note: c.note, OccurredOn: &c.on}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page := a.get("/activity?kind=purchase&year=2026")
+	expect(t, page, http.StatusOK, "New Year&#39;s Day", "Every change to your stock in 2026",
+		`<a class="chip chip-toggle active" href="/activity?kind=purchase&amp;year=2026">2026</a>`,
+		`<a class="chip chip-toggle" href="/activity?kind=purchase&amp;year=2025">2025</a>`,
+		`<a class="chip chip-toggle" href="/activity?kind=purchase">All years</a>`,
+		// The kind chips, the CSV and the column headers keep the year.
+		`href="/activity?kind=use&amp;year=2026"`, `href="/activity?year=2026">Everything</a>`,
+		`href="/activity/export.csv?kind=purchase&amp;year=2026"`, `&amp;year=2026" title="`)
+	expectNot(t, page, "New Year&#39;s Eve")
+	csv := a.get("/activity/export.csv?kind=purchase&year=2026").Body.String()
+	if !strings.Contains(csv, "New Year's Day") || strings.Contains(csv, "New Year's Eve") {
+		t.Errorf("csv of 2026 = %q", csv)
+	}
+
+	// Not a year: every year.
+	expect(t, a.get("/activity?year=nope"), http.StatusOK, "New Year&#39;s Eve", "New Year&#39;s Day", `chip-toggle active" href="/activity">All years</a>`)
+	// A year with nothing yet keeps its chip; Show everything drops both filters.
+	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `>2027</a>`, "Nothing matches these filters",
+		`<a class="btn btn-primary" href="/activity">`)
 }

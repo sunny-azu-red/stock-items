@@ -184,9 +184,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .inline-form { display: inline; margin: 0; }
 
 /* Theme toggle: show the button that switches away from the current theme. */
-.theme-toggle { display: inline-flex; margin: 0; }
-.theme-toggle .icon-btn { border-color: transparent; background: transparent; color: var(--muted); }
-.theme-toggle .icon-btn:hover { background: var(--surface-2); color: var(--accent); }
+.theme-toggle { display: inline-flex; align-items: center; margin: 0; }
+.theme-toggle .icon-btn { color: var(--muted); }
+/* Next to the page's buttons: their height, so the row lines up (a touch
+   narrower than square, so it still fits beside them on a 360px phone). */
+.page-head .theme-toggle .icon-btn { width: auto; height: auto; padding: .6rem .5rem; font-size: .9rem; }
 .theme-to-light { display: none !important; }
 :root[data-theme="dark"] .theme-to-dark { display: none !important; }
 :root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }

@@ -114,3 +114,28 @@ func TestRecoverPanics(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
 	t.Error("ErrAbortHandler was swallowed")
 }
+
+func TestQuickAdjustOfADeletedItem(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	pads := itemID(t, a.store, "Brake Pads")
+	path := "/items/" + itoa(pads)
+	expect(t, a.postV(path+"/delete", nil), http.StatusSeeOther)
+
+	// htmx swaps no 404 page into the row: it goes where the item went,
+	// and says why there.
+	rec := a.post(path+"/adjust", url.Values{"dir": {"up"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusNoContent)
+	if to := rec.Header().Get("HX-Redirect"); to != "/trash" {
+		t.Errorf("HX-Redirect = %q, want /trash", to)
+	}
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "deleted") {
+		t.Errorf("flash = %+v, want that it was deleted", f)
+	}
+	// Without htmx too, rather than a 404.
+	rec = a.post(path+"/adjust", url.Values{"dir": {"down"}})
+	expect(t, rec, http.StatusSeeOther)
+	if to := rec.Header().Get("Location"); to != "/trash" {
+		t.Errorf("Location = %q, want /trash", to)
+	}
+}

@@ -805,7 +805,9 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	it, err := s.store.GetItem(ctx, id)
 	if err != nil {
-		return err
+		// Deleted in another tab. htmx wouldn't swap a 404 page into the
+		// row, so like any button, say so where the item went.
+		return s.gone(r, err, store.WhatItem, id)
 	}
 	if it.Archived() {
 		return s.adjustDone(w, r, it, "error", "Restore "+it.DisplayName()+" to record stock changes")
@@ -830,10 +832,10 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 		case errors.As(err, &verrs):
 			return s.adjustDone(w, r, it, "error", verrs["amount"])
 		}
-		return err
+		return s.gone(r, err, store.WhatItem, id)
 	}
 	if it, err = s.store.GetItem(ctx, id); err != nil {
-		return err
+		return s.gone(r, err, store.WhatItem, id)
 	}
 	return s.adjustDone(w, r, it, "success", it.DisplayName()+": "+stock.FormatQuantity(it.Quantity, it.Unit))
 }

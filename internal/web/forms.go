@@ -20,6 +20,10 @@ import (
 
 var errBadID = errors.New("invalid id")
 
+// errBadForm is a body that can't be read as a form (a bad %-escape, an
+// unreadable Content-Type): the client's mistake, so a 400, not a 500.
+var errBadForm = errors.New("malformed form")
+
 const maxFormBytes = 1 << 20 // 1 MiB for regular forms
 
 // pathID reads a positive integer path parameter.
@@ -34,7 +38,11 @@ func pathID(r *http.Request, name string) (int64, error) {
 // parseForm parses a urlencoded body with a size limit.
 func parseForm(w http.ResponseWriter, r *http.Request) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
-	return r.ParseForm()
+	err := r.ParseForm()
+	if err == nil || errors.As(err, new(*http.MaxBytesError)) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", errBadForm, err)
 }
 
 func formText(r *http.Request, key string) string { return strings.TrimSpace(r.PostFormValue(key)) }

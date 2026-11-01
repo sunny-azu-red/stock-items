@@ -210,6 +210,10 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 			s.render(w, r, http.StatusRequestEntityTooLarge, "error", View{Title: "Too large", Data: errorPage{
 				Code: 413, Title: "Too large", Message: "That form was too large to save. Shorten the notes and try again.",
 			}})
+		case errors.Is(err, errBadForm):
+			s.render(w, r, http.StatusBadRequest, "error", View{Title: "Bad request", Data: errorPage{
+				Code: 400, Title: "Bad request", Message: "That form could not be read, so nothing was saved. Reload the page and try again.",
+			}})
 		case errors.Is(err, context.Canceled):
 		default:
 			s.serverError(w, r, err)

@@ -481,7 +481,7 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 		if err := json.Unmarshal([]byte(raw), &p); err != nil {
 			return err
 		}
-		if err := checkSnapshotAmounts(p); err != nil {
+		if err := checkSnapshotAmounts(ctx, tx, p); err != nil {
 			return err
 		}
 		var err error
@@ -519,24 +519,74 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 var amountColumns = []string{"quantity", "min_quantity", "delta", "pack_size"}
 
 // checkSnapshotAmounts refuses a snapshot holding an amount finer than
-// 0.01. Restoring casts the numbers into the columns' type, which would
-// round it, and the stock is moved by the unrounded delta: the ledger
-// could stop adding up. Migration 00012 made sure no snapshot holds one,
-// and snapshots since come from two-decimal columns; this keeps it so.
-func checkSnapshotAmounts(p trashPayload) error {
-	for _, raw := range p {
+// 0.01, or fractional pieces. Restoring casts the numbers into the
+// columns' type, which would round it, and the stock is moved by the
+// unrounded delta: the ledger could stop adding up. Migration 00012 made
+// sure no snapshot holds one, and snapshots since come from two-decimal
+// columns; this keeps it so. Each amount is checked in its item's unit:
+// the snapshot's own item, else the item as it is now (its unit can't
+// change while amounts of it are in the trash), else the entry's unit.
+func checkSnapshotAmounts(ctx context.Context, tx pgx.Tx, p trashPayload) error {
+	tables := map[string][]snapshotRow{}
+	units := map[int64]stock.Unit{}
+	var others []int64
+	for table, raw := range p {
 		rows, err := decodeRows(raw)
 		if err != nil {
 			continue // not a table's rows (e.g. movement_id)
 		}
+		tables[table] = rows
 		for _, r := range rows {
+			if table == "items" {
+				units[r.int64("id")] = stock.Unit(r.string("unit"))
+			} else if _, ok := r["item_id"].(json.Number); ok {
+				others = append(others, r.int64("item_id"))
+			}
+		}
+	}
+	if len(others) > 0 {
+		rows, err := tx.Query(ctx, `SELECT id, unit FROM items WHERE id = ANY($1)`, others)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			var u stock.Unit
+			if err := rows.Scan(&id, &u); err != nil {
+				return err
+			}
+			if _, ok := units[id]; !ok {
+				units[id] = u
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	for table, rows := range tables {
+		for _, r := range rows {
+			unit := stock.Unit(r.string("unit")) // an item's, or a free-text entry's
+			if table != "items" {
+				if u, ok := units[r.int64("item_id")]; ok {
+					unit = u
+				}
+			}
+			if !unit.Valid() {
+				unit = stock.UnitML // not known any more: at least two decimals
+			}
 			for _, col := range amountColumns {
 				n, ok := r[col].(json.Number)
 				if !ok {
 					continue
 				}
-				if f, err := n.Float64(); err != nil || stock.CheckQuantity(f, stock.UnitML) != nil {
+				f, err := n.Float64()
+				if err != nil || stock.CheckQuantity(f, stock.UnitML) != nil {
 					return &ConflictError{Field: "form", Message: "It holds an amount finer than 0.01 (" + n.String() +
+						"), which Pitbox doesn't store, so it can't be restored."}
+				}
+				if stock.CheckQuantity(f, unit) != nil {
+					return &ConflictError{Field: "form", Message: "It holds part of a piece (" + n.String() +
 						"), which Pitbox doesn't store, so it can't be restored."}
 				}
 			}

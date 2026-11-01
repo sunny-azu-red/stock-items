@@ -868,11 +868,115 @@ async function offGrid(page: Page) {
   });
 }
 
-test("every box sits on whole pixels", async ({ page }) => {
+// Text that doesn't line up, by more than 1px: an icon against the
+// capitals of the text beside it; the capitals against the middle of their
+// button, chip, badge or nav link; and the capitals of things side by side
+// in a centred row (a table row, a list row, a toolbar), on the same line
+// and one line tall each. The capitals' middle is the baseline (the text
+// box's top plus Inter's ascent, .96875em, rounded) less half their height
+// (.727em). Monospace text (SKUs) is left out.
+async function misaligned(page: Page) {
+  return page.evaluate(() => {
+    const vis = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest(".sr-only");
+    };
+    const mono = (el: Element) => /mono|Menlo|Consolas/i.test(getComputedStyle(el).fontFamily);
+    const caps = (t: Text) => {
+      const fs = parseFloat(getComputedStyle(t.parentElement!).fontSize);
+      const rg = document.createRange();
+      rg.selectNodeContents(t);
+      const r = rg.getClientRects()[0];
+      return r.top + Math.round(0.96875 * fs) - (0.727 * fs) / 2;
+    };
+    // An element's own text: direct, or inside its inline children.
+    const ownText = (el: Element) => {
+      const out: Text[] = [];
+      const walk = (n: Node) => {
+        for (const c of n.childNodes) {
+          if (c.nodeType === Node.TEXT_NODE) { if ((c as Text).data.trim()) out.push(c as Text); }
+          else if (c instanceof HTMLElement && getComputedStyle(c).display === "inline" && !mono(c)) walk(c);
+        }
+      };
+      walk(el);
+      return out;
+    };
+    const lines = (el: Element) => {
+      const t = ownText(el)[0];
+      if (!t) return 0;
+      const rg = document.createRange();
+      rg.selectNodeContents(t);
+      return new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size;
+    };
+    // How tall everything inside an element is, icons and text included.
+    const extent = (k: Element) => {
+      let top = Infinity, bottom = -Infinity;
+      const add = (r: DOMRect) => { if (r.height) { top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom); } };
+      for (const n of k.querySelectorAll("*")) if (!(n instanceof SVGElement) || n.matches("svg.icon")) add(n.getBoundingClientRect());
+      const tw = document.createTreeWalker(k, NodeFilter.SHOW_TEXT);
+      for (let x = tw.nextNode(); x; x = tw.nextNode()) {
+        if (!(x as Text).data.trim()) continue;
+        const rg = document.createRange();
+        rg.selectNodeContents(x);
+        for (const r of rg.getClientRects()) add(r);
+      }
+      return [top, bottom];
+    };
+    const name = (el: Element) => el.tagName.toLowerCase() + [...el.classList].map((c) => "." + c).join("");
+    const out: string[] = [];
+    for (const svg of document.querySelectorAll("svg.icon")) {
+      const el = svg.parentElement!;
+      const t = ownText(el)[0];
+      if (!vis(svg) || !t || mono(el) || getComputedStyle(el).flexDirection === "column") continue;
+      const r = svg.getBoundingClientRect(), d = r.top + r.height / 2 - caps(t);
+      if (Math.abs(d) > 1) out.push(`icon in ${name(el)} ${d.toFixed(2)}px off its text`);
+    }
+    for (const el of document.querySelectorAll(".btn, .chip, .badge, .nav a, .toggle, .segmented label, .kbd, .count, .flash, .sort-link, .tile .label")) {
+      const t = ownText(el)[0];
+      if (!vis(el) || !t || lines(el) !== 1) continue;
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      const d = caps(t) - (r.top + parseFloat(cs.borderTopWidth) + r.bottom - parseFloat(cs.borderBottomWidth)) / 2;
+      if (Math.abs(d) > 1) out.push(`text of ${name(el)} ${d.toFixed(2)}px off its middle`);
+    }
+    for (const el of document.querySelectorAll("body *")) {
+      if (!vis(el) || el instanceof SVGElement) continue;
+      const cs = getComputedStyle(el);
+      const centred = cs.alignItems === "center" && ((cs.display.includes("flex") && !cs.flexDirection.startsWith("column")) || cs.display.includes("grid"));
+      if (!centred && el.tagName !== "TR") continue;
+      const kids = [...(el instanceof HTMLTableRowElement ? el.cells : el.children)].filter((k) => vis(k) && !(k instanceof SVGElement));
+      const ms: [Element, number, number, number][] = [];
+      for (const k of kids) {
+        const t = ownText(k)[0];
+        const kcs = getComputedStyle(k);
+        if (!t || mono(k) || lines(k) !== 1 || (el.tagName === "TR" && kcs.verticalAlign !== "middle")) continue;
+        const [top, bottom] = extent(k);
+        if (bottom - top <= 1.5 * parseFloat(kcs.lineHeight)) ms.push([k, caps(t), top, bottom]);
+      }
+      // Only what shares a line: a wrapped row is several.
+      ms.sort((a, b) => a[2] - b[2]);
+      const groups: { ms: typeof ms; bottom: number }[] = [];
+      for (const m of ms) {
+        const g = groups[groups.length - 1];
+        if (g && m[2] < g.bottom) { g.ms.push(m); g.bottom = Math.max(g.bottom, m[3]); }
+        else groups.push({ ms: [m], bottom: m[3] });
+      }
+      for (const g of groups) {
+        const v = g.ms.map((m) => m[1]);
+        const spread = Math.max(...v) - Math.min(...v);
+        if (g.ms.length > 1 && spread > 1) out.push(`text in ${name(el)}: ${g.ms.map((m) => name(m[0])).join(", ")} ${spread.toFixed(2)}px apart`);
+      }
+    }
+    return out;
+  });
+}
+
+test("every box sits on whole pixels and its text lines up", async ({ page }) => {
   // Every page's offenders, so one run shows them all.
   const problems: string[] = [];
   const check = async (where: string) => {
     for (const box of await offGrid(page)) problems.push(`${where}: ${box}`);
+    for (const text of await misaligned(page)) problems.push(`${where}: ${text}`);
   };
   const link = async (url: string, selector: string) => {
     await page.goto(url);

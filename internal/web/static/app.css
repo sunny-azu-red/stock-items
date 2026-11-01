@@ -531,6 +531,11 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .status-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 .status-ok { background: var(--ok-soft); color: var(--ok); }
 .status-short { background: var(--danger-soft); color: var(--danger); }
+/* A kit's parts: each row on the line of its item's name, with the stock
+   meter hanging below it (centred, the name rode above the amounts). The
+   status circle is centred on that first line. */
+.kit-lines td { vertical-align: top; }
+.kit-lines .status-icon { margin: -4px 0; }
 .meter { margin-top: 6px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--ok); }
 .meter.short > span { background: var(--danger); }

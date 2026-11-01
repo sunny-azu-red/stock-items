@@ -23,7 +23,7 @@
     <div class="card-head"><h2>{{icon "list-checks"}} Parts</h2><span class="muted small">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Kit order</a> · {{end}}{{plural $r.Lines "line"}}{{if $r.ShortLines}} · {{$r.ShortLines}} short{{end}}</span></div>
     {{if $k.Lines}}
     <div class="table-wrap">
-    <table class="table">
+    <table class="table kit-lines">
       {{$h := $d.Sort}}<thead><tr><th><span class="sr-only">Status</span></th>{{template "sort-th" ($h.Col "item" "Item" false)}}{{template "sort-th" ($h.Col "need" "Need" true)}}{{template "sort-th" ($h.Col "have" "On stock" true)}}{{template "sort-th" ($h.Col "missing" "Missing" true)}}</tr></thead>
       <tbody>
       {{range $d.Lines}}

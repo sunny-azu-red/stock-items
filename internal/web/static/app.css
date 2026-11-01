@@ -95,10 +95,15 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .app-brand { display: flex; align-items: center; gap: .6rem; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; }
 .app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
+/* Whole pixels: a 24px line in 8px padding, so every row is 40px and they
+   all start at the same fraction of a pixel. At 22.5px (the body's line)
+   each row started a tenth further along, and the text, snapped to whole
+   pixels, moved against its icon from row to row. */
 .nav a {
-  display: flex; align-items: center; gap: .7rem; padding: .55rem .7rem; border-radius: var(--radius-sm);
-  text-decoration: none; color: var(--muted); font-weight: 500;
+  display: flex; align-items: center; gap: .7rem; padding: .5rem .7rem; border-radius: var(--radius-sm);
+  line-height: 1.5rem; text-decoration: none; color: var(--muted); font-weight: 500;
 }
+.nav a .icon { width: 18px; height: 18px; }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
 .nav .count { margin-left: auto; font-size: .75rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 .45rem; font-weight: 700; }

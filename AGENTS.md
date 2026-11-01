@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repository. Read [doc
 
 ## What this is
 
-A server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdlib `net/http` and `html/template`, pgx for Postgres, and htmx for small dynamic updates. It ships as a single binary with templates, static files and migrations embedded.
+A server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdlib `net/http` and `html/template`, pgx for Postgres, and htmx for small dynamic updates. It ships as a single binary with templates, static files and migrations embedded. Photos are processed by the libvips command line tools (`libvips-tools`) in a child process.
 
 ## Layout
 
@@ -14,17 +14,17 @@ internal/config/      env + .env loading
 internal/db/          pgx pool, goose migrations (migrations/*.sql, embedded)
 internal/stock/       pure domain logic: units, validation, grouping, exports, kits, suggestions
 internal/store/       all SQL; multi-row writes in one transaction
-internal/web/         routes, middleware, handlers, templates/, static/
+internal/web/         routes, middleware, handlers, templates/, static/, photo.go (runs vips)
 internal/testdb/      throwaway schema helper for integration tests
 e2e/                  Playwright tests (Node is only used here)
 docs/                 documentation
 .github/workflows/    CI: checks, govulncheck, Docker smoke test, e2e; publishes the image to GHCR
-Dockerfile            distroless image; compose.yaml runs it (Portainer stack)
+Dockerfile            debian:trixie-slim + libvips-tools; compose.yaml runs it (Portainer stack)
 ```
 
 ## Commands
 
-Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HOME/.local/go/bin:$PATH` if `go` is not found.
+Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HOME/.local/go/bin:$PATH` if `go` is not found. Photos need `libvips-tools` (`vips`, `vipsheader` on `PATH`; `apt install libvips-tools`); without it the app warns at startup and refuses uploads, and the photo tests skip (CI installs it, and they fail there instead).
 
 | Task | Command |
 |---|---|
@@ -63,6 +63,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - Forms must work without JavaScript (plain POST and redirect). htmx and `app.js` only enhance.
 - **Sort keys are whitelisted, never interpolated.** A page reads `sort`/`dir` with its `sortSpec` (`internal/web/sort.go`): an unknown value falls back to the page's default. The store maps each key to its own ORDER BY (`itemOrder`, `movementOrder`; kit lines in Go, `stock.SortKitLines`) with a stable tiebreak ending in the id, and blanks last in both directions. Sortable headers use the `sort-th` partial (plain links, `aria-sort`).
 - Build URLs with query strings in templates using the `withQuery` helper. Otherwise `html/template` escapes `=` in pre-encoded query strings.
+- **Photo memory stays bounded.** Never decode or resize images in Go (no `image.Decode` of uploads, no `x/image`): `processPhoto` runs `vips thumbnail_source`, which shrinks while it loads, one photo at a time, with the pixel cap, decode budget, `JPEGMEM` and `RLIMIT_DATA` in `photo.go`. `TestPhotoMemory` checks the vips child's peak RSS on the worst inputs; keep it under its ceilings. The browser shrinks photos before upload (`app.js`), but the server must never rely on it.
 - No external CDNs at runtime. Vendor assets into `internal/web/static/vendor/`.
 - Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing.
 

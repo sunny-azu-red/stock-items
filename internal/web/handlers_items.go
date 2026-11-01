@@ -947,13 +947,14 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err // the client went away while waiting for its turn
 	}
-	if errors.Is(err, errPhotoTooBig) {
-		s.setFlash(w, "error", fmt.Sprintf("The photo has too many pixels (max %d megapixels)", photoMaxPixels/1_000_000))
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
-		return nil
-	}
 	if err != nil {
-		s.setFlash(w, "error", "That file is not a JPEG, PNG, GIF or WebP image")
+		msg := photoError(err)
+		if errors.Is(err, errVipsMissing) {
+			s.log.Error("photo upload refused: install libvips-tools", "item", id, "err", err)
+		} else {
+			s.log.Warn("photo upload refused", "item", id, "err", err)
+		}
+		s.setFlash(w, "error", msg)
 		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
 		return nil
 	}
@@ -967,6 +968,24 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Photo saved")
 	return nil
+}
+
+// photoError is what the user is told about a photo that wasn't saved.
+// What vips said goes to the log only.
+func photoError(err error) string {
+	switch {
+	case errors.Is(err, errPhotoTooBig):
+		return fmt.Sprintf("The photo has too many pixels (max %d megapixels)", photoMaxPixels/1_000_000)
+	case errors.Is(err, errPhotoTooHeavy):
+		return "The photo is too large to process (a very large HEIC, GIF, interlaced PNG or progressive JPEG). Save it smaller and try again."
+	case errors.Is(err, errPhotoTimeout):
+		return "Processing the photo took too long. Try a smaller photo."
+	case errors.Is(err, errVipsMissing):
+		return "Photos can't be processed: this server is missing libvips (libvips-tools). The photo was not saved."
+	case errors.Is(err, errPhotoNotImage):
+		return "That file is not a JPEG, PNG, GIF, WebP or HEIC image"
+	}
+	return "The photo could not be processed; the file may be damaged. Try another one."
 }
 
 func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {

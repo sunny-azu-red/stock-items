@@ -75,6 +75,12 @@ func run() error {
 		return nil
 	}
 
+	if v, err := web.PhotoTools(ctx); err != nil {
+		logger.Warn("photo uploads will be refused until libvips-tools is installed", "err", err)
+	} else {
+		logger.Info("photos ready", "libvips", v)
+	}
+
 	srv, err := web.New(store.New(pool), web.Options{
 		Currency:        cfg.Currency,
 		SKUSearchURL:    cfg.SKUSearchURL,

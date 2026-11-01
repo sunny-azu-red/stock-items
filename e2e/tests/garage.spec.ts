@@ -1,4 +1,5 @@
-import { chromium, expect, test, type Page } from "@playwright/test";
+import { chromium, expect, test, type Page, type Request } from "@playwright/test";
+import * as zlib from "node:zlib";
 
 // One realistic walk through the app, using the inventory from the
 // original request. Tests run in order and build on each other.
@@ -520,6 +521,94 @@ test("replaced photos show their thumbnails in Recently deleted", async ({ page 
   // Newest first: the third (blue), then the first (red).
   expect(colours[0][2]).toBeGreaterThan(colours[0][0]);
   expect(colours[1][0]).toBeGreaterThan(colours[1][2]);
+});
+
+// A w x h RGB PNG, a gradient, made here so the test needs no files.
+function gradientPNG(w: number, h: number): Buffer {
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * (w * 3 + 1); // each row starts with filter type 0
+    for (let x = 0; x < w; x++) raw.set([(x * 255) / w, (y * 255) / h, 128], row + 1 + x * 3);
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8); // 8-bit RGB, not interlaced
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+// The width and height in a JPEG's or PNG's header.
+function imageSize(b: Buffer): { type: string; w: number; h: number } {
+  if (b.subarray(1, 4).toString("latin1") === "PNG") return { type: "png", w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  for (let i = 2; i + 9 < b.length; ) {
+    const marker = b[i + 1];
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+      return { type: "jpeg", h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7) };
+    }
+    i += 2 + b.readUInt16BE(i + 2);
+  }
+  throw new Error("not a JPEG or PNG");
+}
+
+// The photo file in a multipart upload.
+function uploadedPhoto(req: Request): Buffer {
+  const body = req.postDataBuffer()!;
+  const boundary = "--" + /boundary=(.+)$/.exec(req.headers()["content-type"])![1];
+  const start = body.indexOf("\r\n\r\n", body.indexOf('name="photo"')) + 4;
+  return body.subarray(start, body.indexOf("\r\n" + boundary, start));
+}
+
+test("a large photo is shrunk in the browser; without JavaScript the original goes", async ({ page, browser }, testInfo) => {
+  const big = gradientPNG(2400, 1800);
+  await page.goto("/stock");
+  await page.locator(".item-row a.item-name").filter({ hasText: "Hiflofiltro" }).click();
+  const item = page.url();
+  const sent: Buffer[] = [];
+  await page.route("**/items/*/photo", (route) => {
+    if (route.request().method() === "POST") sent.push(uploadedPhoto(route.request()));
+    return route.continue();
+  });
+  await page.evaluate(() => { (window as any).before = true; });
+  await page.locator('input[type="file"][name="photo"]').setInputFiles({ name: "big.png", mimeType: "image/png", buffer: big });
+  await page.waitForFunction(() => !(window as any).before);
+  await expect(page.locator(".flash-success")).toContainText("Photo replaced");
+  expect(sent).toHaveLength(1);
+  expect(imageSize(sent[0])).toEqual({ type: "jpeg", w: 1600, h: 1200 });
+  expect(sent[0].length).toBeLessThan(big.length);
+
+  // Without JavaScript the form's Upload button sends the PNG as it is, and
+  // the server shrinks it.
+  const { baseURL, viewport } = testInfo.project.use;
+  const context = await browser.newContext({ baseURL, viewport, javaScriptEnabled: false });
+  try {
+    const plain = await context.newPage();
+    const sentPlain: Buffer[] = [];
+    await plain.route("**/items/*/photo", (route) => {
+      if (route.request().method() === "POST") sentPlain.push(uploadedPhoto(route.request()));
+      return route.continue();
+    });
+    await plain.goto(item);
+    await plain.locator('input[type="file"][name="photo"]').setInputFiles({ name: "big.png", mimeType: "image/png", buffer: big });
+    await plain.getByRole("button", { name: "Upload" }).click();
+    await expect(plain.locator(".flash-success")).toContainText("Photo replaced");
+    expect(sentPlain).toHaveLength(1);
+    expect(sentPlain[0].equals(big)).toBe(true);
+    const photo = await context.request.get(new URL(item).pathname + "/photo");
+    expect(imageSize(await photo.body())).toEqual({ type: "jpeg", w: 1600, h: 1200 });
+  } finally {
+    await context.close();
+  }
 });
 
 test("no page scrolls sideways", async ({ page }) => {

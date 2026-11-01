@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1985,20 +1986,110 @@ func smallPNG(t *testing.T, c color.Color) []byte {
 // A photo over the pixel limit is refused with the limit, and nothing is
 // saved.
 func TestPhotoUploadTooManyPixels(t *testing.T) {
+	needVips(t)
 	a := newApp(t)
 	a.seed()
 	item := itemPath(itemID(t, a.store, "Silkolene"))
-	rec := a.do(photoUpload(t, context.Background(), item, pngWithSize(t, 7072, 7071)))
+	gray := image.NewGray(image.Rect(0, 0, 1, 1))
+	rec := a.do(photoUpload(t, context.Background(), item, pngWithSize(t, gray, 10001, 10000, false)))
 	expect(t, rec, http.StatusSeeOther)
-	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "The photo has too many pixels (max 50 megapixels)" {
+	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "The photo has too many pixels (max 100 megapixels)" {
 		t.Errorf("flash = %+v", f)
 	}
 	expect(t, a.get(item+"/photo"), http.StatusNotFound)
 }
 
+// A HEIC from a phone is saved as a 1600 px JPEG with its thumbnail, and
+// replacing it can be undone.
+func TestPhotoUploadHEIC(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	heic, err := os.ReadFile("testdata/photo-12mp.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := a.do(photoUpload(t, context.Background(), item, heic))
+	if f := flashOf(t, rec); f.Kind != "success" || f.Message != "Photo saved" {
+		t.Fatalf("flash = %+v", f)
+	}
+	for _, tc := range []struct {
+		path string
+		w, h int
+	}{{item + "/photo", 1600, 1200}, {item + "/photo?size=thumb", thumbSide, thumbSide}} {
+		rec := a.get(tc.path)
+		expect(t, rec, http.StatusOK)
+		if ct := rec.Header().Get("Content-Type"); ct != "image/jpeg" {
+			t.Errorf("%s: Content-Type %q", tc.path, ct)
+		}
+		if b := decodeJPEG(t, rec.Body.Bytes()).Bounds(); b.Dx() != tc.w || b.Dy() != tc.h {
+			t.Errorf("%s: %dx%d, want %dx%d", tc.path, b.Dx(), b.Dy(), tc.w, tc.h)
+		}
+	}
+	first := a.get(item + "/photo").Body.String()
+	rec = a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black)))
+	f := flashOf(t, rec)
+	if f.Message != "Photo replaced" || f.Undo == 0 {
+		t.Fatalf("flash = %+v", f)
+	}
+	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("Undo didn't bring the HEIC's photo back")
+	}
+}
+
+// What goes wrong in processing is told plainly, nothing is saved, and
+// the old photo stays.
+func TestPhotoUploadProcessingFails(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	expect(t, a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black))), http.StatusSeeOther)
+	first := a.get(item + "/photo").Body.String()
+
+	upload := func() Flash {
+		t.Helper()
+		rec := a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.White)))
+		expect(t, rec, http.StatusSeeOther)
+		if loc := rec.Header().Get("Location"); loc != item {
+			t.Errorf("Location = %q", loc)
+		}
+		return flashOf(t, rec)
+	}
+	for _, tc := range []struct {
+		name, script, want string
+	}{
+		{"failure", `echo "VipsJpeg: raw detail" >&2; exit 1`, "The photo could not be processed; the file may be damaged. Try another one."},
+		{"timeout", "exec sleep 20", "Processing the photo took too long. Try a smaller photo."},
+	} {
+		fakeVips(t, tc.script)
+		old := photoTimeout
+		photoTimeout = 300 * time.Millisecond
+		if f := upload(); f.Kind != "error" || f.Message != tc.want {
+			t.Errorf("%s: flash = %+v", tc.name, f)
+		}
+		photoTimeout = old
+	}
+
+	vipsBin = "pitbox-no-such-vips"
+	if f := upload(); f.Kind != "error" || f.Message != "Photos can't be processed: this server is missing libvips (libvips-tools). The photo was not saved." {
+		t.Errorf("missing vips: flash = %+v", f)
+	}
+	expect(t, a.get(item+"/photo"), http.StatusOK)
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("a failed upload changed the photo")
+	}
+	if strings.Contains(a.get("/trash").Body.String(), "Photo: Silkolene") {
+		t.Error("a failed upload put the old photo in the trash")
+	}
+}
+
 // An upload waits while another photo is being decoded, then saves; one
 // whose client goes away while waiting saves nothing.
 func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
+	needVips(t)
 	a := newApp(t)
 	a.seed()
 	item := itemPath(itemID(t, a.store, "Silkolene"))

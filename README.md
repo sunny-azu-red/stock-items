@@ -28,7 +28,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Undo everything:** every delete (and Bought) has an Undo, and Recently deleted keeps it all until you empty it or permanently delete an entry.
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
-- **Photos** of items (resized and stored in Postgres), best-before dates, storage locations and notes.
+- **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a phone in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).
 
 | Stock grouped by vehicle | Service kit | Phone |
@@ -37,7 +37,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 
 ## Quick start
 
-Requirements: [Go](https://go.dev/dl/) 1.27.3+ and a PostgreSQL database (tested with 18).
+Requirements: [Go](https://go.dev/dl/) 1.27.3+, a PostgreSQL database (tested with 18), and for photos the libvips command line tools (`sudo apt install libvips-tools`; without them the app runs, logs a warning and refuses photo uploads). The Docker image has everything.
 
 ```bash
 cp .env.example .env     # then fill in your database credentials

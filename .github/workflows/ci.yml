@@ -40,6 +40,13 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # Photos are processed by libvips; the photo tests fail without it in
+      # CI (they only skip locally). The HEVC decoder is for HEIC photos.
+      - name: Install libvips
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvips-tools libheif-plugin-libde265
+          vips --version
       - name: Lint and test
         run: scripts/check.sh
       - name: Known vulnerabilities
@@ -48,6 +55,7 @@ jobs:
       - name: Docker image starts and turns healthy
         run: |
           docker build -t pitbox:ci --build-arg VERSION=ci .
+          docker run --rm --entrypoint vips pitbox:ci --version
           docker run -d --name pitbox --network host \
             -e DB_HOST -e DB_PORT -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
             -e DB_SCHEMA=e2e_docker -e PORT=18090 pitbox:ci

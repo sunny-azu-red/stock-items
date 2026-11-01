@@ -1,6 +1,6 @@
 # Deployment
 
-The app is a single static binary. Templates, CSS, JavaScript and migrations are embedded. It only needs a reachable Postgres database and a `.env` file, or environment variables.
+The app is a single static binary. Templates, CSS, JavaScript and migrations are embedded. It needs a reachable Postgres database, a `.env` file or environment variables, and, for photos, the libvips command line tools (`vips`, `vipsheader`) on `PATH`. The Docker image includes them; nothing to install there.
 
 > There is no authentication. Only expose the app on a trusted home network, never directly to the internet. For remote access, use a VPN (WireGuard, Tailscale) or a reverse proxy that adds authentication.
 
@@ -16,6 +16,7 @@ Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host).
 ## Run with systemd
 
 ```bash
+sudo apt install --no-install-recommends libvips-tools libheif-plugin-libde265   # photos (HEIC needs the second)
 sudo useradd --system --home /opt/pitbox pitbox
 sudo mkdir -p /opt/pitbox
 sudo cp bin/pitbox /opt/pitbox/
@@ -57,7 +58,7 @@ journalctl -u pitbox -f
 
 ## Run with Docker
 
-The image is distroless and runs as a non-root user. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
+The image is Debian 13 slim (`debian:trixie-slim`) with `libvips-tools` (and libheif's HEVC decoder for HEIC photos), `ca-certificates` and `tzdata`, and runs as a non-root user (uid 65532). It is about 360 MB unpacked (92 MB to download), almost all of it libvips and its libraries; the earlier distroless image without photo tools was 29 MB. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
 CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `latest` for every push to `master`, `sha-<commit>` for every push, and `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
 

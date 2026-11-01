@@ -160,9 +160,12 @@ func (s *Server) funcs() template.FuncMap {
 		"newFormKey":     newFormKey,
 		// photoLimit is checked by app.js before a photo is uploaded: the
 		// server's refusal of a larger one can arrive while the browser is
-		// still sending, and show as a connection error instead.
-		"photoLimit": func() map[string]any { return map[string]any{"Bytes": maxPhotoFileBytes, "Message": photoTooLarge} },
-		"subUnits":   func() []stock.SubUnit { return stock.SubUnits },
+		// still sending, and show as a connection error instead. Side is
+		// how far app.js shrinks a larger photo before it goes.
+		"photoLimit": func() map[string]any {
+			return map[string]any{"Bytes": maxPhotoFileBytes, "Message": photoTooLarge, "Side": photoMaxSide}
+		},
+		"subUnits": func() []stock.SubUnit { return stock.SubUnits },
 		// step is how much quick -/+ changes an item's stock, e.g. "100 ml".
 		"step": func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
 		"join": strings.Join,

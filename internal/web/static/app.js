@@ -97,6 +97,9 @@
     document.querySelectorAll("form[data-submitting]").forEach(function (f) {
       delete f.dataset.submitting;
     });
+    document.querySelectorAll("[data-photo-label][data-text]").forEach(function (l) {
+      l.textContent = l.dataset.text; // not "Uploading…" any more
+    });
     pending.slice().forEach(function (p) { settle(p[0]); });
   });
 
@@ -171,18 +174,83 @@
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
-    if (e.target.matches("input[data-autosubmit]")) {
-      var max = Number(e.target.getAttribute("data-max-bytes"));
-      var file = e.target.files && e.target.files[0];
-      if (max && file && file.size > max) {
-        toast(e.target.getAttribute("data-too-large"), "error");
-        e.target.value = "";
+    if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
+  });
+
+  // ---- Photos -------------------------------------------------------------
+  // A photo input sends itself once a file is chosen. A photo larger than
+  // data-shrink (px) is shrunk here first, upright and on white, so a phone
+  // uploads a few hundred KB instead of many MB and the server has little
+  // to do. If the browser can't (HEIC outside Safari, an old browser, any
+  // error), the original goes and the server shrinks it. Without JS the
+  // form's Upload button sends the original.
+  function shrinkPhoto(file, side, force) {
+    if (!side || !window.createImageBitmap || !window.DataTransfer || !HTMLCanvasElement.prototype.toBlob) {
+      return Promise.reject(new Error("can't shrink here"));
+    }
+    return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
+      var scale = Math.min(1, side / Math.max(bmp.width, bmp.height));
+      if (scale === 1 && !force) {
+        bmp.close();
+        return null; // small already: the original is the better copy
+      }
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bmp.width * scale));
+      canvas.height = Math.max(1, Math.round(bmp.height * scale));
+      var g = canvas.getContext("2d");
+      g.fillStyle = "#fff"; // JPEG has no transparency
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.imageSmoothingQuality = "high";
+      g.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      bmp.close();
+      return new Promise(function (resolve, reject) {
+        canvas.toBlob(function (blob) {
+          if (!blob) return reject(new Error("toBlob failed"));
+          var name = file.name.replace(/\.[^.]*$/, "") + ".jpg";
+          resolve(new File([blob], name, { type: "image/jpeg", lastModified: file.lastModified }));
+        }, "image/jpeg", 0.9);
+      });
+    });
+  }
+  function sendPhoto(input) {
+    var file = input.files && input.files[0];
+    var form = input.form;
+    if (!file || !form || form.dataset.preparing) return;
+    var label = form.querySelector("[data-photo-label]");
+    var text = label ? label.textContent : "";
+    if (label) label.dataset.text = text;
+    form.dataset.preparing = "1";
+    var max = Number(input.getAttribute("data-max-bytes"));
+    // Only say so when it takes a moment.
+    var slow = setTimeout(function () { if (label) label.textContent = "Preparing photo…"; }, 300);
+    var done = function (upload) {
+      clearTimeout(slow);
+      delete form.dataset.preparing;
+      if (label) label.textContent = text;
+      if (max && upload.size > max) {
+        toast(input.getAttribute("data-too-large"), "error");
+        input.value = "";
         return;
       }
-      var f = e.target.form;
-      if (f.requestSubmit) f.requestSubmit(); else f.submit();
-    }
-  });
+      if (upload !== file) {
+        try {
+          var dt = new DataTransfer();
+          dt.items.add(upload);
+          input.files = dt.files;
+        } catch (err) {
+          if (max && file.size > max) {
+            toast(input.getAttribute("data-too-large"), "error");
+            input.value = "";
+            return;
+          }
+        }
+      }
+      if (label) label.textContent = "Uploading…";
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    };
+    shrinkPhoto(file, Number(input.getAttribute("data-shrink")), max && file.size > max)
+      .then(function (small) { done(small || file); }, function () { done(file); });
+  }
 
   // In kit / service part rows, show what is on stock for the chosen item.
   function updatePartNote(sel) {

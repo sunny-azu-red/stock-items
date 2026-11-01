@@ -3,8 +3,9 @@
 ## Setup
 
 1. Install Go 1.27.3 or newer (the version in `go.mod`). Without root access, unpack the official tarball into `~/.local/go` and add `~/.local/go/bin` to `PATH`.
-2. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases.
-3. `go run ./cmd/pitbox` starts the app on `http://localhost:8080`.
+2. Install the libvips command line tools, which process photos: `sudo apt install libvips-tools` (Debian/Ubuntu; it brings the JPEG, PNG, WebP, GIF and HEIC loaders). Without them the app starts with a warning, photo uploads are refused, and the photo tests skip (in CI they fail instead).
+3. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases.
+4. `go run ./cmd/pitbox` starts the app on `http://localhost:8080`.
 
 Useful flags:
 
@@ -29,6 +30,7 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 | Migrations, UTC sessions | `internal/db/migrations_test.go` | yes | `go test ./internal/db/` |
 | Store (SQL, transactions, ledger invariant, lock order, SQL without zones) | `internal/store/*_test.go` | yes | `go test ./internal/store/` |
 | HTTP handlers and templates (versions, form keys, sorting) | `internal/web/*_test.go` | yes | `go test ./internal/web/` |
+| Photo processing (formats, rotation, limits, vips failures, the vips child's peak memory) | `internal/web/photo_test.go` | no, but libvips-tools | `go test -run Photo ./internal/web/` (`-short` skips the memory test, which makes 50-100 MP images) |
 | Browser end-to-end, desktop and phone | `e2e/tests/*.spec.ts` | yes | `cd e2e && npx playwright test` |
 
 - Each DB test gets a fresh, migrated schema `test_<random>` that is dropped when the test ends. Without `DB_HOST` (and no `.env`) these tests are skipped.
@@ -40,7 +42,7 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on pull requests, pushes to `master` and `v*` tags:
 
-1. **test:** `scripts/check.sh` against a Postgres 18 service, govulncheck (fails on a known vulnerability in Go or a dependency that the code reaches; its version is pinned in the workflow, and it is fetched there, not a module dependency), the Docker smoke test, then the Playwright suite. To run govulncheck locally: `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...`.
+1. **test:** installs `libvips-tools`, then `scripts/check.sh` against a Postgres 18 service, govulncheck (fails on a known vulnerability in Go or a dependency that the code reaches; its version is pinned in the workflow, and it is fetched there, not a module dependency), the Docker smoke test, then the Playwright suite. To run govulncheck locally: `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...`.
 2. **image** (pushes only, after **test** passes): builds `linux/amd64` (the only platform Pitbox runs on) and pushes `ghcr.io/sunny-azu-red/pitbox`, tagged `latest` from `master`, `sha-<commit>` from every push, and `1.2.3` and `1.2` from a `v1.2.3` tag. [Deployment](deployment.md#portainer) uses these images.
 
 ## Adding a feature (checklist)

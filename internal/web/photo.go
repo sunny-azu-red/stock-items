@@ -3,33 +3,68 @@ package web
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
-	"image"
-	"image/color"
-	_ "image/gif" // register decoder
-	"image/jpeg"
-	_ "image/png" // register decoder
-
-	"golang.org/x/image/draw"
-	_ "golang.org/x/image/webp" // register decoder
+	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+	"time"
 )
+
+// Photos are shrunk by the libvips command line tools (libvips-tools) in a
+// child process, not decoded in Go. libvips shrinks while it loads (JPEG
+// is decoded at 1/2, 1/4 or 1/8 straight away, PNG and WebP are streamed),
+// so its memory follows the output size, not the photo's: about 50-150 MB
+// for a 100 MP JPEG or PNG. Running it as a subprocess keeps the binary
+// pure Go (CGO_ENABLED=0), and whatever the decoders do, they do it in a
+// process of their own with its own memory limit.
 
 const (
 	photoMaxSide = 1600
 	thumbSide    = 320
-	// photoMaxPixels bounds the memory a decode can take. A small file can
-	// declare a huge image ("decompression bomb"). 50 MP still takes the
-	// largest phone photos. Processing one at the limit takes about 270 MB
-	// for an ordinary JPEG, up to about 1.4 GB for a progressive CMYK one.
-	photoMaxPixels = 50_000_000
+	// photoMaxPixels is a sanity limit, read from the header before
+	// anything is decoded. A small file can declare a huge image
+	// ("decompression bomb").
+	photoMaxPixels = 100_000_000
+	// photoDecodeBudget is what a decoder that can't shrink while it loads
+	// may hold at once: libjpeg's buffer for a progressive JPEG (JPEGMEM),
+	// and the whole image for HEIC, GIF and interlaced PNG (estimated from
+	// the header). 48 MP HEIC from an iPhone fits.
+	photoDecodeBudget = 256 << 20
+	// photoMemoryLimit is the vips child's hard data limit (RLIMIT_DATA on
+	// Linux), in case a decoder needs more than anyone expected.
+	photoMemoryLimit = 512 << 20
 )
 
-var errPhotoTooBig = errors.New("image has too many pixels")
+var (
+	// vipsBin and vipsheaderBin are looked up on PATH at every upload, so
+	// installing libvips-tools takes effect without a restart.
+	vipsBin       = "vips"
+	vipsheaderBin = "vipsheader"
+	// photoTimeout bounds one photo's processing, after its turn came.
+	photoTimeout = 30 * time.Second
+	// vipsExited, when set (tests), sees every vips child that finished.
+	vipsExited func(*os.ProcessState)
+)
 
-// photoSlot lets one photo decode run at a time, so two or three uploads
-// at once can't add up to several gigabytes and run the server out of
-// memory. One at a time is plenty for a garage.
+// The errors processPhoto returns wrap one of these, with what vips said.
+var (
+	errPhotoTooBig   = errors.New("image has too many pixels")
+	errPhotoTooHeavy = errors.New("image needs too much memory to decode")
+	errPhotoNotImage = errors.New("not a JPEG, PNG, GIF, WebP or HEIC image")
+	errPhotoBroken   = errors.New("image could not be processed")
+	errPhotoTimeout  = errors.New("image processing took too long")
+	errVipsMissing   = errors.New("libvips-tools (vips, vipsheader) is not installed")
+)
+
+// photoLoaders are the libvips loaders an upload may use. libvips knows
+// many more formats (TIFF, PDF, SVG...); VIPS_BLOCK_UNTRUSTED blocks the
+// riskiest, and this list the rest.
+var photoLoaders = map[string]bool{"jpegload": true, "pngload": true, "gifload": true, "webpload": true, "heifload": true}
+
+// photoSlot lets one photo be processed at a time, so a few uploads at
+// once can't add up. One at a time is plenty for a garage.
 var photoSlot = make(chan struct{}, 1)
 
 // processPhotoQueued is processPhoto once the photo slot is free. It gives
@@ -41,188 +76,275 @@ func processPhotoQueued(ctx context.Context, data []byte) (full, thumb []byte, e
 		return nil, nil, ctx.Err()
 	}
 	defer func() { <-photoSlot }()
-	return processPhoto(data)
+	return processPhoto(ctx, data)
 }
 
-// processPhoto decodes an uploaded image, applies the EXIF orientation
-// (phone photos are often stored sideways), and returns a resized JPEG and
-// a square JPEG thumbnail.
-func processPhoto(data []byte) (full, thumb []byte, err error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+// processPhoto turns an uploaded image into a JPEG of at most 1600 px a
+// side and a 320 px square thumbnail of its centre, upright (EXIF
+// orientation applied), in sRGB, on white where it was transparent, and
+// without metadata. It returns ctx's error when ctx ends.
+func processPhoto(ctx context.Context, data []byte) (full, thumb []byte, err error) {
+	vips, err1 := exec.LookPath(vipsBin)
+	header, err2 := exec.LookPath(vipsheaderBin)
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, nil, fmt.Errorf("%w: %v", errVipsMissing, err)
+	}
+	tctx, cancel := context.WithTimeout(ctx, photoTimeout)
+	defer cancel()
+	defer func() {
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		} else if tctx.Err() != nil {
+			err = fmt.Errorf("%w (%s)", errPhotoTimeout, photoTimeout)
+		}
+	}()
+
+	h, err := readPhotoHeader(tctx, header, data)
 	if err != nil {
 		return nil, nil, err
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > photoMaxPixels {
-		return nil, nil, errPhotoTooBig
+	if h.width <= 0 || h.height <= 0 || int64(h.width)*int64(h.height) > photoMaxPixels {
+		return nil, nil, fmt.Errorf("%w: %dx%d", errPhotoTooBig, h.width, h.height)
 	}
-	src, _, err := image.Decode(bytes.NewReader(data))
+	if n := h.decodeBytes(data); n > photoDecodeBudget {
+		return nil, nil, fmt.Errorf("%w: %s %dx%d needs about %d MB", errPhotoTooHeavy, h.loader, h.width, h.height, n>>20)
+	}
+
+	size := strconv.Itoa(photoMaxSide)
+	full, err = runVips(tctx, vips, data, "--vips-cache-max=0", "thumbnail_source", "[descriptor=0]",
+		".jpg[Q=85,keep=none,background=255]", size, "--height", size, "--size", "down",
+		// A damaged file is refused, not saved half grey. (thumbnail_source
+		// ignores its own --fail-on in libvips 8.15; the loader option works.)
+		"--export-profile", "srgb", "--option-string", "fail-on=truncated")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vipsFailed(err)
 	}
-	// Scale first so the (pixel by pixel) rotation works on a small image.
-	img := orient(fit(src, photoMaxSide), exifOrientation(data))
-
-	full, err = encodeJPEG(img, 85)
+	// The thumbnail comes from the small photo: it is upright and flat
+	// already, and shrinking 1600 px is quicker than the original again.
+	side := strconv.Itoa(thumbSide)
+	thumb, err = runVips(tctx, vips, full, "--vips-cache-max=0", "thumbnail_source", "[descriptor=0]",
+		".jpg[Q=80,keep=none]", side, "--height", side, "--crop", "centre")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vipsFailed(err)
 	}
-	thumb, err = encodeJPEG(cover(img, thumbSide), 80)
-	return full, thumb, err
+	return full, thumb, nil
 }
 
-func encodeJPEG(img image.Image, quality int) ([]byte, error) {
-	var buf bytes.Buffer
-	err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality})
-	return buf.Bytes(), err
-}
-
-// fit scales img down so its longest side is at most maxSide.
-func fit(img image.Image, maxSide int) image.Image {
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w <= maxSide && h <= maxSide {
-		return flatten(img)
-	}
-	if w >= h {
-		h = max(h*maxSide/w, 1)
-		w = maxSide
-	} else {
-		w = max(w*maxSide/h, 1)
-		h = maxSide
-	}
-	// Halve a large photo first, until it is under twice the target size:
-	// CatmullRom's scratch buffer is 32 bytes × target width × source
-	// height, about 360 MB straight from 50 MP. Bilinear at exactly half
-	// (an odd last row or column is left out) is the average of each 2×2
-	// block, so the halving doesn't alias, and CatmullRom makes the last
-	// step.
-	for b.Dx()/2 >= w && b.Dy()/2 >= h {
-		even := image.Rect(b.Min.X, b.Min.Y, b.Min.X+b.Dx()&^1, b.Min.Y+b.Dy()&^1)
-		img = scaleOnWhite(draw.ApproxBiLinear, img, even, b.Dx()/2, b.Dy()/2)
-		b = img.Bounds()
-	}
-	return scaleOnWhite(draw.CatmullRom, img, b, w, h)
-}
-
-// cover crops the centre square of img and scales it to side x side.
-func cover(img image.Image, side int) image.Image {
-	b := img.Bounds()
-	s := min(b.Dx(), b.Dy())
-	x, y := b.Min.X+(b.Dx()-s)/2, b.Min.Y+(b.Dy()-s)/2
-	return scaleOnWhite(draw.CatmullRom, img, image.Rect(x, y, x+s, y+s), side, side)
-}
-
-// scaleOnWhite scales the part sr of img to a new w x h image on white
-// (JPEG has no transparency).
-func scaleOnWhite(s draw.Scaler, img image.Image, sr image.Rectangle, w, h int) *image.RGBA {
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	s.Scale(dst, dst.Bounds(), img, sr, draw.Over, nil)
-	return dst
-}
-
-// flatten draws img on white (JPEG has no transparency).
-func flatten(img image.Image) image.Image {
-	b := img.Bounds()
-	dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	draw.Draw(dst, dst.Bounds(), img, b.Min, draw.Over)
-	return dst
-}
-
-// orient applies an EXIF orientation value (1-8) to img.
-func orient(img image.Image, o int) image.Image {
-	if o < 2 || o > 8 {
-		return img
-	}
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	swap := o >= 5
-	dw, dh := w, h
-	if swap {
-		dw, dh = h, w
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			var dx, dy int
-			switch o {
-			case 2: // mirror horizontal
-				dx, dy = w-1-x, y
-			case 3: // rotate 180
-				dx, dy = w-1-x, h-1-y
-			case 4: // mirror vertical
-				dx, dy = x, h-1-y
-			case 5: // transpose
-				dx, dy = y, x
-			case 6: // rotate 90 clockwise
-				dx, dy = h-1-y, x
-			case 7: // transverse
-				dx, dy = h-1-y, w-1-x
-			case 8: // rotate 90 counter-clockwise
-				dx, dy = y, w-1-x
-			}
-			dst.Set(dx, dy, img.At(b.Min.X+x, b.Min.Y+y))
+// vipsFailed says why shrinking failed: a decoder over its memory limit,
+// or anything else (a damaged file).
+func vipsFailed(err error) error {
+	msg := err.Error()
+	for _, s := range []string{"Backing store not supported", "out of memory", "failed to allocate"} {
+		if strings.Contains(msg, s) {
+			return fmt.Errorf("%w: %v", errPhotoTooHeavy, err)
 		}
 	}
-	return dst
+	return fmt.Errorf("%w: %v", errPhotoBroken, err)
 }
 
-// exifOrientation reads the orientation tag from a JPEG's EXIF block. It
-// returns 1 (normal) when there is none.
-func exifOrientation(data []byte) int {
-	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
-		return 1
-	}
-	i := 2
-	for i+4 <= len(data) {
-		if data[i] != 0xFF {
-			return 1
-		}
-		marker := data[i+1]
-		size := int(binary.BigEndian.Uint16(data[i+2 : i+4]))
-		if marker == 0xDA || size < 2 || i+2+size > len(data) { // start of scan: no more metadata
-			return 1
-		}
-		seg := data[i+4 : i+2+size]
-		if marker == 0xE1 && len(seg) > 14 && string(seg[:6]) == "Exif\x00\x00" {
-			return tiffOrientation(seg[6:])
-		}
-		i += 2 + size
-	}
-	return 1
+// photoHeader is what vipsheader says about an image without decoding it.
+type photoHeader struct {
+	width, height, bands int
+	format, loader       string // "uchar", "jpegload"
 }
 
-func tiffOrientation(t []byte) int {
-	if len(t) < 8 {
-		return 1
+// readPhotoHeader runs vipsheader on a temporary copy of data (it reads
+// only files) and checks the format is one photos may use.
+func readPhotoHeader(ctx context.Context, vipsheader string, data []byte) (photoHeader, error) {
+	f, err := os.CreateTemp("", "pitbox-photo-*")
+	if err != nil {
+		return photoHeader{}, err
 	}
-	var bo binary.ByteOrder
-	switch string(t[:2]) {
-	case "II":
-		bo = binary.LittleEndian
-	case "MM":
-		bo = binary.BigEndian
-	default:
-		return 1
+	defer os.Remove(f.Name())
+	_, err = f.Write(data)
+	if err := errors.Join(err, f.Close()); err != nil {
+		return photoHeader{}, err
 	}
-	off := int(bo.Uint32(t[4:8]))
-	if off+2 > len(t) {
-		return 1
+	out, err := runVips(ctx, vipsheader, nil, f.Name())
+	if err != nil {
+		return photoHeader{}, fmt.Errorf("%w: %v", errPhotoNotImage, err)
 	}
-	n := int(bo.Uint16(t[off : off+2]))
-	for k := 0; k < n; k++ {
-		e := off + 2 + k*12
-		if e+12 > len(t) {
-			return 1
+	h, ok := parsePhotoHeader(string(out))
+	if !ok {
+		return photoHeader{}, fmt.Errorf("%w: unexpected vipsheader output %q", errPhotoNotImage, out)
+	}
+	if !photoLoaders[h.loader] {
+		return photoHeader{}, fmt.Errorf("%w: %s", errPhotoNotImage, h.loader)
+	}
+	return h, nil
+}
+
+// parsePhotoHeader reads vipsheader's summary line, like
+// "/tmp/x: 4032x3024 uchar, 3 bands, srgb, jpegload".
+func parsePhotoHeader(out string) (photoHeader, bool) {
+	line := strings.TrimSpace(out)
+	if i := strings.LastIndex(line, ": "); i >= 0 {
+		line = line[i+2:]
+	}
+	f := strings.Split(line, ", ")
+	if len(f) != 4 {
+		return photoHeader{}, false
+	}
+	var h photoHeader
+	dims, format, ok := strings.Cut(f[0], " ")
+	w, hgt, ok2 := strings.Cut(dims, "x")
+	bands, _, ok3 := strings.Cut(f[1], " ")
+	if !ok || !ok2 || !ok3 {
+		return photoHeader{}, false
+	}
+	var err1, err2, err3 error
+	h.width, err1 = strconv.Atoi(w)
+	h.height, err2 = strconv.Atoi(hgt)
+	h.bands, err3 = strconv.Atoi(bands)
+	h.format, h.loader = format, f[3]
+	return h, errors.Join(err1, err2, err3) == nil
+}
+
+// decodeBytes estimates the memory a decoder holds that can't shrink
+// while it loads: libheif and GIF decode the whole image, and so does an
+// interlaced PNG. A progressive JPEG's buffer is libjpeg's to limit
+// (JPEGMEM), and the rest stream. The factors are measured peaks.
+func (h photoHeader) decodeBytes(data []byte) int64 {
+	px := int64(h.width) * int64(h.height)
+	sample := int64(1)
+	switch h.format {
+	case "ushort", "short":
+		sample = 2
+	case "uint", "int", "float":
+		sample = 4
+	case "double", "complex":
+		sample = 8
+	}
+	switch h.loader {
+	case "heifload": // the decoded YCbCr planes and the RGB image
+		return px * (int64(h.bands)*sample + 2)
+	case "gifload": // the frame and its RGBA copy
+		return px * 6
+	case "pngload":
+		// IHDR is the first chunk; its last byte is the interlace method.
+		if len(data) > 28 && data[28] == 1 {
+			return px * int64(h.bands) * sample
 		}
-		if bo.Uint16(t[e:e+2]) == 0x0112 {
-			v := int(bo.Uint16(t[e+8 : e+10]))
-			if v >= 1 && v <= 8 {
-				return v
-			}
-			return 1
+	}
+	return 0
+}
+
+// vipsError is a vips command that failed, with what it wrote to stderr.
+type vipsError struct {
+	err    error
+	stderr string
+}
+
+func (e *vipsError) Error() string { return fmt.Sprintf("%v: %s", e.err, e.stderr) }
+func (e *vipsError) Unwrap() error { return e.err }
+
+// runVips runs one libvips command with stdin (nil for none) and returns
+// its stdout. The child gets only the environment it needs: no untrusted
+// loaders, one thread, libjpeg's memory limit, and none of the app's
+// settings (DB_PASSWORD). The callers turn the operation cache off.
+func runVips(ctx context.Context, bin string, stdin []byte, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = []string{
+		"VIPS_BLOCK_UNTRUSTED=1",
+		"VIPS_CONCURRENCY=1",
+		"JPEGMEM=" + strconv.Itoa(photoDecodeBudget/1000), // in thousands of bytes
+		"MALLOC_ARENA_MAX=2",
+	}
+	for _, k := range []string{"PATH", "HOME", "TMPDIR", "LD_LIBRARY_PATH"} {
+		if v, ok := os.LookupEnv(k); ok {
+			cmd.Env = append(cmd.Env, k+"="+v)
 		}
 	}
-	return 1
+	cmd.WaitDelay = time.Second
+	var stdout bytes.Buffer
+	stderr := &tail{max: 4 << 10}
+	cmd.Stdout, cmd.Stderr = &stdout, stderr
+	var in interface {
+		Write([]byte) (int, error)
+		Close() error
+	}
+	if stdin != nil {
+		pipe, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, err
+		}
+		in = pipe
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	// Limited before it gets its input, so before it decodes anything.
+	_ = limitMemory(cmd.Process.Pid, photoMemoryLimit)
+	if in != nil {
+		go func() {
+			_, _ = in.Write(stdin) // fails when vips gave up early; Wait says why
+			_ = in.Close()
+		}()
+	}
+	err := cmd.Wait()
+	if vipsExited != nil {
+		vipsExited(cmd.ProcessState)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		return nil, &vipsError{err: err, stderr: vipsMessage(stderr.String())}
+	}
+	return stdout.Bytes(), nil
+}
+
+// vipsMessage is what vips said without its per-tile warnings, which
+// only repeat that decoding failed.
+func vipsMessage(stderr string) string {
+	var keep []string
+	for _, line := range strings.Split(stderr, "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.Contains(line, "VIPS-WARNING") {
+			keep = append(keep, line)
+		}
+	}
+	if len(keep) == 0 {
+		return strings.TrimSpace(stderr)
+	}
+	return strings.Join(keep, "; ")
+}
+
+// tail keeps the last max bytes written to it: vips warns once per tile
+// of a damaged image, and says why it failed last.
+type tail struct {
+	buf []byte
+	max int
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > 2*t.max {
+		t.buf = append(t.buf[:0], t.buf[len(t.buf)-t.max:]...)
+	}
+	return len(p), nil
+}
+
+func (t *tail) String() string {
+	if len(t.buf) > t.max {
+		return string(t.buf[len(t.buf)-t.max:])
+	}
+	return string(t.buf)
+}
+
+// PhotoTools reports the libvips version photos are processed with, or
+// why they can't be: a missing vips is a warning at startup, not a
+// failure, and uploads are refused until it is installed.
+func PhotoTools(ctx context.Context) (string, error) {
+	vips, err1 := exec.LookPath(vipsBin)
+	_, err2 := exec.LookPath(vipsheaderBin)
+	if err := errors.Join(err1, err2); err != nil {
+		return "", fmt.Errorf("%w: %v", errVipsMissing, err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := runVips(ctx, vips, nil, "--version")
+	return strings.TrimSpace(string(out)), err
 }

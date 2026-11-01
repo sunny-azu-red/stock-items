@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Section is a group of items that share exactly the same vehicle tags,
@@ -280,9 +281,12 @@ func WriteMovementsCSV(w io.Writer, moves []Movement) error {
 	return cw.Error()
 }
 
-// csvSafe stops spreadsheet apps from treating user text as a formula.
+// csvSafe stops spreadsheet apps from treating user text as a formula:
+// text starting with a tab or carriage return, or whose first character
+// after any blanks (which an import may trim) starts a formula.
 func csvSafe(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+	t := strings.TrimLeftFunc(s, unicode.IsSpace)
+	if s != "" && strings.ContainsRune("\t\r", rune(s[0])) || t != "" && strings.ContainsRune("=+-@", rune(t[0])) {
 		return "'" + s
 	}
 	return s

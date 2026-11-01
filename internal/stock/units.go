@@ -315,7 +315,11 @@ func SplitForInput(q float64, u Unit) (string, string) {
 // amounts have at most two; the third is for numbers people typed, such as
 // the 999.999 an error message quotes.
 func FormatNumber(f float64) string {
-	return strconv.FormatFloat(round3(f), 'f', -1, 64)
+	r := round3(f)
+	if r == 0 {
+		return "0" // not "-0" for a tiny negative
+	}
+	return strconv.FormatFloat(r, 'f', -1, 64)
 }
 
 // DefaultStep is the amount the quick +/- buttons change for a unit.

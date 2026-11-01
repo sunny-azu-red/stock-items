@@ -96,7 +96,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [U
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`, the newest `master` that passed CI; pin `sha-<commit>` (or a tagged version) to stay on it |
 
    Type values without quotes.
-4. **Deploy the stack** and open `http://<docker-host>:8080`.
+4. **Deploy the stack** and open `http://<docker-host>:8080` (or the `PITBOX_PORT` you set). Don't add `PORT`: the compose file doesn't pass it to the container, so it changes nothing.
 
 **Updating:** after a push to `master` whose CI passed, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
 

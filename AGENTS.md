@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repository. Read [doc
 
 ## What this is
 
-A server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdlib `net/http` and `html/template`, pgx for Postgres, and htmx for small dynamic updates. It ships as a single binary with templates, static files and migrations embedded. Photos are processed by the libvips command line tools (`libvips-tools`) in a child process.
+Pitbox (the Pit is for Parts & Inventory Tracker) is a server-rendered Go web app that tracks vehicle parts on stock. It uses Go stdlib `net/http` and `html/template`, pgx for Postgres, and htmx for small dynamic updates. It ships as a single binary with templates, static files and migrations embedded. Photos are processed by the libvips command line tools (`libvips-tools`) in a child process.
 
 ## Layout
 

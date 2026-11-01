@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # JPEG, PNG, WebP and GIF loaders are part of libvips.
 FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 LABEL org.opencontainers.image.title="Pitbox" \
-      org.opencontainers.image.description="Garage stock, service kits and shopping list for your vehicles" \
+      org.opencontainers.image.description="Pitbox, a Parts & Inventory Tracker: garage stock, service kits and shopping list for your vehicles" \
       org.opencontainers.image.source="https://github.com/sunny-azu-red/stock-items" \
       org.opencontainers.image.licenses="MIT"
 RUN apt-get update \

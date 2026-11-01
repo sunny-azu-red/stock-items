@@ -1,6 +1,6 @@
 # Pitbox
 
-A small, private garage app for your vehicles: the parts and fluids on the shelf, the service jobs they need and when they are due, and what to buy before the next one.
+A small, private **P**arts & **I**nventory **T**racker (the Pit in Pitbox) for your garage: the parts and fluids on the shelf, the service jobs they need and when they are due, and what to buy before the next one.
 
 It is built for one household on a home network: no login, one binary, one Postgres database.
 

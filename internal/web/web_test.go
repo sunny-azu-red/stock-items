@@ -1486,7 +1486,12 @@ func TestPolish(t *testing.T) {
 	if f := flashOf(t, a.post(item+"/photo/delete", nil)); f.Message != "There was no photo to remove" {
 		t.Errorf("photo delete flash = %+v", f)
 	}
-	expect(t, a.post("/items/424242/photo/delete", nil), http.StatusNotFound)
+	// An item that is gone: a message, not a Not found page.
+	gone := a.post("/items/424242/photo/delete", nil)
+	expect(t, gone, http.StatusSeeOther)
+	if f := flashOf(t, gone); f.Kind != "error" || !strings.Contains(f.Message, "deleted") {
+		t.Errorf("photo delete of a gone item: flash = %+v", f)
+	}
 
 	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1x of OEM Rear Brake Pads"`)
 

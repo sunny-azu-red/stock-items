@@ -453,7 +453,7 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	k, err := s.store.GetKit(ctx, id)
 	if err != nil {
-		return err
+		return s.gone(r, err, store.WhatKit, id) // deleted in another tab: not a 404
 	}
 	n, missing := 0, 0
 	for _, l := range k.Lines {

@@ -200,3 +200,33 @@ func TestLinkingADeletedItemSaysSo(t *testing.T) {
 		t.Errorf("entry gone too: Location = %q, want /shopping", to)
 	}
 }
+
+// The item page's forms and buttons, and a kit's, of a record deleted in
+// another tab say where it went rather than show Not found.
+func TestFormsOfDeletedRecordsGoToTheTrash(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	item := itemPath(itemID(t, a.store, "Brake Pads"))
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	expect(t, a.postV(item+"/delete", nil), http.StatusSeeOther)
+	expect(t, a.postV(kit+"/delete", nil), http.StatusSeeOther)
+	for _, tt := range []struct {
+		action string
+		form   url.Values
+	}{
+		{item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"2"}}},
+		{item + "/shopping", url.Values{"quantity": {"2"}}},
+		{item + "/photo/delete", nil},
+		{kit + "/shortfall", nil},
+	} {
+		rec := a.post(tt.action, tt.form)
+		if to := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || to != "/trash" {
+			t.Errorf("%s: %d to %q, want 303 to /trash", tt.action, rec.Code, to)
+		}
+		if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "was deleted since you opened this") {
+			t.Errorf("%s: flash = %+v", tt.action, f)
+		}
+	}
+}

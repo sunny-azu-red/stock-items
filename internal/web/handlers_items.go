@@ -676,7 +676,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	}
 	it, err := s.store.GetItem(r.Context(), id)
 	if err != nil {
-		return err
+		return s.gone(r, err, store.WhatItem, id) // deleted in another tab: not a 404
 	}
 	if it.Archived() {
 		s.setFlash(w, "error", "Restore "+it.DisplayName()+" to record stock changes")
@@ -871,7 +871,7 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	}
 	it, err := s.store.GetItem(r.Context(), id)
 	if err != nil {
-		return err
+		return s.gone(r, err, store.WhatItem, id) // deleted in another tab: not a 404
 	}
 	if key == "" {
 		s.setFlash(w, "error", noFormKey)
@@ -1023,9 +1023,9 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 	}
 	trashID, err := s.store.DeletePhoto(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		// No photo: say so, unless the item is gone too (then 404).
+		// No photo: say so, unless the item is gone too (then where it went).
 		if _, err := s.store.GetItem(r.Context(), id); err != nil {
-			return err
+			return s.gone(r, err, store.WhatItem, id)
 		}
 		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "There was no photo to remove")
 		return nil

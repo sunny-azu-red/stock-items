@@ -829,6 +829,73 @@ test("screenshots", async ({ page }, testInfo) => {
   }
 });
 
+// Boxes that don't start and end on whole CSS pixels (docs/conventions.md):
+// the browser snaps text to whole pixels but not icons or borders, so text
+// on a fraction moves against its icon from row to row, and a border on one
+// is drawn blurred across two. Icons, images and inline text are skipped,
+// and so is what is hidden from sight (.sr-only).
+async function offGrid(page: Page) {
+  return page.evaluate(() => {
+    const frac = (v: number) => Math.abs(v - Math.round(v)) > 0.01;
+    const out: string[] = [];
+    for (const el of document.querySelectorAll("body *")) {
+      if (el.closest("svg") || el.closest(".sr-only") || ["IMG", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "OPTION", "BR"].includes(el.tagName)) continue;
+      const display = getComputedStyle(el).display;
+      if (display === "inline" || display === "none" || display === "contents") continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const top = r.top + window.scrollY;
+      if (frac(top) || frac(r.height)) {
+        out.push(`${el.tagName.toLowerCase()}${[...el.classList].map((c) => "." + c).join("")} top ${top.toFixed(2)} height ${r.height.toFixed(2)}`);
+      }
+    }
+    return out;
+  });
+}
+
+test("every box sits on whole pixels", async ({ page }) => {
+  // Every page's offenders, so one run shows them all.
+  const problems: string[] = [];
+  const check = async (where: string) => {
+    for (const box of await offGrid(page)) problems.push(`${where}: ${box}`);
+  };
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const movement = await link("/activity", 'a[href^="/movements/"]');
+  // Something on the shopping list, and the flash that says so.
+  await page.goto("/shopping");
+  if ((await page.locator('a[href$="/bought"]').count()) === 0) {
+    await page.getByLabel("Something new").fill("Chain wax");
+    await page.getByLabel("Quantity").fill("1");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.locator(".flash")).toBeVisible();
+    await check("/shopping with a flash");
+  }
+  const bought = await link("/shopping", 'a[href$="/bought"]');
+  const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", "/stock?sort=expiry&dir=desc", item, "/items/new", item + "/edit",
+    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
+    kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", bought, "/activity", "/activity?sort=price", "/activity?kind=purchase&year=2026",
+    movement, "/trash", "/no-such-page"];
+  for (const p of paths) {
+    await page.goto(p);
+    await check(p);
+  }
+  // An open hint, and a form sent back with its errors.
+  await page.goto("/items/new");
+  await page.locator(".label-row").filter({ hasText: "Keep at least" }).getByRole("button", { name: "Help" }).click();
+  await check("/items/new with a hint open");
+  await page.getByRole("button", { name: "Save item" }).click();
+  await expect(page.locator(".error-summary")).toBeVisible();
+  await check("/items/new with errors");
+  expect(problems).toEqual([]);
+});
+
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock");

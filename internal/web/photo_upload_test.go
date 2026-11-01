@@ -1,13 +1,36 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"image/color"
 	"io"
+	"log/slog"
 	"net/http"
+	"os/exec"
 	"strings"
 	"testing"
 )
+
+// A vips child whose memory couldn't be limited is said so in the log.
+func TestUnlimitedVipsIsLogged(t *testing.T) {
+	bin, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("no true command")
+	}
+	swap(t, &limitChild, func(int, uint64) error { return errors.New("operation not permitted") })
+	var log bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&log, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	if _, err := runVips(context.Background(), bin, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(log.String(), "level=WARN") || !strings.Contains(log.String(), "operation not permitted") {
+		t.Errorf("log = %q, want a warning with the reason", log.String())
+	}
+}
 
 // readCounter counts the bytes read from a request body.
 type readCounter struct {

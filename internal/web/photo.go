@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
@@ -46,6 +47,8 @@ var (
 	photoTimeout = 30 * time.Second
 	// vipsExited, when set (tests), sees every vips child that finished.
 	vipsExited func(*os.ProcessState)
+	// limitChild sets a vips child's memory limit (tests make it fail).
+	limitChild = limitMemory
 )
 
 // The errors processPhoto returns wrap one of these, with what vips said.
@@ -293,7 +296,10 @@ func runVips(ctx context.Context, bin string, stdin []byte, args ...string) ([]b
 		return nil, err
 	}
 	// Limited before it gets its input, so before it decodes anything.
-	_ = limitMemory(cmd.Process.Pid, photoMemoryLimit)
+	if err := limitChild(cmd.Process.Pid, photoMemoryLimit); err != nil {
+		// It still runs, but nothing stops a decoder that wants more.
+		slog.Warn("photo: could not limit the memory of vips", "bin", bin, "err", err)
+	}
 	if in != nil {
 		go func() {
 			_, _ = in.Write(stdin) // fails when vips gave up early; Wait says why

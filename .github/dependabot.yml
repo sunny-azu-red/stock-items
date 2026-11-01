@@ -1,4 +1,4 @@
-# Weekly update pull requests, one per ecosystem: all of its updates in a
+# Monthly update pull requests, one per ecosystem: all of its updates in a
 # single PR, so CI runs once for them and they are merged (or reverted)
 # together.
 version: 2
@@ -6,7 +6,7 @@ updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       go:
         patterns: ["*"]
@@ -17,7 +17,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       actions:
         patterns: ["*"]
@@ -27,7 +27,7 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       docker:
         patterns: ["*"]
@@ -38,7 +38,7 @@ updates:
   - package-ecosystem: npm
     directory: /e2e
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       e2e:
         patterns: ["*"]

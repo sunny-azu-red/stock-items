@@ -53,7 +53,7 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 2. **image** (pushes only, after **test** passes): builds `linux/amd64` (the only platform the image is for) with an SBOM and provenance, pushes `ghcr.io/sunny-azu-red/pitbox`, and scans it with Trivy (fails on a HIGH or CRITICAL vulnerability that has a fix). Tags: `latest` and `sha-<commit>` from `master`; `1.2.3` and `1.2` from an optional `v1.2.3` tag, which never moves `latest`. [Deployment](deployment.md#updates-and-versions) uses these images.
 3. **release** (optional `v*` tags only, after **image**): builds static `linux-amd64` and `linux-arm64` binaries and creates the GitHub Release with generated notes, the binaries and `SHA256SUMS`.
 
-Actions are pinned to commit SHAs and the base images to digests; [Dependabot](../.github/dependabot.yml) proposes weekly updates for them, Go modules and the e2e's npm packages.
+Actions are pinned to commit SHAs and the base images to digests; [Dependabot](../.github/dependabot.yml) proposes monthly updates for them, Go modules and the e2e's npm packages.
 
 ## Adding a feature (checklist)
 

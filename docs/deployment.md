@@ -92,11 +92,11 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [U
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
    | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |
    | `TZ` | `Europe/Berlin` | the app's zone: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today"), the day a service counts as logged on, and the times pages show. Default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`); empty or unknown also means that. The database's own zone doesn't matter: the app's sessions are in UTC and timestamps are stored in UTC |
-   | `PITBOX_PORT` | `8080` | port on the Docker host |
+   | `PITBOX_PORT` | `3002` | port on the Docker host; default `3002` |
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`, the newest `master` that passed CI; pin `sha-<commit>` (or a tagged version) to stay on it |
 
    Type values without quotes.
-4. **Deploy the stack** and open `http://<docker-host>:8080` (or the `PITBOX_PORT` you set). Don't add `PORT`: the compose file doesn't pass it to the container, so it changes nothing.
+4. **Deploy the stack** and open `http://<docker-host>:3002` (or the `PITBOX_PORT` you set). Don't add `PORT`: the compose file doesn't pass it to the container, so it changes nothing.
 
 **Updating:** after a push to `master` whose CI passed, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
 
@@ -110,7 +110,7 @@ With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values).
 
 - `DB_SCHEMA` must be `public`, as in `.env.example` (or left out: that is the compose default), not a development `.env`'s `dev`.
 - `DB_HOST` must be the Postgres server's LAN address, not `127.0.0.1` as in `.env.example`: inside the container that is the container itself.
-- Compose ignores `HOST` and `PORT`; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host. Plain `docker run --env-file` passes them through, so leave them out of that file (or match `-p` to `PORT`).
+- Compose ignores `HOST` and `PORT`; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 3002) picks the port on the Docker host. Plain `docker run --env-file` passes them through, so leave them out of that file (or match `-p` to `PORT`).
 
 ```bash
 docker compose up -d                       # or: docker compose pull && docker compose up -d
@@ -120,7 +120,7 @@ To build the image yourself instead of pulling it:
 
 ```bash
 docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) .
-docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env \
+docker run -d --name pitbox --restart unless-stopped -p 3002:8080 --env-file .env \
   --read-only --tmpfs /tmp --security-opt no-new-privileges \
   -v /etc/localtime:/etc/localtime:ro pitbox
 ```

@@ -238,8 +238,28 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 // lockItems locks items in id order, so restores can't deadlock with
 // services or each other.
 func lockItems(ctx context.Context, tx pgx.Tx, ids []int64) error {
-	_, err := tx.Exec(ctx, `SELECT id FROM items WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE`, ids)
+	_, err := lockedItems(ctx, tx, ids)
 	return err
+}
+
+// lockedItems is lockItems returning the ids it locked: an item deleted
+// meanwhile is missing.
+func lockedItems(ctx context.Context, tx pgx.Tx, ids []int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `SELECT id FROM items WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE`, ids)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[int64])
+}
+
+// lostItems explains items that needRows found but their lock didn't:
+// deleted meanwhile, they are in the trash or gone for good (a
+// *ConflictError naming them), rather than make the restore look gone.
+func lostItems(ctx context.Context, tx pgx.Tx, ids []int64, what string) error {
+	if err := needRows(ctx, tx, "items", ids, what); err != nil {
+		return err
+	}
+	return &ConflictError{Field: "form", Message: what + " was changed meanwhile. Try again."}
 }
 
 // refuseArchived fails if any of the items is archived: stock changes come
@@ -271,8 +291,18 @@ func takeMovements(ctx context.Context, tx pgx.Tx, moves []snapshotRow, ofServic
 	if err := needRows(ctx, tx, "items", ids, "An item it used"); err != nil {
 		return err
 	}
-	if err := lockItems(ctx, tx, ids); err != nil {
+	locked, err := lockedItems(ctx, tx, ids)
+	if err != nil {
 		return err
+	}
+	if len(locked) < len(ids) {
+		var lost []int64
+		for _, id := range ids {
+			if !slices.Contains(locked, id) {
+				lost = append(lost, id)
+			}
+		}
+		return lostItems(ctx, tx, lost, "An item it used")
 	}
 	if !ofService {
 		if err := refuseArchived(ctx, tx, ids); err != nil {
@@ -646,7 +676,11 @@ func restoreShopping(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, err
 			return 0, err
 		}
 		var archived bool
-		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, item.String()).Scan(&archived); err != nil {
+		err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, item.String()).Scan(&archived)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, lostItems(ctx, tx, []int64{e.int64("item_id")}, "Its item")
+		}
+		if err != nil {
 			return 0, err
 		}
 		if archived {
@@ -739,7 +773,11 @@ func restorePhoto(ctx context.Context, tx pgx.Tx, p trashPayload) (itemID, repla
 	}
 	// A photo the item has now trades places with it, so neither is lost
 	// (this is how replacing a photo is undone). trashPhoto locks the item.
-	if replaced, err = trashPhoto(ctx, tx, itemID, "replaced"); err != nil {
+	replaced, err = trashPhoto(ctx, tx, itemID, "replaced")
+	if errors.Is(err, ErrNotFound) {
+		return 0, 0, "", lostItems(ctx, tx, []int64{itemID}, "Its item")
+	}
+	if err != nil {
 		return 0, 0, "", err
 	}
 	var brand, item string
@@ -786,7 +824,11 @@ func undoBought(ctx context.Context, tx pgx.Tx, p trashPayload) (int64, error) {
 		return 0, err
 	}
 	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&archived); err != nil {
+	err = tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&archived)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, lostItems(ctx, tx, []int64{itemID}, "Its item")
+	}
+	if err != nil {
 		return 0, err
 	}
 	if archived {

@@ -556,3 +556,63 @@ func TestArchivingAnItemAndTickingOffItsEntryTakeTurns(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+// Restoring something of an item while the item is deleted: the restore
+// finds the item, then waits for its lock while the delete commits. It
+// then says the item must be restored first, rather than fail as if the
+// trash entry were gone (or with a bare "no rows").
+func TestRestoringWhileTheItemIsDeleted(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		trash func(t *testing.T, s *store.Store, item int64) int64
+	}{
+		{"stock change", func(t *testing.T, s *store.Store, item int64) int64 {
+			ctx := context.Background()
+			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: item, Kind: stock.MoveUse, Delta: -1}); err != nil {
+				t.Fatal(err)
+			}
+			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: item, Kind: stock.MoveUse})
+			_, trashID, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return trashID
+		}},
+		{"shopping entry", func(t *testing.T, s *store.Store, item int64) int64 {
+			ctx := context.Background()
+			entry, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &item, Quantity: ptr(2.0)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			trashID, err := s.DeleteShopping(ctx, entry, cur(t, s, store.WhatShopping, entry))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return trashID
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, pool, ctx := newStorePool(t)
+			pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
+			trashID := tt.trash(t, s, pads)
+
+			// The item's delete, as DeleteItem makes it: in the trash.
+			h := hold(t, pool, `DELETE FROM items WHERE id = $1`, pads)
+			if _, err := h.tx.Exec(ctx, `INSERT INTO trash (kind, label, payload)
+				VALUES ('item', 'Item: Pads', jsonb_build_object('items', jsonb_build_array(jsonb_build_object('id', $1::bigint))))`, pads); err != nil {
+				t.Fatal(err)
+			}
+			var c calls
+			var restored error
+			c.run(func() { _, restored = s.RestoreTrash(ctx, trashID) })
+			waitBlocked(t, pool, 1, []string{h.xid}, "items")
+			h.commit(t)
+			c.wait()
+			noDeadlock(t, "restore", restored)
+			wantConflict(t, "restore", restored, "Restore Item: Pads first")
+			if errors.Is(restored, store.ErrNotFound) {
+				t.Error("the trash entry looks gone")
+			}
+		})
+	}
+}

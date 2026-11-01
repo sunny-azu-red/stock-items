@@ -11,6 +11,9 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -634,4 +637,239 @@ func appPeakRSS() int64 {
 		}
 	}
 	return 0
+}
+
+// Undoing a photo replace shows the old photo again, though it is older
+// than the one the browser has cached, and offers to undo the swap.
+func TestPhotoRestoreBeatsTheCache(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	ctx := context.Background()
+	if _, err := a.store.SetPhoto(ctx, oil, "image/jpeg", []byte("old"), []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := a.store.SetPhoto(ctx, oil, "image/jpeg", []byte("new"), []byte("new"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := "/items/" + itoa(oil) + "/photo"
+	cached := a.get(photo)
+	expect(t, cached, http.StatusOK, "new")
+
+	f := flashOf(t, a.post("/trash/"+itoa(replaced)+"/restore", nil))
+	if f.Undo == 0 || f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in the trash." {
+		t.Errorf("restore flash = %+v", f)
+	}
+	req := httptest.NewRequest(http.MethodGet, photo, nil)
+	req.Header.Set("If-None-Match", cached.Header().Get("ETag"))
+	req.Header.Set("If-Modified-Since", cached.Header().Get("Last-Modified"))
+	expect(t, a.do(req), http.StatusOK, "old")
+
+	// Undo swaps them back.
+	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	expect(t, a.get(photo), http.StatusOK, "new")
+}
+
+// photoUpload is the item page's photo form sending data.
+func photoUpload(t *testing.T, ctx context.Context, item string, data []byte) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	fw, err := w.CreateFormFile("photo", "p.png")
+	if err == nil {
+		_, err = fw.Write(data)
+	}
+	if err == nil {
+		err = w.Close()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, item+"/photo", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req
+}
+
+func smallPNG(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	m := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for i := range m.Pix {
+		m.Pix[i] = 255
+	}
+	m.Set(0, 0, c)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, m); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// A photo over the pixel limit is refused with the limit, and nothing is
+// saved.
+func TestPhotoUploadTooManyPixels(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	gray := image.NewGray(image.Rect(0, 0, 1, 1))
+	rec := a.do(photoUpload(t, context.Background(), item, pngWithSize(t, gray, 10001, 10000, false)))
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "The photo has too many pixels (max 100 megapixels)" {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get(item+"/photo"), http.StatusNotFound)
+}
+
+// A HEIC from a phone is saved as a 1600 px JPEG with its thumbnail, and
+// replacing it can be undone.
+func TestPhotoUploadHEIC(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	heic, err := os.ReadFile("testdata/photo-12mp.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := a.do(photoUpload(t, context.Background(), item, heic))
+	if f := flashOf(t, rec); f.Kind != "success" || f.Message != "Photo saved" {
+		t.Fatalf("flash = %+v", f)
+	}
+	for _, tc := range []struct {
+		path string
+		w, h int
+	}{{item + "/photo", 1600, 1200}, {item + "/photo?size=thumb", thumbSide, thumbSide}} {
+		rec := a.get(tc.path)
+		expect(t, rec, http.StatusOK)
+		if ct := rec.Header().Get("Content-Type"); ct != "image/jpeg" {
+			t.Errorf("%s: Content-Type %q", tc.path, ct)
+		}
+		if b := decodeJPEG(t, rec.Body.Bytes()).Bounds(); b.Dx() != tc.w || b.Dy() != tc.h {
+			t.Errorf("%s: %dx%d, want %dx%d", tc.path, b.Dx(), b.Dy(), tc.w, tc.h)
+		}
+	}
+	first := a.get(item + "/photo").Body.String()
+	rec = a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black)))
+	f := flashOf(t, rec)
+	if f.Message != "Photo replaced" || f.Undo == 0 {
+		t.Fatalf("flash = %+v", f)
+	}
+	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("Undo didn't bring the HEIC's photo back")
+	}
+}
+
+// What goes wrong in processing is told plainly, nothing is saved, and
+// the old photo stays.
+func TestPhotoUploadProcessingFails(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	expect(t, a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black))), http.StatusSeeOther)
+	first := a.get(item + "/photo").Body.String()
+
+	upload := func() Flash {
+		t.Helper()
+		rec := a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.White)))
+		expect(t, rec, http.StatusSeeOther)
+		if loc := rec.Header().Get("Location"); loc != item {
+			t.Errorf("Location = %q", loc)
+		}
+		return flashOf(t, rec)
+	}
+	for _, tc := range []struct {
+		name, script, want string
+	}{
+		{"failure", `echo "VipsJpeg: raw detail" >&2; exit 1`, "The photo could not be processed; the file may be damaged. Try another one."},
+		{"timeout", "exec sleep 20", "Processing the photo took too long. Try a smaller photo."},
+	} {
+		fakeVips(t, tc.script)
+		swap(t, &photoTimeout, 300*time.Millisecond)
+		if f := upload(); f.Kind != "error" || f.Message != tc.want {
+			t.Errorf("%s: flash = %+v", tc.name, f)
+		}
+	}
+
+	swap(t, &vipsBin, "pitbox-no-such-vips")
+	if f := upload(); f.Kind != "error" || f.Message != "Photos can't be processed: this server is missing libvips (libvips-tools). The photo was not saved." {
+		t.Errorf("missing vips: flash = %+v", f)
+	}
+	expect(t, a.get(item+"/photo"), http.StatusOK)
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("a failed upload changed the photo")
+	}
+	if strings.Contains(a.get("/trash").Body.String(), "Photo: Silkolene") {
+		t.Error("a failed upload put the old photo in the trash")
+	}
+}
+
+// An upload waits while another photo is being decoded, then saves; one
+// whose client goes away while waiting saves nothing.
+func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	send := func(ctx context.Context, data []byte) <-chan *httptest.ResponseRecorder {
+		done := make(chan *httptest.ResponseRecorder, 1)
+		req := photoUpload(t, ctx, item, data)
+		go func() { done <- a.do(req) }()
+		return done
+	}
+	// waiting sees the upload in flight (it holds a place in photoQueue
+	// until answered) and not answered while another decode holds the slot.
+	waiting := func(done <-chan *httptest.ResponseRecorder) {
+		t.Helper()
+		for start := time.Now(); len(photoQueue) == 0; time.Sleep(time.Millisecond) {
+			if time.Since(start) > 10*time.Second {
+				t.Fatal("the upload never took its place in the queue")
+			}
+		}
+		select {
+		case rec := <-done:
+			t.Fatalf("answered while another decode held the slot: %d %+v", rec.Code, flashOf(t, rec))
+		default:
+		}
+	}
+	answer := func(done <-chan *httptest.ResponseRecorder) *httptest.ResponseRecorder {
+		t.Helper()
+		select {
+		case rec := <-done:
+			return rec
+		case <-time.After(10 * time.Second):
+			t.Fatal("still waiting")
+			return nil
+		}
+	}
+
+	release := holdPhotoSlot(t) // another upload is being decoded
+	done := send(context.Background(), smallPNG(t, color.Black))
+	waiting(done)
+	release()
+	rec := answer(done)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Message != "Photo saved" {
+		t.Fatalf("flash = %+v", f)
+	}
+	first := a.get(item + "/photo").Body.String()
+
+	release = holdPhotoSlot(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done = send(ctx, smallPNG(t, color.White))
+	waiting(done)
+	cancel()
+	answer(done)
+	release()
+	if len(photoQueue) != 0 {
+		t.Error("an upload whose client went away kept its place in the queue")
+	}
+	if a.get(item+"/photo").Body.String() != first {
+		t.Error("an upload whose client went away replaced the photo")
+	}
+	if strings.Contains(a.get("/trash").Body.String(), "Photo: Silkolene") {
+		t.Error("an upload whose client went away put the old photo in the trash")
+	}
 }

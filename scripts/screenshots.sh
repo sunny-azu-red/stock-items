@@ -36,11 +36,24 @@ rm -rf docs/screenshots/desktop docs/screenshots/mobile
 mkdir -p docs/screenshots
 cp -r "$shots/desktop" "$shots/mobile" docs/screenshots/
 
-# Lossless: the same pixels, about a third smaller.
+# Lossless: the same pixels, about a third smaller. Chromium's anti-aliasing
+# varies by a level or two between runs: a screenshot that differs from the
+# committed one by no more than that keeps the committed file.
 echo "==> recompress"
 find docs/screenshots -name '*.png' -print0 | while IFS= read -r -d '' f; do
   vips copy "$f" "$shots/png.png[compression=9,strip]"
   mv "$shots/png.png" "$f"
+  if git cat-file -e "HEAD:$f" 2>/dev/null && ! git diff --quiet -- "$f"; then
+    git show "HEAD:$f" > "$shots/old.png"
+    if [ "$(vipsheader -f width "$f")x$(vipsheader -f height "$f")" = \
+         "$(vipsheader -f width "$shots/old.png")x$(vipsheader -f height "$shots/old.png")" ]; then
+      vips subtract "$f" "$shots/old.png" "$shots/d.v"
+      vips abs "$shots/d.v" "$shots/a.v"
+      if [ "$(vips max "$shots/a.v" | cut -d. -f1)" -le 2 ]; then
+        git checkout -q -- "$f"
+      fi
+    fi
+  fi
 done
 
 echo "$(find docs/screenshots -name '*.png' | wc -l) screenshots, $(git status --porcelain -- docs/screenshots | wc -l) changed:"

@@ -252,7 +252,8 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 			return store.ErrNotFound
 		}
 		f.ShoppingID, f.Name, f.Notes, f.Unit = e.ID, e.FreeText, e.Note, string(e.ItemUnit)
-		shoppingVersion = e.Version
+		// The form carries the entry's version: saving ticks it off.
+		f.Version, shoppingVersion = e.Version, e.Version
 		_, f.MinUnit = stock.SplitForInput(0, e.ItemUnit)
 		f.QuantityUnit = f.MinUnit
 		if e.Quantity != nil {
@@ -286,10 +287,10 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		in.BoughtOn = s.today()
 	}
 	if !f.Errors.Any() {
-		var id int64
+		var id, trashID int64
 		var err error
 		if f.ShoppingID != 0 {
-			id, err = s.store.CreateItemFromShopping(r.Context(), f.ShoppingID, in)
+			id, trashID, err = s.store.CreateItemFromShopping(r.Context(), f.ShoppingID, f.Version, in)
 		} else {
 			id, err = s.store.CreateItem(r.Context(), in)
 		}
@@ -303,7 +304,8 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 			f.Errors.Add("form", "The shopping entry is gone (ticked off, or this item was saved already). Check your stock, or save again to add it anyway.")
 		} else if err == nil {
 			if f.ShoppingID != 0 {
-				s.redirect(w, r, "/shopping", "Added "+displayInput(in)+" to stock")
+				// Undo puts the entry back on the list; the item stays.
+				s.redirectUndo(w, r, "/shopping", "Added "+displayInput(in)+" to stock", trashID)
 				return nil
 			}
 			if r.PostFormValue("next") == "new" {
@@ -316,8 +318,9 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 			}
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Added "+displayInput(in))
 			return nil
-		}
-		if !formConflict(f.Errors, err) {
+		} else if f.Stale = staleForm(err, "/items/new?shopping="+strconv.FormatInt(f.ShoppingID, 10)); f.Stale == nil && !formConflict(f.Errors, err) {
+			// An entry changed meanwhile (put back from the trash) gets the
+			// banner, keeping what was typed.
 			return err
 		}
 	}

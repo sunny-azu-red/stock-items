@@ -809,7 +809,7 @@ func TestBuySomethingNewFromShoppingList(t *testing.T) {
 	expectNot(t, rec, "Save &amp; add another")
 
 	form := url.Values{"shopping_id": {entry}, "name": {"Chain lube"}, "unit": {"piece"}, "quantity": {"2"}, "quantity_unit": {"pcs"},
-		"total_price": {"60"}, "supplier": {"Moto shop"}, "bought_on": {"2026-10-29"}}
+		"total_price": {"60"}, "supplier": {"Moto shop"}, "bought_on": {"2026-10-29"}, "version": {formVersion(t, rec.Body.String(), "/items")}}
 	rec = a.post("/items", form)
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != "/shopping" {

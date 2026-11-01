@@ -736,7 +736,12 @@ func TestCreateItemFromShopping(t *testing.T) {
 
 	in := stock.ItemInput{Name: "Chain lube", Unit: stock.UnitPiece, Quantity: 1, TotalPrice: ptr(45.0), Supplier: "Shop"}
 	in.Normalize()
-	id, err := s.CreateItemFromShopping(ctx, free, in)
+	// A form opened before the entry changed is stale, and saves nothing.
+	var stale *store.StaleError
+	if _, _, err := s.CreateItemFromShopping(ctx, free, 0, in); !errors.As(err, &stale) || stale.Gone {
+		t.Fatalf("stale entry: got %v", err)
+	}
+	id, trashID, err := s.CreateItemFromShopping(ctx, free, cur(t, s, store.WhatShopping, free), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,13 +758,22 @@ func TestCreateItemFromShopping(t *testing.T) {
 	// A second submit of the same form, or an entry that is already an
 	// item, creates nothing.
 	for _, entry := range []int64{free, linked} {
-		if _, err := s.CreateItemFromShopping(ctx, entry, in); !errors.Is(err, store.ErrNotFound) {
+		if _, _, err := s.CreateItemFromShopping(ctx, entry, cur(t, s, store.WhatShopping, entry), in); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("entry %d: want ErrNotFound, got %v", entry, err)
 		}
 	}
 	if items, _ := s.ListItems(ctx, store.ItemFilter{}); len(items) != 2 {
 		t.Errorf("items = %v, want Brake Pads and one Chain lube", ids(items))
 	}
+
+	// The entry went to the trash: Undo puts it back, and the item stays.
+	if _, err := s.RestoreTrash(ctx, trashID); err != nil {
+		t.Fatal(err)
+	}
+	if e, err := s.GetShopping(ctx, free); err != nil || e.FreeText != "Chain lube" || e.Quantity == nil || *e.Quantity != 1 {
+		t.Errorf("restored entry = %+v, %v", e, err)
+	}
+	mustGet(t, s, id)
 	assertLedger(t, s)
 }
 

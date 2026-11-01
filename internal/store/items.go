@@ -202,26 +202,31 @@ func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, erro
 }
 
 // CreateItemFromShopping stores a new item bought from a free-text shopping
-// list entry and removes that entry, in one transaction. It returns
-// ErrNotFound when the entry is gone or is linked to an existing item.
-func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, in stock.ItemInput) (int64, error) {
-	var id int64
-	err := s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
+// list entry and removes that entry, in one transaction. The entry goes to
+// the trash (trashID), so Undo can put it back on the list; the item stays.
+// It returns ErrNotFound when the entry is gone or is linked to an existing
+// item, and a *StaleError when it changed since version.
+func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, version int, in stock.ItemInput) (id, trashID int64, err error) {
+	err = s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
 		var itemID *int64
-		if err := tx.QueryRow(ctx, `SELECT item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&itemID); err != nil {
-			return notFound(err)
-		}
-		if itemID != nil {
+		var have int
+		err := tx.QueryRow(ctx, `SELECT item_id, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&itemID, &have)
+		if err == nil && itemID != nil {
 			return ErrNotFound
 		}
-		var err error
+		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, entryID); err != nil {
+			return err
+		}
 		if id, err = createItem(ctx, tx, in); err != nil {
+			return err
+		}
+		if trashID, err = trashShopping(ctx, tx, entryID); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID)
 		return err
 	})
-	return id, err
+	return id, trashID, err
 }
 
 // createItem inserts an item with its starting stock, SKUs and tags.

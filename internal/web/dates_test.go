@@ -16,9 +16,7 @@ import (
 // while it is set or put back.
 func inZone(t *testing.T, loc *time.Location) {
 	t.Helper()
-	saved := time.Local
-	time.Local = loc
-	t.Cleanup(func() { time.Local = saved })
+	swap(t, &time.Local, loc)
 }
 
 // Just after midnight in the app's zone (UTC+3) it is already the next day

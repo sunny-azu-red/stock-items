@@ -18,6 +18,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -366,6 +367,26 @@ func TestParsePhotoHeader(t *testing.T) {
 	}
 }
 
+// swap sets the package variable *p to v until the test ends, even when
+// it fails half way.
+func swap[T any](t *testing.T, p *T, v T) {
+	t.Helper()
+	old := *p
+	*p = v
+	t.Cleanup(func() { *p = old })
+}
+
+// holdPhotoSlot takes the photo slot, as a photo being processed would.
+// release gives it back; the test's end does, if it didn't.
+func holdPhotoSlot(t *testing.T) (release func()) {
+	t.Helper()
+	photoSlot <- struct{}{}
+	var once sync.Once
+	release = func() { once.Do(func() { <-photoSlot }) }
+	t.Cleanup(release)
+	return release
+}
+
 // fakeVips makes vips a shell script with body for the test.
 func fakeVips(t *testing.T, body string) {
 	t.Helper()
@@ -373,9 +394,7 @@ func fakeVips(t *testing.T, body string) {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	old := vipsBin
-	vipsBin = path
-	t.Cleanup(func() { vipsBin = old })
+	swap(t, &vipsBin, path)
 }
 
 // When vips fails, the user gets a plain message, and what vips said
@@ -414,9 +433,7 @@ func TestProcessPhotoVipsFails(t *testing.T) {
 func TestProcessPhotoTimeout(t *testing.T) {
 	needVips(t)
 	fakeVips(t, "exec sleep 20")
-	old := photoTimeout
-	photoTimeout = 200 * time.Millisecond
-	t.Cleanup(func() { photoTimeout = old })
+	swap(t, &photoTimeout, 200*time.Millisecond)
 	data := encodePNG(t, testImage(40, 30))
 
 	start := time.Now()
@@ -442,9 +459,7 @@ func TestProcessPhotoTimeout(t *testing.T) {
 // Without libvips installed, uploads are refused with a clear message,
 // and the startup check says why.
 func TestProcessPhotoVipsMissing(t *testing.T) {
-	old := vipsBin
-	vipsBin = "pitbox-no-such-vips"
-	t.Cleanup(func() { vipsBin = old })
+	swap(t, &vipsBin, "pitbox-no-such-vips")
 	_, _, err := processPhoto(context.Background(), encodePNG(t, testImage(4, 4)))
 	if !errors.Is(err, errVipsMissing) {
 		t.Fatalf("err = %v, want errVipsMissing", err)
@@ -497,10 +512,10 @@ func TestPhotoProcessedOneAtATime(t *testing.T) {
 		}
 	}
 
-	photoSlot <- struct{}{} // another upload is being processed
+	release := holdPhotoSlot(t) // another upload is being processed
 	done := process(context.Background())
 	waiting(done)
-	<-photoSlot
+	release()
 	if err := finished(done); err != nil {
 		t.Fatal(err)
 	}
@@ -508,8 +523,7 @@ func TestPhotoProcessedOneAtATime(t *testing.T) {
 		t.Fatal("a finished photo kept the slot")
 	}
 
-	photoSlot <- struct{}{}
-	defer func() { <-photoSlot }()
+	holdPhotoSlot(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done = process(ctx)
 	waiting(done)
@@ -561,13 +575,11 @@ func TestPhotoMemory(t *testing.T) {
 		{"50 MP WebP", "rgb50.webp", []string{"zoom", "rgb.v", "rgb50.webp[Q=80]", "7", "7"}, nil, 200},
 	}
 	var peak int64
-	old := vipsExited
-	vipsExited = func(ps *os.ProcessState) {
+	swap(t, &vipsExited, func(ps *os.ProcessState) {
 		if ru, ok := ps.SysUsage().(*syscall.Rusage); ok {
 			peak = max(peak, ru.Maxrss<<10) // KB on Linux
 		}
-	}
-	t.Cleanup(func() { vipsExited = old })
+	})
 	for _, in := range inputs {
 		vipsMake(t, dir, in.args...)
 		data, err := os.ReadFile(filepath.Join(dir, in.file))

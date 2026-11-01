@@ -2070,15 +2070,13 @@ func TestPhotoUploadProcessingFails(t *testing.T) {
 		{"timeout", "exec sleep 20", "Processing the photo took too long. Try a smaller photo."},
 	} {
 		fakeVips(t, tc.script)
-		old := photoTimeout
-		photoTimeout = 300 * time.Millisecond
+		swap(t, &photoTimeout, 300*time.Millisecond)
 		if f := upload(); f.Kind != "error" || f.Message != tc.want {
 			t.Errorf("%s: flash = %+v", tc.name, f)
 		}
-		photoTimeout = old
 	}
 
-	vipsBin = "pitbox-no-such-vips"
+	swap(t, &vipsBin, "pitbox-no-such-vips")
 	if f := upload(); f.Kind != "error" || f.Message != "Photos can't be processed: this server is missing libvips (libvips-tools). The photo was not saved." {
 		t.Errorf("missing vips: flash = %+v", f)
 	}
@@ -2104,12 +2102,19 @@ func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
 		go func() { done <- a.do(req) }()
 		return done
 	}
+	// waiting sees the upload in flight (it holds a place in photoQueue
+	// until answered) and not answered while another decode holds the slot.
 	waiting := func(done <-chan *httptest.ResponseRecorder) {
 		t.Helper()
+		for start := time.Now(); len(photoQueue) == 0; time.Sleep(time.Millisecond) {
+			if time.Since(start) > 10*time.Second {
+				t.Fatal("the upload never took its place in the queue")
+			}
+		}
 		select {
 		case rec := <-done:
 			t.Fatalf("answered while another decode held the slot: %d %+v", rec.Code, flashOf(t, rec))
-		case <-time.After(100 * time.Millisecond):
+		default:
 		}
 	}
 	answer := func(done <-chan *httptest.ResponseRecorder) *httptest.ResponseRecorder {
@@ -2123,10 +2128,10 @@ func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
 		}
 	}
 
-	photoSlot <- struct{}{} // another upload is being decoded
+	release := holdPhotoSlot(t) // another upload is being decoded
 	done := send(context.Background(), smallPNG(t, color.Black))
 	waiting(done)
-	<-photoSlot
+	release()
 	rec := answer(done)
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Message != "Photo saved" {
@@ -2134,13 +2139,16 @@ func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
 	}
 	first := a.get(item + "/photo").Body.String()
 
-	photoSlot <- struct{}{}
+	release = holdPhotoSlot(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done = send(ctx, smallPNG(t, color.White))
 	waiting(done)
 	cancel()
 	answer(done)
-	<-photoSlot
+	release()
+	if len(photoQueue) != 0 {
+		t.Error("an upload whose client went away kept its place in the queue")
+	}
 	if a.get(item+"/photo").Body.String() != first {
 		t.Error("an upload whose client went away replaced the photo")
 	}

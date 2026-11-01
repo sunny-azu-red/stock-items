@@ -169,6 +169,7 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		if err != nil {
 			return err
 		}
+		defer vehicles.Close()
 		var target string
 		var targetArchived, found bool
 		for vehicles.Next() {

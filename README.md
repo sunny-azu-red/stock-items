@@ -48,7 +48,7 @@ Open `http://<this-machine>:8080` from any device on your network. Start by addi
 
 The example `.env` uses the `dev` schema. `go run` is a development build, and refuses `public`, the schema that holds the real data (see [docs/development.md](docs/development.md)).
 
-**To use it for real,** run a release: the published image (e.g. a Portainer stack from [compose.yaml](compose.yaml)) or a binary from [GitHub Releases](https://github.com/sunny-azu-red/stock-items/releases), with `DB_SCHEMA=public`. See [docs/deployment.md](docs/deployment.md) for Portainer, plain Docker and systemd.
+**To use it for real,** run the published image (e.g. a Portainer stack from [compose.yaml](compose.yaml)) with `DB_SCHEMA=public`: every push to `master` that passes CI becomes `latest`. See [docs/deployment.md](docs/deployment.md) for Portainer, plain Docker and systemd.
 
 ## Configuration
 

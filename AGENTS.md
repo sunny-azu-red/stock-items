@@ -18,8 +18,8 @@ internal/web/         routes, middleware, handlers_*.go, templates/, static/, ph
 internal/testdb/      throwaway schema helper for integration tests
 e2e/                  Playwright tests (Node is only used here)
 docs/                 documentation
-.github/workflows/    CI: checks, lint, govulncheck, Docker smoke test, e2e; images to GHCR (edge from master,
-                      latest from v* tags) and GitHub Releases from v* tags; dependabot.yml proposes updates
+.github/workflows/    CI: checks, lint, govulncheck, Docker smoke test, e2e; images to GHCR (latest from master,
+                      after CI passes) and, for an optional v* tag, a GitHub Release; dependabot.yml proposes updates
 Dockerfile            debian:trixie-slim + libvips-tools; compose.yaml runs it (Portainer stack)
 ```
 
@@ -35,7 +35,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | E2E tests | `cd e2e && npx playwright test` |
 | Docker image | `docker build -t pitbox .` |
 | E2E screenshots | see [docs/development.md](docs/development.md#screenshots) |
-| Release | push a `v1.2.3` tag; see [docs/deployment.md](docs/deployment.md#releases) |
+| Deploy | push to `master`; once CI is green, Portainer's re-pull gets `latest` ([docs/deployment.md](docs/deployment.md#updates-and-versions)) |
 
 ## Hard rules
 
@@ -69,7 +69,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - **Photo memory stays bounded.** Never decode or resize images in Go (no `image.Decode` of uploads, no `x/image`): `processPhoto` runs `vips thumbnail_source`, which shrinks while it loads, one photo at a time, with the pixel cap, decode budget, `JPEGMEM` and `RLIMIT_DATA` in `photo.go`. `TestPhotoMemory` checks the vips child's peak RSS on the worst inputs; keep it under its ceilings. The browser shrinks photos before upload (`app.js`), but the server must never rely on it.
 - No external CDNs at runtime. Vendor assets into `internal/web/static/vendor/`.
 - Tests live next to the code (`_test.go`, one file per feature), the Go convention; there is no separate test directory. New HTTP tests go in the feature's file in `internal/web`; a new kind of trash entry gets a case in `trash_matrix_test.go`.
-- `latest` is the newest release, not `master`: Portainer re-pulls it, and starting applies migrations to the real data. Never move it from a branch.
+- Every green push to `master` becomes `latest`, which Portainer re-pulls, and starting it applies new migrations to the real data. So CI must stay strict: never weaken or skip a check to get an image out.
 - Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing and golangci-lint ([`.golangci.yml`](.golangci.yml)) is clean; a `//nolint` needs a reason.
 
 ## Style

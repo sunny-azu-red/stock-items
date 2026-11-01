@@ -6,8 +6,8 @@
 name: pitbox
 services:
   pitbox:
-    # latest is the newest release (a v* tag), never master; pin a version
-    # (e.g. PITBOX_TAG=1.2) to stay on it, or use edge to follow master.
+    # latest is the newest master that passed CI; pin sha-<commit> (or a
+    # version, if you tag one) to stay on it.
     image: ghcr.io/sunny-azu-red/pitbox:${PITBOX_TAG:-latest}
     container_name: pitbox
     restart: unless-stopped

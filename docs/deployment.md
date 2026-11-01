@@ -4,25 +4,17 @@ The app is a single static binary. Templates, CSS, JavaScript and migrations are
 
 > There is no authentication. Only expose the app on a trusted home network, never directly to the internet. For remote access, use a VPN (WireGuard, Tailscale) or a reverse proxy that adds authentication.
 
-## Releases
+## Updates and versions
 
-A release is a `v*` tag, e.g. `v1.2.3`. Pushing one makes CI test it and then:
+Push to `master`. CI tests the commit (unit, integration and browser tests, lint, the Docker image) and only if all of that passes publishes the image `ghcr.io/sunny-azu-red/pitbox` as `latest` and `sha-<commit>`. Then re-pull in Portainer (see [Portainer](#portainer)). A red run publishes nothing, so `latest` stays on the last good commit.
 
-- publish the image `ghcr.io/sunny-azu-red/pitbox` as `latest`, `1.2.3` and `1.2` (a pre-release such as `v1.3.0-rc.1` gets only `1.3.0-rc.1`, never `latest`);
-- create a [GitHub Release](https://github.com/sunny-azu-red/stock-items/releases) with generated notes, static `linux-amd64` and `linux-arm64` binaries and `SHA256SUMS`.
+To stay on a version, set `PITBOX_TAG=sha-<commit>`. Going back to an older one is only safe if no migration came in between; otherwise restore a [backup](#backups).
 
-Every push to `master` publishes `edge` and `sha-<commit>` only. So `latest`, which [`compose.yaml`](../compose.yaml) runs by default, changes only when you release, and a re-pull never brings untested migrations from `master` onto the real data.
-
-To cut one, from an up-to-date `master` whose CI passed:
-
-```bash
-git tag -a v1.2.3 -m "v1.2.3"
-git push origin v1.2.3
-```
+Tags are optional. If you want a named version, push one (`git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`): CI publishes `1.2.3` and `1.2` images (never `latest`) and a [GitHub Release](https://github.com/sunny-azu-red/stock-items/releases) with static `linux-amd64` and `linux-arm64` binaries and `SHA256SUMS`, for running without Docker.
 
 ## Build
 
-Or take a binary from the release. To build one yourself:
+To build a binary yourself:
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always --dirty)" \
@@ -37,7 +29,7 @@ Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host).
 sudo apt install --no-install-recommends libvips-tools libheif-plugin-libde265   # photos (HEIC needs the second)
 sudo useradd --system --home /opt/pitbox pitbox
 sudo mkdir -p /opt/pitbox
-sudo cp bin/pitbox /opt/pitbox/   # or the release binary, renamed to pitbox
+sudo cp bin/pitbox /opt/pitbox/   # or a tagged release's binary, renamed to pitbox
 sudo cp .env.example /opt/pitbox/.env && sudo chmod 600 /opt/pitbox/.env
 sudo chown -R pitbox: /opt/pitbox
 ```
@@ -80,7 +72,7 @@ journalctl -u pitbox -f
 
 The image is Debian 13 slim (`debian:trixie-slim`) with `libvips-tools` (and libheif's HEVC decoder for HEIC photos), `ca-certificates` and `tzdata`, and runs as a non-root user (uid 65532). It is about 360 MB unpacked (92 MB to download), almost all of it libvips and its libraries; the earlier distroless image without photo tools was 29 MB. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
-CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [Releases](#releases)): `latest`, `1.2.3` and `1.2` for a `v1.2.3` tag, `edge` for the newest `master`, and `sha-<commit>` for every push. Each image carries an SBOM and provenance attestation and is scanned for known vulnerabilities. [`compose.yaml`](../compose.yaml) runs it with a read-only root filesystem (photos are processed in a `tmpfs` at `/tmp`) and `no-new-privileges`.
+CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [Updates and versions](#updates-and-versions)): `latest` for the newest `master` that passed CI, `sha-<commit>` for every push, and `1.2.3` and `1.2` for an optional `v1.2.3` tag. Each image carries an SBOM and provenance attestation and is scanned for known vulnerabilities. [`compose.yaml`](../compose.yaml) runs it with a read-only root filesystem (photos are processed in a `tmpfs` at `/tmp`) and `no-new-privileges`.
 
 ### Portainer
 
@@ -101,12 +93,12 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [R
    | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |
    | `TZ` | `Europe/Berlin` | the app's zone: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today"), the day a service counts as logged on, and the times pages show. Default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`); empty or unknown also means that. The database's own zone doesn't matter: the app's sessions are in UTC and timestamps are stored in UTC |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
-   | `PITBOX_TAG` | `1.2.3` | default `latest`, the newest release; pin a version (`1.2.3`, or `1.2` for its fixes) to stay on it, or `edge` to follow `master` |
+   | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`, the newest `master` that passed CI; pin `sha-<commit>` (or a tagged version) to stay on it |
 
    Type values without quotes.
 4. **Deploy the stack** and open `http://<docker-host>:8080`.
 
-**Updating:** after a release, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
+**Updating:** after a push to `master` whose CI passed, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
 
 **The image is private?** GitHub makes a new package private on its first publish. Set `pitbox` to public under the package's settings on GitHub, or add `ghcr.io` with a personal access token (scope `read:packages`) under **Registries** in Portainer.
 

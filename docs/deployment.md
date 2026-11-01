@@ -34,7 +34,7 @@ sudo cp .env.example /opt/pitbox/.env && sudo chmod 600 /opt/pitbox/.env
 sudo chown -R pitbox: /opt/pitbox
 ```
 
-Then edit `/opt/pitbox/.env`: the database credentials, and `DB_SCHEMA=public` (the example's `dev` is for development). Don't copy your development `.env`.
+Then edit `/opt/pitbox/.env`: the database credentials (the example already uses `DB_SCHEMA=public`). Don't copy your development `.env`, which uses `dev`.
 
 `/etc/systemd/system/pitbox.service`:
 
@@ -108,7 +108,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [U
 
 With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values). Three things differ from the development `.env`:
 
-- `DB_SCHEMA` must be `public` (or left out: that is the compose default), not the example's `dev`.
+- `DB_SCHEMA` must be `public`, as in `.env.example` (or left out: that is the compose default), not a development `.env`'s `dev`.
 - `DB_HOST` must be the Postgres server's LAN address, not `127.0.0.1` as in `.env.example`: inside the container that is the container itself.
 - Compose ignores `HOST` and `PORT`; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host. Plain `docker run --env-file` passes them through, so leave them out of that file (or match `-p` to `PORT`).
 

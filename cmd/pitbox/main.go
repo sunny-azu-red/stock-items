@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -146,8 +147,9 @@ func resetSchema(ctx context.Context, cfg config.DB) error {
 	return db.DropSchema(ctx, pool, cfg.Schema)
 }
 
-// checkHealth asks a running server for /healthz. The distroless image has
-// no shell or curl, so its Docker HEALTHCHECK runs the binary itself.
+// checkHealth asks a running server for /healthz. The image
+// (debian:trixie-slim) has no curl or wget, so its Docker HEALTHCHECK runs
+// the binary itself.
 func checkHealth(cfg config.Config) error {
 	host := cfg.Host
 	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
@@ -168,9 +170,12 @@ func checkHealth(cfg config.Config) error {
 // checkSchema keeps development builds off the real data: `public` holds
 // it, and starting the app applies new migrations there. A release build
 // (version set with -ldflags, as the Docker image is) may use it; a build
-// from `go run` or a plain `go build` needs allow (APP_ALLOW_PUBLIC_SCHEMA=1).
+// from `go run` or a plain `go build`, or one whose version ends in
+// "-dirty" (`git describe --dirty` with uncommitted changes), needs allow
+// (APP_ALLOW_PUBLIC_SCHEMA=1).
 func checkSchema(schema, version string, allow bool) error {
-	if schema != "public" || version != "" || allow {
+	release := version != "" && !strings.HasSuffix(version, "-dirty")
+	if schema != "public" || release || allow {
 		return nil
 	}
 	return errors.New("this is a development build and DB_SCHEMA is public, where the real data lives: " +
@@ -195,8 +200,14 @@ func buildVersion() string {
 	if !ok {
 		return "dev"
 	}
+	return vcsVersion(info.Settings)
+}
+
+// vcsVersion is the short VCS revision in a build's settings, with
+// "-dirty" for uncommitted changes, or "dev" without one.
+func vcsVersion(settings []debug.BuildSetting) string {
 	rev, dirty := "", false
-	for _, s := range info.Settings {
+	for _, s := range settings {
 		switch s.Key {
 		case "vcs.revision":
 			rev = s.Value

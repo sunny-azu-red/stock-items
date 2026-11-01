@@ -16,7 +16,7 @@ Useful flags:
 | `-reset-schema` | drop `DB_SCHEMA` before starting. Only allowed for `test_*` / `e2e_*` schemas; used by the e2e tests. |
 | `-healthcheck` | ask the server on `HOST`:`PORT` for `/healthz` and exit 0 or 1; the Docker image's `HEALTHCHECK` |
 
-The real data lives in `public`, and starting the app applies new migrations to its schema. So a development build (`go run`, or `go build` without `-ldflags "-X main.version=…"`) refuses to start with `DB_SCHEMA=public` unless `APP_ALLOW_PUBLIC_SCHEMA=1` is set. Develop on `dev`, a copy of the real data made from a backup (`pg_dump -n public`, restored into a scratch database, `ALTER SCHEMA public RENAME TO dev`, dumped with `-n dev` and restored). Refresh it the same way when you need newer data.
+The real data lives in `public`, and starting the app applies new migrations to its schema. So a development build (`go run`, `go build` without `-ldflags "-X main.version=…"`, or a version ending in `-dirty`, as `git describe --dirty` gives with uncommitted changes) refuses to start with `DB_SCHEMA=public` unless `APP_ALLOW_PUBLIC_SCHEMA=1` is set. Develop on `dev`, a copy of the real data made from a backup (`pg_dump -n public`, restored into a scratch database, `ALTER SCHEMA public RENAME TO dev`, dumped with `-n dev` and restored). Refresh it the same way when you need newer data.
 
 To experiment without touching even that, run with a throwaway schema:
 

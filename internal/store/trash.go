@@ -703,7 +703,26 @@ func restoreVehicle(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	if err != nil {
 		return 0, err
 	}
+	// The tagged items after the vehicle and before looking for them, in id
+	// order: none can be deleted between the look and its tag coming back.
+	ids := make([]int64, 0, len(tags))
+	for _, t := range tags {
+		ids = append(ids, t.int64("item_id"))
+	}
+	slices.Sort(ids)
+	if err := lockItems(ctx, tx, slices.Compact(ids)); err != nil {
+		return 0, err
+	}
 	if tags, err = linked(ctx, tx, tags, "item_id", "items", dropped); err != nil {
+		return 0, err
+	}
+	ids = ids[:0]
+	for _, t := range tags {
+		ids = append(ids, t.int64("item_id"))
+	}
+	// Tags belong to the item's version: a new one, so an edit form opened
+	// while the vehicle was in the trash can't save over the tag.
+	if _, err := tx.Exec(ctx, `UPDATE items SET version = version + 1 WHERE id = ANY($1)`, ids); err != nil {
 		return 0, err
 	}
 	return v.int64("id"), restoreRows(ctx, tx, "item_vehicles", encodeRows(tags))

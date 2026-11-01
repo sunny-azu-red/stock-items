@@ -573,12 +573,14 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 		return 0, err
 	}
 	vehicleID := rec.int64("vehicle_id")
-	if err := needRows(ctx, tx, "vehicles", []int64{vehicleID}, "Its vehicle"); err != nil {
+	// The vehicle's lock before the kit and the parts, like every service
+	// change, and before looking for it: one deleted meanwhile is then seen
+	// gone, rather than fail the insert. An archived vehicle is fine:
+	// bringing back a past service isn't new work.
+	if _, _, err := lockVehicle(ctx, tx, vehicleID); err != nil && !errors.Is(err, ErrNotFound) {
 		return 0, err
 	}
-	// The vehicle's lock before the parts, like every service change. An
-	// archived vehicle is fine: bringing back a past service isn't new work.
-	if _, _, err := lockVehicle(ctx, tx, vehicleID); err != nil {
+	if err := needRows(ctx, tx, "vehicles", []int64{vehicleID}, "Its vehicle"); err != nil {
 		return 0, err
 	}
 	// Its reading must still fit between the services logged since.
@@ -596,8 +598,14 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 	if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
 		return 0, err
 	}
-	// A kit deleted for good since: keep the service without it.
+	// A kit deleted for good since: keep the service without it. The kit
+	// FOR SHARE after the vehicle, like logging a service with it, and
+	// before looking for it, so it can't be deleted before the service is
+	// back.
 	if _, ok := rec["kit_id"].(json.Number); ok {
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM service_kits WHERE id = $1 FOR SHARE`, rec.int64("kit_id")); err != nil {
+			return 0, err
+		}
 		gone, err := needRow(ctx, tx, "service_kits", rec.int64("kit_id"))
 		if err != nil {
 			return 0, err
@@ -626,9 +634,14 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (i
 	if err != nil {
 		return 0, err
 	}
-	// An archived vehicle is fine: the kit comes back as it was, and new
-	// services for that vehicle stay refused.
-	if err := needRows(ctx, tx, "vehicles", []int64{kit.int64("vehicle_id")}, "Its vehicle"); err != nil {
+	// The vehicle FOR SHARE before looking for it, so it can't be deleted
+	// before the kit is back. An archived vehicle is fine: the kit comes
+	// back as it was, and new services for that vehicle stay refused.
+	vehicleID := kit.int64("vehicle_id")
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM vehicles WHERE id = $1 FOR SHARE`, vehicleID); err != nil {
+		return 0, err
+	}
+	if err := needRows(ctx, tx, "vehicles", []int64{vehicleID}, "Its vehicle"); err != nil {
 		return 0, err
 	}
 	if err := restoreRows(ctx, tx, "service_kits", encodeRows([]snapshotRow{kit})); err != nil {
@@ -638,17 +651,18 @@ func restoreKit(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int) (i
 	if err != nil {
 		return 0, err
 	}
-	if lines, err = linked(ctx, tx, lines, "item_id", "items", dropped); err != nil {
-		return 0, err
-	}
-	// Hold the items FOR SHARE, like saving a kit, so none changes unit
-	// past the lines coming back. Their units can't have changed while the
-	// lines were in the trash (UpdateItem checks the trash too).
+	// Hold the items FOR SHARE (in id order) before looking for them, like
+	// saving a kit, so none is deleted or changes unit past the lines
+	// coming back. Their units can't have changed while the lines were in
+	// the trash (UpdateItem checks the trash too).
 	ids := make([]int64, 0, len(lines))
 	for _, l := range lines {
 		ids = append(ids, l.int64("item_id"))
 	}
 	if _, err := shareItems(ctx, tx, ids); err != nil {
+		return 0, err
+	}
+	if lines, err = linked(ctx, tx, lines, "item_id", "items", dropped); err != nil {
 		return 0, err
 	}
 	return kit.int64("id"), restoreRows(ctx, tx, "service_kit_lines", encodeRows(lines))

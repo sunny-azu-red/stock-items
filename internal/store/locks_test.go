@@ -616,3 +616,90 @@ func TestRestoringWhileTheItemIsDeleted(t *testing.T) {
 		})
 	}
 }
+
+// Restoring a service or kit while what it belongs to is deleted: the
+// restore locks the vehicle, kit and items before looking for them, so it
+// sees them gone once the delete commits. A vehicle in the trash must be
+// restored first; a kit or item deleted for good is dropped. Without the
+// locks, the look passed and the insert failed on the foreign key.
+func TestRestoringWhileWhatItBelongsToIsDeleted(t *testing.T) {
+	trashed := `INSERT INTO trash (kind, label, payload)
+		VALUES ('vehicle', 'Vehicle: KTM 390', jsonb_build_object('vehicles', jsonb_build_array(jsonb_build_object('id', $1::bigint))))`
+	for _, tt := range []struct {
+		name    string
+		restore string // TrashService or TrashKit
+		// gone deletes what the restore needs in the holder's transaction.
+		gone     func(t *testing.T, h *holder, vehicle, kit, oil int64)
+		conflict string // the restore's error ("" for none)
+		dropped  int
+	}{
+		{"service, vehicle into the trash", store.TrashService, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
+			holderExec(t, h, `DELETE FROM vehicles WHERE id = $1`, vehicle)
+			holderExec(t, h, trashed, vehicle)
+		}, "Restore Vehicle: KTM 390 first", 0},
+		{"service, kit for good", store.TrashService, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
+			holderExec(t, h, `DELETE FROM service_kits WHERE id = $1`, kit)
+		}, "", 1},
+		{"kit, vehicle into the trash", store.TrashKit, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
+			holderExec(t, h, `DELETE FROM vehicles WHERE id = $1`, vehicle)
+			holderExec(t, h, trashed, vehicle)
+		}, "Restore Vehicle: KTM 390 first", 0},
+		{"kit, line item for good", store.TrashKit, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
+			holderExec(t, h, `DELETE FROM items WHERE id = $1`, oil)
+		}, "", 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, pool, ctx := newStorePool(t)
+			v := mustVehicle(t, s, "KTM 390")
+			oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+			kin := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 100}}}
+			kin.Normalize()
+			kit, err := s.CreateKit(ctx, kin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			trashID, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.restore == store.TrashKit {
+				if trashID, err = s.DeleteKit(ctx, kit, cur(t, s, store.WhatKit, kit)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			h := hold(t, pool, `SELECT 1`)
+			tt.gone(t, h, v, kit, oil)
+			var c calls
+			var res store.Restored
+			var restored error
+			c.run(func() { res, restored = s.RestoreTrash(ctx, trashID) })
+			waitBlocked(t, pool, 1, []string{h.xid})
+			h.commit(t)
+			c.wait()
+			noDeadlock(t, "restore", restored)
+			if tt.conflict != "" {
+				wantConflict(t, "restore", restored, tt.conflict)
+				return
+			}
+			if restored != nil {
+				t.Fatalf("restore: %v", restored)
+			}
+			if res.Dropped != tt.dropped {
+				t.Errorf("dropped = %d, want %d", res.Dropped, tt.dropped)
+			}
+		})
+	}
+}
+
+// holderExec runs sql in the holder's transaction.
+func holderExec(t *testing.T, h *holder, sql string, args ...any) {
+	t.Helper()
+	if _, err := h.tx.Exec(context.Background(), sql, args...); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -69,8 +69,9 @@ Actions are pinned to commit SHAs and the base images to digests; [Dependabot](.
 
 ```bash
 cd e2e
-SCREENSHOT_DIR=/tmp/shots npx playwright test -g "set up|filter|quick|plan|screenshots"
-cp /tmp/shots/{desktop-dashboard,desktop-stock,desktop-kit,mobile-stock}.png ../docs/screenshots/
+rm -rf /tmp/shots && SCREENSHOT_DIR=/tmp/shots npx playwright test
+rm -rf ../docs/screenshots/{desktop,mobile} && cp -r /tmp/shots/{desktop,mobile} ../docs/screenshots/
+cd .. && for f in $(find docs/screenshots -name '*.png'); do vips copy "$f" /tmp/shot.png[compression=9,strip] && mv /tmp/shot.png "$f"; done
 ```
 
-This writes one PNG per page and device. Add `SCREENSHOT_SCHEME=dark` for the dark theme (the files end in `-dark`). Only the four the README shows are kept in `docs/screenshots`.
+This runs the whole suite and then captures every page and form, on desktop and phone, in light and dark: `docs/screenshots/<desktop|mobile>/<light|dark>/<page>.png`. It comes late in the suite, so the pages have photos, history and trash to show. The last line recompresses the PNGs losslessly (about a third smaller). Commit first, or the version in the sidebar ends in `-dirty`. The README shows four of them; the rest are there to browse.

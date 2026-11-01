@@ -9,6 +9,14 @@ services:
     image: ghcr.io/sunny-azu-red/pitbox:${PITBOX_TAG:-latest}
     container_name: pitbox
     restart: unless-stopped
+    # Hardening: the app writes nothing to its own filesystem (everything
+    # lives in Postgres), so the root filesystem is read-only. Uploads larger
+    # than the in-memory limit and vips' work files go to /tmp, a tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${PITBOX_PORT:-8080}:8080"
     environment:

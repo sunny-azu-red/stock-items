@@ -1006,7 +1006,12 @@ func TestEditAndDeleteMovement(t *testing.T) {
 
 	// Taking away more than is left is refused with a hint.
 	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
-	expect(t, a.postV(edit+"/delete", nil), http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
+	rec = a.postV(edit+"/delete", nil)
+	expect(t, rec, http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
+	// The form shown with the refusal carries the change's version, so it
+	// still saves.
+	expect(t, a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"},
+		"occurred_on": {"2026-10-29"}, "version": {formVersion(t, rec.Body.String(), edit)}}), http.StatusSeeOther)
 
 	uses, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
 	expect(t, a.postV("/movements/"+itoa(uses[0].ID)+"/delete", nil), http.StatusSeeOther)

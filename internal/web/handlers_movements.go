@@ -232,7 +232,7 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
-		Removed: m.Delta < 0, Back: back, Errors: stock.Errors{}}
+		Removed: m.Delta < 0, Back: back, Version: m.Version, Errors: stock.Errors{}}
 	f.Amount, f.AmountUnit = stock.SplitForInput(math.Abs(m.Delta), m.ItemUnit)
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)

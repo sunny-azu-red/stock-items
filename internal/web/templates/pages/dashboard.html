@@ -30,7 +30,7 @@
   <a class="card tile{{if $d.Expiring}} danger{{end}}" href="/stock?exp=1"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
   <a class="card tile" href="/shopping"><span class="label">{{icon "shopping-cart"}} To buy</span><span class="value">{{.ShoppingCount}}</span></a>
   <div class="card tile"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></div>
-  <div class="card tile"><span class="label">{{icon "calendar"}} Spent (12 months)</span><span class="value money">{{money $d.Stats.Spent12m}}</span></div>
+  <a class="card tile" href="/activity?kind=purchase"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
 </div>
 
 <div class="split">

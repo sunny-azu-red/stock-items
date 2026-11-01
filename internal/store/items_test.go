@@ -258,7 +258,7 @@ func TestNewItemWithPriceIsAPurchase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(st.StockValue-77) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
+	if math.Abs(st.StockValue-77) > 0.001 || math.Abs(st.SpentThisYear-67) > 0.001 {
 		t.Errorf("stats = %+v, want value 77 and spent 67", st)
 	}
 	assertLedger(t, s)

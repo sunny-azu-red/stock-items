@@ -190,8 +190,12 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 		Delta: 1, TotalPrice: ptr(5.0), OccurredOn: &dayAfter}); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := s.GetStats(ctx, later); st.Spent12m != 10 {
-		t.Errorf("spent in the 12 months before %s = %v, want 10", later.Format("2006-01-02"), st.Spent12m)
+	// The purchase of June 2029 was last year.
+	if st, _ := s.GetStats(ctx, later); st.SpentThisYear != 0 {
+		t.Errorf("spent in 2030 up to %s = %v, want 0", later.Format("2006-01-02"), st.SpentThisYear)
+	}
+	if st, _ := s.GetStats(ctx, dayAfter); st.SpentThisYear != 5 {
+		t.Errorf("spent in 2030 up to %s = %v, want 5", dayAfter.Format("2006-01-02"), st.SpentThisYear)
 	}
 
 	// Counts and edited quantities are dated by the caller.

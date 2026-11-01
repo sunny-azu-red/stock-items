@@ -45,7 +45,7 @@ func TestMovements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.StockValue != 49.5 || st.Spent12m != 60 {
+	if st.StockValue != 49.5 || st.SpentThisYear != 60 {
 		t.Errorf("stats = %+v", st)
 	}
 	all, _ := s.ListMovements(ctx, store.MovementFilter{Limit: 2})
@@ -116,6 +116,41 @@ func TestLastPurchases(t *testing.T) {
 	}
 }
 
+func TestSpentThisYear(t *testing.T) {
+	s, ctx := newStore(t)
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+	bike := mustVehicle(t, s, "KTM 390")
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	today := day(2030, 3, 10)
+	for _, c := range []struct {
+		on    time.Time
+		price float64
+	}{
+		{day(2029, 12, 31), 1},   // last year
+		{day(2030, 1, 1), 10},    // the year's first day counts
+		{today, 100},             // today counts
+		{day(2030, 3, 11), 1000}, // tomorrow doesn't yet
+	} {
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: bike, Title: "Labour", PerformedOn: c.on, LaborCost: ptr(c.price * 2)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// No price is no spending.
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &today}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := s.GetStats(ctx, today); err != nil || st.SpentThisYear != 330 {
+		t.Errorf("spent in 2030 up to %s = %v, %v; want 330 (110 bought, 220 labour)", today.Format("2006-01-02"), st.SpentThisYear, err)
+	}
+	// On 1 January only that day counts.
+	if st, _ := s.GetStats(ctx, day(2030, 1, 1)); st.SpentThisYear != 30 {
+		t.Errorf("spent on 1 January = %v, want 30", st.SpentThisYear)
+	}
+}
+
 func TestUpdateAndDeleteMovements(t *testing.T) {
 	s, ctx := newStore(t)
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
@@ -133,7 +168,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	if p, _ := s.LastUnitPrice(ctx, oil); p == nil || *p != 0.067 {
 		t.Errorf("last unit price = %v, want 0.067", p)
 	}
-	if st, _ := s.GetStats(ctx, time.Now()); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.Spent12m-67) > 0.001 {
+	if st, _ := s.GetStats(ctx, time.Now()); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.SpentThisYear-67) > 0.001 {
 		t.Errorf("stats = %+v, want value 100.5 and spent 67", st)
 	}
 

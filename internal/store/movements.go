@@ -385,14 +385,17 @@ type Stats struct {
 	// of each item (archived items and items never bought with a price
 	// are not counted).
 	StockValue float64
-	// Spent12m is purchases plus labour over the last 12 months.
-	Spent12m float64
+	// SpentThisYear is purchases plus labour from 1 January of the app's
+	// year up to today.
+	SpentThisYear float64
 }
 
-// GetStats computes the dashboard money figures, with the last 12 months
-// counted back from today (a purchase dated tomorrow is not counted yet).
+// GetStats computes the dashboard money figures, with this year counted
+// from 1 January up to today (a purchase dated tomorrow is not counted yet).
 func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 	var st Stats
+	day := stock.DateOnly(today)
+	yearStart := time.Date(day.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 		  COALESCE((SELECT sum(i.quantity * lp.unit_price) FROM items i
@@ -401,10 +404,10 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
 		            WHERE i.archived_at IS NULL), 0)::float8,
 		  (COALESCE((SELECT sum(total_price) FROM stock_movements
-		             WHERE kind = 'purchase' AND occurred_on > $1::date - interval '12 months' AND occurred_on <= $1::date), 0)
+		             WHERE kind = 'purchase' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)
 		 + COALESCE((SELECT sum(labor_cost) FROM service_records
-		             WHERE performed_on > $1::date - interval '12 months' AND performed_on <= $1::date), 0))::float8`, stock.DateOnly(today)).
-		Scan(&st.StockValue, &st.Spent12m)
+		             WHERE performed_on >= $1::date AND performed_on <= $2::date), 0))::float8`, yearStart, day).
+		Scan(&st.StockValue, &st.SpentThisYear)
 	return st, err
 }
 

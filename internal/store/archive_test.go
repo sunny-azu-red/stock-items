@@ -174,7 +174,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 		t.Errorf("kit lines = %+v", kit.Lines)
 	}
 	after, _ := s.GetStats(ctx, time.Now())
-	if after.Spent12m != before.Spent12m || after.StockValue != 0 || before.StockValue != 40 {
+	if after.SpentThisYear != before.SpentThisYear || after.StockValue != 0 || before.StockValue != 40 {
 		t.Errorf("stats before %+v, after %+v: spending kept, archived stock not valued", before, after)
 	}
 
@@ -233,7 +233,7 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	if kits, _ := s.ListKits(ctx, store.KitFilter{VehicleID: old}); len(kits) != 1 {
 		t.Errorf("the vehicle's own kits = %+v", kits)
 	}
-	if st, _ := s.GetStats(ctx, time.Now()); st.Spent12m != 80 {
+	if st, _ := s.GetStats(ctx, time.Now()); st.SpentThisYear != 80 {
 		t.Errorf("labour of an archived vehicle still counts: %+v", st)
 	}
 	if err := s.RestoreVehicle(ctx, old, cur(t, s, store.WhatVehicle, old)); err != nil {

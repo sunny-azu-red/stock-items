@@ -56,6 +56,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if err := checkSchema(schemaName(cfg.DB), version, os.Getenv("APP_ALLOW_PUBLIC_SCHEMA") == "1"); err != nil {
+		return err
+	}
 	if *reset {
 		if err := resetSchema(ctx, cfg.DB); err != nil {
 			return err
@@ -160,6 +163,19 @@ func checkHealth(cfg config.Config) error {
 		return fmt.Errorf("healthcheck: %s", resp.Status)
 	}
 	return nil
+}
+
+// checkSchema keeps development builds off the real data: `public` holds
+// it, and starting the app applies new migrations there. A release build
+// (version set with -ldflags, as the Docker image is) may use it; a build
+// from `go run` or a plain `go build` needs allow (APP_ALLOW_PUBLIC_SCHEMA=1).
+func checkSchema(schema, version string, allow bool) error {
+	if schema != "public" || version != "" || allow {
+		return nil
+	}
+	return errors.New("this is a development build and DB_SCHEMA is public, where the real data lives: " +
+		"starting would apply new migrations to it. Use DB_SCHEMA=dev (a copy for development), " +
+		"or set APP_ALLOW_PUBLIC_SCHEMA=1 to run this build on public on purpose")
 }
 
 func schemaName(cfg config.DB) string {

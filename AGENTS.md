@@ -39,6 +39,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 
 - **Never commit `.env`** or print its secrets. `.env.example` holds placeholders only.
 - **Never run tests or experiments against the `public` schema.** Use `internal/testdb` (schemas `test_*`) or `DB_SCHEMA=e2e_*`. `db.DropSchema` refuses anything else. Keep it that way.
+- **`public` holds the real data; local development uses `DB_SCHEMA=dev`**, a copy of it. Starting the app applies new migrations to its schema, so a development build (`go run`, plain `go build`) refuses to start on `public` unless `APP_ALLOW_PUBLIC_SCHEMA=1`; release builds (version set with `-ldflags`, as in the Docker image) may. Never set that variable to get around this.
 - **Migrations are append-only.** Add `internal/db/migrations/000NN_short_description.sql` with the next number (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
 - **Quantities are stored in base units:** pieces, millilitres, grams. Convert only at the edges with `stock.ParseAmount` and `stock.FormatQuantity`.
 - **Amounts have at most two decimals of the base unit** (whole pieces). The columns are `numeric(12,2)`, and `stock.ParseAmount` refuses finer input (also after an L/kg conversion) instead of rounding it; amounts computed in code go through `stock.RoundQty`. Never add a third decimal back, and never round what a user typed. Trash restores refuse a finer snapshot amount, as the column would round it and break the ledger.

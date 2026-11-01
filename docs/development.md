@@ -4,7 +4,7 @@
 
 1. Install Go 1.27.3 or newer (the version in `go.mod`). Without root access, unpack the official tarball into `~/.local/go` and add `~/.local/go/bin` to `PATH`.
 2. Install the libvips command line tools, which process photos: `sudo apt install libvips-tools` (Debian/Ubuntu; it brings the JPEG, PNG, WebP, GIF and HEIC loaders). Without them the app starts with a warning, photo uploads are refused, and the photo tests skip (in CI they fail instead).
-3. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases.
+3. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases. Keep `DB_SCHEMA=dev`: `public` is the real app's, and a development build refuses to start on it (see below).
 4. `go run ./cmd/pitbox` starts the app on `http://localhost:8080`.
 
 Useful flags:
@@ -16,7 +16,9 @@ Useful flags:
 | `-reset-schema` | drop `DB_SCHEMA` before starting. Only allowed for `test_*` / `e2e_*` schemas; used by the e2e tests. |
 | `-healthcheck` | ask the server on `HOST`:`PORT` for `/healthz` and exit 0 or 1; the Docker image's `HEALTHCHECK` |
 
-To experiment without touching your real data, run with a separate schema:
+The real data lives in `public`, and starting the app applies new migrations to its schema. So a development build (`go run`, or `go build` without `-ldflags "-X main.version=…"`) refuses to start with `DB_SCHEMA=public` unless `APP_ALLOW_PUBLIC_SCHEMA=1` is set. Develop on `dev`, a copy of the real data made from a backup (`pg_dump -n public`, restored into a scratch database, `ALTER SCHEMA public RENAME TO dev`, dumped with `-n dev` and restored). Refresh it the same way when you need newer data.
+
+To experiment without touching even that, run with a throwaway schema:
 
 ```bash
 DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox

@@ -49,7 +49,7 @@ Open `http://<this-machine>:8080` from any device on your network. Start by addi
 ### Build a binary
 
 ```bash
-CGO_ENABLED=0 go build -o bin/pitbox ./cmd/pitbox
+CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o bin/pitbox ./cmd/pitbox
 ./bin/pitbox            # reads .env from the working directory
 ```
 
@@ -63,7 +63,7 @@ All settings come from environment variables or a `.env` file (real environment 
 |---|---|---|
 | `DB_HOST`, `DB_PORT` | `127.0.0.1`, `5432` | Postgres server |
 | `DB_DATABASE` | `stock_items` | Database name |
-| `DB_SCHEMA` | `public` | Postgres schema (tests use throwaway schemas) |
+| `DB_SCHEMA` | `public` | Postgres schema. The real data lives in `public`; develop on a copy (`dev`): development builds refuse `public` unless `APP_ALLOW_PUBLIC_SCHEMA=1` |
 | `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices (up to 10 characters) |

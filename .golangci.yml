@@ -1,0 +1,50 @@
+# golangci-lint v2. CI runs it (version pinned in .github/workflows/ci.yml);
+# scripts/check.sh runs it when golangci-lint is on PATH, and falls back to
+# staticcheck otherwise.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose     # HTTP response bodies closed (the -healthcheck client, tests)
+    - errcheck      # unchecked errors
+    - errorlint     # errors compared with == or formatted without %w
+    - gosec         # security: SQL built from strings, redirects, cookies, …
+    - govet
+    - ineffassign
+    - misspell
+    - rowserrcheck  # rows.Err() checked after iterating
+    - sqlclosecheck # rows and statements closed
+    - staticcheck
+    - unused
+
+  settings:
+    gosec:
+      excludes:
+        # G104 (errors not checked) is errcheck's job; errcheck is the
+        # configurable one, so keep a single source of these reports.
+        - G104
+    rowserrcheck:
+      # The store uses pgx directly, not database/sql.
+      packages:
+        - github.com/jackc/pgx/v5
+
+  exclusions:
+    presets:
+      # Unchecked Close, Flush, os.Remove, os.Setenv, fmt.Print… The code
+      # writes `defer x.Close()` on purpose where there is nothing left to
+      # do with the error.
+      - std-error-handling
+    rules:
+      # Tests read their own testdata and temp files (G304, G306), build
+      # images with fixed-size integer conversions (G115) and run vips
+      # directly (G204); none of that takes user input.
+      - path: _test\.go
+        linters:
+          - gosec
+      # Photos are processed by running vips (see AGENTS.md); photo.go
+      # builds the arguments itself and never goes through a shell.
+      - path: internal/web/photo\.go
+        linters:
+          - gosec
+        text: G204

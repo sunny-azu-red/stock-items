@@ -6,8 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
 
-# A newer push to a pull request cancels its older run; master and tags
-# always finish, so every commit there gets its image.
+# A newer push to a pull request cancels its older run. Runs on master and
+# tags are never cancelled once started, but GitHub runs one workflow per
+# push, for its last commit: pushing several commits at once builds and
+# tags only the last (earlier ones get no sha-<commit> image), and a run
+# still queued behind a running one is replaced by a newer push's run.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -15,10 +18,12 @@ concurrency:
 permissions:
   contents: read
 
+# Third-party actions are pinned to a commit (the tag is in the comment);
+# Dependabot (.github/dependabot.yml) proposes updates.
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:18
@@ -36,8 +41,27 @@ jobs:
       DB_USERNAME: stock
       DB_PASSWORD: stock
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, so a pull request can be compared with its
+          # base branch below.
+          fetch-depth: 0
+
+      # Migrations are append-only (AGENTS.md): a pull request may add files
+      # to internal/db/migrations, never change, rename or delete one.
+      - name: Committed migrations are unchanged
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-status --no-renames "origin/$BASE_REF...HEAD" -- internal/db/migrations | grep -v '^A' || true)
+          if [ -n "$changed" ]; then
+            echo "::error::Migrations are append-only: add a new file instead of changing a committed one."
+            echo "$changed"
+            exit 1
+          fi
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       # Photos are processed by libvips; the photo tests fail without it in
@@ -47,16 +71,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libvips-tools libheif-plugin-libde265
           vips --version
-      - name: Lint and test
+      # gofmt, go mod tidy/verify, vet, staticcheck, and the tests with
+      # -race and coverage (writes coverage.out).
+      - name: Check and test
         run: scripts/check.sh
+      - name: Coverage
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
+          echo "Test coverage of internal/... and cmd/...: **${total}**" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage.out
+      # The forced-interleaving lock tests, five times over, as AGENTS.md
+      # asks: a lock-order bug may only show up now and then. Every test in
+      # locks_test.go (their names don't share a word to match on).
+      - name: Lock tests, five times
+        run: |
+          tests=$(grep -oE '^func Test[A-Za-z0-9_]+' internal/store/locks_test.go | cut -d' ' -f2 | paste -sd'|')
+          go test -race -count=5 -run "^(${tests})\$" ./internal/store/
       - name: Known vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      # .golangci.yml; check.sh ran staticcheck already (golangci-lint isn't
+      # on PATH there), this adds the rest.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
 
+      # Started like compose.yaml starts it: read-only root filesystem, a
+      # tmpfs /tmp, no-new-privileges.
       - name: Docker image starts and turns healthy
         run: |
           docker build -t pitbox:ci --build-arg VERSION=ci .
           docker run --rm --entrypoint vips pitbox:ci --version
           docker run -d --name pitbox --network host \
+            --read-only --tmpfs /tmp --security-opt no-new-privileges \
             -e DB_HOST -e DB_PORT -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
             -e DB_SCHEMA=e2e_docker -e PORT=18090 pitbox:ci
           for _ in $(seq 30); do
@@ -66,18 +116,25 @@ jobs:
           done
           echo "container is $status"; docker logs pitbox; exit 1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: e2e/package-lock.json
+      # The browser download, keyed on the lock file that pins Playwright
+      # (a new version needs its own browser build).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
       - name: Install Playwright
         working-directory: e2e
+        # --with-deps still installs the system libraries on a cache hit.
         run: npm ci && npx playwright install --with-deps chromium
       - name: End-to-end tests
         working-directory: e2e
         run: npx playwright test
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report
@@ -94,17 +151,17 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
         run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/pitbox
           tags: |
@@ -112,7 +169,7 @@ jobs:
             type=sha,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64

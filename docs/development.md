@@ -68,10 +68,7 @@ Actions are pinned to commit SHAs and the base images to digests; [Dependabot](.
 ## Screenshots
 
 ```bash
-cd e2e
-rm -rf /tmp/shots && SCREENSHOT_DIR=/tmp/shots npx playwright test
-rm -rf ../docs/screenshots/{desktop,mobile} && cp -r /tmp/shots/{desktop,mobile} ../docs/screenshots/
-cd .. && for f in $(find docs/screenshots -name '*.png'); do vips copy "$f" /tmp/shot.png[compression=9,strip] && mv /tmp/shot.png "$f"; done
+scripts/screenshots.sh
 ```
 
-This runs the whole suite and then captures every page and form, on desktop and phone, in light and dark: `docs/screenshots/<desktop|mobile>/<light|dark>/<page>.png`. It comes late in the suite, so the pages have photos, history and trash to show. The last line recompresses the PNGs losslessly (about a third smaller). Commit first, or the version in the sidebar ends in `-dirty`. The README shows four of them; the rest are there to browse.
+This retakes `docs/screenshots`: every page and form, on desktop and phone, in light and dark (`docs/screenshots/<desktop|mobile>/<light|dark>/<page>.png`). It runs the whole e2e suite; the screenshot test comes late in it, so the pages have photos, history and trash to show. Then it recompresses the PNGs losslessly (about a third smaller) and lists what changed. Commit your changes first (it refuses otherwise): the sidebar shows the version, which ends in `-dirty` for uncommitted code. The README shows four of them by path, so it stays up to date; the rest are there to browse. A new page goes in the `shots` list of the `screenshots` test in `e2e/tests/garage.spec.ts`.

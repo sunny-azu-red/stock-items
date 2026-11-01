@@ -34,7 +34,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |
 | Docker image | `docker build -t pitbox .` |
-| E2E screenshots | see [docs/development.md](docs/development.md#screenshots) |
+| Screenshots (docs/screenshots, README) | `scripts/screenshots.sh` ([docs/development.md](docs/development.md#screenshots)) |
 | Deploy | push to `master`; once CI is green, Portainer's re-pull gets `latest` ([docs/deployment.md](docs/deployment.md#updates-and-versions)) |
 
 ## Hard rules

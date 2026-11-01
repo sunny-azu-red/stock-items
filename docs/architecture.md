@@ -37,7 +37,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 ## Static files
 
-`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx is vendored in `static/vendor`, and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
+`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx and the Inter font are vendored in `static/vendor` (`app.css` asks for the font with a fixed `?v=`, so it is cached the same way), and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
 
 ## Key design decisions
 

@@ -759,47 +759,73 @@ test("sorting works without JavaScript", async ({ browser }, testInfo) => {
   }
 });
 
-// Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test -g screenshots (see docs/development.md)
+// Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test (see docs/development.md)
+// Every page and form, in both themes: <dir>/<desktop|mobile>/<light|dark>/<name>.png.
 test("screenshots", async ({ page }, testInfo) => {
   const dir = process.env.SCREENSHOT_DIR;
   test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
-  // SCREENSHOT_SCHEME=dark for the dark theme (the names get "-dark").
-  const scheme = process.env.SCREENSHOT_SCHEME === "dark" ? "dark" : "light";
-  await page.emulateMedia({ colorScheme: scheme });
-  const suffix = scheme === "dark" ? "-dark" : "";
+  test.setTimeout(180_000);
+  // The first link on a page that matches, for the pages of one record.
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const movement = await link("/activity", 'a[href^="/movements/"]');
+  // The earlier tests leave the shopping list empty: put something on it.
+  await page.goto("/shopping");
+  await page.getByLabel("Something new").fill("Chain wax");
+  await page.getByLabel("Quantity").fill("1");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator('a[href$="/bought"]')).toHaveCount(1);
+  const bought = await link("/shopping", 'a[href$="/bought"]');
   const shots: [string, string][] = [
     ["dashboard", "/"],
     ["stock", "/stock"],
-    ["vehicles", "/vehicles"],
-    ["services", "/services"],
-    ["shopping", "/shopping"],
-    ["activity", "/activity"],
-    ["trash", "/trash"],
-    ["activity-sorted", "/activity?sort=price"],
+    ["stock-list", "/stock?view=list"],
+    ["stock-low", "/stock?low=1"],
+    ["stock-archived", "/stock?archived=1"],
     ["stock-sorted", "/stock?sort=expiry&dir=desc"],
+    ["item", item],
     ["item-new", "/items/new"],
+    ["item-edit", item + "/edit"],
+    ["vehicles", "/vehicles"],
+    ["vehicles-archived", "/vehicles?archived=1"],
+    ["vehicle", vehicle],
+    ["vehicle-new", "/vehicles/new"],
+    ["vehicle-edit", vehicle + "/edit"],
+    ["services", "/services"],
+    ["service", service],
+    ["service-new", "/services/new"],
+    ["service-edit", service + "/edit"],
+    ["kit", kit],
+    ["kit-sorted", kit + "?sort=missing"],
+    ["kit-new", "/kits/new"],
+    ["kit-edit", kit + "/edit"],
+    ["shopping", "/shopping"],
+    ["shopping-bought", bought],
+    ["activity", "/activity"],
+    ["activity-sorted", "/activity?sort=price"],
+    ["movement-edit", movement],
+    ["trash", "/trash"],
+    ["not-found", "/no-such-page"],
   ];
-  await page.goto("/stock?q=Silkolene");
-  shots.push(["item", (await page.locator(".item-row a.item-name").first().getAttribute("href")) as string]);
-  shots.push(["item-edit", shots[shots.length - 1][1] + "/edit"]);
-  await page.goto("/vehicles");
-  const vehicle = (await page.locator("a.vehicle-card").first().getAttribute("href")) as string;
-  shots.push(["vehicle", vehicle]);
-  await page.goto("/services");
-  shots.push(["kit", (await page.locator("a.kit-row").first().getAttribute("href")) as string]);
-  shots.push(["kit-sorted", shots[shots.length - 1][1] + "?sort=missing"]);
-  shots.push(["kit-new", "/kits/new"]);
-  shots.push(["service-new", "/services/new"]);
-  for (const [name, url] of shots) {
-    await page.goto(url);
-    // A full-page shot keeps the fixed tab bar where the first screen ends,
-    // over the content: put it at the end of the page, as when scrolled down.
-    // The sticky sidebar is one screen high too: stretch it down the page,
-    // so its footer is at the bottom and not halfway down.
-    await page.addStyleTag({
-      content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
-    });
-    await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}${suffix}.png`, fullPage: true });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const [name, url] of shots) {
+      await page.goto(url);
+      // A full-page shot keeps the fixed tab bar where the first screen ends,
+      // over the content: put it at the end of the page, as when scrolled down.
+      // The sticky sidebar is one screen high too: stretch it down the page,
+      // so its footer is at the bottom and not halfway down.
+      await page.addStyleTag({
+        content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
+      });
+      await page.screenshot({ path: `${dir}/${testInfo.project.name}/${scheme}/${name}.png`, fullPage: true });
+    }
   }
 });
 

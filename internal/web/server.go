@@ -178,6 +178,10 @@ func (s *Server) Handler() http.Handler {
 	return handler
 }
 
+// statusClientClosed is nginx's "client closed request", logged for a
+// request whose client went away before it was answered.
+const statusClientClosed = 499
+
 // handlerFunc is an http handler that can fail.
 type handlerFunc func(http.ResponseWriter, *http.Request) error
 
@@ -215,6 +219,9 @@ func (s *Server) wrap(fn handlerFunc) http.HandlerFunc {
 				Code: 400, Title: "Bad request", Message: "That form could not be read, so nothing was saved. Reload the page and try again.",
 			}})
 		case errors.Is(err, context.Canceled):
+			// The client went away (a closed tab, a search typed over):
+			// nobody reads this, but the log shouldn't call it a 200.
+			w.WriteHeader(statusClientClosed)
 		default:
 			s.serverError(w, r, err)
 		}

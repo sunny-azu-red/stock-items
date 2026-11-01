@@ -9,3 +9,7 @@ docs
 scripts
 *.md
 compose.yaml
+coverage.*
+*.out
+# Worktrees of agents and editors, full copies of the repository.
+.claude

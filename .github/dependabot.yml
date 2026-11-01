@@ -1,0 +1,45 @@
+# Weekly update pull requests, one per ecosystem: all of its updates in a
+# single PR, so CI runs once for them and they are merged (or reverted)
+# together.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # Actions are pinned to commits; Dependabot updates the SHA and the
+  # `# vX.Y.Z` comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # The Dockerfile's base images, pinned by digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # @playwright/test only. After it moves, the dev machine needs
+  # `npx playwright install chromium` (docs/development.md).
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    groups:
+      e2e:
+        patterns: ["*"]
+    open-pull-requests-limit: 3

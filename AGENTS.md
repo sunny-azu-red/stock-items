@@ -14,11 +14,12 @@ internal/config/      env + .env loading
 internal/db/          pgx pool, goose migrations (migrations/*.sql, embedded)
 internal/stock/       pure domain logic: units, validation, grouping, exports, kits, suggestions
 internal/store/       all SQL; multi-row writes in one transaction
-internal/web/         routes, middleware, handlers, templates/, static/, photo.go (runs vips)
+internal/web/         routes, middleware, handlers_*.go, templates/, static/, photo.go (runs vips)
 internal/testdb/      throwaway schema helper for integration tests
 e2e/                  Playwright tests (Node is only used here)
 docs/                 documentation
-.github/workflows/    CI: checks, govulncheck, Docker smoke test, e2e; publishes the image to GHCR
+.github/workflows/    CI: checks, lint, govulncheck, Docker smoke test, e2e; images to GHCR (edge from master,
+                      latest from v* tags) and GitHub Releases from v* tags; dependabot.yml proposes updates
 Dockerfile            debian:trixie-slim + libvips-tools; compose.yaml runs it (Portainer stack)
 ```
 
@@ -29,18 +30,19 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | Task | Command |
 |---|---|
 | Run the app | `go run ./cmd/pitbox` |
-| All checks (fmt, vet, staticcheck, tests) | `scripts/check.sh` |
+| All checks (fmt, tidy, vet, lint, tests with -race and coverage) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |
 | Docker image | `docker build -t pitbox .` |
 | E2E screenshots | see [docs/development.md](docs/development.md#screenshots) |
+| Release | push a `v1.2.3` tag; see [docs/deployment.md](docs/deployment.md#releases) |
 
 ## Hard rules
 
 - **Never commit `.env`** or print its secrets. `.env.example` holds placeholders only.
 - **Never run tests or experiments against the `public` schema.** Use `internal/testdb` (schemas `test_*`) or `DB_SCHEMA=e2e_*`. `db.DropSchema` refuses anything else. Keep it that way.
 - **`public` holds the real data; local development uses `DB_SCHEMA=dev`**, a copy of it. Starting the app applies new migrations to its schema, so a development build (`go run`, plain `go build`, a version ending in `-dirty`) refuses to start on `public` unless `APP_ALLOW_PUBLIC_SCHEMA=1`; release builds (version set with `-ldflags`, as in the Docker image) may. Never set that variable to get around this.
-- **Migrations are append-only.** Add `internal/db/migrations/000NN_short_description.sql` with the next number (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed.
+- **Migrations are append-only.** Add `internal/db/migrations/000NN_short_description.sql` with the next number (goose format, with `-- +goose Up` and `-- +goose Down`). Never edit a migration that has been committed. (`TestMigrationFiles` checks the numbering and markers; CI refuses a pull request that changes a committed one.)
 - **Quantities are stored in base units:** pieces, millilitres, grams. Convert only at the edges with `stock.ParseAmount` and `stock.FormatQuantity`.
 - **Amounts have at most two decimals of the base unit** (whole pieces). The columns are `numeric(12,2)`, and `stock.ParseAmount` refuses finer input (also after an L/kg conversion) instead of rounding it; amounts computed in code go through `stock.RoundQty`. Never add a third decimal back, and never round what a user typed. Trash restores refuse a finer snapshot amount, as the column would round it and break the ledger.
 - **Every change to `items.quantity` goes through `applyMovement`** in `internal/store/movements.go`, inside a transaction. The ledger must always add up. The tests assert this. (The exceptions undo or fix a recorded entry together with its effect: `DeleteService`/`UpdateService`; `UpdateMovement`/`DeleteMovement`, which go through `reviseMovement`; and `RestoreTrash`, including undoing a Bought.)
@@ -49,7 +51,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - **Every user delete goes to the trash.** Take a snapshot with `snapshot`/`putTrash` (`internal/store/trash.go`) in the same transaction and return the trash id; restoring is `RestoreTrash` (a ledger exception, above).
 - **Don't hard-delete what other records depend on.** Items with purchases, service usage or kit lines, vehicles with services or kits, and kits with services are archived (`archived_at`), not deleted; `ListItems` and `ListKits` hide them by default, and web lists use `activeVehicles`.
 - **Archived means no new work, enforced in the store.** Stock changes to an archived item, and new services or kits for an archived vehicle, and services with an archived kit, fail with a `ConflictError` inside the transaction; the pages only hide the buttons. A service's own parts move with it when it is edited (unchanged), deleted or restored; kit lines may name archived items. Restoring a deleted past service or kit of an archived vehicle is not new work: `RestoreTrash` allows it (Undo must keep working).
-- **Take row locks in one order**, so two requests can't deadlock: a service row; its vehicle (`lockVehicle`; a kit's save locks its old and new vehicle, in id order); the kit (`FOR SHARE` when a service uses it, `checkServiceKit`); a shopping entry; the items, in id order; a stock change after its item (`lockMovement` reads the item id unlocked, locks the item, then the stock change); an item before its photo. Trash rows come before all of these, in id order (`RestoreTrash` locks its entry first; `PurgeTrash`, `EmptyTrash` lock all theirs). An insert only takes `KEY SHARE` on the rows its foreign keys point to, which an `UPDATE` doesn't wait for: when a check must hold until commit (a kit not archived, an item's unit for its kit lines), lock the row `FOR SHARE` before checking. A lookup that finds no row locks nothing; look again after the lock that keeps new rows out (`ArchiveItem`, `LinkShopping`), with `NOWAIT`, since that row now comes after the item: `ArchiveItem` then rolls back to a savepoint (which lets go of the item) and starts over taking the entry first; `LinkShopping` says "try again". Each lock fix gets a forced-interleaving test in `internal/store/locks_test.go` (a third transaction holds a row so the two calls queue up in the bad order), run with `-count=5`.
+- **Take row locks in one order**, so two requests can't deadlock: a service row; its vehicle (`lockVehicle`; a kit's save locks its old and new vehicle, in id order); the kit (`FOR SHARE` when a service uses it, `checkServiceKit`); a shopping entry; the items, in id order; a stock change after its item (`lockMovement` reads the item id unlocked, locks the item, then the stock change); an item before its photo. Trash rows come before all of these, in id order (`RestoreTrash` locks its entry first; `PurgeTrash`, `EmptyTrash` lock all theirs). An insert only takes `KEY SHARE` on the rows its foreign keys point to, which an `UPDATE` doesn't wait for: when a check must hold until commit (a kit not archived, an item's unit for its kit lines), lock the row `FOR SHARE` before checking. A lookup that finds no row locks nothing; look again after the lock that keeps new rows out (`ArchiveItem`, `LinkShopping`), with `NOWAIT`, since that row now comes after the item: `ArchiveItem` then rolls back to a savepoint (which lets go of the item) and starts over taking the entry first; `LinkShopping` says "try again". Each lock fix gets a forced-interleaving test in `internal/store/locks_test.go` (a third transaction holds a row so the two calls queue up in the bad order); CI runs every test in that file with `-race -count=5`, so keep them there.
 - **Edit forms and record buttons carry the record's version.** `items`, `vehicles`, `service_kits`, `service_records`, `stock_movements` and `shopping_entries` have a `version`; every edit form and every delete, archive, restore, Bought, link and remove button posts it (`<input type="hidden" name="version">`, read with `parseVersion`). The store checks it after the row lock the function already takes (no new locks) and fails with a `StaleError` (`Gone` when the row is no longer there); a missing version is stale. Edit forms re-render with 422, keeping what was typed, with a banner and a Reload link (`staleForm`); buttons flash and redirect (`staleButton`).
   - Bump (`version = version + 1`, written in the UPDATE, with a comment) on every write that changes what the record's edit form or page shows: the edit itself, archive/restore, a purchase's best-before date, un-archiving in `LinkShopping`, any change to a shopping entry's quantity or note. Child rows (SKUs, tags, kit lines, a service's parts) belong to the parent's version.
   - Don't bump on `items.quantity` (`applyMovement`, `reviseMovement`, `returnServiceParts`, `adjustStock`) or `vehicles.odometer_km` (`SetOdometer`, `moveOdometer`, `restoreOdometer`): those forms guard them with `quantity_was`/`odometer_was`, and a quick +/- or a logged service must not break an open edit form.
@@ -66,7 +68,9 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - Build URLs with query strings in templates using the `withQuery` helper. Otherwise `html/template` escapes `=` in pre-encoded query strings.
 - **Photo memory stays bounded.** Never decode or resize images in Go (no `image.Decode` of uploads, no `x/image`): `processPhoto` runs `vips thumbnail_source`, which shrinks while it loads, one photo at a time, with the pixel cap, decode budget, `JPEGMEM` and `RLIMIT_DATA` in `photo.go`. `TestPhotoMemory` checks the vips child's peak RSS on the worst inputs; keep it under its ceilings. The browser shrinks photos before upload (`app.js`), but the server must never rely on it.
 - No external CDNs at runtime. Vendor assets into `internal/web/static/vendor/`.
-- Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing.
+- Tests live next to the code (`_test.go`, one file per feature), the Go convention; there is no separate test directory. New HTTP tests go in the feature's file in `internal/web`; a new kind of trash entry gets a case in `trash_matrix_test.go`.
+- `latest` is the newest release, not `master`: Portainer re-pulls it, and starting applies migrations to the real data. Never move it from a branch.
+- Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing and golangci-lint ([`.golangci.yml`](.golangci.yml)) is clean; a `//nolint` needs a reason.
 
 ## Style
 

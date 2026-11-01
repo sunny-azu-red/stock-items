@@ -4,14 +4,32 @@ The app is a single static binary. Templates, CSS, JavaScript and migrations are
 
 > There is no authentication. Only expose the app on a trusted home network, never directly to the internet. For remote access, use a VPN (WireGuard, Tailscale) or a reverse proxy that adds authentication.
 
+## Releases
+
+A release is a `v*` tag, e.g. `v1.2.3`. Pushing one makes CI test it and then:
+
+- publish the image `ghcr.io/sunny-azu-red/pitbox` as `latest`, `1.2.3` and `1.2` (a pre-release such as `v1.3.0-rc.1` gets only `1.3.0-rc.1`, never `latest`);
+- create a [GitHub Release](https://github.com/sunny-azu-red/stock-items/releases) with generated notes, static `linux-amd64` and `linux-arm64` binaries and `SHA256SUMS`.
+
+Every push to `master` publishes `edge` and `sha-<commit>` only. So `latest`, which [`compose.yaml`](../compose.yaml) runs by default, changes only when you release, and a re-pull never brings untested migrations from `master` onto the real data.
+
+To cut one, from an up-to-date `master` whose CI passed:
+
+```bash
+git tag -a v1.2.3 -m "v1.2.3"
+git push origin v1.2.3
+```
+
 ## Build
+
+Or take a binary from the release. To build one yourself:
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always --dirty)" \
   -o bin/pitbox ./cmd/pitbox
 ```
 
-Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host). To build on another machine, such as a Mac, set `GOOS=linux GOARCH=amd64`.
+Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host). To build on another machine, such as a Mac, set `GOOS=linux GOARCH=amd64`. Build from a clean checkout: a version ending in `-dirty` counts as a development build, which refuses the `public` schema.
 
 ## Run with systemd
 
@@ -19,10 +37,12 @@ Pitbox runs on an amd64 Linux server (here, an LXC container on a Proxmox host).
 sudo apt install --no-install-recommends libvips-tools libheif-plugin-libde265   # photos (HEIC needs the second)
 sudo useradd --system --home /opt/pitbox pitbox
 sudo mkdir -p /opt/pitbox
-sudo cp bin/pitbox /opt/pitbox/
-sudo cp .env /opt/pitbox/.env && sudo chmod 600 /opt/pitbox/.env
+sudo cp bin/pitbox /opt/pitbox/   # or the release binary, renamed to pitbox
+sudo cp .env.example /opt/pitbox/.env && sudo chmod 600 /opt/pitbox/.env
 sudo chown -R pitbox: /opt/pitbox
 ```
+
+Then edit `/opt/pitbox/.env`: the database credentials, and `DB_SCHEMA=public` (the example's `dev` is for development). Don't copy your development `.env`.
 
 `/etc/systemd/system/pitbox.service`:
 
@@ -60,7 +80,7 @@ journalctl -u pitbox -f
 
 The image is Debian 13 slim (`debian:trixie-slim`) with `libvips-tools` (and libheif's HEVC decoder for HEIC photos), `ca-certificates` and `tzdata`, and runs as a non-root user (uid 65532). It is about 360 MB unpacked (92 MB to download), almost all of it libvips and its libraries; the earlier distroless image without photo tools was 29 MB. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
-CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `latest` for every push to `master`, `sha-<commit>` for every push, and `1.2.3` and `1.2` for a `v1.2.3` tag. [`compose.yaml`](../compose.yaml) runs it.
+CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [Releases](#releases)): `latest`, `1.2.3` and `1.2` for a `v1.2.3` tag, `edge` for the newest `master`, and `sha-<commit>` for every push. Each image carries an SBOM and provenance attestation and is scanned for known vulnerabilities. [`compose.yaml`](../compose.yaml) runs it with a read-only root filesystem (photos are processed in a `tmpfs` at `/tmp`) and `no-new-privileges`.
 
 ### Portainer
 
@@ -81,12 +101,12 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `lates
    | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |
    | `TZ` | `Europe/Berlin` | the app's zone: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today"), the day a service counts as logged on, and the times pages show. Default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`); empty or unknown also means that. The database's own zone doesn't matter: the app's sessions are in UTC and timestamps are stored in UTC |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
-   | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`; pin a tag to stay on a version |
+   | `PITBOX_TAG` | `1.2.3` | default `latest`, the newest release; pin a version (`1.2.3`, or `1.2` for its fixes) to stay on it, or `edge` to follow `master` |
 
    Type values without quotes.
 4. **Deploy the stack** and open `http://<docker-host>:8080`.
 
-**Updating:** open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
+**Updating:** after a release, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
 
 **The image is private?** GitHub makes a new package private on its first publish. Set `pitbox` to public under the package's settings on GitHub, or add `ghcr.io` with a personal access token (scope `read:packages`) under **Registries** in Portainer.
 
@@ -94,8 +114,9 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `lates
 
 ### Docker Compose or plain Docker
 
-With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values). Two things differ from running the binary with the same file:
+With a `.env` next to `compose.yaml` (Compose reads it for the `${…}` values). Three things differ from the development `.env`:
 
+- `DB_SCHEMA` must be `public` (or left out: that is the compose default), not the example's `dev`.
 - `DB_HOST` must be the Postgres server's LAN address, not `127.0.0.1` as in `.env.example`: inside the container that is the container itself.
 - Compose ignores `HOST` and `PORT`; the app listens on 8080 inside the container, and `PITBOX_PORT` (default 8080) picks the port on the Docker host. Plain `docker run --env-file` passes them through, so leave them out of that file (or match `-p` to `PORT`).
 
@@ -108,8 +129,11 @@ To build the image yourself instead of pulling it:
 ```bash
 docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) .
 docker run -d --name pitbox --restart unless-stopped -p 8080:8080 --env-file .env \
+  --read-only --tmpfs /tmp --security-opt no-new-privileges \
   -v /etc/localtime:/etc/localtime:ro pitbox
 ```
+
+The image builds for the machine's own platform; building for another (`--platform`) needs QEMU, since the runtime stage installs packages.
 
 Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=secret`, not `DB_PASSWORD="secret"`. Compose's `.env` handles quotes normally.
 

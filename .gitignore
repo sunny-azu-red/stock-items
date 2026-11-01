@@ -16,6 +16,10 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/.cache/
 
+# Claude Code: agent worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
+
 # Editors / OS
 .idea/
 .vscode/

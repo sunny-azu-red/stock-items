@@ -41,15 +41,14 @@ Requirements: [Go](https://go.dev/dl/) 1.27.3+, a PostgreSQL database (tested wi
 
 ```bash
 cp .env.example .env     # then fill in your database credentials
-CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o bin/pitbox ./cmd/pitbox
-./bin/pitbox             # reads .env from the working directory, migrates the database and serves http://0.0.0.0:8080
+go run ./cmd/pitbox      # migrates the dev schema and serves http://0.0.0.0:8080
 ```
 
 Open `http://<this-machine>:8080` from any device on your network. Start by adding your vehicles, then your items.
 
-The example `.env` uses the `public` schema, where the app keeps its data. A build with a version, like the one above or the Docker image, runs on it. `go run ./cmd/pitbox` and a plain `go build` are development builds and refuse `public`: develop with `DB_SCHEMA=dev` (see [docs/development.md](docs/development.md)).
+The example `.env` uses the `dev` schema. `go run` is a development build, and refuses `public`, the schema that holds the real data (see [docs/development.md](docs/development.md)).
 
-Or run the published image, e.g. as a Portainer stack from [compose.yaml](compose.yaml). See [docs/deployment.md](docs/deployment.md) for that, systemd and plain Docker.
+**To use it for real,** run a release: the published image (e.g. a Portainer stack from [compose.yaml](compose.yaml)) or a binary from [GitHub Releases](https://github.com/sunny-azu-red/stock-items/releases), with `DB_SCHEMA=public`. See [docs/deployment.md](docs/deployment.md) for Portainer, plain Docker and systemd.
 
 ## Configuration
 
@@ -73,8 +72,8 @@ All settings come from environment variables or a `.env` file (real environment 
 ## Development
 
 ```bash
-scripts/check.sh                     # gofmt, go vet, staticcheck, unit + integration tests
-cd e2e && npm ci && npx playwright test   # end-to-end tests (desktop + phone)
+scripts/check.sh      # gofmt, go mod tidy, vet, lint, unit + integration tests with coverage
+cd e2e && npm ci && npx playwright install chromium && npx playwright test   # end-to-end (desktop + phone)
 ```
 
 The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the configured database and never touch your data. More in [docs/development.md](docs/development.md).

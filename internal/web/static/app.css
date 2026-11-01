@@ -165,8 +165,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .tile { padding: .9rem 1rem; text-decoration: none; display: block; }
 .tile:hover { border-color: var(--accent); }
 .tile .label { color: var(--muted); font-size: .8rem; display: flex; align-items: center; gap: .35rem; }
-.tile .value { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
-.tile .value.money { font-size: 1.2rem; line-height: 1.9; white-space: nowrap; }
+/* One line height for counts and money, so their digits share a middle. */
+.tile .value { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; line-height: 2.4rem; }
+.tile .value.money { font-size: 1.2rem; white-space: nowrap; }
 .tile.warn .value { color: var(--warn); }
 .tile.danger .value { color: var(--danger); }
 

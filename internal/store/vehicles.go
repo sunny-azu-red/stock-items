@@ -237,7 +237,7 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64, version int) (trash
 // version fails with a *StaleError.
 func (s *Store) ArchiveVehicle(ctx context.Context, id int64, version int) error {
 	// Archiving changes the vehicle's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = COALESCE(archived_at, now()), version = version + 1
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = COALESCE(archived_at, now()), updated_at = now(), version = version + 1
 		WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }
@@ -245,6 +245,6 @@ func (s *Store) ArchiveVehicle(ctx context.Context, id int64, version int) error
 // RestoreVehicle brings an archived vehicle back. A vehicle changed since
 // version fails with a *StaleError.
 func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }

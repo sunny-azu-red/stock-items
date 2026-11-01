@@ -342,7 +342,7 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 			}
 		}
 		// Un-archiving changes the item's page: a new version, only then.
-		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL, version = version + 1 WHERE id = $1 AND archived_at IS NOT NULL`,
+		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND archived_at IS NOT NULL`,
 			itemID); err != nil {
 			return err
 		}

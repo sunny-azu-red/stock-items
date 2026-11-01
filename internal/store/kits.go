@@ -337,7 +337,7 @@ func (s *Store) DeleteKit(ctx context.Context, id int64, version int) (trashID i
 // services keep it. A kit changed since version fails with a *StaleError.
 func (s *Store) ArchiveKit(ctx context.Context, id int64, version int) error {
 	// Archiving changes the kit's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = COALESCE(archived_at, now()), version = version + 1
+	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = COALESCE(archived_at, now()), updated_at = now(), version = version + 1
 		WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
 }
@@ -345,6 +345,6 @@ func (s *Store) ArchiveKit(ctx context.Context, id int64, version int) error {
 // RestoreKit brings an archived kit back. A kit changed since version
 // fails with a *StaleError.
 func (s *Store) RestoreKit(ctx context.Context, id int64, version int) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
 }

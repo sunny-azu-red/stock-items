@@ -447,7 +447,7 @@ func archiveItem(ctx context.Context, tx pgx.Tx, id int64, version int) (int64, 
 		return 0, err
 	}
 	// Archiving changes the item's page: a new version.
-	tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), version = version + 1
+	tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), updated_at = now(), version = version + 1
 		WHERE id = $1 AND version = $2`, id, version)
 	if err := versionedUpdate(ctx, tx, tag, err, WhatItem, id); err != nil {
 		return 0, err
@@ -478,7 +478,7 @@ func archiveItem(ctx context.Context, tx pgx.Tx, id int64, version int) (int64, 
 // version fails with a *StaleError.
 func (s *Store) RestoreItem(ctx context.Context, id int64, version int) error {
 	// Restoring changes the item's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL, version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	tag, err := s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatItem, id)
 }
 

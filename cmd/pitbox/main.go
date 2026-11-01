@@ -90,6 +90,7 @@ func run() error {
 		SKUSearchURL:    cfg.SKUSearchURL,
 		SKUSearchPrefix: cfg.SKUSearchPrefix,
 		Version:         buildVersion(),
+		AllowedHosts:    cfg.AllowedHosts,
 		Logger:          logger,
 	})
 	if err != nil {

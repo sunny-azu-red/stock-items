@@ -42,6 +42,10 @@ type Config struct {
 	// Location decides when "today" starts: the zone named by TZ, or the
 	// machine's zone when TZ is unset, empty or unknown.
 	Location *time.Location
+	// AllowedHosts are the host names and IPs the server answers to
+	// (APP_ALLOWED_HOSTS, comma-separated, any port ignored); empty means
+	// any. Loopback always works.
+	AllowedHosts []string
 }
 
 // Addr is the HTTP listen address.
@@ -91,8 +95,20 @@ func load() (Config, error) {
 		SKUSearchURL:    env("APP_SKU_SEARCH_URL", DefaultSKUSearchURL),
 		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
 		Location:        location(),
+		AllowedHosts:    list(os.Getenv("APP_ALLOWED_HOSTS")),
 	}
 	return cfg, nil
+}
+
+// list splits a comma-separated setting, dropping blanks.
+func list(v string) []string {
+	var out []string
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // location reads TZ. Go itself turns an empty or unknown TZ into UTC; here
@@ -160,6 +176,13 @@ func (c Config) check() error {
 	}
 	if utf8.RuneCountInString(c.Currency) > 10 {
 		return fmt.Errorf("APP_CURRENCY %q is too long (at most 10 characters)", c.Currency)
+	}
+	for _, h := range c.AllowedHosts {
+		// A URL would never match a Host header, and every page would be
+		// refused.
+		if strings.ContainsAny(h, "/@?# ") {
+			return fmt.Errorf("APP_ALLOWED_HOSTS takes host names or IPs such as pitbox.lan,192.168.1.5, not %q", h)
+		}
 	}
 	return nil
 }

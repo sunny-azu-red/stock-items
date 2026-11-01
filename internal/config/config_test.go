@@ -46,6 +46,8 @@ func TestCheck(t *testing.T) {
 		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
 		{"placeholder without http", func(c *Config) { c.SKUSearchURL = "example.com/{q}" }, false},
 		{"long currency", func(c *Config) { c.Currency = "Romanian lei" }, false},
+		{"allowed hosts", func(c *Config) { c.AllowedHosts = []string{"pitbox.lan", "192.168.1.5:8080", "[fe80::1]"} }, true},
+		{"a URL as an allowed host", func(c *Config) { c.AllowedHosts = []string{"http://pitbox.lan"} }, false},
 	}
 	for _, tt := range tests {
 		c := good

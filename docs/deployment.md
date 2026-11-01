@@ -78,6 +78,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only: `lates
    | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
    | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q={q}` | default `https://www.google.com/search?q={q}`. Part number links put the number in place of `{q}`, wherever it is (`https://example.com/search?q={q}&lang=de`). A full `http(s)://` URL with exactly one `{q}`, or the app won't start (see [Upgrades](#upgrades)) |
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
+   | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |
    | `TZ` | `Europe/Berlin` | the app's zone: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today"), the day a service counts as logged on, and the times pages show. Default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`); empty or unknown also means that. The database's own zone doesn't matter: the app's sessions are in UTC and timestamps are stored in UTC |
    | `PITBOX_PORT` | `8080` | port on the Docker host |
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`; pin a tag to stay on a version |

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -26,7 +28,10 @@ type Options struct {
 	SKUSearchURL    string
 	SKUSearchPrefix string
 	Version         string
-	Logger          *slog.Logger
+	// AllowedHosts are the host names and IPs the server answers to (any
+	// port is ignored); empty means any. See checkHost.
+	AllowedHosts []string
+	Logger       *slog.Logger
 	// Now overrides the clock (tests). Its times are shown in the app's
 	// zone, time.Local.
 	Now func() time.Time
@@ -42,6 +47,7 @@ type Server struct {
 	skuSearchPrefix string
 	skuSearchTitle  string // where part number links search, for their tooltips
 	version         string
+	allowedHosts    map[string]bool // by hostName; nil for any
 	assetHashes     map[string]string
 	now             func() time.Time
 	mux             *http.ServeMux // set by Handler; used by back
@@ -63,6 +69,12 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	for _, h := range opts.AllowedHosts {
+		if s.allowedHosts == nil {
+			s.allowedHosts = map[string]bool{}
+		}
+		s.allowedHosts[hostName(h)] = true
 	}
 	// "Today" and every time shown are the app's zone (time.Local, which
 	// main sets from TZ), whatever zone the clock's time comes in.
@@ -172,6 +184,7 @@ func (s *Server) Handler() http.Handler {
 
 	var handler http.Handler = mux
 	handler = http.NewCrossOriginProtection().Handler(handler)
+	handler = s.checkHost(handler)
 	handler = securityHeaders(handler)
 	handler = s.logRequests(handler)
 	handler = s.recoverPanics(handler)
@@ -271,6 +284,49 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// checkHost answers a request for a host not in AllowedHosts with 421.
+// The app has no login, and cross-origin protection can't tell a page
+// whose own name was pointed at this server (DNS rebinding) from the app
+// itself: the browser calls both same-origin, and only the Host header
+// shows the other name. Loopback names always work, and so does /healthz,
+// which the Docker healthcheck asks for on whatever HOST says.
+func (s *Server) checkHost(next http.Handler) http.Handler {
+	if s.allowedHosts == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := hostName(r.Host)
+		if s.allowedHosts[h] || isLoopback(h) || r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "Pitbox doesn't answer to this host name. If it is yours, add it to APP_ALLOWED_HOSTS.",
+			http.StatusMisdirectedRequest)
+	})
+}
+
+// hostName is a host without its port, as compared in checkHost:
+// "Pitbox.LAN:8080" and "pitbox.lan." are "pitbox.lan", "[::1]:8080" is
+// "::1".
+func hostName(h string) string {
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	}
+	h = strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")
+	if ip, err := netip.ParseAddr(h); err == nil {
+		return ip.Unmap().String()
+	}
+	return strings.TrimSuffix(strings.ToLower(h), ".")
+}
+
+// isLoopback reports whether h (see hostName) can only name this machine.
+func isLoopback(h string) bool {
+	if ip, err := netip.ParseAddr(h); err == nil {
+		return ip.IsLoopback()
+	}
+	return h == "localhost"
 }
 
 type statusRecorder struct {

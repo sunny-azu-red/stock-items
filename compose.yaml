@@ -29,6 +29,10 @@ services:
       APP_CURRENCY: ${APP_CURRENCY:-EUR}
       APP_SKU_SEARCH_URL: ${APP_SKU_SEARCH_URL:-https://www.google.com/search?q={q}}
       APP_SKU_SEARCH_PREFIX: ${APP_SKU_SEARCH_PREFIX:-}
+      # The names and IPs Pitbox is opened by, comma-separated, e.g.
+      # pitbox.lan,192.168.1.5: other names are refused (DNS rebinding).
+      # Unset, it answers to any.
+      APP_ALLOWED_HOSTS: ${APP_ALLOWED_HOSTS:-}
       # When "today" starts for reminders, date checks and spending. Unset,
       # the app uses the Docker host's zone (from the mount below).
       TZ: ${TZ:-}

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 
 // settings are the variables load reads.
 var settings = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_USERNAME", "DB_PASSWORD",
-	"HOST", "PORT", "APP_CURRENCY", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "TZ"}
+	"HOST", "PORT", "APP_CURRENCY", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "TZ", "APP_ALLOWED_HOSTS"}
 
 // cleanEnv unsets every setting until the test ends, and runs it in a new
 // directory holding the given files.
@@ -47,6 +48,7 @@ DB_SCHEMA=" public "
 DB_PASSWORD=" p@ss w0rd "
 APP_CURRENCY=RON
 APP_SKU_SEARCH_PREFIX=" site:de "
+APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 `})
 	t.Setenv("APP_CURRENCY", " lei ") // the real environment wins over .env
 	t.Setenv("PORT", "  ")            // blank is the default
@@ -66,6 +68,9 @@ APP_SKU_SEARCH_PREFIX=" site:de "
 	}
 	if cfg.Location == nil {
 		t.Error("no Location")
+	}
+	if got := cfg.AllowedHosts; !slices.Equal(got, []string{"pitbox.lan", "192.168.1.5:8080"}) {
+		t.Errorf("AllowedHosts = %q", got)
 	}
 
 	// Settings the app would only fail on later are refused at once;
@@ -87,7 +92,7 @@ func TestLoadWithoutDotenv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" || cfg.Currency != "EUR" {
+	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" || cfg.Currency != "EUR" || cfg.AllowedHosts != nil {
 		t.Errorf("cfg = %+v", cfg)
 	}
 	if got := cfg.Addr(); got != "[::1]:8080" {

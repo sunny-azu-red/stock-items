@@ -43,11 +43,10 @@ func (s *Store) GetShopping(ctx context.Context, id int64) (stock.ShoppingEntry,
 
 // AddShopping adds an entry. Adding an item that is already on the list
 // increases the quantity of the existing entry instead. Missing and
-// archived items are refused with ErrNotFound.
+// archived items are refused with ErrNotFound. For an item, in.Unit (when
+// set) is the unit its quantity was read in: one the item no longer has,
+// or an amount its unit can't hold, is refused with stock.Errors.
 func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64, error) {
-	if in.Unit == "" {
-		in.Unit = stock.UnitPiece
-	}
 	var id int64
 	// The list is where its forms return to, whatever became of the entry.
 	err := s.inFormTx(ctx, in.FormKey, "", &id, func(tx pgx.Tx) error {
@@ -58,15 +57,30 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 				return err
 			}
 			// FOR SHARE: an item being archived right now waits, or is seen
-			// archived, so it can't end up back on the list.
+			// archived, so it can't end up back on the list; and its unit
+			// can't change until this commits.
 			var archived bool
-			err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM items WHERE id = $1 FOR SHARE`, *in.ItemID).Scan(&archived)
+			var unit stock.Unit
+			err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL, unit FROM items WHERE id = $1 FOR SHARE`, *in.ItemID).Scan(&archived, &unit)
 			if err != nil {
 				return notFound(err)
 			}
 			if archived {
 				return ErrNotFound
 			}
+			// The unit read under the lock, like EnsureShopping: the amount
+			// was read in the unit the page showed.
+			if in.Quantity != nil {
+				if in.Unit != "" && in.Unit != unit {
+					return stock.Errors{"quantity": "The item's unit was changed meanwhile. Check the amount and add it again."}
+				}
+				if err := stock.CheckQuantity(*in.Quantity, unit); err != nil {
+					return stock.Errors{"quantity": err.Error()}
+				}
+			}
+			in.Unit = unit
+		} else if in.Unit == "" {
+			in.Unit = stock.UnitPiece
 		}
 		// Adding to an entry changes what its Bought form shows: a new version.
 		return tx.QueryRow(ctx, `

@@ -876,7 +876,7 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 		s.redirect(w, r, back, "")
 		return nil
 	}
-	in := stock.ShoppingInput{ItemID: &id, FormKey: key}
+	in := stock.ShoppingInput{ItemID: &id, Unit: it.Unit, FormKey: key}
 	if q, err := parseOptAmount(formText(r, "quantity"), it.Unit, formText(r, "quantity_unit")); err == nil && q != nil && *q > 0 {
 		in.Quantity = q
 	}
@@ -894,6 +894,11 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	} else if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", it.DisplayName()+" was archived or deleted meanwhile")
+		s.redirect(w, r, back, "")
+		return nil
+	} else if invalid := stock.Errors(nil); errors.As(err, &invalid) {
+		// Its unit changed since the page was shown.
+		s.setFlash(w, "error", invalid["quantity"])
 		s.redirect(w, r, back, "")
 		return nil
 	} else if err != nil {

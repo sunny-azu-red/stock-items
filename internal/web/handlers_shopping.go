@@ -121,10 +121,18 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		if s.savedAlready(w, r, err, nil, "/shopping") {
 			return nil
 		}
-		if !errors.Is(err, store.ErrNotFound) {
+		var invalid stock.Errors
+		switch {
+		case errors.As(err, &invalid):
+			// The item's unit changed since the page was shown.
+			for k, v := range invalid {
+				f.Errors.Add(k, v)
+			}
+		case errors.Is(err, store.ErrNotFound):
+			f.Errors.Add("item_id", "That item was archived or deleted meanwhile")
+		default:
 			return err
 		}
-		f.Errors.Add("item_id", "That item was archived or deleted meanwhile")
 	}
 	p, err := s.loadShopping(r, f)
 	if err != nil {

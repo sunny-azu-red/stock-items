@@ -162,11 +162,20 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 @media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
-.tile { padding: .9rem 1rem; text-decoration: none; display: block; }
+.tile { padding: .9rem 1rem; text-decoration: none; display: flex; flex-direction: column; gap: .4rem; }
 .tile:hover { border-color: var(--accent); }
 .tile .label { color: var(--muted); font-size: .8rem; display: flex; align-items: center; gap: .35rem; }
-/* One line height for counts and money, so their digits share a middle. */
-.tile .value { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; line-height: 2.4rem; }
+/* At the tile's foot, in a line no taller than its font: no empty line
+   below the digits, and counts and the smaller money figures end level. */
+.tile .value { margin-top: auto; font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+/* Where the browser can, the value's box is just its capitals: the space
+   below the digits is then the padding alone, in every tile. That padding
+   matches the space above the label's icon, and the gap keeps the label as
+   far from the figures as the line did. */
+@supports (text-box: trim-both cap alphabetic) {
+  .tile { gap: .65rem; padding-bottom: 1.05rem; }
+  .tile .value { text-box: trim-both cap alphabetic; }
+}
 .tile .value.money { font-size: 1.2rem; white-space: nowrap; }
 .tile.warn .value { color: var(--warn); }
 .tile.danger .value { color: var(--danger); }

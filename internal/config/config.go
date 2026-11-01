@@ -104,7 +104,7 @@ func location() *time.Location {
 		return time.Local // Go has read the machine's zone
 	}
 	if tz = strings.TrimPrefix(strings.TrimSpace(tz), ":"); tz != "" {
-		loc, err := time.LoadLocation(tz)
+		loc, err := loadZone(tz)
 		if err == nil {
 			return loc
 		}
@@ -113,10 +113,27 @@ func location() *time.Location {
 	return machineZone()
 }
 
+// loadZone loads a zone by name ("Europe/Berlin") or, as the C library
+// does, from the absolute path of a zone file
+// ("/usr/share/zoneinfo/Europe/Berlin"), which time.LoadLocation refuses.
+func loadZone(tz string) (*time.Location, error) {
+	if !filepath.IsAbs(tz) {
+		return time.LoadLocation(tz)
+	}
+	b, err := os.ReadFile(tz)
+	if err != nil {
+		return nil, err
+	}
+	return time.LoadLocationFromTZData(tz, b)
+}
+
+// localtime is the machine's zone file (tests point it elsewhere).
+var localtime = "/etc/localtime"
+
 // machineZone is the zone in /etc/localtime (in Docker, the host's when
 // compose.yaml mounts it), or UTC without one.
 func machineZone() *time.Location {
-	b, err := os.ReadFile("/etc/localtime")
+	b, err := os.ReadFile(localtime)
 	if err != nil {
 		return time.UTC
 	}

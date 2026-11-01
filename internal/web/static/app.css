@@ -1,6 +1,19 @@
 /* Pitbox — hand written, no build step.
    Design tokens first, then layout, then components. */
 
+/* Windows' Segoe UI keeps more room above its letters than below (ascent
+   2210, descent 514 of 2048), so its capitals sit about .064em low in every
+   line box: text looks low in buttons and chips. The installed font again,
+   with the same total split so that capitals (1434) sit in the middle. Where
+   Segoe UI isn't installed these match nothing and the stack goes on. */
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 400; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Italic"), local("SegoeUI-Italic"); font-weight: 400; font-style: italic; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"); font-weight: 600; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Semibold Italic"), local("SegoeUI-SemiboldItalic"); font-weight: 600; font-style: italic; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 700; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Bold Italic"), local("SegoeUI-BoldItalic"); font-weight: 700; font-style: italic; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+@font-face { font-family: "Segoe UI Centred"; src: local("Segoe UI Black"), local("SegoeUIBlack"); font-weight: 900; ascent-override: 101.51%; descent-override: 31.49%; line-gap-override: 0%; }
+
 :root {
   /* Colours are light-dark(light, dark). Which one applies follows
      color-scheme: the system setting, unless data-theme on <html> (from the
@@ -29,7 +42,7 @@
   --radius: 12px;
   --radius-sm: 8px;
   --control-h: 42px;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font: "Segoe UI Centred", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sidebar: 236px;
   --tabbar: 64px;
@@ -160,7 +173,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
-  font: inherit; font-weight: 600; font-size: .9rem; line-height: 1;
+  /* line-height: the icons' height (.icon), so a button without one is as
+     tall as one with one. */
+  font: inherit; font-weight: 600; font-size: .9rem; line-height: 1.15;
   padding: .6rem .95rem; border-radius: var(--radius-sm); border: 1px solid var(--border);
   background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; white-space: nowrap;
   transition: background .12s, border-color .12s, color .12s;
@@ -269,6 +284,9 @@ select.input { cursor: pointer; }
    Elsewhere it keeps the native popup. */
 @supports (appearance: base-select) {
   select.input, select.input::picker(select) { appearance: base-select; }
+  /* It lays out as a flex box: centre the line, or it sits at the top
+     wherever the box is taller (the sort select). */
+  select.input { align-items: center; }
   select.input::picker-icon { display: none; }
   select.input::picker(select) {
     margin-top: 4px; padding: .25rem; color: var(--text); background: var(--surface);

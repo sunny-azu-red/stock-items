@@ -4,7 +4,10 @@ A small, private garage app for your vehicles: the parts and fluids on the shelf
 
 It is built for one household on a home network: no login, one binary, one Postgres database.
 
-![Dashboard](docs/screenshots/desktop-dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-dashboard-dark.png">
+  <img alt="Dashboard" src="docs/screenshots/desktop-dashboard.png">
+</picture>
 
 ## Features
 
@@ -31,9 +34,9 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a phone in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).
 
-| Stock grouped by vehicle | Service kit | Phone |
+| Stock grouped by vehicle | Services and kits | Vehicles |
 |---|---|---|
-| ![Stock](docs/screenshots/desktop-stock.png) | ![Kit](docs/screenshots/desktop-kit.png) | ![Mobile](docs/screenshots/mobile-stock.png) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-stock-dark.png"><img alt="Stock" src="docs/screenshots/desktop-stock.png"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-services-dark.png"><img alt="Services" src="docs/screenshots/desktop-services.png"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/desktop-vehicles-dark.png"><img alt="Vehicles" src="docs/screenshots/desktop-vehicles.png"></picture> |
 
 ## Quick start
 

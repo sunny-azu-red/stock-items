@@ -69,8 +69,9 @@ Actions are pinned to commit SHAs and the base images to digests; [Dependabot](.
 
 ```bash
 cd e2e
-SCREENSHOT_DIR=/tmp/shots npx playwright test -g "set up|filter|quick|plan|screenshots"
-cp /tmp/shots/{desktop-dashboard,desktop-stock,desktop-kit,mobile-stock}.png ../docs/screenshots/
+SCREENSHOT_DIR=/tmp/shots npx playwright test --project desktop -g "set up|filter|quick|plan|screenshots"
+SCREENSHOT_DIR=/tmp/shots SCREENSHOT_SCHEME=dark npx playwright test --project desktop -g "set up|filter|quick|plan|screenshots"
+cp /tmp/shots/desktop-{dashboard,stock,services,vehicles}{,-dark}.png ../docs/screenshots/
 ```
 
-This writes one PNG per page and device. Add `SCREENSHOT_SCHEME=dark` for the dark theme (the files end in `-dark`). Only the four the README shows are kept in `docs/screenshots`.
+This writes one PNG per page, and with `SCREENSHOT_SCHEME=dark` the dark theme (the files end in `-dark`); drop `--project desktop` for the phone ones too. Only the four pages the README shows are kept in `docs/screenshots`, light and dark: the README picks one by the reader's GitHub theme (`<picture>`).

@@ -10,14 +10,21 @@
     <a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
   </div>
 </div>
-<div class="chips mb" role="group" aria-label="Kind">
-  <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">Everything</a>
-  {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
+<div class="filters-row mb">
+  <div class="chips" role="group" aria-label="Kind">
+    <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">Everything</a>
+    {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
+  </div>
+  {{if $d.Years}}<form class="sort-by" method="get" action="/activity">
+    {{range $d.YearFields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+    <label class="sort-label" for="year">Year</label>
+    <select class="input" id="year" name="year" data-submit-on-change>
+      <option value="">All years</option>
+      {{range $d.Years}}<option value="{{.}}"{{if eq . $d.Year}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <noscript><button class="btn btn-sm" type="submit">Show</button></noscript>
+  </form>{{end}}
 </div>
-{{if $d.Years}}<div class="chips mb" role="group" aria-label="Year">
-  <a class="chip chip-toggle{{if not $d.Year}} active{{end}}" href="{{withQuery "/activity" ($d.YearQuery 0)}}">All years</a>
-  {{range $d.Years}}<a class="chip chip-toggle{{if eq . $d.Year}} active{{end}}" href="{{withQuery "/activity" ($d.YearQuery .)}}">{{.}}</a>{{end}}
-</div>{{end}}
 <section class="card">
   {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item) "Sort" $d.Heads)}}
   {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}

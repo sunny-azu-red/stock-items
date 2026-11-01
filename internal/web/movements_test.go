@@ -217,21 +217,24 @@ func TestActivityYearFilter(t *testing.T) {
 
 	page := a.get("/activity?kind=purchase&year=2026")
 	expect(t, page, http.StatusOK, "New Year&#39;s Day", "Every change to your stock in 2026",
-		`<a class="chip chip-toggle active" href="/activity?kind=purchase&amp;year=2026">2026</a>`,
-		`<a class="chip chip-toggle" href="/activity?kind=purchase&amp;year=2025">2025</a>`,
-		`<a class="chip chip-toggle" href="/activity?kind=purchase">All years</a>`,
+		// The year picker: its years, this one chosen, keeping the kind.
+		`<select class="input" id="year" name="year" data-submit-on-change>`, `<option value="">All years</option>`,
+		`<option value="2026" selected>2026</option>`, `<option value="2025">2025</option>`,
+		`<input type="hidden" name="kind" value="purchase">`, `<button class="btn btn-sm" type="submit">Show</button>`,
 		// The kind chips, the CSV and the column headers keep the year.
 		`href="/activity?kind=use&amp;year=2026"`, `href="/activity?year=2026">Everything</a>`,
 		`href="/activity/export.csv?kind=purchase&amp;year=2026"`, `&amp;year=2026" title="`)
-	expectNot(t, page, "New Year&#39;s Eve")
+	expectNot(t, page, "New Year&#39;s Eve", `name="year" value=`)
 	csv := a.get("/activity/export.csv?kind=purchase&year=2026").Body.String()
 	if !strings.Contains(csv, "New Year's Day") || strings.Contains(csv, "New Year's Eve") {
 		t.Errorf("csv of 2026 = %q", csv)
 	}
 
-	// Not a year: every year.
-	expect(t, a.get("/activity?year=nope"), http.StatusOK, "New Year&#39;s Eve", "New Year&#39;s Day", `chip-toggle active" href="/activity">All years</a>`)
-	// A year with nothing yet keeps its chip; Show everything drops both filters.
-	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `>2027</a>`, "Nothing matches these filters",
+	// All years, as the picker sends it, or not a year: every year.
+	for _, q := range []string{"year=", "year=nope"} {
+		expect(t, a.get("/activity?kind=purchase&"+q), http.StatusOK, "New Year&#39;s Eve", "New Year&#39;s Day", `<option value="2026">2026</option>`)
+	}
+	// A year with nothing yet is still offered; Show everything drops both filters.
+	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `<option value="2027" selected>2027</option>`, "Nothing matches these filters",
 		`<a class="btn btn-primary" href="/activity">`)
 }

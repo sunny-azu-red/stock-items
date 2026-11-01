@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -80,7 +81,7 @@ type activityPage struct {
 	Kind      string
 	Kinds     []stock.MovementKind
 	Year      int         // 0 for every year
-	Years     []int       // newest first, for the year chips
+	Years     []int       // newest first, for the year picker
 	Item      *stock.Item // set when showing one item's history
 	Page      int         // 1 is the newest
 	More      bool        // there are older entries
@@ -94,8 +95,21 @@ const activityPageSize = 200
 // the year, the item filter and the sort, and starting at the first page.
 func (p activityPage) KindQuery(kind string) string { return p.filterValues(kind, p.Year).Encode() }
 
-// YearQuery is KindQuery for a year (0 for all), keeping the kind.
-func (p activityPage) YearQuery(year int) string { return p.filterValues(p.Kind, year).Encode() }
+// YearFields are the year picker's hidden fields: the kind, the item filter
+// and the sort, so picking a year keeps them (and starts at the first page).
+func (p activityPage) YearFields() []hiddenField {
+	q := p.filterValues(p.Kind, 0)
+	var fields []hiddenField
+	for _, k := range slices.Sorted(maps.Keys(q)) {
+		for _, v := range q[k] {
+			fields = append(fields, hiddenField{Name: k, Value: v})
+		}
+	}
+	return fields
+}
+
+// hiddenField is an <input type="hidden">.
+type hiddenField struct{ Name, Value string }
 
 // AllQuery drops the kind and the year, keeping the item filter and the sort.
 func (p activityPage) AllQuery() string { return p.filterValues("", 0).Encode() }

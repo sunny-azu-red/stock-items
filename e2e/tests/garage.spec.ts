@@ -687,6 +687,21 @@ test("sort the activity by clicking its headers", async ({ page }) => {
   expect(cells.slice(prices.length).every((c) => !c.trim())).toBe(true);
 });
 
+test("pick a year on the Activity page", async ({ page }) => {
+  await page.goto("/activity?kind=purchase");
+  const year = page.getByLabel("Year");
+  const thisYear = String(new Date().getFullYear());
+  await year.selectOption(thisYear);
+  // The page reloads for that year and keeps the kind.
+  await expect(page).toHaveURL(new RegExp(`\\?kind=purchase&year=${thisYear}$`));
+  await expect(year).toHaveValue(thisYear);
+  await expect(page.getByText(`Every change to your stock in ${thisYear}`)).toBeVisible();
+  await expect(page.locator("table.table tbody tr").first()).toBeVisible();
+  await year.selectOption({ label: "All years" });
+  await expect(page).toHaveURL(/\?kind=purchase&year=$/);
+  await expect(year).toHaveValue("");
+});
+
 test("sort the stock with Sort by and its direction", async ({ page }) => {
   await page.goto("/stock?view=list");
   const names = () => page.locator("#results .item-row .item-name").allInnerTexts();

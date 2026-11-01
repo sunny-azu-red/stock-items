@@ -566,6 +566,7 @@ func TestUndoPathsStillWork(t *testing.T) {
 	})
 
 	t.Run("photo replace and remove", func(t *testing.T) {
+		needVips(t)
 		a := newApp(t)
 		a.seed()
 		item := itemPath(itemID(t, a.store, "Silkolene"))

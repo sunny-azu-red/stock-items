@@ -544,10 +544,34 @@ func TestPhotoProcessedOneAtATime(t *testing.T) {
 // allocates. The inputs are made with vips, zoomed up from a small image
 // (smooth, so they stay near upload size; the decoders' memory doesn't
 // depend on the content).
+//
+// It measures in a fresh copy of the test binary: a vips child's peak RSS
+// counts the app's RSS when it starts (see below), and after the rest of
+// the package, with -race, that alone is 150-210 MB.
 func TestPhotoMemory(t *testing.T) {
 	needVips(t)
 	if testing.Short() {
 		t.Skip("makes 50-100 MP images")
+	}
+	if os.Getenv("PITBOX_PHOTO_MEMORY_CHILD") == "" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestPhotoMemory$", "-test.v", "-test.count=1")
+		cmd.Env = append(os.Environ(), "PITBOX_PHOTO_MEMORY_CHILD=1")
+		out, err := cmd.CombinedOutput()
+		// go test would take the child's coverage line for the package's.
+		var shown []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.HasPrefix(line, "coverage: ") {
+				shown = append(shown, line)
+			}
+		}
+		t.Logf("fresh test process:\n%s", strings.Join(shown, "\n"))
+		if err != nil {
+			t.Fatalf("fresh test process: %v", err)
+		}
+		if !bytes.Contains(out, []byte("--- PASS: TestPhotoMemory")) {
+			t.Fatal("fresh test process didn't run TestPhotoMemory")
+		}
+		return
 	}
 	dir := t.TempDir()
 	vipsMake(t, dir, "sines", "s.v", "1224", "816", "--hfreq", "3", "--vfreq", "2")

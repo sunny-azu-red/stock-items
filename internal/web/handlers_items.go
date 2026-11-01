@@ -926,6 +926,24 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// Before the body is read: a refused upload needn't wait for 15 MB to
+	// arrive, nor hold them.
+	it, err := s.store.GetItem(r.Context(), id)
+	if err != nil {
+		return s.gone(r, err, store.WhatItem, id)
+	}
+	if it.Archived() {
+		s.setFlash(w, "error", "Restore "+it.DisplayName()+" to change its photo")
+		http.Redirect(w, r, itemPath(id), http.StatusSeeOther)
+		return nil
+	}
+	done, ok := photoPlace()
+	if !ok {
+		s.setFlash(w, "error", "Other photos are being processed right now. Try again in a minute.")
+		http.Redirect(w, r, itemPath(id), http.StatusSeeOther)
+		return nil
+	}
+	defer done()
 	// A 15 MB photo over a slow phone connection can take minutes. Both
 	// deadlines count from the request headers, so extend both.
 	rc := http.NewResponseController(w)
@@ -970,7 +988,7 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	}
 	replaced, err := s.store.SetPhoto(r.Context(), id, "image/jpeg", full, thumb)
 	if err != nil {
-		return err
+		return s.gone(r, err, store.WhatItem, id) // deleted while the photo was processed
 	}
 	if replaced != 0 {
 		s.redirectUndo(w, r, fmt.Sprintf("/items/%d", id), "Photo replaced", replaced)

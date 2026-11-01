@@ -67,6 +67,22 @@ var photoLoaders = map[string]bool{"jpegload": true, "pngload": true, "gifload":
 // once can't add up. One at a time is plenty for a garage.
 var photoSlot = make(chan struct{}, 1)
 
+// photoQueue has a place for each upload from before its body is read
+// until it is answered: waiting for photoSlot, each holds its photo (up
+// to 15 MB) in memory, so beyond a few the next is told to try again.
+var photoQueue = make(chan struct{}, 4)
+
+// photoPlace takes a place in photoQueue, to give back with done; ok is
+// false when there is none.
+func photoPlace() (done func(), ok bool) {
+	select {
+	case photoQueue <- struct{}{}:
+		return func() { <-photoQueue }, true
+	default:
+		return nil, false
+	}
+}
+
 // processPhotoQueued is processPhoto once the photo slot is free. It gives
 // up waiting when ctx ends (the client went away).
 func processPhotoQueued(ctx context.Context, data []byte) (full, thumb []byte, err error) {

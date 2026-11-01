@@ -581,7 +581,9 @@ func TestUndoPathsStillWork(t *testing.T) {
 			}
 			w := multipart.NewWriter(&body)
 			fw, _ := w.CreateFormFile("photo", "p.png")
-			fw.Write(img.Bytes())
+			if _, err := fw.Write(img.Bytes()); err != nil {
+				t.Fatal(err)
+			}
 			w.Close()
 			req := httptest.NewRequest(http.MethodPost, item+"/photo", &body)
 			req.Header.Set("Content-Type", w.FormDataContentType())

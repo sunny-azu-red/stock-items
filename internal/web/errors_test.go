@@ -108,7 +108,7 @@ func TestRecoverPanics(t *testing.T) {
 	// must see it, so it goes on up.
 	h = srv.recoverPanics(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) }))
 	defer func() {
-		if v := recover(); v != http.ErrAbortHandler {
+		if v := recover(); v != http.ErrAbortHandler { //nolint:errorlint // the panic value itself, as net/http compares it
 			t.Errorf("recovered %v, want http.ErrAbortHandler passed on", v)
 		}
 	}()

@@ -154,7 +154,7 @@ func TestConcurrentSavesWithOneKeyMakeOneRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM vehicles WHERE id = $1 FOR UPDATE`, k390); err != nil {
 		t.Fatal(err)
 	}

@@ -106,7 +106,7 @@ func processPhoto(ctx context.Context, data []byte) (full, thumb []byte, err err
 	vips, err1 := exec.LookPath(vipsBin)
 	header, err2 := exec.LookPath(vipsheaderBin)
 	if err := errors.Join(err1, err2); err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", errVipsMissing, err)
+		return nil, nil, fmt.Errorf("%w: %v", errVipsMissing, err) //nolint:errorlint // only the sentinel, see vipsFailed
 	}
 	tctx, cancel := context.WithTimeout(ctx, photoTimeout)
 	defer cancel()
@@ -155,13 +155,15 @@ func processPhoto(ctx context.Context, data []byte) (full, thumb []byte, err err
 // vipsFailed says why shrinking failed: a decoder over its memory limit,
 // or anything else (a damaged file).
 func vipsFailed(err error) error {
+	// Only the sentinel is wrapped: the cause (a context error, say) is detail
+	// for the log and must not decide how the request is answered.
 	msg := err.Error()
 	for _, s := range []string{"Backing store not supported", "out of memory", "failed to allocate"} {
 		if strings.Contains(msg, s) {
-			return fmt.Errorf("%w: %v", errPhotoTooHeavy, err)
+			return fmt.Errorf("%w: %v", errPhotoTooHeavy, err) //nolint:errorlint // only the sentinel
 		}
 	}
-	return fmt.Errorf("%w: %v", errPhotoBroken, err)
+	return fmt.Errorf("%w: %v", errPhotoBroken, err) //nolint:errorlint // only the sentinel
 }
 
 // photoHeader is what vipsheader says about an image without decoding it.
@@ -184,7 +186,7 @@ func readPhotoHeader(ctx context.Context, vipsheader string, data []byte) (photo
 	}
 	out, err := runVips(ctx, vipsheader, nil, f.Name())
 	if err != nil {
-		return photoHeader{}, fmt.Errorf("%w: %v", errPhotoNotImage, err)
+		return photoHeader{}, fmt.Errorf("%w: %v", errPhotoNotImage, err) //nolint:errorlint // only the sentinel
 	}
 	h, ok := parsePhotoHeader(string(out))
 	if !ok {
@@ -363,7 +365,7 @@ func PhotoTools(ctx context.Context) (string, error) {
 	vips, err1 := exec.LookPath(vipsBin)
 	_, err2 := exec.LookPath(vipsheaderBin)
 	if err := errors.Join(err1, err2); err != nil {
-		return "", fmt.Errorf("%w: %v", errVipsMissing, err)
+		return "", fmt.Errorf("%w: %v", errVipsMissing, err) //nolint:errorlint // only the sentinel
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

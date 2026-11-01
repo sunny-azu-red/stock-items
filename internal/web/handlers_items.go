@@ -843,7 +843,7 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Item, kind, msg string) error {
 	if !isHTMX(r) {
 		s.setFlash(w, kind, msg)
-		http.Redirect(w, r, s.back(r, "/stock"), http.StatusSeeOther)
+		http.Redirect(w, r, s.back(r, "/stock"), http.StatusSeeOther) //nolint:gosec // back returns only local paths
 		return nil
 	}
 	vehicles, err := s.store.ListVehicles(r.Context())
@@ -950,20 +950,20 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 	_ = rc.SetReadDeadline(time.Now().Add(photoUploadTimeout))
 	_ = rc.SetWriteDeadline(time.Now().Add(photoUploadTimeout + 30*time.Second))
 	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes)
-	if err := r.ParseMultipartForm(4 << 20); err != nil {
+	if err := r.ParseMultipartForm(4 << 20); err != nil { //nolint:gosec // MaxBytesReader above caps the body
 		msg := "Choose a photo to upload"
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			msg = photoTooLarge
 		}
 		s.setFlash(w, "error", msg)
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther) //nolint:gosec // a local path
 		return nil
 	}
 	file, _, err := r.FormFile("photo")
 	if err != nil {
 		s.setFlash(w, "error", "Choose a photo to upload")
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther) //nolint:gosec // a local path
 		return nil
 	}
 	defer file.Close()
@@ -983,7 +983,7 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 			s.log.Warn("photo upload refused", "item", id, "err", err)
 		}
 		s.setFlash(w, "error", msg)
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther) //nolint:gosec // a local path
 		return nil
 	}
 	replaced, err := s.store.SetPhoto(r.Context(), id, "image/jpeg", full, thumb)

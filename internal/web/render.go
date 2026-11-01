@@ -112,6 +112,7 @@ func (s *Server) funcs() template.FuncMap {
 			if len(class) > 0 {
 				c += " " + class[0]
 			}
+			//nolint:gosec // both parts are escaped
 			return template.HTML(`<svg class="` + template.HTMLEscapeString(c) + `" aria-hidden="true"><use href="#i-` +
 				template.HTMLEscapeString(name) + `"></use></svg>`)
 		},
@@ -148,12 +149,12 @@ func (s *Server) funcs() template.FuncMap {
 		// withQuery joins a path and an already encoded query string
 		// (from url.Values.Encode), so html/template does not escape it again.
 		"withQuery": func(path, query string) template.URL {
-			return template.URL(joinQuery(path, query))
+			return template.URL(joinQuery(path, query)) //nolint:gosec // our own paths, and a query url.Values encoded
 		},
 		// skuSearch links a part number to the configured search engine,
 		// with the configured prefix (e.g. "site:de"), if any, added to the query.
 		"skuSearch": func(code string) template.URL {
-			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code))
+			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code)) //nolint:gosec // the operator's URL, the code escaped
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },
@@ -179,10 +180,10 @@ func (s *Server) funcs() template.FuncMap {
 			return fmt.Sprintf("%d %ss", n, word)
 		},
 		"chipStyle": func(color string) template.CSS {
-			if !strings.HasPrefix(color, "#") || len(color) != 7 {
+			if !stock.IsColor(color) {
 				color = "#888888"
 			}
-			return template.CSS("--chip:" + color)
+			return template.CSS("--chip:" + color) //nolint:gosec // a #rrggbb colour, checked above
 		},
 	}
 }
@@ -304,7 +305,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, url, http.StatusSeeOther)
+	http.Redirect(w, r, url, http.StatusSeeOther) //nolint:gosec // callers pass our own paths or back's
 }
 
 // searchTitle says where part number links search: "Search on

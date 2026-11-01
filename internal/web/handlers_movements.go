@@ -82,7 +82,7 @@ func (s *Server) movementRefused(w http.ResponseWriter, r *http.Request, m stock
 func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) {
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
-			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit)}})
+			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit)}}) //nolint:gosec // Back is a checked local path
 }
 
 // goneMovementForm shows the edit form of a stock change deleted since it
@@ -113,7 +113,7 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 		units = stock.SubUnits
 	}
 	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
-		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true}})
+		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true}}) //nolint:gosec // Back is a checked local path
 	return nil
 }
 

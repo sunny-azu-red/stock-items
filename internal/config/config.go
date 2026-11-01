@@ -136,7 +136,7 @@ func loadZone(tz string) (*time.Location, error) {
 	if !filepath.IsAbs(tz) {
 		return time.LoadLocation(tz)
 	}
-	b, err := os.ReadFile(tz)
+	b, err := os.ReadFile(tz) //nolint:gosec // TZ is the operator's own setting
 	if err != nil {
 		return nil, err
 	}

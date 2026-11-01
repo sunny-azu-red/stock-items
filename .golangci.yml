@@ -24,6 +24,10 @@ linters:
         # G104 (errors not checked) is errcheck's job; errcheck is the
         # configurable one, so keep a single source of these reports.
         - G104
+        # G124 wants cookies Secure: Pitbox is served over plain HTTP on a
+        # LAN, where a Secure cookie is never sent back. The flash cookie is
+        # HttpOnly and SameSite=Lax; the theme cookie is read by app.js.
+        - G124
     rowserrcheck:
       # The store uses pgx directly, not database/sql.
       packages:

@@ -218,6 +218,10 @@ func ValidGTIN(code string) bool {
 
 var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// IsColor reports whether s is a #rrggbb colour, the only form a vehicle's
+// colour is stored in.
+func IsColor(s string) bool { return colorRe.MatchString(s) }
+
 // VehicleInput is the data needed to create or update a vehicle.
 type VehicleInput struct {
 	Name       string
@@ -268,7 +272,7 @@ func (in VehicleInput) Validate() Errors {
 	if in.Year != nil && (*in.Year < 1900 || *in.Year > 2100) {
 		errs.Add("year", "Year must be between 1900 and 2100")
 	}
-	if !colorRe.MatchString(in.Color) {
+	if !IsColor(in.Color) {
 		errs.Add("color", "Colour must look like #ff6600")
 	}
 	if in.OdometerKm != nil && *in.OdometerKm < 0 {

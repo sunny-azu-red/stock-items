@@ -13,7 +13,7 @@ import (
 func limitMemory(pid int, bytes uint64) error {
 	lim := syscall.Rlimit{Cur: bytes, Max: bytes}
 	_, _, errno := syscall.RawSyscall6(syscall.SYS_PRLIMIT64, uintptr(pid), syscall.RLIMIT_DATA,
-		uintptr(unsafe.Pointer(&lim)), 0, 0, 0)
+		uintptr(unsafe.Pointer(&lim)), 0, 0, 0) //nolint:gosec // prlimit(2) takes a pointer to the limit
 	if errno != 0 {
 		return errno
 	}

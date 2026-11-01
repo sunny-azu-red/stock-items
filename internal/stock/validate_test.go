@@ -337,3 +337,22 @@ func TestTextAndNumberLimits(t *testing.T) {
 		t.Errorf("at the limits: %v", errs)
 	}
 }
+
+func TestIsColor(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"#f97316", true},
+		{"#ABCDEF", true},
+		{"#fff", false},
+		{"f97316", false},
+		{"#f9731g", false},
+		{"#a;b:cd", false}, // seven characters, but not a colour: never into CSS
+		{"#f97316 ", false},
+	} {
+		if got := IsColor(tc.in); got != tc.want {
+			t.Errorf("IsColor(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

@@ -153,7 +153,7 @@ func (h sortHeads) Col(key, label string, num bool) sortCol {
 	if h.Anchor != "" {
 		href += "#" + h.Anchor
 	}
-	c.Href = template.URL(href)
+	c.Href = template.URL(href) //nolint:gosec // the page's own path and a url.Values query
 	c.Title = "Sort by " + label + ", " + map[bool]string{false: "ascending", true: "descending"}[next.Desc]
 	return c
 }

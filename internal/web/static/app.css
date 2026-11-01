@@ -71,8 +71,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
   background: var(--surface); border-right: 1px solid var(--border);
   padding: 1.1rem .8rem; display: flex; flex-direction: column; gap: 1.25rem;
 }
-.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.app-brand { display: flex; align-items: center; gap: .6rem; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; padding: 0 .5rem; }
+/* The nav links' inset, so the logo lines up with their icons. */
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .7rem; }
+.app-brand { display: flex; align-items: center; gap: .6rem; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; }
 .app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav a {
@@ -185,10 +186,14 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 
 /* Theme toggle: show the button that switches away from the current theme. */
 .theme-toggle { display: inline-flex; align-items: center; margin: 0; }
-.theme-toggle .icon-btn { color: var(--muted); }
-/* Next to the page's buttons: their height, so the row lines up (a touch
-   narrower than square, so it still fits beside them on a 360px phone). */
-.page-head .theme-toggle .icon-btn { width: auto; height: auto; padding: .6rem .5rem; font-size: .9rem; }
+.theme-toggle .icon-btn { border-color: transparent; background: transparent; color: var(--muted); }
+.theme-toggle .icon-btn:hover { background: var(--surface-2); color: var(--accent); }
+/* Only the icon shows, so pull the button out by the space around it: the
+   icon's right edge lines up with the nav's counts, or the page's edge. */
+.sidebar-head .theme-toggle .icon-btn { margin-right: calc((1.15em - 34px) / 2); }
+/* Next to the page's buttons: their height, so its icon centres on theirs. */
+.page-head .theme-toggle { margin-right: calc(-.6rem - 1px); }
+.page-head .theme-toggle .icon-btn { width: auto; height: auto; padding: .6rem; font-size: .9rem; }
 .theme-to-light { display: none !important; }
 :root[data-theme="dark"] .theme-to-dark { display: none !important; }
 :root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }

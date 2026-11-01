@@ -703,3 +703,151 @@ func holderExec(t *testing.T, h *holder, sql string, args ...any) {
 		t.Fatal(err)
 	}
 }
+
+// Restoring a service while another is logged for its vehicle with the
+// same parts: both lock the vehicle, then the parts in id order, so they
+// take turns and both take their parts.
+func TestRestoringAndLoggingServicesTakeTurns(t *testing.T) {
+	s, pool, ctx := newStorePool(t)
+	v := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
+	ring := mustItem(t, s, stock.ItemInput{Name: "Ring", Unit: stock.UnitPiece, Quantity: 2})
+	parts := []stock.KitLineInput{{ItemID: ring, Quantity: 1}, {ItemID: oil, Quantity: 400}}
+	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Oil service", PerformedOn: time.Now(), Parts: parts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trashID, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := hold(t, pool, `SELECT 1 FROM vehicles WHERE id = $1 FOR UPDATE`, v)
+	var c calls
+	var restored, logged error
+	c.run(func() { _, restored = s.RestoreTrash(ctx, trashID) })
+	xids := waitBlocked(t, pool, 1, []string{h.xid}, "vehicles")
+	c.run(func() {
+		_, logged = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Top up", PerformedOn: time.Now(),
+			Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 400}, {ItemID: ring, Quantity: 1}}})
+	})
+	waitBlocked(t, pool, 2, xids, "vehicles")
+	h.release(t)
+	c.wait()
+	noDeadlock(t, "restore", restored)
+	noDeadlock(t, "log", logged)
+	if restored != nil || logged != nil {
+		t.Fatalf("restore = %v, log = %v", restored, logged)
+	}
+	if o, r := mustGet(t, s, oil), mustGet(t, s, ring); o.Quantity != 200 || r.Quantity != 0 {
+		t.Errorf("oil = %v, ring = %v; want 200 and 0", o.Quantity, r.Quantity)
+	}
+	assertLedger(t, s)
+}
+
+// Restoring a kit while its item's unit is changed: the restore holds the
+// line items FOR SHARE, and the unit change finds the kit's lines (or the
+// kit in the trash) and is refused, so 100 ml never reads as 100 g.
+func TestRestoringAKitAndChangingAnItemsUnitTakeTurns(t *testing.T) {
+	s, pool, ctx := newStorePool(t)
+	v := mustVehicle(t, s, "KTM 390")
+	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
+	ring := mustItem(t, s, stock.ItemInput{Name: "Ring", Unit: stock.UnitPiece})
+	kin := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 100}, {ItemID: ring, Quantity: 1}}}
+	kin.Normalize()
+	kit, err := s.CreateKit(ctx, kin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trashID, err := s.DeleteKit(ctx, kit, cur(t, s, store.WhatKit, kit))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grams := itemV(t, s, oil, stock.ItemInput{Name: "Oil", Unit: stock.UnitGram})
+	grams.Normalize()
+
+	// The restore holds the oil and waits for the ring.
+	h := hold(t, pool, `SELECT 1 FROM items WHERE id = $1 FOR UPDATE`, ring)
+	var c calls
+	var restored, changed error
+	c.run(func() { _, restored = s.RestoreTrash(ctx, trashID) })
+	xids := waitBlocked(t, pool, 1, []string{h.xid}, "items")
+	done := c.run(func() { changed = s.UpdateItem(ctx, oil, grams, time.Now()) })
+	if !blocks(t, pool, done, 2, xids, "items") {
+		t.Error("the unit changed while the kit's lines were being restored")
+	}
+	h.release(t)
+	c.wait()
+	noDeadlock(t, "restore", restored)
+	noDeadlock(t, "change unit", changed)
+	if restored != nil {
+		t.Fatalf("restore: %v", restored)
+	}
+	wantConflict(t, "unit change", changed, "unit cannot be changed")
+	if it := mustGet(t, s, oil); it.Unit != stock.UnitML {
+		t.Errorf("oil unit = %s, want ml", it.Unit)
+	}
+}
+
+// Deleting an item while its shopping entry is ticked off: both lock the
+// entry, then the item, so they take turns. Bought first, the item has a
+// purchase and is kept; deleted first, the Bought finds the entry in the
+// trash with the item.
+func TestDeletingAnItemAndTickingOffItsEntryTakeTurns(t *testing.T) {
+	for _, first := range []string{"bought", "delete"} {
+		t.Run(first+" first", func(t *testing.T) {
+			s, pool, ctx := newStorePool(t)
+			pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+			entry, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(2.0)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			itemV, entryV := cur(t, s, store.WhatItem, pads), cur(t, s, store.WhatShopping, entry)
+			buy := func() error {
+				_, _, err := s.MarkBought(ctx, entry, entryV, &stock.MovementInput{Delta: 2, TotalPrice: ptr(20.0)})
+				return err
+			}
+			del := func() error { _, err := s.DeleteItem(ctx, pads, itemV); return err }
+
+			// The first holds the entry and waits for the item.
+			h := hold(t, pool, `SELECT 1 FROM items WHERE id = $1 FOR NO KEY UPDATE`, pads)
+			var c calls
+			var bought, deleted error
+			if first == "bought" {
+				c.run(func() { bought = buy() })
+			} else {
+				c.run(func() { deleted = del() })
+			}
+			xids := waitBlocked(t, pool, 1, []string{h.xid}, "items")
+			if first == "bought" {
+				c.run(func() { deleted = del() })
+			} else {
+				c.run(func() { bought = buy() })
+			}
+			waitBlocked(t, pool, 2, xids, "items", "shopping_entries")
+			h.release(t)
+			c.wait()
+			noDeadlock(t, "bought", bought)
+			noDeadlock(t, "delete", deleted)
+
+			if first == "bought" {
+				if bought != nil {
+					t.Fatalf("bought: %v", bought)
+				}
+				wantConflict(t, "delete after the purchase", deleted, "Archive it instead")
+				if it := mustGet(t, s, pads); it.Quantity != 2 {
+					t.Errorf("pads = %v, want 2", it.Quantity)
+				}
+				assertLedger(t, s)
+				return
+			}
+			if deleted != nil {
+				t.Fatalf("delete: %v", deleted)
+			}
+			var stale *store.StaleError
+			if !errors.As(bought, &stale) || !stale.Gone || !stale.InTrash {
+				t.Errorf("bought = %v, want the entry gone with its item, in the trash", bought)
+			}
+		})
+	}
+}

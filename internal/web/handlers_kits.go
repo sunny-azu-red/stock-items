@@ -459,6 +459,10 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	for _, l := range k.Lines {
 		if short := l.Short(); short > 0 && !l.Archived {
 			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "Short for "+k.VehicleName+": "+k.Name) // the note suggestions give
+			var invalid stock.Errors
+			if errors.As(err, &invalid) {
+				continue // an amount the list can't hold, like a line's 1.5 pieces from before they had to be whole
+			}
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return err
 			}

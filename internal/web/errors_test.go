@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 	"github.com/sunny-azu-red/stock-items/internal/testdb"
 )
@@ -137,5 +138,65 @@ func TestQuickAdjustOfADeletedItem(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	if to := rec.Header().Get("Location"); to != "/trash" {
 		t.Errorf("Location = %q, want /trash", to)
+	}
+}
+
+func TestKitShortfallSkipsAnAmountTheListRefuses(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	pads, oil := itemID(t, a.store, "Brake Pads"), itemID(t, a.store, "Silkolene")
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
+		"line_item": {itoa(pads), itoa(oil)}, "line_qty": {"2", "1 L"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	// A line saved before pieces had to be whole: 1.5 pads short, which
+	// the shopping list refuses (stock.CheckQuantity).
+	if _, err := a.pool.Exec(ctx, `UPDATE service_kit_lines SET quantity = 2.5 WHERE kit_id = $1 AND item_id = $2`, mustID(t, kit), pads); err != nil {
+		t.Fatal(err)
+	}
+	rec = a.post(kit+"/shortfall", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Message != "Added 1 missing part to the shopping list" {
+		t.Errorf("flash = %+v, want the oil added", f)
+	}
+	list := mustShopping(t, a)
+	if len(list) != 1 || list[0].ItemID == nil || *list[0].ItemID != oil {
+		t.Errorf("shopping list = %+v, want only the oil", list)
+	}
+}
+
+func TestLinkingADeletedItemSaysSo(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	entry, _ := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "silkolene 15w50 pro 4 xp"})
+	page := "/shopping/" + itoa(entry) + "/bought"
+	link := "/shopping/" + itoa(entry) + "/link"
+	version := a.versionOf(link) // the page offers the oil
+
+	// Deleted in another tab before the click.
+	expect(t, a.postV("/items/"+itoa(oil)+"/delete", nil), http.StatusSeeOther)
+	rec := a.post(link, url.Values{"item_id": {itoa(oil)}, "version": {version}})
+	expect(t, rec, http.StatusSeeOther)
+	if to := rec.Header().Get("Location"); to != page {
+		t.Errorf("Location = %q, want the entry's Bought page %s", to, page)
+	}
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "deleted") {
+		t.Errorf("flash = %+v, want that the item was deleted", f)
+	}
+	expect(t, a.get(page), http.StatusOK)
+	if e, _ := a.store.GetShopping(ctx, entry); e.ItemID != nil {
+		t.Errorf("entry linked to %v", *e.ItemID)
+	}
+	// A forged click without an item, and one of an entry that is gone too.
+	rec = a.post(link, url.Values{"version": {version}})
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.postV("/shopping/"+itoa(entry)+"/delete", nil), http.StatusSeeOther)
+	rec = a.post(link, url.Values{"item_id": {itoa(oil)}, "version": {version}})
+	expect(t, rec, http.StatusSeeOther)
+	if to := rec.Header().Get("Location"); to != "/shopping" {
+		t.Errorf("entry gone too: Location = %q, want /shopping", to)
 	}
 }

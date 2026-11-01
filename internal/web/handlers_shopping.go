@@ -229,11 +229,24 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	itemID := parseOptID(formText(r, "item_id"))
+	var it stock.Item
 	if itemID == nil {
-		return store.ErrNotFound
+		err = store.ErrNotFound
+	} else {
+		it, err = s.store.GetItem(r.Context(), *itemID)
 	}
-	it, err := s.store.GetItem(r.Context(), *itemID)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
+		// Deleted in another tab since the page offered it: back to the
+		// entry's page, which offers what is left (or to the list, when
+		// the entry is gone too).
+		to := fmt.Sprintf("/shopping/%d/bought", id)
+		if _, err := s.store.GetShopping(r.Context(), id); errors.Is(err, store.ErrNotFound) {
+			to = "/shopping"
+		}
+		s.setFlash(w, "error", "That item was deleted meanwhile, so nothing was linked. Choose another, or add it as a new item.")
+		s.redirect(w, r, to, "")
+		return nil
+	} else if err != nil {
 		return err
 	}
 	entry, dropped, err := s.store.LinkShopping(r.Context(), id, parseVersion(r), *itemID)

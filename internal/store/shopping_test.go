@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
+	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 // AddShopping checks an item's amount against the unit it reads under the
@@ -47,5 +48,43 @@ func TestAddShoppingChecksTheItemsUnit(t *testing.T) {
 	}
 	if len(list) != 2 || got[oil] != 500 || got[pads] != 2 {
 		t.Errorf("shopping list = %+v", list)
+	}
+}
+
+// Linking a free-text entry to an item keeps what the text said in the
+// note, unless it was just the item's name.
+func TestLinkShoppingKeepsTheText(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, note string
+		listed           bool // the item has an entry already, noted "sintered"
+		want             string
+	}{
+		{"own entry", "the cheap ones from the market", "rear", false, "the cheap ones from the market; rear"},
+		{"own entry, no note", "the cheap ones from the market", "", false, "the cheap ones from the market"},
+		{"own entry, the item's name", " brake PADS ", "rear", false, "rear"},
+		{"own entry, brand and name", "EBC Brake Pads", "", false, ""},
+		{"merged", "the cheap ones from the market", "rear", true, "sintered; the cheap ones from the market; rear"},
+		{"merged, the item's name", "Brake Pads", "rear", true, "sintered; rear"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ctx := newStore(t)
+			pads := mustItem(t, s, stock.ItemInput{Brand: "EBC", Name: "Brake Pads", Unit: stock.UnitPiece})
+			if tc.listed {
+				if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Note: "sintered"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			free, err := s.AddShopping(ctx, stock.ShoppingInput{FreeText: tc.text, Note: tc.note})
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, _, err := s.LinkShopping(ctx, free, cur(t, s, store.WhatShopping, free), pads)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if e, err := s.GetShopping(ctx, id); err != nil || e.Note != tc.want || e.FreeText != "" {
+				t.Errorf("entry = %+v, %v; want note %q", e, err, tc.want)
+			}
+		})
 	}
 }

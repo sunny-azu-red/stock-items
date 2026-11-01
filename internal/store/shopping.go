@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -275,11 +276,19 @@ func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, erro
 	return s.ListItems(ctx, ItemFilter{IDs: ids})
 }
 
+// namesItem reports whether text is just an item's name or "brand name",
+// ignoring case and surrounding spaces, as ItemsNamed matches it.
+func namesItem(text, brand, name string) bool {
+	text = strings.TrimSpace(text)
+	return strings.EqualFold(text, strings.TrimSpace(name)) || strings.EqualFold(text, strings.TrimSpace(brand+" "+name))
+}
+
 // LinkShopping turns a free-text entry into an entry for an existing item,
 // restoring the item if it was archived, and returns the entry to mark
 // bought. If the item is on the list already, the free-text entry is
-// merged into that one. A quantity in another unit than the item's is
-// dropped (dropped reports it). ErrNotFound means the entry is gone or
+// merged into that one. Its text joins the note, unless it is just the
+// item's name. A quantity in another unit than the item's is dropped
+// (dropped reports it). ErrNotFound means the entry is gone or
 // already linked, or the item is gone. An entry changed since version
 // fails with a *StaleError.
 func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, itemID int64) (id int64, dropped bool, err error) {
@@ -287,10 +296,10 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		var linked *int64
 		var unit stock.Unit
 		var qty *float64
-		var note string
+		var text, note string
 		var have int
-		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, note, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
-			Scan(&linked, &unit, &qty, &note, &have)
+		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, free_text, note, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
+			Scan(&linked, &unit, &qty, &text, &note, &have)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, entryID); err != nil {
 			return err
 		}
@@ -305,8 +314,14 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 			return err
 		}
 		var itemUnit stock.Unit
-		if err := tx.QueryRow(ctx, `SELECT unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&itemUnit); err != nil {
+		var brand, name string
+		if err := tx.QueryRow(ctx, `SELECT unit, brand, name FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&itemUnit, &brand, &name); err != nil {
 			return notFound(err)
+		}
+		// The text said what to buy: unless it is just the item's name, keep
+		// it in the note, as adding an item with text does.
+		if !namesItem(text, brand, name) {
+			note = strings.TrimSuffix(text+"; "+note, "; ")
 		}
 		// Looked up again under the item's lock, like ArchiveItem: locking
 		// an entry that wasn't there yet locked nothing, and an AddShopping
@@ -337,8 +352,8 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		if !merge {
 			id = entryID
 			// It is another entry now: a new version.
-			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4, version = version + 1
-				WHERE id = $1`, entryID, itemID, qty, itemUnit)
+			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4, note = $5, version = version + 1
+				WHERE id = $1`, entryID, itemID, qty, itemUnit, note)
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM shopping_entries WHERE id = $1`, entryID); err != nil {

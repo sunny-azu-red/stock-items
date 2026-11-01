@@ -55,6 +55,9 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   font: 15px/1.5 var(--font);
+  /* Every digit the same width, so figures line up in columns and don't
+     shift when they change. Segoe UI's own digits aren't. */
+  font-variant-numeric: tabular-nums;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -414,7 +417,7 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: .4rem; padding: 0; 
 .item-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: .9rem; align-items: center; padding: .7rem 1.1rem; border-top: 1px solid var(--border); }
 .item-list > .item-row:first-child { border-top: 0; }
 .item-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
-.qty { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1rem; text-align: right; white-space: nowrap; }
+.qty { font-weight: 700; font-size: 1rem; text-align: right; white-space: nowrap; }
 .qty.zero { color: var(--danger); }
 .qty.low { color: var(--warn); }
 .item-main { min-width: 0; }
@@ -441,7 +444,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .table th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: .6rem 1.1rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .table td { padding: .6rem 1.1rem; border-top: 1px solid var(--border); vertical-align: middle; }
 .table tr:first-child td { border-top: 0; }
-.table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table .num { text-align: right; white-space: nowrap; }
 .table .nowrap { white-space: nowrap; }
 .table a { text-decoration: none; font-weight: 600; }
 .table a:hover { color: var(--accent); }
@@ -512,7 +515,7 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .photo { aspect-ratio: 4 / 3; background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; color: var(--muted); }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
 .photo .icon { width: 40px; height: 40px; }
-.big-qty { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.big-qty { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
 .sku-table td:first-child { font-family: var(--mono); }
 .sku-link { text-decoration: underline dotted; text-underline-offset: 3px; }
 .sku-link:hover { color: var(--accent); text-decoration-style: solid; }

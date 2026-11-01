@@ -794,7 +794,11 @@ test("screenshots", async ({ page }, testInfo) => {
     await page.goto(url);
     // A full-page shot keeps the fixed tab bar where the first screen ends,
     // over the content: put it at the end of the page, as when scrolled down.
-    await page.addStyleTag({ content: "body { position: relative; } .tabbar { position: absolute !important; }" });
+    // The sticky sidebar is one screen high too: stretch it down the page,
+    // so its footer is at the bottom and not halfway down.
+    await page.addStyleTag({
+      content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
+    });
     await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}${suffix}.png`, fullPage: true });
   }
 });

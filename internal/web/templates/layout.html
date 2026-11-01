@@ -27,9 +27,10 @@
       {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard"))}}
       {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock"))}}
       {{template "nav-link" (dict "Href" "/services" "Icon" "wrench" "Label" "Services" "Active" (eq .Nav "services"))}}
-      {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping list" "Active" (eq .Nav "shopping") "Count" .ShoppingCount)}}
+      {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping" "Active" (eq .Nav "shopping") "Count" .ShoppingCount)}}
       {{template "nav-link" (dict "Href" "/vehicles" "Icon" "warehouse" "Label" "Vehicles" "Active" (eq .Nav "vehicles"))}}
       {{template "nav-link" (dict "Href" "/activity" "Icon" "history" "Label" "Activity" "Active" (eq .Nav "activity"))}}
+      {{if .TrashCount}}{{template "nav-link" (dict "Href" "/trash" "Icon" "trash-2" "Label" "Trash" "Active" (eq .Nav "trash") "Count" .TrashCount "Muted" true)}}{{end}}
     </nav>
     {{with .NavVehicles}}
     <div>
@@ -46,7 +47,6 @@
         <li><span class="kbd">/</span> Search stock</li>
         <li><span class="kbd">n</span> New item</li>
       </ul>
-      {{if .TrashCount}}<p><a href="/trash">{{icon "trash-2"}} Recently deleted ({{.TrashCount}})</a></p>{{end}}
       <p>{{.Version}}</p>
     </div>
   </aside>
@@ -62,13 +62,13 @@
   <a href="/stock" {{if eq .Nav "stock"}}aria-current="page"{{end}}>{{icon "package"}}Stock</a>
   <a href="/services" {{if eq .Nav "services"}}aria-current="page"{{end}}>{{icon "wrench"}}Services</a>
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shopping{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>
-  <a href="/vehicles" {{if or (eq .Nav "vehicles") (eq .Nav "activity")}}aria-current="page"{{end}}>{{icon "warehouse"}}Vehicles</a>
+  <a href="/vehicles" {{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash")}}aria-current="page"{{end}}>{{icon "warehouse"}}Vehicles</a>
 </nav>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 </body>
 </html>{{end}}
 
-{{define "nav-link"}}<a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count">{{.}}</span>{{end}}</a>{{end}}
+{{define "nav-link"}}<a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}</a>{{end}}
 
 {{/* Both buttons are rendered; CSS shows the one that switches away from the
      current theme, so it also works without JavaScript. Data: extra class. */}}

@@ -26,7 +26,7 @@
 </div>
 <p class="mt flex">
   <a class="btn btn-ghost" href="/activity">{{icon "history"}} Activity log</a>
-  {{if .TrashCount}}<a class="btn btn-ghost" href="/trash">{{icon "trash-2"}} Recently deleted ({{.TrashCount}})</a>{{end}}
+  {{if .TrashCount}}<a class="btn btn-ghost" href="/trash">{{icon "trash-2"}} Trash ({{.TrashCount}})</a>{{end}}
   {{if $d.ShowArchived}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
   {{else if $d.Archived}}<a class="btn btn-ghost" href="/vehicles?archived=1">{{icon "archive"}} {{plural $d.Archived "archived vehicle"}}</a>{{end}}
 </p>

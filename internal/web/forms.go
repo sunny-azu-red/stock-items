@@ -261,7 +261,7 @@ func staleForm(err error, reload string) *staleNote {
 	n := &staleNote{Message: stale.Error(), Href: reload, Link: "Reload"}
 	switch {
 	case stale.Gone && stale.InTrash:
-		n.Href, n.Link = "/trash", "Recently deleted"
+		n.Href, n.Link = "/trash", "Trash"
 	case stale.Gone:
 		n.Href = ""
 	}
@@ -269,7 +269,7 @@ func staleForm(err error, reload string) *staleNote {
 }
 
 // gone turns a page's ErrNotFound for the record a button acts on into
-// the store's explanation: deleted, and maybe in Recently deleted.
+// the store's explanation: deleted, and maybe in the trash.
 func (s *Server) gone(r *http.Request, err error, what string, id int64) error {
 	if errors.Is(err, store.ErrNotFound) {
 		return s.store.Gone(r.Context(), what, id)
@@ -279,7 +279,7 @@ func (s *Server) gone(r *http.Request, err error, what string, id int64) error {
 
 // staleButton answers a button (delete, archive, restore, …) whose record
 // changed or was deleted since its page was shown: nothing was done, and
-// the user lands on the record as it is now (page), on Recently deleted,
+// the user lands on the record as it is now (page), on the trash page,
 // or on list when it is gone for good. It reports whether err was that.
 func (s *Server) staleButton(w http.ResponseWriter, r *http.Request, err error, page, list string) bool {
 	var stale *store.StaleError
@@ -352,7 +352,7 @@ func (s *Server) savedBefore(w http.ResponseWriter, r *http.Request, key, what s
 // savedAlready answers a *store.AlreadySavedError: nothing was saved this
 // time, and the user lands where the first save did, page(id) for the
 // record it saved, with a message saying so. A record deleted since leads
-// to Recently deleted, or to list. It reports whether err was that.
+// to the trash, or to list. It reports whether err was that.
 func (s *Server) savedAlready(w http.ResponseWriter, r *http.Request, err error, page func(int64) string, list string) bool {
 	var saved *store.AlreadySavedError
 	if !errors.As(err, &saved) {
@@ -360,7 +360,7 @@ func (s *Server) savedAlready(w http.ResponseWriter, r *http.Request, err error,
 	}
 	switch {
 	case saved.Gone != nil && saved.Gone.InTrash:
-		s.setFlash(w, "error", "This was saved already, and deleted since; it's in Recently deleted.")
+		s.setFlash(w, "error", "This was saved already, and deleted since; it's in the trash.")
 		s.redirect(w, r, "/trash", "")
 	case saved.Gone != nil:
 		s.setFlash(w, "error", "This was saved already, and deleted since.")

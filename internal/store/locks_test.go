@@ -160,7 +160,7 @@ func noDeadlock(t *testing.T, what string, err error) {
 // Deleting an item while one of its stock changes is deleted: the stock
 // change locks its item before itself, as the item's delete does before
 // cascading to it, so they take turns. The stock change is then gone with
-// the item, in Recently deleted, and Undo brings both back.
+// the item, in the trash, and Undo brings both back.
 func TestDeletingAnItemAndItsStockChangeTakeTurns(t *testing.T) {
 	s, pool, ctx := newStorePool(t)
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
@@ -189,7 +189,7 @@ func TestDeletingAnItemAndItsStockChangeTakeTurns(t *testing.T) {
 	}
 	var stale *store.StaleError
 	if !errors.As(delUse, &stale) || !stale.Gone || !stale.InTrash {
-		t.Errorf("delete stock change = %v, want gone with its item, in Recently deleted", delUse)
+		t.Errorf("delete stock change = %v, want gone with its item, in the trash", delUse)
 	}
 	mustRestore(t, s, trashID)
 	if it := mustGet(t, s, pads); it.Quantity != 3 {

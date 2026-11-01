@@ -2554,7 +2554,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.Unit, in.Quantity = stock.UnitML, 0
-	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now()), "including in Recently deleted")
+	wantConflict(t, "with a deleted stock change", s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now()), "including in the trash")
 	if _, err := s.PurgeTrash(ctx, trashID); err != nil {
 		t.Fatal(err)
 	}
@@ -2571,7 +2571,7 @@ func TestUnitLockedByTheTrash(t *testing.T) {
 		}
 		err := s.UpdateItem(ctx, id, itemV(t, s, id, in), time.Now())
 		if qty != nil {
-			wantConflict(t, "with a deleted list entry", err, "including in Recently deleted")
+			wantConflict(t, "with a deleted list entry", err, "including in the trash")
 			if _, err := s.PurgeTrash(ctx, trashID); err != nil {
 				t.Fatal(err)
 			}

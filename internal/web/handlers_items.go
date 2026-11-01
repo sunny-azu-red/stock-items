@@ -507,7 +507,7 @@ func (s *Server) itemArchive(w http.ResponseWriter, r *http.Request) error {
 	}
 	msg := "Archived " + it.DisplayName() + ". Its history stays; restore it any time."
 	if listTrash != 0 {
-		msg = "Archived " + it.DisplayName() + ". Its history stays; restore it any time. Its shopping list entry is in Recently deleted."
+		msg = "Archived " + it.DisplayName() + ". Its history stays; restore it any time. Its shopping list entry is in the trash."
 	}
 	s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
 	return nil

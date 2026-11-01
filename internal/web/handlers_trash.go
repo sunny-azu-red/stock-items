@@ -16,7 +16,7 @@ func (s *Server) trashList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "trash", View{Title: "Recently deleted", Nav: "activity", Data: entries})
+	s.render(w, r, http.StatusOK, "trash", View{Title: "Trash", Nav: "trash", Data: entries})
 	return nil
 }
 
@@ -90,7 +90,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 	}
 	if res.Replaced != 0 {
 		// The photo it took the place of went to the trash in turn.
-		s.redirectUndo(w, r, restoredPath(res), msg+" The newer photo is in Recently deleted.", res.Replaced)
+		s.redirectUndo(w, r, restoredPath(res), msg+" The newer photo is in the trash.", res.Replaced)
 		return nil
 	}
 	s.redirect(w, r, restoredPath(res), msg)

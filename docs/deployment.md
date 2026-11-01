@@ -120,11 +120,11 @@ New migrations are applied automatically on start; to apply them separately, run
 
 ## Health check
 
-`GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no shell or curl. Docker only marks an unhealthy container; it doesn't restart it.
+`GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.
 
 ## Backups
 
-Everything, photos and Recently deleted included, lives in the database:
+Everything, photos and the trash included, lives in the database:
 
 ```bash
 pg_dump -h <db-host> -U <db-user> -Fc stock_items > stock_items-$(date +%F).dump

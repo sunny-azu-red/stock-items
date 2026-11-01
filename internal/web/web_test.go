@@ -1073,7 +1073,7 @@ func TestArchiveItemFlow(t *testing.T) {
 	// On the shopping list: archiving says where the entry went.
 	expect(t, a.post(path+"/shopping", nil), http.StatusSeeOther)
 	rec = a.postV(path+"/archive", nil)
-	if f := flashOf(t, rec); !strings.Contains(f.Message, "shopping list entry is in Recently deleted") {
+	if f := flashOf(t, rec); !strings.Contains(f.Message, "shopping list entry is in the trash") {
 		t.Errorf("flash = %+v", f)
 	}
 	expect(t, a.get("/trash"), http.StatusOK, "Shopping list: ")
@@ -1663,8 +1663,8 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	if f.Undo == 0 || !strings.Contains(f.Message, "Deleted Top up") {
 		t.Fatalf("flash = %+v", f)
 	}
-	expect(t, a.get("/"), http.StatusOK, `href="/trash">`, "Recently deleted (1)")
-	expect(t, a.get("/trash"), http.StatusOK, "Service: Top up (KTM 390, 29 Oct 2026)", `action="/trash/`+itoa(f.Undo)+`/restore"`)
+	expect(t, a.get("/"), http.StatusOK, `href="/trash"`, `Trash<span class="count count-muted">1</span>`)
+	expect(t, a.get("/trash"), http.StatusOK, `href="/trash" aria-current="page"`, "Service: Top up (KTM 390, 29 Oct 2026)", `action="/trash/`+itoa(f.Undo)+`/restore"`)
 
 	// Undo brings the service back and takes the oil again.
 	rec = a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
@@ -1701,7 +1701,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	}
 	expect(t, a.post("/trash/empty", nil), http.StatusSeeOther)
 	expect(t, a.get("/trash"), http.StatusOK, "Nothing deleted")
-	expectNot(t, a.get("/"), "Recently deleted (")
+	expectNot(t, a.get("/"), `href="/trash"`)
 }
 
 func TestPurgeSaysWhatWentAlong(t *testing.T) {
@@ -1936,7 +1936,7 @@ func TestPhotoRestoreBeatsTheCache(t *testing.T) {
 	expect(t, cached, http.StatusOK, "new")
 
 	f := flashOf(t, a.post("/trash/"+itoa(replaced)+"/restore", nil))
-	if f.Undo == 0 || f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in Recently deleted." {
+	if f.Undo == 0 || f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in the trash." {
 		t.Errorf("restore flash = %+v", f)
 	}
 	req := httptest.NewRequest(http.MethodGet, photo, nil)

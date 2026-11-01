@@ -82,6 +82,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
 .nav .count { margin-left: auto; font-size: .75rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 .45rem; font-weight: 700; }
+/* A count that needs no action, such as what is in the trash. */
+.nav .count-muted { background: var(--surface-2); color: var(--muted); }
 .nav-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 .7rem; margin-bottom: .25rem; }
 .nav-vehicles a { font-weight: 400; }
 .dot { width: .65rem; height: .65rem; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }

@@ -311,7 +311,7 @@ func (s *Store) ListTrash(ctx context.Context) ([]stock.TrashEntry, error) {
 }
 
 // TrashThumb returns the thumbnail of a photo in the trash, from its
-// snapshot, so Recently deleted can tell several photos of one item apart.
+// snapshot, so the trash page can tell several photos of one item apart.
 // A trash entry never changes, so the result can be cached for good.
 func (s *Store) TrashThumb(ctx context.Context, id int64) (Photo, error) {
 	var p Photo

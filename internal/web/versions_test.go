@@ -215,7 +215,7 @@ func TestStaleEditFormsAreRefused(t *testing.T) {
 }
 
 // An edit form whose record was deleted in another tab keeps what was
-// typed and points to Recently deleted, rather than a 404.
+// typed and points to the trash, rather than a 404.
 func TestEditFormsOfDeletedRecordsKeepWhatWasTyped(t *testing.T) {
 	for _, r := range records() {
 		t.Run(r.name, func(t *testing.T) {
@@ -230,8 +230,8 @@ func TestEditFormsOfDeletedRecordsKeepWhatWasTyped(t *testing.T) {
 				t.Fatalf("delete offered no Undo: %+v", flashOf(t, rec))
 			}
 			rec = submit(a, action, mine, r.fields(a, "Typed in the first tab"))
-			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was deleted since you opened this; it&#39;s in Recently deleted.",
-				`href="/trash">Recently deleted</a>`, "Typed in the first tab")
+			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was deleted since you opened this; it&#39;s in the trash.",
+				`href="/trash">Trash</a>`, "Typed in the first tab")
 			if got := r.note(a, action); got != "" {
 				t.Errorf("the deleted %s came back with %q", r.name, got)
 			}
@@ -415,7 +415,7 @@ func TestButtonsOfDeletedRecordsPointToTheTrash(t *testing.T) {
 			if l := rec.Header().Get("Location"); l != "/trash" {
 				t.Errorf("went to %q, want /trash", l)
 			}
-			if f := flashOf(t, rec); f.Kind != "error" || f.Message != "This "+r.name+" was deleted since you opened this; it's in Recently deleted." {
+			if f := flashOf(t, rec); f.Kind != "error" || f.Message != "This "+r.name+" was deleted since you opened this; it's in the trash." {
 				t.Errorf("flash = %+v", f)
 			}
 		})
@@ -611,7 +611,7 @@ func TestUndoPathsStillWork(t *testing.T) {
 			http.StatusSeeOther) // in use: archived, not deleted
 		expect(t, a.post(item+"/shopping", url.Values{"quantity": {"1"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
 		rec := saveFresh(t, a, item, item+"/archive", nil)
-		if f := flashOf(t, rec); !strings.Contains(f.Message, "Its shopping list entry is in Recently deleted") {
+		if f := flashOf(t, rec); !strings.Contains(f.Message, "Its shopping list entry is in the trash") {
 			t.Errorf("archive flash = %+v", f)
 		}
 		saveFresh(t, a, item, item+"/restore", nil)

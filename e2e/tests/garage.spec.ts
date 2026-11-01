@@ -331,14 +331,14 @@ test("undo a deleted service", async ({ page }) => {
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText(before as string);
 });
 
-test("restore a shopping entry from Recently deleted", async ({ page }) => {
+test("restore a shopping entry from the trash", async ({ page }) => {
   await page.goto("/shopping");
   await page.getByLabel("Something new").fill("Zip ties");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Remove Zip ties" }).click();
   await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(0);
   await page.goto("/activity");
-  await page.locator("main").getByRole("link", { name: /Recently deleted/ }).click();
+  await page.locator("main").getByRole("link", { name: /^Trash/ }).click();
   const entry = page.locator(".list li").filter({ hasText: "Shopping list: Zip ties" });
   await entry.getByRole("button", { name: "Restore" }).click();
   await expect(page.locator(".flash-success")).toContainText("Restored Shopping list: Zip ties");
@@ -477,7 +477,7 @@ test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page,
   await expect(copy).not.toHaveAttribute("data-copied");
 });
 
-test("replaced photos show their thumbnails in Recently deleted", async ({ page }) => {
+test("replaced photos show their thumbnails in the trash", async ({ page }) => {
   // Three photos of one item, in different colours.
   const png = async (color: string) => Buffer.from(await page.evaluate((c) => {
     const canvas = document.createElement("canvas");
@@ -500,7 +500,7 @@ test("replaced photos show their thumbnails in Recently deleted", async ({ page 
   }
   // Undo the last replace: the second photo is back, the third in the trash.
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Restored the photo of Hiflofiltro Oil Filter. The newer photo is in Recently deleted.");
+  await expect(page.locator(".flash-success")).toContainText("Restored the photo of Hiflofiltro Oil Filter. The newer photo is in the trash.");
 
   await page.goto("/trash");
   const photos = page.locator("li").filter({ hasText: "Photo: Hiflofiltro Oil Filter (replaced)" });
@@ -758,6 +758,7 @@ test("screenshots", async ({ page }, testInfo) => {
     ["services", "/services"],
     ["shopping", "/shopping"],
     ["activity", "/activity"],
+    ["trash", "/trash"],
     ["activity-sorted", "/activity?sort=price"],
     ["stock-sorted", "/stock?sort=expiry&dir=desc"],
     ["item-new", "/items/new"],
@@ -775,6 +776,9 @@ test("screenshots", async ({ page }, testInfo) => {
   shots.push(["service-new", "/services/new"]);
   for (const [name, url] of shots) {
     await page.goto(url);
+    // A full-page shot keeps the fixed tab bar where the first screen ends,
+    // over the content: put it at the end of the page, as when scrolled down.
+    await page.addStyleTag({ content: "body { position: relative; } .tabbar { position: absolute !important; }" });
     await page.screenshot({ path: `${dir}/${testInfo.project.name}-${name}${suffix}.png`, fullPage: true });
   }
 });

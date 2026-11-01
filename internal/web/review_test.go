@@ -210,7 +210,7 @@ func TestPartNumberLinks(t *testing.T) {
 	}
 }
 
-// Photos in Recently deleted show their thumbnails, so several replaced
+// Photos in the trash show their thumbnails, so several replaced
 // photos of one item can be told apart, and the one brought back says
 // where the newer one went.
 func TestDeletedPhotosShowTheirThumbnails(t *testing.T) {
@@ -230,7 +230,7 @@ func TestDeletedPhotosShowTheirThumbnails(t *testing.T) {
 	second := trash[0].ID
 	rec := a.post("/trash/"+itoa(second)+"/restore", nil)
 	f := flashOf(t, rec)
-	if f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in Recently deleted." || f.Undo == 0 {
+	if f.Message != "Restored the photo of Silkolene 15W50 PRO 4 XP. The newer photo is in the trash." || f.Undo == 0 {
 		t.Errorf("restore flash = %+v", f)
 	}
 	expect(t, a.get(itemPath(oil)+"/photo"), http.StatusOK, "second photo")
@@ -277,7 +277,7 @@ func TestArchivingAListedItemKeepsItsEntry(t *testing.T) {
 	expect(t, a.post(item+"/shopping", url.Values{"quantity": {"2"}}), http.StatusSeeOther)
 
 	rec := a.postV(item+"/archive", nil)
-	if f := flashOf(t, rec); !strings.Contains(f.Message, "Its shopping list entry is in Recently deleted.") {
+	if f := flashOf(t, rec); !strings.Contains(f.Message, "Its shopping list entry is in the trash.") {
 		t.Errorf("archive flash = %+v", f)
 	}
 	if list, _ := a.store.ListShopping(ctx); len(list) != 0 {

@@ -61,7 +61,7 @@ func (s *Server) shoppingList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "shopping", View{Title: "Shopping list", Nav: "shopping", Data: p})
+	s.render(w, r, http.StatusOK, "shopping", View{Title: "Shopping", Nav: "shopping", Data: p})
 	return nil
 }
 
@@ -130,7 +130,7 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusUnprocessableEntity, "shopping", View{Title: "Shopping list", Nav: "shopping", Data: p})
+	s.render(w, r, http.StatusUnprocessableEntity, "shopping", View{Title: "Shopping", Nav: "shopping", Data: p})
 	return nil
 }
 

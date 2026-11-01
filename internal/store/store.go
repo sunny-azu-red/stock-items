@@ -30,7 +30,7 @@ func (e *ConflictError) Error() string { return e.Message }
 // StaleError refuses a form or button whose record changed or vanished
 // since it was shown: the version it carries no longer matches. Gone
 // means the row no longer exists; InTrash that it can be restored from
-// Recently deleted. A gone record also matches ErrNotFound.
+// the trash. A gone record also matches ErrNotFound.
 type StaleError struct {
 	What    string // what the record is, e.g. WhatItem
 	Gone    bool
@@ -67,7 +67,7 @@ func versioned(table string) bool {
 func (e *StaleError) Error() string {
 	switch {
 	case e.Gone && e.InTrash:
-		return "This " + e.What + " was deleted since you opened this; it's in Recently deleted."
+		return "This " + e.What + " was deleted since you opened this; it's in the trash."
 	case e.Gone:
 		return "This " + e.What + " was deleted since you opened this."
 	}
@@ -131,7 +131,7 @@ func versionedUpdate(ctx context.Context, q queryRower, tag pgconn.CommandTag, e
 }
 
 // Gone explains a record of kind what (WhatItem, …) that a page found
-// missing: a *StaleError saying whether it is in Recently deleted.
+// missing: a *StaleError saying whether it is in the trash.
 func (s *Store) Gone(ctx context.Context, what string, id int64) error {
 	if _, ok := versionedTables[what]; !ok {
 		return ErrNotFound

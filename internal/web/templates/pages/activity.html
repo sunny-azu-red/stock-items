@@ -6,7 +6,7 @@
     <p class="sub">{{if $d.Item}}Every change to this item's stock{{else}}Every change to your stock{{end}}, {{$d.SortNote}}.</p>
   </div>
   <div class="actions">
-    {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Recently deleted ({{.TrashCount}})</a>{{end}}
+    {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Trash ({{.TrashCount}})</a>{{end}}
     <a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
   </div>
 </div>

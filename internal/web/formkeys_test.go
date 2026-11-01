@@ -622,7 +622,7 @@ func TestRepeatsAfterUndo(t *testing.T) {
 		if got := rec.Header().Get("Location"); got != "/trash" {
 			t.Errorf("repeat after the delete went to %s, want /trash", got)
 		}
-		if f := flashOf(t, rec); !strings.Contains(f.Message, "saved already, and deleted since; it's in Recently deleted") {
+		if f := flashOf(t, rec); !strings.Contains(f.Message, "saved already, and deleted since; it's in the trash") {
 			t.Errorf("flash = %+v", f)
 		}
 		if s, _ := a.store.ListServices(ctx, store.ServiceFilter{}); len(s) != 0 {

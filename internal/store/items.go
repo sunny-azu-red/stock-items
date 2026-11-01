@@ -283,7 +283,7 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 				return err
 			}
 			if used {
-				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in Recently deleted"}
+				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in the trash"}
 			}
 		}
 		// A new version: a form opened before this save is stale now.

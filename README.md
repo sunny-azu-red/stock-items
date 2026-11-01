@@ -41,17 +41,13 @@ Requirements: [Go](https://go.dev/dl/) 1.27.3+, a PostgreSQL database (tested wi
 
 ```bash
 cp .env.example .env     # then fill in your database credentials
-go run ./cmd/pitbox      # migrates the database and serves http://0.0.0.0:8080
+CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o bin/pitbox ./cmd/pitbox
+./bin/pitbox             # reads .env from the working directory, migrates the database and serves http://0.0.0.0:8080
 ```
 
 Open `http://<this-machine>:8080` from any device on your network. Start by adding your vehicles, then your items.
 
-### Build a binary
-
-```bash
-CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always --dirty)" -o bin/pitbox ./cmd/pitbox
-./bin/pitbox            # reads .env from the working directory
-```
+The example `.env` uses the `public` schema, where the app keeps its data. A build with a version, like the one above or the Docker image, runs on it. `go run ./cmd/pitbox` and a plain `go build` are development builds and refuse `public`: develop with `DB_SCHEMA=dev` (see [docs/development.md](docs/development.md)).
 
 Or run the published image, e.g. as a Portainer stack from [compose.yaml](compose.yaml). See [docs/deployment.md](docs/deployment.md) for that, systemd and plain Docker.
 

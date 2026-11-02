@@ -12,7 +12,7 @@
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "shopping-cart"}} To buy</h2><span class="muted small">{{len $d.Entries}}</span></div>
+      <div class="card-head"><h2>{{icon "shopping-cart"}} On the list</h2><span class="muted small">{{len $d.Entries}}</span></div>
       {{if $d.Entries}}
       <ul class="list">
         {{range $d.Entries}}{{$entry := .}}

@@ -725,7 +725,7 @@ test("sort the stock with Sort by and its direction", async ({ page }) => {
   await expect(row(page, screen).locator(".qty")).toHaveText(before);
 
   // Sorting isn't a filter, and the other links keep it.
-  await expect(page.locator("#results")).not.toContainText("clear filters");
+  await expect(page.locator("#results")).not.toContainText("Clear filters");
   await page.locator("#results").getByRole("link", { name: "Grouped" }).click();
   await expect(page).toHaveURL(/\/stock\?dir=asc&sort=recent$/);
   await expect(page.getByLabel("Sort by")).toHaveValue("recent");

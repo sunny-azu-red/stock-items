@@ -23,7 +23,7 @@
     </select>
   </div>
   <div class="filters-row" role="group" aria-label="Vehicles">
-    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="{{withQuery "/stock" $f.AllVehicles}}">All</a>
+    <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="{{withQuery "/stock" $f.AllVehicles}}">All vehicles</a>
     {{range $d.Vehicles}}
     <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="v" value="{{.ID}}" {{if $f.HasVehicle .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
     {{end}}
@@ -62,7 +62,7 @@
 
 <div id="results" class="loading-dim">
   <div class="results-head">
-    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="{{withQuery "/stock" $f.Cleared}}">clear filters</a>{{end}}</span>
+    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="{{withQuery "/stock" $f.Cleared}}">Clear filters</a>{{end}}</span>
     <div class="flex">
       <span class="segmented" role="group" aria-label="View">
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>
@@ -76,7 +76,7 @@
   {{if not $d.Items}}
     <div class="card">
       {{if $f.Active}}
-        {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search or remove some filters.")}}
+        {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search, or clear the filters." "Href" (withQuery "/stock" $f.Cleared) "Action" "Clear filters" "ActionIcon" "x")}}
       {{else}}
         {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep in stock." "Href" "/items/new" "Action" "Add item")}}
       {{end}}

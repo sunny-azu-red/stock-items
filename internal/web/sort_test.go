@@ -117,7 +117,7 @@ func TestActivitySortHeaders(t *testing.T) {
 	expect(t, rec, http.StatusOK,
 		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc&amp;kind=purchase&amp;sort=price"`,
 		`<th aria-sort="none"><a class="sort-link" href="/activity?kind=purchase" title="Sort by Date, descending">`,
-		`href="/activity?sort=price">Everything</a>`,
+		`href="/activity?sort=price">All types</a>`,
 		`href="/activity?kind=use&amp;sort=price">Used</a>`,
 		`href="/activity/export.csv?kind=purchase&amp;sort=price"`)
 	expect(t, rec, http.StatusOK, "Every change to your stock, by price, highest first.")
@@ -244,10 +244,10 @@ func TestStockSortBy(t *testing.T) {
 		`href="/stock/export.txt?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`href="/stock/export.csv?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`id="filter-all" href="/stock?dir=desc&amp;sort=expiry&amp;view=list"`)
-	if strings.Contains(rec.Body.String(), "clear filters") {
+	if strings.Contains(rec.Body.String(), "Clear filters") {
 		t.Error("a sort counts as a filter")
 	}
-	expect(t, a.get("/stock?q=oil&sort=quantity"), http.StatusOK, `href="/stock?sort=quantity">clear filters</a>`)
+	expect(t, a.get("/stock?q=oil&sort=quantity"), http.StatusOK, `href="/stock?sort=quantity">Clear filters</a>`)
 
 	// Without a direction, Recently changed starts newest first.
 	expect(t, a.get("/stock?sort=recent"), http.StatusOK,

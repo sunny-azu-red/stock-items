@@ -28,7 +28,7 @@
   <a class="card tile" href="/stock"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
   <a class="card tile{{if $d.LowItems}} warn{{end}}" href="/stock?low=1"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
   <a class="card tile{{if $d.Expiring}} danger{{end}}" href="/stock?exp=1"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
-  <a class="card tile" href="/shopping"><span class="label">{{icon "shopping-cart"}} To buy</span><span class="value">{{.ShoppingCount}}</span></a>
+  <a class="card tile" href="/shopping"><span class="label">{{icon "shopping-cart"}} Shopping list</span><span class="value">{{.ShoppingCount}}</span></a>
   <a class="card tile" href="/stock?instock=1"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></a>
   <a class="card tile" href="/activity?kind=purchase&amp;year={{.Today.Year}}"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
 </div>
@@ -70,7 +70,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "triangle-alert"}} Running low</h2>{{if $d.SuggestionCount}}<a class="more" href="/shopping">{{$d.SuggestionCount}} to buy →</a>{{end}}</div>
+      <div class="card-head"><h2>{{icon "triangle-alert"}} Running low</h2>{{if $d.SuggestionCount}}<a class="more" href="/shopping">{{$d.SuggestionCount}} suggested →</a>{{end}}</div>
       {{if $d.LowItems}}
       <ul class="list">
         {{range $d.LowItems}}

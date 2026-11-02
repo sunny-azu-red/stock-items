@@ -12,7 +12,7 @@
 </div>
 <div class="filters-row mb">
   <div class="chips" role="group" aria-label="Kind">
-    <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">Everything</a>
+    <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">All types</a>
     {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
   </div>
   {{if $d.Years}}<form class="sort-by" method="get" action="/activity">
@@ -27,7 +27,7 @@
 <section class="card">
   {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item) "Sort" $d.Heads)}}
   {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
-  {{else if or $d.Kind $d.Year}}{{template "empty" (dict "Icon" "history" "Title" "Nothing matches these filters" "Href" (withQuery "/activity" $d.AllQuery) "Action" "Show everything" "ActionIcon" "history")}}
+  {{else if or $d.Kind $d.Year}}{{template "empty" (dict "Icon" "history" "Title" "Nothing matches these filters" "Href" (withQuery "/activity" $d.AllQuery) "Action" "Clear filters" "ActionIcon" "x")}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}
 </section>
 {{if or $d.More (gt $d.Page 1)}}

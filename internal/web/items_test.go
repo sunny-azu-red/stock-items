@@ -364,7 +364,7 @@ func TestStockFilterLinksKeepTheView(t *testing.T) {
 	rec := a.get("/stock?v=" + itoa(k390) + "&q=oil&view=list&sort=quantity&cat=FILTERS")
 	expect(t, rec, http.StatusOK,
 		`id="filter-all" href="/stock?cat=FILTERS&amp;q=oil&amp;sort=quantity&amp;view=list"`,
-		`href="/stock?sort=quantity&amp;view=list">clear filters</a>`,
+		`href="/stock?sort=quantity&amp;view=list">Clear filters</a>`,
 		`<option value="quantity" selected>Quantity</option>`, "<option selected>Filters</option>")
 }
 

@@ -222,7 +222,7 @@ func TestActivityYearFilter(t *testing.T) {
 		`<option value="2026" selected>2026</option>`, `<option value="2025">2025</option>`,
 		`<input type="hidden" name="kind" value="purchase">`,
 		// The kind chips, the CSV and the column headers keep the year.
-		`href="/activity?kind=use&amp;year=2026"`, `href="/activity?year=2026">Everything</a>`,
+		`href="/activity?kind=use&amp;year=2026"`, `href="/activity?year=2026">All types</a>`,
 		`href="/activity/export.csv?kind=purchase&amp;year=2026"`, `&amp;year=2026" title="`)
 	expectNot(t, page, "New Year&#39;s Eve", `name="year" value=`)
 	csv := a.get("/activity/export.csv?kind=purchase&year=2026").Body.String()
@@ -234,7 +234,7 @@ func TestActivityYearFilter(t *testing.T) {
 	for _, q := range []string{"year=", "year=nope"} {
 		expect(t, a.get("/activity?kind=purchase&"+q), http.StatusOK, "New Year&#39;s Eve", "New Year&#39;s Day", `<option value="2026">2026</option>`)
 	}
-	// A year with nothing yet is still offered; Show everything drops both filters.
+	// A year with nothing yet is still offered; Clear filters drops both.
 	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `<option value="2027" selected>2027</option>`, "Nothing matches these filters",
 		`<a class="btn btn-primary" href="/activity">`)
 }

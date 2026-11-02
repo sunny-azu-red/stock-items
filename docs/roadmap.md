@@ -28,3 +28,9 @@ Before building it, decide whether parts taken from stock for a service count as
 - the Go constants and every test that names a kind.
 
 Worth doing in one go, after a backup, with an e2e test that undoes a stock change deleted before the migration.
+
+## Small things noted on 2 November 2026
+
+- **Long amounts on a phone's stock list.** The quantity column is 58px on a phone (`.item-row`, `app.css`), and an amount like "3 825 ml" needs about 63px, so it runs into the gap beside it. It was like this before the consistency pass. A wider or content-sized column moves every row, so choose it by looking at real lists: a wider fixed column, a smaller font for long amounts, or the unit on a second line.
+- **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
+- **The e2e "pick a year" test at New Year's midnight.** It takes the year from the test machine's clock (`new Date().getFullYear()`), the app from its own; a run that crosses midnight on 31 December could fail once. Read the year the page shows instead.

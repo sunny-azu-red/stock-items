@@ -6,7 +6,7 @@
     {{if $d.Gone}}<p class="sub">{{$m.ItemName}}</p>{{else}}<p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>{{end}}
   </div>
   {{if not $d.Gone}}<div class="actions">
-    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete" data-confirm="Delete this {{$d.Name}}? The stock changes by {{$d.Undo}}."><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete"><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit" title="The stock changes by {{$d.Undo}}; you can undo it">{{icon "trash-2"}} Delete</button></form>
   </div>{{end}}
 </div>
 <form class="card form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>

@@ -17,7 +17,7 @@ internal/store/       all SQL; multi-row writes in one transaction
 internal/web/         routes, middleware, handlers_*.go, templates/, static/, photo.go (runs vips)
 internal/testdb/      throwaway schema helper for integration tests
 e2e/                  Playwright tests (Node is only used here)
-docs/                 documentation
+docs/                 documentation; ideas for later go in docs/roadmap.md
 .github/workflows/    CI: checks, lint, govulncheck, Docker smoke test, e2e; images to GHCR (latest from master,
                       after CI passes) and, for an optional v* tag, a GitHub Release; dependabot.yml proposes updates
 Dockerfile            debian:trixie-slim + libvips-tools; compose.yaml runs it (Portainer stack)

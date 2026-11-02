@@ -391,8 +391,9 @@ type Stats struct {
 	// of each item (archived items and items never bought with a price
 	// are not counted).
 	StockValue float64
-	// SpentThisYear is purchases plus labour from 1 January of the app's
-	// year up to today.
+	// SpentThisYear is what was paid for items (priced purchases) from
+	// 1 January of the app's year up to today. Labour is on the Services
+	// page; a total of both is an idea in docs/roadmap.md.
 	SpentThisYear float64
 }
 
@@ -409,10 +410,8 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 		                          WHERE m.item_id = i.id AND m.kind = 'purchase' AND m.total_price IS NOT NULL AND m.delta > 0
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
 		            WHERE i.archived_at IS NULL), 0)::float8,
-		  (COALESCE((SELECT sum(total_price) FROM stock_movements
-		             WHERE kind = 'purchase' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)
-		 + COALESCE((SELECT sum(labor_cost) FROM service_records
-		             WHERE performed_on >= $1::date AND performed_on <= $2::date), 0))::float8`, yearStart, day).
+		  COALESCE((SELECT sum(total_price) FROM stock_movements
+		            WHERE kind = 'purchase' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)::float8`, yearStart, day).
 		Scan(&st.StockValue, &st.SpentThisYear)
 	return st, err
 }

@@ -27,7 +27,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
 - **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
-- **Spending at a glance:** the dashboard shows the stock value and what you spent this year (purchases and labour), each opening the list behind it.
+- **Spending at a glance:** the dashboard shows the stock value and what you spent on items this year, each opening the list behind it.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.
 - **Undo everything:** every delete (and Bought) has an Undo, and the trash keeps it all until you empty it or permanently delete an entry.
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
@@ -91,6 +91,7 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 - [Development](docs/development.md): setup, tests, adding features
 - [Deployment](docs/deployment.md): Portainer, Docker, systemd, backups
 - [Conventions](docs/conventions.md): rules for contributors and coding agents (see also [AGENTS.md](AGENTS.md))
+- [Roadmap](docs/roadmap.md): ideas to come back to
 
 ## License
 

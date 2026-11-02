@@ -143,12 +143,13 @@ func TestSpentThisYear(t *testing.T) {
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &today}); err != nil {
 		t.Fatal(err)
 	}
-	if st, err := s.GetStats(ctx, today); err != nil || st.SpentThisYear != 330 {
-		t.Errorf("spent in 2030 up to %s = %v, %v; want 330 (110 bought, 220 labour)", today.Format("2006-01-02"), st.SpentThisYear, err)
+	// Purchases only: the labour is the Services page's.
+	if st, err := s.GetStats(ctx, today); err != nil || st.SpentThisYear != 110 {
+		t.Errorf("spent in 2030 up to %s = %v, %v; want 110, without the labour", today.Format("2006-01-02"), st.SpentThisYear, err)
 	}
 	// On 1 January only that day counts.
-	if st, _ := s.GetStats(ctx, day(2030, 1, 1)); st.SpentThisYear != 30 {
-		t.Errorf("spent on 1 January = %v, want 30", st.SpentThisYear)
+	if st, _ := s.GetStats(ctx, day(2030, 1, 1)); st.SpentThisYear != 10 {
+		t.Errorf("spent on 1 January = %v, want 10", st.SpentThisYear)
 	}
 }
 

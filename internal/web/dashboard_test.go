@@ -27,11 +27,11 @@ func TestDashboardSpentThisYear(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// This year's purchase and labour, not last year's purchase; the tile
-	// opens this year's purchases.
+	// This year's purchase, not last year's, nor the labour (that is on
+	// the Services page); the tile opens this year's purchases.
 	rec := a.get("/")
-	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=purchase&amp;year=2026">`, "Spent in 2026", "50.00 EUR")
-	expectNot(t, rec, "57.00 EUR", "12 months")
+	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=purchase&amp;year=2026">`, "Spent in 2026", "20.00 EUR")
+	expectNot(t, rec, "50.00 EUR", "27.00 EUR", "12 months")
 	purchases := a.get("/activity?kind=purchase&year=2026")
 	expect(t, purchases, http.StatusOK, "1 Jan 2026")
 	expectNot(t, purchases, "31 Dec 2025")

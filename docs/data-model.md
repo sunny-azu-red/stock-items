@@ -89,4 +89,4 @@ form_submissions (one-time form keys; no foreign keys)
 | Purchase suggestions | `stock.SuggestPurchases`: below minimum or short for any kit, and not already on the list |
 | Stock value | quantity × last purchase price per unit, for items that aren't archived (`store.GetStats`) |
 | Purchase count (item page) | `store.CountPurchases` |
-| Spent this year | priced purchases plus labour cost dated from 1 January of the app's year up to and including the app's date (`store.GetStats`); a purchase dated tomorrow counts from tomorrow, and the figure starts again from zero each 1 January |
+| Spent this year | priced purchases dated from 1 January of the app's year up to and including the app's date (`store.GetStats`); a purchase dated tomorrow counts from tomorrow, and the figure starts again from zero each 1 January |

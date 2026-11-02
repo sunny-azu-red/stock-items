@@ -175,8 +175,7 @@
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
-    // A picker that filters the page (Activity's year): without JS, its
-    // form has a button instead.
+    // A picker that filters the page (Activity's year).
     if (e.target.matches("select[data-submit-on-change]")) e.target.form.requestSubmit();
   });
 

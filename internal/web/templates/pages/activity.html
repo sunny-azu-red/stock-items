@@ -22,7 +22,6 @@
       <option value="">All years</option>
       {{range $d.Years}}<option value="{{.}}"{{if eq . $d.Year}} selected{{end}}>{{.}}</option>{{end}}
     </select>
-    <noscript><button class="btn btn-sm" type="submit">Show</button></noscript>
   </form>{{end}}
 </div>
 <section class="card">

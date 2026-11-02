@@ -585,11 +585,11 @@ function uploadedPhoto(req: Request): Buffer {
   return body.subarray(start, body.indexOf("\r\n" + boundary, start));
 }
 
-test("a large photo is shrunk in the browser; without JavaScript the original goes", async ({ page, browser }, testInfo) => {
+test("a large photo is shrunk in the browser, and the server shrinks an original", async ({ page }) => {
   const big = gradientPNG(2400, 1800);
   await page.goto("/stock");
   await page.locator(".item-row a.item-name").filter({ hasText: "Hiflofiltro" }).click();
-  const item = page.url();
+  const item = new URL(page.url()).pathname;
   const sent: Buffer[] = [];
   await page.route("**/items/*/photo", (route) => {
     if (route.request().method() === "POST") sent.push(uploadedPhoto(route.request()));
@@ -603,28 +603,12 @@ test("a large photo is shrunk in the browser; without JavaScript the original go
   expect(imageSize(sent[0])).toEqual({ type: "jpeg", w: 1600, h: 1200 });
   expect(sent[0].length).toBeLessThan(big.length);
 
-  // Without JavaScript the form's Upload button sends the PNG as it is, and
-  // the server shrinks it.
-  const { baseURL, viewport } = testInfo.project.use;
-  const context = await browser.newContext({ baseURL, viewport, javaScriptEnabled: false });
-  try {
-    const plain = await context.newPage();
-    const sentPlain: Buffer[] = [];
-    await plain.route("**/items/*/photo", (route) => {
-      if (route.request().method() === "POST") sentPlain.push(uploadedPhoto(route.request()));
-      return route.continue();
-    });
-    await plain.goto(item);
-    await plain.locator('input[type="file"][name="photo"]').setInputFiles({ name: "big.png", mimeType: "image/png", buffer: big });
-    await plain.getByRole("button", { name: "Upload" }).click();
-    await expect(plain.locator(".flash-success")).toContainText("Photo replaced");
-    expect(sentPlain).toHaveLength(1);
-    expect(sentPlain[0].equals(big)).toBe(true);
-    const photo = await context.request.get(new URL(item).pathname + "/photo");
-    expect(imageSize(await photo.body())).toEqual({ type: "jpeg", w: 1600, h: 1200 });
-  } finally {
-    await context.close();
-  }
+  // The server never relies on the browser: sent as it is (when the browser
+  // can't decode it, say), the PNG is shrunk there.
+  const res = await page.request.post(item + "/photo", { multipart: { photo: { name: "big.png", mimeType: "image/png", buffer: big } } });
+  expect(res.ok()).toBe(true);
+  const photo = await page.request.get(item + "/photo");
+  expect(imageSize(await photo.body())).toEqual({ type: "jpeg", w: 1600, h: 1200 });
 });
 
 test("no page scrolls sideways", async ({ page }) => {
@@ -745,33 +729,6 @@ test("sort the stock with Sort by and its direction", async ({ page }) => {
   await page.locator("#results").getByRole("link", { name: "Grouped" }).click();
   await expect(page).toHaveURL(/\/stock\?dir=asc&sort=recent$/);
   await expect(page.getByLabel("Sort by")).toHaveValue("recent");
-});
-
-test("sorting works without JavaScript", async ({ browser }, testInfo) => {
-  const { baseURL, viewport } = testInfo.project.use;
-  const context = await browser.newContext({ baseURL, viewport, javaScriptEnabled: false });
-  try {
-    const page = await context.newPage();
-    await page.goto("/activity");
-    const date = page.locator("table.table thead th").filter({ hasText: "Date" });
-    await date.getByRole("link").click();
-    await expect(page).toHaveURL(/\/activity\?dir=asc$/);
-    await expect(date).toHaveAttribute("aria-sort", "ascending");
-
-    // The stock form sends the sort with Apply, and lands on a plain URL.
-    await page.goto("/stock");
-    await page.getByLabel("Sort by").selectOption("expiry");
-    await page.getByRole("button", { name: "Apply" }).click();
-    await expect(page).toHaveURL(/\/stock\?sort=expiry$/);
-    await expect(page.getByLabel("Sort by")).toHaveValue("expiry");
-    await expect(page.locator("#dir-asc")).toBeChecked();
-    await expect(page.locator("#sort-dir")).toContainText("Soonest first");
-    await page.locator("#sort-dir label").last().click();
-    await page.getByRole("button", { name: "Apply" }).click();
-    await expect(page).toHaveURL(/\/stock\?dir=desc&sort=expiry$/);
-  } finally {
-    await context.close();
-  }
 });
 
 // Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test (see docs/development.md)

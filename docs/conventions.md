@@ -38,7 +38,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 
 ## Web
 
-- Every page is server-rendered and every form works without JavaScript (POST, then a 303 redirect with a flash message). htmx and `static/app.js` are progressive enhancements only.
+- Every page is server-rendered and every form is a plain HTML form (POST, then a 303 redirect with a flash message). JavaScript is assumed: htmx and `static/app.js` may carry a page's behaviour (pickers that send themselves, tabs, adding form rows), and nothing gets a `<noscript>` fallback. The server still never relies on what the browser did (the photo pipeline takes an original as it is).
 - Invalid forms re-render with status **422**, keeping exactly what the user typed, with messages next to the fields.
 - Every edit form and every button that acts on a record (delete, archive, restore, Bought, link, remove) carries the record's version in a hidden `version` field. A stale edit form (`store.StaleError`) re-renders with 422, keeping what was typed, with the banner "This … was changed since you opened this (another tab or person). Reload to see the latest, then make your change again." and a Reload link (`staleForm`, the `stale` partial). When the record was deleted, it says so and links to the trash. A stale button changes nothing: it flashes the reason and redirects to the record as it is now, or to the trash (`staleButton`). A form whose record was deleted meanwhile never 404s.
 - Test forms and buttons over HTTP in `internal/web` (open the page, read the version from the rendered form, change the record in another request, submit), including Undo and Restore paths.

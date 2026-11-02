@@ -220,7 +220,7 @@ func TestActivityYearFilter(t *testing.T) {
 		// The year picker: its years, this one chosen, keeping the kind.
 		`<select class="input" id="year" name="year" data-submit-on-change>`, `<option value="">All years</option>`,
 		`<option value="2026" selected>2026</option>`, `<option value="2025">2025</option>`,
-		`<input type="hidden" name="kind" value="purchase">`, `<button class="btn btn-sm" type="submit">Show</button>`,
+		`<input type="hidden" name="kind" value="purchase">`,
 		// The kind chips, the CSV and the column headers keep the year.
 		`href="/activity?kind=use&amp;year=2026"`, `href="/activity?year=2026">Everything</a>`,
 		`href="/activity/export.csv?kind=purchase&amp;year=2026"`, `&amp;year=2026" title="`)

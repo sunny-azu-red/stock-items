@@ -122,8 +122,6 @@ func TestStockFilterDetails(t *testing.T) {
 	// The parts htmx swaps out of band are always present.
 	rec := a.get("/stock?v=" + itoa(k390) + "&v=" + itoa(k1290))
 	expect(t, rec, http.StatusOK, `id="stock-head"`, `id="filter-all"`, `id="match-toggle"`, "Fits all")
-	// Without JS every stock change form is reachable.
-	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Silkolene"))), http.StatusOK, `[role="tabpanel"][hidden] { display: grid !important; }`)
 }
 
 func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {

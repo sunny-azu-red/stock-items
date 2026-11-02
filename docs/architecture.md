@@ -41,7 +41,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 ## Key design decisions
 
-- **Go with server rendering instead of a SPA with an API.** For a single-user CRUD app this means one binary, no build step for the frontend, and fewer moving parts. Every form works without JavaScript.
+- **Go with server rendering instead of a SPA with an API.** For a single-user CRUD app this means one binary, no build step for the frontend, and fewer moving parts. Every form is a plain HTML form (POST, then a redirect); htmx and `app.js` add the rest.
 - **Quantities in base units** (pieces, ml, g) stored as `numeric(12,2)`: at most two decimals, as the pages show them, so "1.234 g" (which reads as 1234 g) and "have 0.23 g, need 0.23 g" can't happen. Conversion happens only at the edges, and `stock.ParseAmount` refuses finer input rather than round it.
 - **Days are decided in Go, in the app's zone.** Postgres keeps instants in UTC and every session is pinned to UTC, so the database server's zone never matters. Which calendar day it is (today, the day a service was logged, what is expiring, "Deleted today") is worked out in Go in the zone `TZ` names, or the machine's, and passed to SQL as a `date` parameter. One rule in one place, instead of SQL and Go disagreeing around midnight; a test fails on SQL like `current_date` or `created_at::date`.
 - **Stock ledger.** Every quantity change is a row in `stock_movements`, written in the same transaction as the quantity update. History, prices, stock value and "undo a service" all come from this.
@@ -55,7 +55,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 ## Photo pipeline
 
-1. **In the browser** (`app.js`), a photo over 1600 px is drawn upright on a white canvas of at most 1600 px and sent as a JPEG (quality 0.9) instead, so a phone uploads a few hundred KB. When the browser can't decode it (HEIC outside Safari) or anything fails, the original goes. Without JavaScript the form uploads the original. Either way the upload is at most 15 MB.
+1. **In the browser** (`app.js`), a photo over 1600 px is drawn upright on a white canvas of at most 1600 px and sent as a JPEG (quality 0.9) instead, so a phone uploads a few hundred KB. When the browser can't decode it (HEIC outside Safari) or anything fails, the original goes. Either way the upload is at most 15 MB.
 2. **On the server** (`web/photo.go`), one photo is processed at a time (`photoSlot`; a waiting upload gives up when its client goes away), within 30 seconds:
    - `vipsheader` reads the size and format from a temporary copy, decoding nothing. Only JPEG, PNG, GIF, WebP and HEIC/HEIF are taken, at most 100 MP, and formats that must decode the whole image at once (HEIC, GIF, interlaced PNG) only when their estimate fits a 256 MB budget.
    - `vips thumbnail_source` reads the upload from stdin and **shrinks while it loads**: a JPEG is decoded at 1/2, 1/4 or 1/8 straight away, PNG and WebP stream. It applies the EXIF orientation, converts to sRGB, flattens transparency onto white, strips metadata and writes the 1600 px JPEG (Q85) to stdout; a second, quick run makes the 320 px centre-cropped thumbnail (Q80) from that.

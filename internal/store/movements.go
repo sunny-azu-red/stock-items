@@ -418,10 +418,19 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 }
 
 // MovementYears returns the years from the newest stock change back to
-// the oldest (none when there are none).
-func (s *Store) MovementYears(ctx context.Context) ([]int, error) {
+// the oldest, of one item and one kind when they are set (none when there
+// are none): the years the Activity page can show with its other filters.
+func (s *Store) MovementYears(ctx context.Context, itemID int64, kind stock.MovementKind) ([]int, error) {
+	var args sqlArgs
+	sql := `SELECT min(occurred_on), max(occurred_on) FROM stock_movements WHERE true`
+	if itemID != 0 {
+		sql += " AND item_id = " + args.add(itemID)
+	}
+	if kind != "" {
+		sql += " AND kind = " + args.add(kind)
+	}
 	var first, last *time.Time
-	if err := s.pool.QueryRow(ctx, `SELECT min(occurred_on), max(occurred_on) FROM stock_movements`).Scan(&first, &last); err != nil || first == nil {
+	if err := s.pool.QueryRow(ctx, sql, args...).Scan(&first, &last); err != nil || first == nil {
 		return nil, err
 	}
 	var years []int

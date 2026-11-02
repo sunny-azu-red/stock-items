@@ -31,6 +31,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},
 		{re: `data-confirm`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html"},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},
+		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}
 	// A link's text starts with a capital, also mid-sentence.
 	lowerClear := regexp.MustCompile(`\bclear filters\b`)

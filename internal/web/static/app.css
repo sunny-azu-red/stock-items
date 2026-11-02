@@ -545,6 +545,8 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
    status circle is centred on that first line. */
 .kit-lines td { vertical-align: top; }
 .kit-lines .status-icon { margin: -4px 0; }
+.kit-lines .status-col { width: 40px; }
+.table .qty-col { width: 110px; }
 .meter { margin-top: 6px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--ok); }
 .meter.short > span { background: var(--danger); }

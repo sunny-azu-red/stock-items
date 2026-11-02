@@ -1,7 +1,6 @@
 package web
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,8 +22,7 @@ type serviceForm struct {
 	Notes       string
 	LaborCost   string
 	Parts       []lineRow
-	Stored      string // the saved title while editing, for the page title
-	Version     int    // as the edit form was opened (see itemForm)
+	Version     int // as the edit form was opened (see itemForm)
 	Stale       *staleNote
 	FormKey     string // see itemForm
 	Errors      stock.Errors
@@ -213,7 +211,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, PerformedOn: rec.PerformedOn.Format("2006-01-02"),
-		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Stored: rec.Title, Version: rec.Version,
+		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
 	}
 	if rec.KitID != nil {
 		f.KitID = *rec.KitID
@@ -260,9 +258,8 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	// Deleted meanwhile, the form still shows what was typed.
-	f.Stored = cmp.Or(f.Title, "service")
 	if rec, err := s.store.GetService(r.Context(), id); err == nil {
-		f.VehicleID, f.Stored = rec.VehicleID, rec.Title // the vehicle can't change
+		f.VehicleID = rec.VehicleID // the vehicle can't change
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return err
 	}

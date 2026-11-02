@@ -196,7 +196,11 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	}
 	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Year: activityYear(r), Item: item, Page: parsePage(r),
 		Sort: activitySorts.parse(r.URL.Query())}
-	if p.Years, err = s.store.MovementYears(r.Context()); err != nil {
+	var itemID int64
+	if item != nil {
+		itemID = item.ID
+	}
+	if p.Years, err = s.store.MovementYears(r.Context(), itemID, stock.MovementKind(p.Kind)); err != nil {
 		return err
 	}
 	// A year with nothing in it yet (this year's first days) still gets
@@ -224,8 +228,8 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// activityExportCSV downloads every stock change (of the chosen kind and
-// item), in the order the page shows them.
+// activityExportCSV downloads every stock change (of the chosen kind, year
+// and item), in the order the page shows them.
 func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error {
 	item, err := s.activityItem(r)
 	if err != nil {

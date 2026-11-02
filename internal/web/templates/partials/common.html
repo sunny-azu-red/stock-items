@@ -47,7 +47,6 @@
 </a>
 {{end}}
 
-{{/* rowData: one stock row with quick -/+ */}}
 {{/* Beside a required field's label, in its .label-row (the label stays
      just the field's name; the input says aria-required). The form says
      once what it means. */}}
@@ -105,6 +104,7 @@
      left in stock can expire). Data: stock.Item. */}}
 {{define "expiry-badge"}}{{with .ExpiresOn}}{{$st := expiryState $}}<span class="badge {{if eq $st "expired"}}badge-danger{{else if eq $st "soon"}}badge-warn{{else}}badge-info{{end}}" title="Best before">{{icon "hourglass"}} {{if eq $st "expired"}}Expired {{else if eq $st "soon"}}Expires {{end}}{{date .}}</span>{{end}}{{end}}
 
+{{/* rowData: one stock row with quick -/+ */}}
 {{define "item-row"}}{{$it := .Item}}
 <li class="item-row{{if .Flash}} flash-ok{{end}}" id="item-{{$it.ID}}">
   <div class="qty{{if $it.IsOut}} zero{{else if $it.IsLow}} low{{end}}">{{qty $it.Quantity $it.Unit}}</div>

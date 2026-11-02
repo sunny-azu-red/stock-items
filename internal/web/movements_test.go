@@ -234,6 +234,10 @@ func TestActivityYearFilter(t *testing.T) {
 	for _, q := range []string{"year=", "year=nope"} {
 		expect(t, a.get("/activity?kind=purchase&"+q), http.StatusOK, "New Year&#39;s Eve", "New Year&#39;s Day", `<option value="2026">2026</option>`)
 	}
+	// An item's history offers that item's years: the pads have none in 2025.
+	pads := a.get("/activity?item=" + itoa(itemID(t, a.store, "Rear Brake")))
+	expect(t, pads, http.StatusOK, `<option value="2026">2026</option>`)
+	expectNot(t, pads, `<option value="2025">`)
 	// A year with nothing yet is still offered; Clear filters drops both.
 	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `<option value="2027" selected>2027</option>`, "Nothing matches these filters",
 		`<a class="btn btn-primary" href="/activity">`)

@@ -154,7 +154,7 @@ func TestSpentThisYear(t *testing.T) {
 
 func TestMovementsOfAYear(t *testing.T) {
 	s, ctx := newStore(t)
-	if years, err := s.MovementYears(ctx); err != nil || len(years) != 0 {
+	if years, err := s.MovementYears(ctx, 0, ""); err != nil || len(years) != 0 {
 		t.Errorf("years with no stock changes = %v, %v", years, err)
 	}
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
@@ -176,9 +176,26 @@ func TestMovementsOfAYear(t *testing.T) {
 	if all, _ := s.ListMovements(ctx, store.MovementFilter{}); len(all) != 5 {
 		t.Errorf("stock changes of every year = %d, want 5", len(all))
 	}
-	// 2029's one entry and the empty years between count too.
-	if years, err := s.MovementYears(ctx); err != nil || !slices.Equal(years, []int{2031, 2030, 2029, 2028}) {
-		t.Errorf("years = %v, %v", years, err)
+	// The years follow the page's other filters: another item's 2033 counts
+	// for all items only, and a kind with no entries has no years.
+	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
+	later := time.Date(2033, 3, 1, 0, 0, 0, 0, time.UTC)
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &later}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		item int64
+		kind stock.MovementKind
+		want []int
+	}{
+		{0, "", []int{2033, 2032, 2031, 2030, 2029, 2028}},
+		{oil, "", []int{2031, 2030, 2029, 2028}}, // 2029's one entry and the empty years between count too
+		{pads, stock.MovePurchase, []int{2033}},
+		{oil, stock.MoveUse, nil},
+	} {
+		if years, err := s.MovementYears(ctx, c.item, c.kind); err != nil || !slices.Equal(years, c.want) {
+			t.Errorf("years of item %d, kind %q = %v, %v; want %v", c.item, c.kind, years, err, c.want)
+		}
 	}
 }
 

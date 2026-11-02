@@ -78,7 +78,7 @@
       {{if $f.Active}}
         {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search or remove some filters.")}}
       {{else}}
-        {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep on stock." "Href" "/items/new" "Action" "Add your first item")}}
+        {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep in stock." "Href" "/items/new" "Action" "Add your first item")}}
       {{end}}
     </div>
   {{else if eq $f.View "list"}}

@@ -4,13 +4,13 @@
   <div>
     <h1>Bought {{$d.Entry.Title}}</h1>
     {{if $d.Entry.ItemID}}<p class="sub">This adds the amount to stock and takes it off the list. If you bought less than listed, the rest stays on the list.</p>
-    {{else}}<p class="sub">This isn't an item on stock yet.</p>{{end}}
+    {{else}}<p class="sub">This isn't an item in stock yet.</p>{{end}}
   </div>
 </div>
 {{if not $d.Entry.ItemID}}
 {{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Version" $d.Entry.Version "Matches" $d.Matches)}}{{end}}
 <div class="card card-body{{if $d.Matches}} mt{{end}}">
-  <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep on stock.</p>
+  <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep in stock.</p>
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>
     <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><input type="hidden" name="version" value="{{$d.Entry.Version}}"><button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>

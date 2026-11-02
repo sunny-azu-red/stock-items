@@ -137,7 +137,7 @@
       {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $row.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </div>
-  <span class="stock-note">{{with $row.Have}}on stock: {{.}}{{end}}</span>
+  <span class="stock-note">{{with $row.Have}}in stock: {{.}}{{end}}</span>
   <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove row">{{icon "x"}}</button>
 </div>
 {{end}}
@@ -172,7 +172,7 @@
 </ul>
 {{end}}
 
-{{/* Items already on stock with a free-text shopping entry's name:
+{{/* Items already in stock with a free-text shopping entry's name:
      dict "EntryID" int64 "Version" int "Matches" []Item */}}
 {{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}
 <div class="card card-body">
@@ -180,7 +180,7 @@
   <ul class="list">
     {{range .Matches}}
     <li>
-      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}} on stock{{if .Archived}} · archived{{end}}</span></span>
+      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}} in stock{{if .Archived}} · archived{{end}}</span></span>
       <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}

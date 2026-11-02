@@ -276,7 +276,7 @@ func movementConflict(errs stock.Errors, err error) bool {
 	var short *store.InsufficientStockError
 	if errors.As(err, &short) {
 		errs.Add("amount", "Only "+stock.FormatQuantity(short.Have, short.Unit)+
-			" is left on stock, so this change can't take away "+stock.FormatQuantity(short.Need, short.Unit)+
+			" is left in stock, so this change can't take away "+stock.FormatQuantity(short.Need, short.Unit)+
 			". Record what was used first, or do a count.")
 		return true
 	}

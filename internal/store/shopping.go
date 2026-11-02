@@ -260,7 +260,7 @@ func putBought(ctx context.Context, tx pgx.Tx, entryID int64, before json.RawMes
 
 // ItemsNamed returns the items, archived ones included, whose name or
 // "brand name" is text (ignoring case and surrounding spaces): candidates
-// for a free-text entry that is already on stock.
+// for a free-text entry that is already in stock.
 func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id FROM items

@@ -39,7 +39,7 @@
         {{template "error-summary" $e}}
         <div class="form-grid">
           <div class="field{{if index $e "item_id"}} has-error{{end}}">
-            <label for="item_id">Item on stock</label>
+            <label for="item_id">Item in stock</label>
             <select class="input" id="item_id" name="item_id" data-unit-source>
               <option value="">— or describe it below —</option>
               {{range $d.Items}}<option value="{{.ID}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" {{if eq .ID $f.ItemID}}selected{{end}}>{{.DisplayName}} ({{qty .Quantity .Unit}})</option>{{end}}

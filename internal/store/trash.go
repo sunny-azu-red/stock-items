@@ -20,9 +20,9 @@ import (
 // Deleted things go to the trash: a JSON snapshot of their rows, written in
 // the same transaction as the delete and kept until the trash is emptied.
 // Restoring puts the rows back with their original ids, so links to them
-// work again, and redoes their effect on stock (and the odometer) under the
+// work again, and redoes their effect in stock (and the odometer) under the
 // same rules as when they were made: it fails rather than leave less than
-// nothing on stock. Like DeleteService, a restore changes movements
+// nothing in stock. Like DeleteService, a restore changes movements
 // together with their effect, so the ledger still adds up.
 
 // Trash kinds.

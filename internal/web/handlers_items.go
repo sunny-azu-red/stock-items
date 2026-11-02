@@ -113,7 +113,7 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		in.Quantity = *q
 	} else if !isNew {
 		// Blank would mean 0 and silently empty the stock.
-		f.Errors.Add("quantity", "Enter the amount on stock (0 if none)")
+		f.Errors.Add("quantity", "Enter the amount in stock (0 if none)")
 	}
 	if isNew {
 		f.TotalPrice, f.Supplier, f.BoughtOn = formText(r, "total_price"), formText(r, "supplier"), formText(r, "bought_on")
@@ -132,7 +132,7 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 			in.BoughtOn = d
 		}
 		if f.ShoppingID != 0 && in.Quantity == 0 && f.Errors["quantity"] == "" {
-			// Ticking the entry off with nothing on stock would lose it.
+			// Ticking the entry off with nothing in stock would lose it.
 			f.Errors.Add("quantity", "Enter how much you bought")
 		}
 	}
@@ -747,7 +747,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 			msg := map[stock.MovementKind]string{
 				stock.MovePurchase:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit),
 				stock.MoveUse:        "Used " + stock.FormatQuantity(-in.Delta, it.Unit),
-				stock.MoveCorrection: "Counted: " + stock.FormatQuantity(amount, it.Unit) + " on stock",
+				stock.MoveCorrection: "Counted: " + stock.FormatQuantity(amount, it.Unit) + " in stock",
 			}[in.Kind]
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
 			return nil
@@ -757,7 +757,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		}
 		var short *store.InsufficientStockError
 		if errors.As(err, &short) {
-			f.Errors.Add("amount", "Only "+stock.FormatQuantity(short.Have, short.Unit)+" on stock")
+			f.Errors.Add("amount", "Only "+stock.FormatQuantity(short.Have, short.Unit)+" in stock")
 		} else if !formConflict(f.Errors, err) {
 			return err
 		}
@@ -791,7 +791,7 @@ func examplesFor(u stock.Unit) string {
 	return "2"
 }
 
-// itemAdjust is the quick -/+ on stock rows.
+// itemAdjust is the quick -/+ in stock rows.
 func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {

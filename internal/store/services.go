@@ -151,7 +151,7 @@ func partIDs(parts []stock.KitLineInput) []int64 {
 }
 
 // UpdateService changes a logged service. Its vehicle stays; everything
-// else may change. The old parts go back on stock and the new ones are
+// else may change. The old parts go back in stock and the new ones are
 // taken, and the odometer change is redone, all in one transaction, so a
 // part that is short leaves the service as it was. Like DeleteService it
 // rewrites recorded movements together with their effect, so the ledger
@@ -366,9 +366,9 @@ func takeServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64, in stock.
 	return nil
 }
 
-// returnServiceParts puts a service's parts back on stock and deletes
+// returnServiceParts puts a service's parts back in stock and deletes
 // their movements. The caller holds the item locks, and checks the
-// maximum on stock once it is done (refuseOverMax).
+// maximum in stock once it is done (refuseOverMax).
 func returnServiceParts(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	// No new version for the items: stock changes don't stale their forms
 	// (see applyMovement).
@@ -443,7 +443,7 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	return err
 }
 
-// DeleteService removes a service record and puts its parts back on stock.
+// DeleteService removes a service record and puts its parts back in stock.
 // It is a deliberate exception to "every change goes through
 // applyMovement": it undoes a mistaken entry by deleting its movements
 // together with their effect, so the ledger still adds up. The odometer

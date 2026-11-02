@@ -254,13 +254,13 @@
       .then(function (small) { done(small || file); }, function () { done(file); });
   }
 
-  // In kit / service part rows, show what is on stock for the chosen item.
+  // In kit / service part rows, show what is in stock for the chosen item.
   function updatePartNote(sel) {
     var row = sel.closest(".row-line");
     if (!row) return;
     var note = row.querySelector(".stock-note");
     var opt = sel.options[sel.selectedIndex];
-    if (note) note.textContent = opt && opt.getAttribute("data-have") ? "on stock: " + opt.getAttribute("data-have") : "";
+    if (note) note.textContent = opt && opt.getAttribute("data-have") ? "in stock: " + opt.getAttribute("data-have") : "";
     followItemUnits(sel, row);
   }
 

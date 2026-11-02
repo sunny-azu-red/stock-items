@@ -9,7 +9,7 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
 
-// grease adds an item counted in grams, with qty on stock.
+// grease adds an item counted in grams, with qty in stock.
 func (a *testApp) grease(qty float64) int64 {
 	a.t.Helper()
 	in := stock.ItemInput{Brand: "Motorex", Name: "Grease", Unit: stock.UnitGram, Quantity: qty}
@@ -108,7 +108,7 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 
 // With amounts kept to two decimals, as the pages show them, "not enough
 // stock" can't name the amount asked for: using 0.231 g of 0.23 g used to
-// fail with "Only 0.23 g on stock" (and "have 0.23 g, need 0.23 g" where
+// fail with "Only 0.23 g in stock" (and "have 0.23 g, need 0.23 g" where
 // the whole error shows). Now the amount itself is refused.
 func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	a := newApp(t)
@@ -117,14 +117,14 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.231"}, "part_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "use at most two decimals of g")
-	expectNot(t, rec, "Only 0.23 g on stock")
+	expectNot(t, rec, "Only 0.23 g in stock")
 	rec = a.post(itemPath(grease)+"/movements", url.Values{"kind": {"use"}, "amount": {"0.231"}, "amount_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
-	expectNot(t, rec, "Only 0.23 g on stock")
+	expectNot(t, rec, "Only 0.23 g in stock")
 	// One hundredth more than there is says so plainly.
 	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.24"}, "part_unit": {"g"}})
-	expect(t, rec, http.StatusUnprocessableEntity, "Only 0.23 g on stock")
+	expect(t, rec, http.StatusUnprocessableEntity, "Only 0.23 g in stock")
 	if got := a.quantity(t, grease); got != 0.23 {
 		t.Errorf("grease = %v, want 0.23", got)
 	}

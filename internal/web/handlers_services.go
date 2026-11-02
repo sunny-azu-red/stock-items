@@ -159,7 +159,7 @@ func serviceConflict(f serviceForm, err error) bool {
 		for _, short := range shorts.Parts {
 			for i := range f.Parts {
 				if f.Parts[i].ItemID == short.ItemID {
-					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " on stock"
+					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " in stock"
 				}
 			}
 		}
@@ -302,7 +302,7 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 	}
 	msg := "Deleted " + rec.Title
 	if len(rec.Parts) > 0 {
-		msg += " and put its parts back on stock"
+		msg += " and put its parts back in stock"
 	}
 	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", rec.VehicleID), msg, trashID)
 	return nil

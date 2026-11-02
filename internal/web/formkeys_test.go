@@ -479,14 +479,14 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 // goes through.
 func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 	ctx := context.Background()
-	t.Run("not enough on stock", func(t *testing.T) {
+	t.Run("not enough in stock", func(t *testing.T) {
 		a := newApp(t)
 		a.seed()
 		oil := itemID(t, a.store, "Silkolene")
 		page := itemPath(oil)
 		key := formKeys(t, a, page, page+"/movements")[1] // used
 		rec := a.post(page+"/movements", with(url.Values{"kind": {"use"}, "amount": {"1"}, "amount_unit": {"l"}}, key, ""))
-		expect(t, rec, http.StatusUnprocessableEntity, "Only 525 ml on stock")
+		expect(t, rec, http.StatusUnprocessableEntity, "Only 525 ml in stock")
 		if keys := keysIn(t, rec.Body.String(), page+"/movements"); len(keys) != 3 || keys[1] != key {
 			t.Errorf("keys after the error = %v, want %s kept on the use form", keys, key)
 		}

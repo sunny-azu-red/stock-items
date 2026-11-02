@@ -46,7 +46,7 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 		return 0, &InsufficientStockError{ItemID: in.ItemID, ItemName: displayName(brand, name), Unit: unit, Have: qty, Need: -in.Delta}
 	}
 	if qty+in.Delta > stock.MaxQuantity {
-		return 0, stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " on stock"}
+		return 0, stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, unit) + " in stock"}
 	}
 	// No new version: a stock change is a delta, and the edit form guards
 	// the quantity with quantity_was, so an open form stays good.
@@ -316,7 +316,7 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 		return &InsufficientStockError{ItemID: m.ItemID, ItemName: m.ItemName, Unit: m.ItemUnit, Have: m.qty, Need: m.Delta - delta}
 	}
 	if qty > stock.MaxQuantity {
-		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, m.ItemUnit) + " on stock"}
+		return stock.Errors{"amount": "That would be more than " + stock.FormatQuantity(stock.MaxQuantity, m.ItemUnit) + " in stock"}
 	}
 	// No new version for the item, like applyMovement.
 	_, err := tx.Exec(ctx, `UPDATE items SET quantity = $2, updated_at = now() WHERE id = $1`, m.ItemID, qty)
@@ -325,7 +325,7 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 
 // UpdateMovement corrects a recorded stock change (see stock.ApplyEdit).
 // The item's stock moves by the difference; a correction that would leave
-// less than nothing on stock fails with *InsufficientStockError. Like
+// less than nothing in stock fails with *InsufficientStockError. Like
 // DeleteMovement, it is a deliberate exception to "every change goes
 // through applyMovement": it rewrites a mistaken entry together with its
 // effect, so the ledger still adds up. A stock change changed or deleted

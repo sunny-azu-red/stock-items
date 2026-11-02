@@ -134,7 +134,7 @@ func TestShoppingListNeeds(t *testing.T) {
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
 	pads := itemID(t, a.store, "Rear Brake")
-	// The kit needs 1.7 L of oil; 525 ml is on stock.
+	// The kit needs 1.7 L of oil; 525 ml is in stock.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"},
 		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"}}), http.StatusSeeOther)
 

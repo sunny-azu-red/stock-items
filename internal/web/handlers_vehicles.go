@@ -250,7 +250,7 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, "/vehicles", "Deleted "+v.Name+". Its parts are still on stock.", trashID)
+	s.redirectUndo(w, r, "/vehicles", "Deleted "+v.Name+". Its parts are still in stock.", trashID)
 	return nil
 }
 

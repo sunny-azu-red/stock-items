@@ -19,7 +19,7 @@
     {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">Low stock</span>{{end}}
     {{if eq $d.ExpiryState "expired"}}<span class="badge badge-danger">Expired</span>{{else if eq $d.ExpiryState "soon"}}<span class="badge badge-warn">Expires soon</span>{{end}}
     {{if $it.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $it.ArchivedAt}}</span>{{end}}
-    {{with $it.Category}}<a class="item-category" href="/stock?cat={{.}}" title="Show all {{.}} on stock">{{icon "tag"}} {{.}}</a>{{end}}
+    {{with $it.Category}}<a class="item-category" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
   </div>
   {{if $it.Archived}}<p class="sub">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
 </div>

@@ -551,7 +551,7 @@ func TestPolish(t *testing.T) {
 		t.Errorf("photo delete of a gone item: flash = %+v", f)
 	}
 
-	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1x of OEM Rear Brake Pads"`)
+	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1 pcs of OEM Rear Brake Pads"`)
 
 	// A bad date typed in one tab doesn't show up in the others.
 	page := a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})

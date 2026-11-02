@@ -181,8 +181,8 @@ func TestFormatQuantity(t *testing.T) {
 		unit Unit
 		want string
 	}{
-		{1, UnitPiece, "1x"},
-		{6, UnitPiece, "6x"},
+		{1, UnitPiece, "1 pcs"},
+		{6, UnitPiece, "6 pcs"},
 		{525, UnitML, "525 ml"},
 		{640, UnitML, "640 ml"},
 		{1500, UnitML, "1.5 L"},
@@ -202,7 +202,7 @@ func TestFormatQuantity(t *testing.T) {
 		{0.004, UnitML, "<0.01 ml"},
 		{-0.004, UnitML, "0 ml"},
 		{999.996, UnitML, "1 L"}, // rounds to 1000, shown like it
-		{1500, UnitPiece, "1 500x"},
+		{1500, UnitPiece, "1 500 pcs"},
 	}
 	for _, tt := range tests {
 		if got := FormatQuantity(tt.q, tt.unit); got != tt.want {
@@ -218,7 +218,7 @@ func TestFormatDelta(t *testing.T) {
 	if got := FormatDelta(-1475, UnitML); got != "−1 475 ml" {
 		t.Errorf("got %q", got)
 	}
-	if got := FormatDelta(2, UnitPiece); got != "+2x" {
+	if got := FormatDelta(2, UnitPiece); got != "+2 pcs" {
 		t.Errorf("got %q", got)
 	}
 }

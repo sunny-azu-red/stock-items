@@ -22,7 +22,7 @@ func TestMovementsAndAdjust(t *testing.T) {
 	path := "/items/" + itoa(oil)
 
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19,90"}, "supplier": {"Moto shop"}}), http.StatusSeeOther)
-	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"5"}, "amount_unit": {"l"}}), http.StatusUnprocessableEntity, "Only 1\u202f525 ml on stock")
+	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"5"}, "amount_unit": {"l"}}), http.StatusUnprocessableEntity, "Only 1\u202f525 ml in stock")
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"25"}, "amount_unit": {"ml"}}), http.StatusSeeOther)
 	expect(t, a.post(path+"/movements", url.Values{"kind": {"correction"}, "amount": {"1.2"}, "amount_unit": {"l"}}), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, "1.2 L", "Moto shop", "19.90 EUR")
@@ -129,7 +129,7 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	// Taking away more than is left is refused with a hint.
 	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
 	rec = a.postV(edit+"/delete", nil)
-	expect(t, rec, http.StatusUnprocessableEntity, "Only 100 ml is left on stock")
+	expect(t, rec, http.StatusUnprocessableEntity, "Only 100 ml is left in stock")
 	// The form shown with the refusal carries the change's version, so it
 	// still saves.
 	expect(t, a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"},

@@ -24,8 +24,8 @@ func TestStockFilterAndExport(t *testing.T) {
 		t.Error("KTM 1290-only item shown in KTM 390 filter")
 	}
 
-	want := "KTM 390\n------------\n1x - OEM Rear Brake Pads\n525 ml - Silkolene 15W50 PRO 4 XP\n\n\n" +
-		"KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6x - OEM Oil Filter O-Ring\n"
+	want := "KTM 390\n------------\n1 pcs - OEM Rear Brake Pads\n525 ml - Silkolene 15W50 PRO 4 XP\n\n\n" +
+		"KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6 pcs - OEM Oil Filter O-Ring\n"
 	rec = a.get("/stock/export.txt?v=" + itoa(k390))
 	expect(t, rec, http.StatusOK)
 	if rec.Body.String() != want {
@@ -198,7 +198,7 @@ func TestItemEditForm(t *testing.T) {
 	// A blank quantity must not silently empty the stock.
 	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {""},
 		"quantity_unit": {"ml"}, "quantity_was": {"525"}}
-	expect(t, a.postV(path, form), http.StatusUnprocessableEntity, "Enter the amount on stock (0 if none)")
+	expect(t, a.postV(path, form), http.StatusUnprocessableEntity, "Enter the amount in stock (0 if none)")
 	form.Set("quantity", "0")
 	expect(t, a.postV(path, form), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), id); it.Quantity != 0 {
@@ -333,8 +333,8 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	expectNot(t, kitPage, "Add missing to shopping list")
 	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
 	ring := itoa(itemID(t, a.store, "O-Ring"))
-	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6x" data-placeholder="e.g. 2" data-unit="piece" selected>`)
-	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1x" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6 pcs" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1 pcs" data-placeholder="e.g. 2" data-unit="piece" selected>`)
 }
 
 func TestQuickAdjustRowKeepsChipsHidden(t *testing.T) {

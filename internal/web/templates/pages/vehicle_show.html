@@ -36,7 +36,7 @@
     {{if $d.Sections}}
       {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" true)}}{{end}}
     {{else}}
-      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing on stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add an item")}}</div>
+      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add an item")}}</div>
     {{end}}
   </div>
 
@@ -80,7 +80,7 @@
       <button class="btn btn-danger btn-block" type="submit">{{icon "archive"}} Archive vehicle</button>
     </form>
     {{else}}
-    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Items stay on stock."><input type="hidden" name="version" value="{{$v.Version}}">
+    <form method="post" action="/vehicles/{{$v.ID}}/delete" data-confirm="Delete {{$v.Name}}? Items stay in stock."><input type="hidden" name="version" value="{{$v.Version}}">
       <button class="btn btn-danger btn-block" type="submit">{{icon "trash-2"}} Delete vehicle</button>
     </form>
     {{end}}

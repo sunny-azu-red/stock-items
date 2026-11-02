@@ -15,7 +15,7 @@ import (
 
 // A snapshot's amounts are checked in their item's unit: part of a piece
 // is refused like an amount finer than 0.01, whether the item is in the
-// snapshot, still on stock, or the amount is a free-text entry's.
+// snapshot, still in stock, or the amount is a free-text entry's.
 func TestRestoreRefusesPartsOfAPiece(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
@@ -32,7 +32,7 @@ func TestRestoreRefusesPartsOfAPiece(t *testing.T) {
 		path  string // the amount to set, as a jsonb_set path
 		ok    string // a whole number of pieces
 	}{
-		{"stock change of an item on stock", func(t *testing.T) int64 {
+		{"stock change of an item in stock", func(t *testing.T) int64 {
 			pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
 			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
 				t.Fatal(err)
@@ -153,7 +153,7 @@ func TestUndoBoughtAfterChanges(t *testing.T) {
 		name string
 		// since changes things after the Bought; the undo should then fail
 		// with conflict, or bring the list to want (pads entry quantity),
-		// leaving qty on stock.
+		// leaving qty in stock.
 		since    func(t *testing.T, s *store.Store, pads int64)
 		conflict string
 		want     float64

@@ -69,7 +69,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 			s.setFlash(w, "error", "Can't restore: "+conflict.Message)
 		case errors.As(err, &short):
 			s.setFlash(w, "error", "Can't restore: only "+stock.FormatQuantity(short.Have, short.Unit)+" of "+short.ItemName+
-				" is on stock, and it would take "+stock.FormatQuantity(short.Need, short.Unit)+".")
+				" is in stock, and it would take "+stock.FormatQuantity(short.Need, short.Unit)+".")
 		default:
 			return err
 		}

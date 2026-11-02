@@ -32,7 +32,7 @@ async function addItem(page: Page, it: ItemSpec) {
   await page.getByLabel("Name", { exact: true }).fill(it.name);
   if (it.brand) await page.getByLabel("Brand").fill(it.brand);
   if (it.volume) await page.locator("label", { hasText: "Volume (ml / L)" }).click();
-  await page.getByLabel("On stock").fill(it.qty);
+  await page.getByLabel("In stock").fill(it.qty);
   if (it.qtyUnit) await page.locator('select[name="quantity_unit"]').selectOption(it.qtyUnit);
   if (it.min) await page.getByLabel("Keep at least").fill(it.min);
   if (it.category) await page.getByLabel("Category").fill(it.category);
@@ -114,7 +114,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   const text = await copy.getAttribute("data-copied");
   expect(text).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
-  expect(text).toContain("KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6x - OEM Oil Filter O-Ring");
+  expect(text).toContain("KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6 pcs - OEM Oil Filter O-Ring");
   expect(text).not.toContain("Hiflofiltro");
 
   // Ticking a second vehicle offers "fits all" without a reload.
@@ -231,7 +231,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
   await page.goto("/stock");
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("3\u202f825 ml");
-  await expect(row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0x");
+  await expect(row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0 pcs");
 
   await page.goto("/");
   await expect(page.locator("main")).toContainText("in 7\u202f500 km");
@@ -247,7 +247,7 @@ test("buy something new from the shopping list", async ({ page }) => {
   await page.getByRole("link", { name: "Add to stock as a new item" }).click();
 
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Chain lube");
-  await expect(page.getByLabel("On stock")).toHaveValue("2");
+  await expect(page.getByLabel("In stock")).toHaveValue("2");
   await page.getByLabel("Total price").fill("59,80");
   await page.getByLabel("Shop").fill("Moto shop");
   await page.getByRole("button", { name: "Save item" }).click();
@@ -256,7 +256,7 @@ test("buy something new from the shopping list", async ({ page }) => {
 
   await page.goto("/stock");
   await row(page, "Chain lube").getByRole("link").first().click();
-  await expect(page.locator("#item-qty")).toHaveText("2x");
+  await expect(page.locator("#item-qty")).toHaveText("2 pcs");
   await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("29.90 EUR / piece");
   await expect(page.locator('dt:text-is("Purchases") + dd')).toHaveText("1");
 });
@@ -365,7 +365,7 @@ test("part rows offer the chosen item's units", async ({ page }) => {
   await expect(unit).toHaveValue("pcs");
   await row.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await expect(unit).toHaveValue("l");
-  await expect(row.locator(".stock-note")).toContainText("on stock:");
+  await expect(row.locator(".stock-note")).toContainText("in stock:");
 });
 
 test("form hints open from the question mark", async ({ page }) => {

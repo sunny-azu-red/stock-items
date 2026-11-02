@@ -1,6 +1,6 @@
 # Architecture
 
-Pitbox is a classic server-rendered web application. The browser asks for HTML pages and submits forms. There is no separate JSON API and no single-page app. A small amount of [htmx](https://htmx.org) makes a few interactions feel instant: live filtering and quick −/+ on stock rows.
+Pitbox is a classic server-rendered web application. The browser asks for HTML pages and submits forms. There is no separate JSON API and no single-page app. A small amount of [htmx](https://htmx.org) makes a few interactions feel instant: live filtering and quick −/+ in stock rows.
 
 ```
 browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL──▶ PostgreSQL

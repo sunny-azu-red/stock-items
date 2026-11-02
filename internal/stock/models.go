@@ -122,7 +122,7 @@ type SKU struct {
 	PackSize *float64 `json:"pack_size"`
 }
 
-// Item is a part or consumable on stock.
+// Item is a part or consumable in stock.
 type Item struct {
 	ID          int64
 	Name        string

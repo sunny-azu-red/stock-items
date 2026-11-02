@@ -189,7 +189,7 @@ type boughtPage struct {
 	Entry   stock.ShoppingEntry
 	Move    movementForm
 	Units   []stock.SubUnit
-	Matches []stock.Item // items already on stock with a free-text entry's name
+	Matches []stock.Item // items already in stock with a free-text entry's name
 }
 
 func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) error {
@@ -218,7 +218,7 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 	return nil
 }
 
-// shoppingLink records that a free-text entry is an item already on stock,
+// shoppingLink records that a free-text entry is an item already in stock,
 // then opens the usual Bought form for it.
 func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")

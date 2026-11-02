@@ -187,8 +187,8 @@ func TestKitPartsSort(t *testing.T) {
 	ctx := context.Background()
 	pads, oil, ring := itemID(t, a.store, "Rear Brake"), itemID(t, a.store, "Silkolene"), itemID(t, a.store, "O-Ring")
 	in := stock.KitInput{VehicleID: k390, Name: "Oil change", Lines: []stock.KitLineInput{
-		{ItemID: ring, Quantity: 1},   // 6 on stock
-		{ItemID: pads, Quantity: 2},   // 1 on stock: 1 short
+		{ItemID: ring, Quantity: 1},   // 6 in stock
+		{ItemID: pads, Quantity: 2},   // 1 in stock: 1 short
 		{ItemID: oil, Quantity: 1000}, // 525 ml: 475 ml short
 	}}
 	in.Normalize()

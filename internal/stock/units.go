@@ -235,7 +235,7 @@ func ParseAmountAnyUnit(s, subUnit string) (float64, Unit, error) {
 }
 
 // FormatQuantity renders a base unit quantity for people:
-// "6x", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg". Like L and kg,
+// "6 pcs", "525 ml", "1.5 L", "1 475 ml", "400 g", "1.2 kg". Like L and kg,
 // ml and g show at most two decimals, as stored ("1.234 g" would read as
 // 1234 g).
 func FormatQuantity(q float64, u Unit) string {
@@ -251,7 +251,7 @@ func FormatQuantity(q float64, u Unit) string {
 		}
 		return formatSmall(q) + " g"
 	default:
-		return formatGrouped(q) + "x"
+		return formatGrouped(q) + " pcs"
 	}
 }
 
@@ -282,7 +282,7 @@ func formatGrouped(f float64) string {
 	return FormatInt(n)
 }
 
-// FormatDelta renders a signed quantity change: "+2x", "−500 ml".
+// FormatDelta renders a signed quantity change: "+2 pcs", "−500 ml".
 func FormatDelta(q float64, u Unit) string {
 	if q < 0 {
 		return "−" + FormatQuantity(-q, u)

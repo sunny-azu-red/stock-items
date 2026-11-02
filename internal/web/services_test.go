@@ -36,7 +36,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 		"performed_on": {"2026-10-20"}, "odometer_km": {"12000"},
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"1.7 L", "1"},
 	}
-	expect(t, a.post("/services", svc), http.StatusUnprocessableEntity, "Only 525 ml on stock")
+	expect(t, a.post("/services", svc), http.StatusUnprocessableEntity, "Only 525 ml in stock")
 
 	// Shortfall to the shopping list, then mark it bought.
 	expect(t, a.post(kitPath+"/shortfall", nil), http.StatusSeeOther)
@@ -105,11 +105,11 @@ func TestEditService(t *testing.T) {
 
 	expect(t, a.get(svc), http.StatusOK, `href="`+svc+`/edit"`)
 	expect(t, a.get(svc+"/edit"), http.StatusOK, "Edit service", `value="Oil top-up"`, `value="1000.00"`, `value="11000"`,
-		`action="`+svc+`"`, "Save changes", "on stock: 525 ml") // 425 ml left + the 100 ml this service returns
+		`action="`+svc+`"`, "Save changes", "in stock: 525 ml") // 425 ml left + the 100 ml this service returns
 
 	expect(t, a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),
-		http.StatusUnprocessableEntity, "Only 525 ml on stock")
+		http.StatusUnprocessableEntity, "Only 525 ml in stock")
 	rec = a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"200"}})
 	expect(t, rec, http.StatusSeeOther)
@@ -145,14 +145,14 @@ func TestPartRowsHaveUnits(t *testing.T) {
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
 		"line_item": {itoa(pads)}, "line_qty": {"1"}, "line_unit": {"l"}}), http.StatusUnprocessableEntity, "L cannot be used for pieces")
 
-	// Prefilled rows come with their unit and what is on stock.
+	// Prefilled rows come with their unit and what is in stock.
 	edit := a.get(kit + "/edit")
-	expect(t, edit, http.StatusOK, `name="line_qty" value="1.7"`, `<option value="l" data-base="ml" selected>L</option>`, "on stock: 525 ml")
+	expect(t, edit, http.StatusOK, `name="line_qty" value="1.7"`, `<option value="l" data-base="ml" selected>L</option>`, "in stock: 525 ml")
 
 	// Every short part is marked at once.
 	form := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"2", "3"}, "part_unit": {"l", ""}}
-	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are short", "Only 525 ml on stock", "Only 1x on stock")
+	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are short", "Only 525 ml in stock", "Only 1 pcs in stock")
 }
 
 func TestServicesShowLabour(t *testing.T) {

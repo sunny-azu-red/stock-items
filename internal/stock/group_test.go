@@ -74,26 +74,26 @@ func TestExportTextMatchesExample(t *testing.T) {
 	items, vehicles := exampleInventory()
 	want := `KTM 390
 ------------
-1x - OEM Rear Brake Pads
-1x - OEM Fuel Filter
-1x - OEM Air Filter
-1x - OEM Oil Filter
-2x - OEM Oil Screen 1 O-Ring
-3x - OEM Oil Screen 2 O-Ring
+1 pcs - OEM Rear Brake Pads
+1 pcs - OEM Fuel Filter
+1 pcs - OEM Air Filter
+1 pcs - OEM Oil Filter
+2 pcs - OEM Oil Screen 1 O-Ring
+3 pcs - OEM Oil Screen 2 O-Ring
 525 ml - Silkolene 15W50 PRO 4 XP
 
 
 KTM 1290
 ------------
-1x - OEM Rear Brake Pads
-1x - Hiflofiltro Oil Filter
-6x - OEM Oil Screen 1+2 O-Ring
+1 pcs - OEM Rear Brake Pads
+1 pcs - Hiflofiltro Oil Filter
+6 pcs - OEM Oil Screen 1+2 O-Ring
 1.5 L - Motorex 10W50 Power Synt 4T
 
 
 KTM 390 + KTM 1290
 ------------------
-6x - OEM Oil Filter O-Ring
+6 pcs - OEM Oil Filter O-Ring
 640 ml - Motorex M3.0 Ready To Use
 `
 	got := ExportText(GroupByVehicles(items, vehicles))
@@ -123,7 +123,7 @@ func TestExportShoppingText(t *testing.T) {
 		{ItemName: "Motorex Power Synt", ItemUnit: UnitML, Quantity: &oil, Note: "4 L can"},
 		{FreeText: "Chain lube"},
 	})
-	want := "Shopping list\n-------------\n2x - OEM Oil Filter\n4 L - Motorex Power Synt (4 L can)\n- Chain lube\n"
+	want := "Shopping list\n-------------\n2 pcs - OEM Oil Filter\n4 L - Motorex Power Synt (4 L can)\n- Chain lube\n"
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
@@ -149,7 +149,7 @@ func TestWriteCSV(t *testing.T) {
 		"id,brand,name,category,unit,quantity,quantity_display,min_quantity,expires_on,location,vehicles,skus,notes," +
 			"last_price,price_per,stock_value,last_bought_on,last_shop",
 		// Never bought with a price: empty money columns.
-		`7,OEM,Oil Filter,,piece,1,1x,2,,,KTM 390,OEM:77038005044,'=HYPERLINK(),,,,,`,
+		`7,OEM,Oil Filter,,piece,1,1 pcs,2,,,KTM 390,OEM:77038005044,'=HYPERLINK(),,,,,`,
 		// Priced per litre, valued at the last price.
 		`8,Motorex,Coolant,,ml,1500,1.5 L,,,,,"Manufacturer:M30 (1 L bottle, pack 1 L)",,67.00,L,100.50,2026-10-01,moto24`,
 	}
@@ -181,7 +181,7 @@ func TestWriteMovementsCSV(t *testing.T) {
 		"date,item_id,item,kind,change,change_display,unit,total_price,unit_price,price_per,shop,note,service",
 		"2026-10-29,8,Motorex Coolant,purchase,1000,'+1 L,ml,67.00,67.00,L,moto24,'-promo,", // "+1 L" would be a formula
 		"2026-10-29,8,Motorex Coolant,service,-500,−500 ml,ml,,,,,,Coolant change",
-		"2026-10-29,7,OEM Oil Filter,use,-1,−1x,piece,,,,,,",
+		"2026-10-29,7,OEM Oil Filter,use,-1,−1 pcs,piece,,,,,,",
 	}
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != len(want) {

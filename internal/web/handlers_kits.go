@@ -17,7 +17,7 @@ type lineRow struct {
 	ItemID int64
 	Qty    string
 	Unit   string // sub-unit chosen next to Qty; "" means the item's base unit
-	Have   string // what is on stock of the chosen item, shown next to the row
+	Have   string // what is in stock of the chosen item, shown next to the row
 	Error  string
 }
 
@@ -28,7 +28,7 @@ func partRow(itemID int64, qty float64, u stock.Unit) lineRow {
 	return row
 }
 
-// describeRows fills in what is on stock for each row's item.
+// describeRows fills in what is in stock for each row's item.
 func describeRows(rows []lineRow, items []stock.Item) {
 	byID := itemsByID(items)
 	for i := range rows {

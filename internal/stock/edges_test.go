@@ -65,11 +65,11 @@ func TestNegativeAmounts(t *testing.T) {
 		{-1475, UnitML, "-1\u202f475 ml"},
 		{-1234.5, UnitGram, "-1\u202f234.5 g"},
 		{-2000, UnitGram, "-2 kg"},
-		{-3, UnitPiece, "-3x"},
-		{-1500, UnitPiece, "-1\u202f500x"},
+		{-3, UnitPiece, "-3 pcs"},
+		{-1500, UnitPiece, "-1\u202f500 pcs"},
 		{-0.5, UnitML, "-0.5 ml"},
 		{-0.004, UnitML, "0 ml"},
-		{-0.0001, UnitPiece, "0x"},
+		{-0.0001, UnitPiece, "0 pcs"},
 	}
 	for _, tt := range format {
 		if got := FormatQuantity(tt.q, tt.unit); got != tt.want {

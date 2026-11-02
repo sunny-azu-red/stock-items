@@ -261,7 +261,7 @@ func TestPagesRenderWithData(t *testing.T) {
 	expect(t, a.get("/vehicles"), http.StatusOK, "KTM 1290")
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Service kits", "Silkolene")
 	expect(t, a.get("/vehicles/"+itoa(k390)+"/edit"), http.StatusOK, `value="KTM 390"`)
-	expect(t, a.get("/items/"+itoa(oil)), http.StatusOK, "525 ml", "Initial stock")
+	expect(t, a.get("/items/"+itoa(oil)), http.StatusOK, "525 ml", "Starting stock")
 	expect(t, a.get("/items/"+itoa(oil)+"/edit"), http.StatusOK, `value="525"`)
 	expect(t, a.get("/kits/new?vehicle="+itoa(k390)), http.StatusOK, "For KTM 390")
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `value="10000"`)

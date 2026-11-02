@@ -134,7 +134,7 @@ func (p activityPage) SortNote() string {
 	words := map[string][3]string{
 		store.MoveSortDate:   {"", "oldest first", "newest first"},
 		store.MoveSortItem:   {"by item, ", "A–Z", "Z–A"},
-		store.MoveSortKind:   {"by kind, ", "A–Z", "Z–A"},
+		store.MoveSortKind:   {"by type, ", "A–Z", "Z–A"},
 		store.MoveSortChange: {"by change, ", "smallest first", "largest first"},
 		store.MoveSortPrice:  {"by price, ", "lowest first", "highest first"},
 	}[p.Sort.Key]

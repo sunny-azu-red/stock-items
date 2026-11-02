@@ -116,9 +116,9 @@ func TestMovementSortOrders(t *testing.T) {
 		// Within an item (or kind, change, price), newest first.
 		{store.MoveSortItem, false, []int{6, 3, 1, 5, 4, 2}},
 		{store.MoveSortItem, true, []int{5, 4, 2, 6, 3, 1}},
-		// By the labels shown: Correction, Purchase, Used.
-		{store.MoveSortKind, false, []int{5, 6, 2, 1, 4, 3}},
-		{store.MoveSortKind, true, []int{4, 3, 6, 2, 1, 5}},
+		// By the labels shown: Bought, Counted, Used.
+		{store.MoveSortKind, false, []int{6, 2, 1, 5, 4, 3}},
+		{store.MoveSortKind, true, []int{4, 3, 5, 6, 2, 1}},
 		// Grouped by unit (ml before pieces) both ways.
 		{store.MoveSortChange, false, []int{4, 5, 2, 3, 6, 1}},
 		{store.MoveSortChange, true, []int{2, 5, 4, 1, 6, 3}},

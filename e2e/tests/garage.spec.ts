@@ -173,7 +173,7 @@ test("fix a wrong price in the history", async ({ page }) => {
   await page.goto("/stock");
   await row(page, "15W50 PRO 4 XP").getByRole("link").first().click();
   const history = page.locator("section").filter({ hasText: "History" });
-  await history.locator("tr").filter({ hasText: "Moto shop" }).getByRole("link", { name: /Edit this Purchase/ }).click();
+  await history.locator("tr").filter({ hasText: "Moto shop" }).getByRole("link", { name: /Edit the purchase/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edit purchase");
   await expect(page.getByLabel("Total price")).toHaveValue("18.50");
   await page.getByLabel("Total price").fill("16,50");
@@ -654,7 +654,7 @@ test("sort the activity by clicking its headers", async ({ page }) => {
   await expect(th("Item").getByRole("link")).toHaveAttribute("title", "Sort by Item, ascending");
 
   // A kind chip keeps the sort.
-  await page.locator(".chips").getByRole("link", { name: "Purchase" }).click();
+  await page.locator(".chips").getByRole("link", { name: "Bought" }).click();
   await expect(page).toHaveURL(/dir=desc&kind=purchase&sort=item/);
   await expect(th("Item")).toHaveAttribute("aria-sort", "descending");
 

@@ -492,7 +492,7 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 		}
 		rec = a.post(page+"/movements", with(url.Values{"kind": {"use"}, "amount": {"500"}, "amount_unit": {"ml"}}, key, ""))
 		expect(t, rec, http.StatusSeeOther)
-		if f := flashOf(t, rec); f.Message != "Took 500 ml from stock" {
+		if f := flashOf(t, rec); f.Message != "Used 500 ml" {
 			t.Errorf("flash = %+v", f)
 		}
 		if got := a.quantity(t, oil); got != 25 {

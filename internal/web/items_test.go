@@ -183,7 +183,7 @@ func TestNewItemBoughtJustNow(t *testing.T) {
 
 	// Without a price or shop it is stock that was already there.
 	expect(t, a.post("/items", url.Values{"name": {"Old grease"}, "unit": {"g"}, "quantity": {"300"}, "bought_on": {"2026-10-29"}}), http.StatusSeeOther)
-	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Old grease"))), http.StatusOK, "Initial stock", "<dt>Purchases</dt><dd>0</dd>")
+	expect(t, a.get("/items/"+itoa(itemID(t, a.store, "Old grease"))), http.StatusOK, "Starting stock", "<dt>Purchases</dt><dd>0</dd>")
 }
 
 func TestItemEditForm(t *testing.T) {

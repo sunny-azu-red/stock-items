@@ -101,7 +101,7 @@
 {{define "movement-table"}}{{$h := .Sort}}
 <div class="table-wrap">
 <table class="table">
-  <thead><tr>{{template "sort-th" ($h.Col "date" "Date" false)}}{{if .ShowItem}}{{template "sort-th" ($h.Col "item" "Item" false)}}{{end}}{{template "sort-th" ($h.Col "kind" "What" false)}}{{template "sort-th" ($h.Col "change" "Change" true)}}{{template "sort-th" ($h.Col "price" "Price" true)}}<th>Note</th><th><span class="sr-only">Edit</span></th></tr></thead>
+  <thead><tr>{{template "sort-th" ($h.Col "date" "Date" false)}}{{if .ShowItem}}{{template "sort-th" ($h.Col "item" "Item" false)}}{{end}}{{template "sort-th" ($h.Col "kind" "Type" false)}}{{template "sort-th" ($h.Col "change" "Change" true)}}{{template "sort-th" ($h.Col "price" "Price" true)}}<th>Note</th><th><span class="sr-only">Edit</span></th></tr></thead>
   <tbody>
   {{range .Movements}}
     <tr>
@@ -111,7 +111,7 @@
       <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
       <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
       <td class="muted small">{{.Supplier}}{{if and .Supplier .Note}} · {{end}}{{if not .ServiceRecordID}}{{.Note}}{{end}}</td>
-      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit this {{.Kind.Label}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{end}}</td>
+      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{end}}</td>
     </tr>
   {{end}}
   </tbody>

@@ -60,7 +60,7 @@ func TestMovementsAndAdjust(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/stock?low=1" {
 		t.Errorf("adjust redirect = %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	expect(t, a.get("/activity"), http.StatusOK, "Quick adjust", "Purchase")
+	expect(t, a.get("/activity"), http.StatusOK, "Quick adjust", "Bought")
 }
 
 func TestActivityExportCSV(t *testing.T) {

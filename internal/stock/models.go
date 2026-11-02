@@ -240,13 +240,13 @@ const (
 func (k MovementKind) Label() string {
 	switch k {
 	case MoveInitial:
-		return "Initial stock"
+		return "Starting stock"
 	case MovePurchase:
-		return "Purchase"
+		return "Bought"
 	case MoveUse:
 		return "Used"
 	case MoveCorrection:
-		return "Correction"
+		return "Counted"
 	case MoveService:
 		return "Service"
 	}

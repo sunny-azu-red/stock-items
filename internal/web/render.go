@@ -116,16 +116,17 @@ func (s *Server) funcs() template.FuncMap {
 			return template.HTML(`<svg class="` + template.HTMLEscapeString(c) + `" aria-hidden="true"><use href="#i-` +
 				template.HTMLEscapeString(name) + `"></use></svg>`)
 		},
-		"qty":   stock.FormatQuantity,
-		"delta": stock.FormatDelta,
-		"num":   stock.FormatNumber,
-		"km":    formatKm,
-		"money": s.formatMoney,
-		"date":  formatDate,
-		"ago":   func(t time.Time) string { return relativeDate(t, s.now()) },
-		"deref": derefFloat,
-		"dict":  dict,
-		"add":   func(a, b int) int { return a + b },
+		"qty":        stock.FormatQuantity,
+		"delta":      stock.FormatDelta,
+		"num":        stock.FormatNumber,
+		"km":         formatKm,
+		"money":      s.formatMoney,
+		"date":       formatDate,
+		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
+		"deref":      derefFloat,
+		"changeName": changeName,
+		"dict":       dict,
+		"add":        func(a, b int) int { return a + b },
 		"pct": func(have, need float64) int {
 			if need <= 0 {
 				return 100

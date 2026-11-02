@@ -745,9 +745,9 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err == nil {
 			msg := map[stock.MovementKind]string{
-				stock.MovePurchase:   "Added " + stock.FormatQuantity(in.Delta, it.Unit) + " to stock",
-				stock.MoveUse:        "Took " + stock.FormatQuantity(-in.Delta, it.Unit) + " from stock",
-				stock.MoveCorrection: "Stock corrected to " + stock.FormatQuantity(amount, it.Unit),
+				stock.MovePurchase:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit),
+				stock.MoveUse:        "Used " + stock.FormatQuantity(-in.Delta, it.Unit),
+				stock.MoveCorrection: "Counted: " + stock.FormatQuantity(amount, it.Unit) + " on stock",
 			}[in.Kind]
 			s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
 			return nil

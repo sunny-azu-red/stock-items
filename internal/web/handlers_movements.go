@@ -265,7 +265,7 @@ func changeName(k stock.MovementKind) string {
 	case stock.MoveCorrection:
 		return "count"
 	case stock.MoveInitial:
-		return "initial stock"
+		return "starting stock"
 	}
 	return "stock change"
 }

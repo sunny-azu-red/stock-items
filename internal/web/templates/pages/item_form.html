@@ -156,7 +156,7 @@
   </select>
   <input class="input" name="sku_label" value="{{if $r}}{{$r.Label}}{{end}}" placeholder="e.g. 1 L bottle" aria-label="Label">
   <div class="qty-input">
-    <input class="input" name="sku_pack" value="{{if $r}}{{$r.Pack}}{{end}}" inputmode="decimal" placeholder="—" aria-label="Pack size">
+    <input class="input" name="sku_pack" value="{{if $r}}{{$r.Pack}}{{end}}" inputmode="decimal" placeholder="e.g. 1" aria-label="Pack size">
     <select class="input" name="sku_pack_unit" data-subunit aria-label="Pack unit">
       {{range .SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if and $r (eq .Value $r.PackUnit)}}selected{{end}}>{{.Label}}</option>{{end}}
     </select>

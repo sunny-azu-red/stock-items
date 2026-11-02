@@ -368,7 +368,7 @@ type MovementEdit struct {
 }
 
 // ApplyEdit returns m corrected by e. A kind without a price and shop
-// (a use, a count) is saved without them. Initial stock that gets a price
+// (a use, a count) is saved without them. Starting stock that gets a price
 // or shop becomes a purchase, as when an item is created.
 func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 	errs := Errors{}

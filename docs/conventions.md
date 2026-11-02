@@ -62,6 +62,28 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Accessibility: real `<label>`s for inputs, buttons for actions, links for navigation, `aria-label` on icon-only buttons.
 - Form hints: a hint about one field goes behind a "?" next to its label (`{{template "tip"}}` inside a `.label-row`, with the input's `aria-describedby` pointing at the tip's ID). A hint about a whole section stays visible as `<p class="hint">` under the section heading. Never put a "?" on a heading.
 
+## Words
+
+One name for each thing, everywhere: pages, messages, comments and docs. `TestVocabulary` (`internal/web/vocabulary_test.go`) fails on the retired forms and says what to write instead.
+
+| Say | Not |
+|---|---|
+| Bought · Used · Counted · Service · Starting stock (the kinds of stock change; "purchase", "use", "count" in a sentence; the item tabs are Bought, Used, Count) | Purchase, Correction, Initial stock |
+| in stock | on stock |
+| 3 pcs (`stock.FormatQuantity`) | 3x |
+| Type (Activity's column and chips: All types) | What, Everything, kind |
+| Add item · Add vehicle · Add kit · Log service (button, page title and empty state alike) | New item, New service kit, Create a kit |
+| Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing) | Save, Save changes |
+| Added X · Saved X · Deleted X · Archived X · Restored X (messages lead with the verb) | Created kit X, Photo saved |
+| Shopping list (the list, and its dashboard tile) · N suggested (what the list could take) | To buy |
+| All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
+| All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |
+
+- Record actions sit in the page header: Edit first, Archive (plain style, it can be undone), Delete (red, the trash icon), Restore (primary).
+- Nothing that can be undone asks first; only the trash's Delete permanently and Empty do (`data-confirm`).
+- Required fields carry a red star beside the label (`{{template "req"}}` in a `.label-row`, `aria-required` on the input), and the form a "* required" note at the start of its buttons (`{{template "req-note"}}`). Optional fields aren't marked.
+- A best-before date shows through `{{template "expiry-badge"}}` and low stock through `{{template "stock-badge"}}`; a purchase is entered through `{{template "bought-fields"}}`.
+
 ## Code style
 
 - `gofmt`, `go vet` and golangci-lint ([`.golangci.yml`](../.golangci.yml), which includes staticcheck) must be clean (`scripts/check.sh`). A `//nolint` names the linter and says why.

@@ -108,7 +108,7 @@ func sectionKey(ids []int64) string {
 //
 //	KTM 390
 //	------------
-//	1x - OEM Rear Brake Pads
+//	1 pcs - OEM Rear Brake Pads
 //	525 ml - Silkolene 15W50 PRO 4 XP
 func ExportText(sections []Section) string {
 	var b strings.Builder

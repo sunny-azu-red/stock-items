@@ -12,13 +12,13 @@ It is built for one household on a home network: no login, one binary, one Postg
 ## Features
 
 - **Stock tagged by vehicle.** An item can fit one vehicle, several (e.g. an O-ring that fits both bikes), or none ("General" stock such as cleaners).
-- **Pieces, ml/L and g/kg.** Type `525 ml`, `1.5 L`, `1,5 l` or `400g`. Quantities display the way you think about them (`6x`, `525 ml`, `1.5 L`).
+- **Pieces, ml/L and g/kg.** Type `525 ml`, `1.5 L`, `1,5 l` or `400g`. Quantities display the way you think about them (`6 pcs`, `525 ml`, `1.5 L`).
 - **Several SKUs per item:** the OEM number, the manufacturer number, one per pack size. Search finds items by any of them, with or without dashes, so a USB barcode scanner works too.
 - **Stock view grouped like a shopping note:** per vehicle, then shared items, then general stock. Filter by vehicle (fits any / fits all), category, low stock or expiring. **Copy as text** gives you:
   ```
   KTM 390
   ------------
-  1x - OEM Rear Brake Pads
+  1 pcs - OEM Rear Brake Pads
   525 ml - Silkolene 15W50 PRO 4 XP
   ```
   CSV export is available too, with last prices and stock value, plus a CSV of the whole history.

@@ -590,7 +590,7 @@ func TestRacesEndInMessages(t *testing.T) {
 	for _, p := range []string{"/delete", "/bought"} {
 		rec = a.post("/shopping/"+itoa(entry)+p, url.Values{"amount": {"1"}})
 		expect(t, rec, http.StatusSeeOther)
-		if f := flashOf(t, rec); f.Kind != "error" || f.Message != "That entry is no longer on the list" {
+		if f := flashOf(t, rec); f.Kind != "error" || f.Message != "That entry is no longer on the shopping list" {
 			t.Errorf("%s: flash = %+v", p, f)
 		}
 	}

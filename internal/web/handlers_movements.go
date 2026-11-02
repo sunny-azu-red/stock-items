@@ -187,7 +187,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateMovement(r.Context(), m.ID, e)
 		if err == nil {
-			s.redirect(w, r, f.Back, "Updated the "+changeName(m.Kind))
+			s.redirect(w, r, f.Back, "Saved the "+changeName(m.Kind))
 			return nil
 		}
 		if s.savedAlready(w, r, err, func(int64) string { return f.Back }, f.Back) {

@@ -757,7 +757,7 @@ func TestPhotoUploadHEIC(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := a.do(photoUpload(t, context.Background(), item, heic))
-	if f := flashOf(t, rec); f.Kind != "success" || f.Message != "Photo saved" {
+	if f := flashOf(t, rec); f.Kind != "success" || f.Message != "Saved the photo" {
 		t.Fatalf("flash = %+v", f)
 	}
 	for _, tc := range []struct {
@@ -776,7 +776,7 @@ func TestPhotoUploadHEIC(t *testing.T) {
 	first := a.get(item + "/photo").Body.String()
 	rec = a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black)))
 	f := flashOf(t, rec)
-	if f.Message != "Photo replaced" || f.Undo == 0 {
+	if f.Message != "Replaced the photo" || f.Undo == 0 {
 		t.Fatalf("flash = %+v", f)
 	}
 	a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
@@ -875,7 +875,7 @@ func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
 	release()
 	rec := answer(done)
 	expect(t, rec, http.StatusSeeOther)
-	if f := flashOf(t, rec); f.Message != "Photo saved" {
+	if f := flashOf(t, rec); f.Message != "Saved the photo" {
 		t.Fatalf("flash = %+v", f)
 	}
 	first := a.get(item + "/photo").Body.String()

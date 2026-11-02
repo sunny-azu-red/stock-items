@@ -6,7 +6,7 @@
   </div>
   {{if not $d.Archived}}
   <div class="actions">
-    <a class="btn" href="/kits/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "list-checks"}} New kit</a>
+    <a class="btn" href="/kits/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "list-checks"}} Add kit</a>
     <a class="btn btn-primary" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
   </div>
   {{end}}
@@ -25,8 +25,8 @@
     {{if $d.Services}}{{template "service-list" $d.Services}}
     {{else if gt $d.Total 0}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing on this page" "Text" "There are no older services." "Href" (withQuery "/services" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
     {{else if $d.Archived}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged for this vehicle" "Text" "It is archived; restore it to log services.")}}
-    {{else if $d.VehicleID}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged for this vehicle yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" (print "/services/new?vehicle=" $d.VehicleID) "Action" "Log a service")}}
-    {{else}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log a service")}}{{end}}
+    {{else if $d.VehicleID}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged for this vehicle yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" (print "/services/new?vehicle=" $d.VehicleID) "Action" "Log service")}}
+    {{else}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing logged yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log service")}}{{end}}
     {{if or $d.More (gt $d.Page 1)}}
     <div class="card-body flex">
       {{if gt $d.Page 1}}<a class="btn btn-ghost btn-sm" href="{{withQuery "/services" ($d.PageQuery (add $d.Page -1))}}">{{icon "arrow-left"}} Newer</a>{{end}}

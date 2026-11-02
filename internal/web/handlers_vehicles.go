@@ -75,7 +75,7 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 func vehiclePath(id int64) string { return fmt.Sprintf("/vehicles/%d", id) }
 
 func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, status int, f vehicleForm, isNew bool) {
-	title := "New vehicle"
+	title := "Add vehicle"
 	if !isNew {
 		title = "Edit " + f.Stored
 	}

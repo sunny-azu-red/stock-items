@@ -183,7 +183,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	for n := 0; n < 3 || len(f.Lines) == 0; n++ {
 		f.Lines = append(f.Lines, lineRow{})
 	}
-	title := "New service kit"
+	title := "Add kit"
 	if !isNew {
 		title = "Edit " + f.Stored
 	}
@@ -256,7 +256,7 @@ func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		id, err := s.store.CreateKit(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, kitPath(id), "Created kit "+in.Name)
+			s.redirect(w, r, kitPath(id), "Added "+in.Name)
 			return nil
 		}
 		if s.savedAlready(w, r, err, kitPath, "/services") {
@@ -301,7 +301,7 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateKit(r.Context(), id, in)
 		if err == nil {
-			s.redirect(w, r, kitPath(id), "Saved kit "+in.Name)
+			s.redirect(w, r, kitPath(id), "Saved "+in.Name)
 			return nil
 		}
 		if s.savedAlready(w, r, err, kitPath, "/services") {
@@ -345,7 +345,7 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted kit "+k.Name, trashID)
+	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted "+k.Name, trashID)
 	return nil
 }
 

@@ -20,7 +20,7 @@
     <li><a href="/items/new">Add the items you have in stock</a> and tag them with the vehicles they fit. Items can fit several vehicles.</li>
     <li>Create a <strong>service kit</strong> (e.g. "Oil service") on a vehicle to see at a glance if you have every part, and get reminded when it is due.</li>
   </ol>
-  <p class="mt"><a class="btn btn-primary" href="/vehicles/new">{{icon "plus"}} Add your first vehicle</a></p>
+  <p class="mt"><a class="btn btn-primary" href="/vehicles/new">{{icon "plus"}} Add vehicle</a></p>
 </div>
 {{end}}
 
@@ -42,7 +42,7 @@
       {{else if $d.KitCount}}
         <div class="card-body muted small">None of your service kits has an interval yet. Set "every X km / months" on a kit to get reminders.</div>
       {{else}}
-        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles "/kits/new") "") "Action" "Create a kit")}}
+        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles "/kits/new") "") "Action" "Add kit")}}
       {{end}}
     </section>
 

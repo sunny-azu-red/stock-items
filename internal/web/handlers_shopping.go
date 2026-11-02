@@ -259,7 +259,7 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	if errors.Is(err, store.ErrNotFound) {
-		s.setFlash(w, "error", "That shopping entry is gone")
+		s.setFlash(w, "error", "That entry is no longer on the shopping list")
 		s.redirect(w, r, "/shopping", "")
 		return nil
 	}
@@ -394,7 +394,7 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 // shoppingGone answers a post about an entry that was ticked off or
 // removed meanwhile, say in another tab, with a message instead of a 404.
 func (s *Server) shoppingGone(w http.ResponseWriter, r *http.Request) {
-	s.setFlash(w, "error", "That entry is no longer on the list")
+	s.setFlash(w, "error", "That entry is no longer on the shopping list")
 	s.redirect(w, r, "/shopping", "")
 }
 

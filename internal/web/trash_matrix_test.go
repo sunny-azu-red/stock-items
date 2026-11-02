@@ -102,7 +102,7 @@ func trashKinds() []struct {
 			needVips(t)
 			item := itemPath(itemID(t, a.store, "Silkolene"))
 			rec := a.do(photoUpload(t, ctx, item, smallPNG(t, color.Black)))
-			if f := flashOf(t, rec); f.Message != "Photo saved" {
+			if f := flashOf(t, rec); f.Message != "Saved the photo" {
 				t.Fatalf("upload: %+v", f)
 			}
 			return trashRecord{page: item, button: item + "/photo/delete",

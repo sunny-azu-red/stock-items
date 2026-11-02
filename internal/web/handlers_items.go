@@ -268,7 +268,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		}
 		page.ShoppingVersion = shoppingVersion
 	}
-	s.render(w, r, http.StatusOK, "item_form", View{Title: "New item", Nav: "stock", Data: page})
+	s.render(w, r, http.StatusOK, "item_form", View{Title: "Add item", Nav: "stock", Data: page})
 	return nil
 }
 
@@ -336,7 +336,7 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		}
 		page.ShoppingVersion = e.Version
 	}
-	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "New item", Nav: "stock", Data: page})
+	s.render(w, r, http.StatusUnprocessableEntity, "item_form", View{Title: "Add item", Nav: "stock", Data: page})
 	return nil
 }
 

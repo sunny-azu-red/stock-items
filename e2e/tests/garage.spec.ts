@@ -177,8 +177,8 @@ test("fix a wrong price in the history", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edit purchase");
   await expect(page.getByLabel("Total price")).toHaveValue("18.50");
   await page.getByLabel("Total price").fill("16,50");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Updated the purchase");
+  await page.getByRole("button", { name: "Save purchase" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Saved the purchase");
   await expect(page.locator("#item-qty")).toHaveText("1\u202f525 ml");
   await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("16.50 EUR / L");
 });
@@ -187,7 +187,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   page.on("dialog", (d) => d.accept());
   await page.goto("/vehicles");
   await page.locator("a.vehicle-card").filter({ has: page.locator(".name", { hasText: exact("KTM 390") }) }).click();
-  await page.getByRole("link", { name: "New kit" }).click();
+  await page.getByRole("link", { name: "Add kit" }).click();
 
   await page.getByLabel("Name").fill("Oil service");
   await page.getByLabel("Kilometres").fill("7500");
@@ -310,7 +310,7 @@ test("fix a logged service", async ({ page }) => {
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
   await page.getByLabel("Labour / workshop cost").fill("120");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByRole("button", { name: "Save service" }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved Oil service");
   await expect(page.locator('dt:text-is("Labour") + dd')).toHaveText("120.00 EUR");
   await expect(page.locator("main")).toContainText("1.7 L");
@@ -512,7 +512,7 @@ test("replaced photos show their thumbnails in the trash", async ({ page }) => {
     await page.locator('input[type="file"][name="photo"]').setInputFiles(file); // sends itself
     await page.waitForFunction(() => !(window as any).before); // the page after the upload
     await expect(page).toHaveURL(item);
-    await expect(page.locator(".flash-success")).toContainText(i === 0 ? "Photo saved" : "Photo replaced");
+    await expect(page.locator(".flash-success")).toContainText(i === 0 ? "Saved the photo" : "Replaced the photo");
   }
   // Undo the last replace: the second photo is back, the third in the trash.
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
@@ -598,7 +598,7 @@ test("a large photo is shrunk in the browser, and the server shrinks an original
   await page.evaluate(() => { (window as any).before = true; });
   await page.locator('input[type="file"][name="photo"]').setInputFiles({ name: "big.png", mimeType: "image/png", buffer: big });
   await page.waitForFunction(() => !(window as any).before);
-  await expect(page.locator(".flash-success")).toContainText("Photo replaced");
+  await expect(page.locator(".flash-success")).toContainText("Replaced the photo");
   expect(sent).toHaveLength(1);
   expect(imageSize(sent[0])).toEqual({ type: "jpeg", w: 1600, h: 1200 });
   expect(sent[0].length).toBeLessThan(big.length);

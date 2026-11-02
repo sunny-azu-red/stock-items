@@ -3,7 +3,7 @@
 ## First steps
 
 1. **Add your vehicles** (Vehicles → Add vehicle). Give each a short name such as "KTM 390" and a colour. That name and colour are used everywhere. Enter the odometer if you want km-based reminders.
-2. **Add your items** (Add item, or press `n`):
+2. **Add your items** (Add item, or press `a`):
    - **Name and brand.** "OEM" works fine as a brand for original parts.
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).
    - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded, or once the item is in a kit or on the shopping list with a quantity, also when those are in the trash.
@@ -93,7 +93,7 @@ When you press Save (or Add to stock, Take from stock, …), the button says **S
 - Amounts take at most two decimals of ml or g, and pieces are whole. A finer amount isn't rounded: the form comes back with what you typed and says why. `0.234 g` gets *"use at most two decimals of g"*, and `1.0004` pieces *"pieces must be a whole number"*. In L and kg you can type more decimals, as long as they come to two of ml or g: `1.2345 kg` is 1234.5 g, but `1.234567 kg` gets *"1.234567 kg is 1234.567 g: use at most two decimals of g"*.
 - Photos help to recognise similar parts: open an item → **Add photo**. JPEG, PNG, GIF, WebP and HEIC (iPhone) photos work, up to 15 MB and 100 megapixels. Large photos are shrunk in your browser before they upload ("Preparing photo…"), so a phone sends a few hundred KB; the server rotates them upright and resizes them to 1600 px either way. **Replace photo** and **Remove** are on the same spot; both can be undone.
 - A USB or Bluetooth barcode scanner "types" into the search box. Put EAN codes in the SKU list and scanning finds the item.
-- Shortcuts: `/` searches stock from any page, `n` opens a new item.
+- Shortcuts, the same on every page: `/` searches stock, `a` opens Add item, `l` opens Log service.
 - The app follows your system's light or dark mode. The sun / moon button (top of the sidebar; on a phone, top of the dashboard) overrides it on that device. Switch back to what your system shows to follow it again.
 - The *Activity* page lists every stock change across all items, 200 per page (**Older** / **Newer**), filtered by kind and year if you like. An item's page shows its first 100 changes (the newest, unless you sorted it otherwise); **All entries →** opens its whole history there, in the same order. The CSV button downloads what the page is filtered on.
 - The services list (100 per page) and each vehicle show the labour cost of every service and the total.

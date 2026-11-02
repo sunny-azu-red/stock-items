@@ -293,7 +293,7 @@ test("archive an item that a service still refers to", async ({ page }) => {
 
   // The logged oil service still lists it.
   await page.goto(itemURL);
-  await page.locator('a[href^="/services/"]').first().click();
+  await page.locator('main a[href^="/services/"]').first().click();
   await expect(page.locator("main")).toContainText("OEM Oil Filter");
 
   await page.goto(itemURL);
@@ -305,7 +305,7 @@ test("archive an item that a service still refers to", async ({ page }) => {
 
 test("fix a logged service", async ({ page }) => {
   await page.goto("/activity?kind=service");
-  await page.locator('a[href^="/services/"]').first().click();
+  await page.locator('main a[href^="/services/"]').first().click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
@@ -321,7 +321,7 @@ test("undo a deleted service", async ({ page }) => {
   await page.goto("/stock");
   const before = await row(page, "15W50 PRO 4 XP").locator(".qty").textContent();
   await page.goto("/activity?kind=service");
-  await page.locator('a[href^="/services/"]').first().click();
+  await page.locator('main a[href^="/services/"]').first().click();
   await page.getByRole("button", { name: /Delete/ }).click();
   await expect(page.locator(".flash-success")).toContainText("Deleted Oil service");
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
@@ -398,6 +398,27 @@ test("slash focuses search from any page", async ({ page }) => {
   await page.locator("main h1").click();
   await page.keyboard.press("/");
   await expect(page.getByPlaceholder(/Search name/)).toBeFocused();
+});
+
+test("a and l open Add item and Log service from any page", async ({ page }) => {
+  await page.goto("/stock");
+  await page.keyboard.press("a");
+  await expect(page).toHaveURL(/\/items\/new$/);
+  await page.goto("/");
+  await page.keyboard.press("l");
+  await expect(page).toHaveURL(/\/services\/new$/);
+
+  // Typed in a field, they are just letters.
+  await page.goto("/items/new");
+  await page.getByLabel("Name", { exact: true }).pressSequentially("al");
+  await expect(page).toHaveURL(/\/items\/new$/);
+
+  // With unsaved changes, leaving asks first; Cancel stays.
+  await page.locator("main h1").click();
+  page.once("dialog", (d) => d.dismiss());
+  await page.keyboard.press("l");
+  await expect(page).toHaveURL(/\/items\/new$/);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("al");
 });
 
 test("switch between light and dark theme", async ({ page }) => {

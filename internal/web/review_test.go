@@ -73,7 +73,8 @@ func TestServicesPageOfAnArchivedVehicle(t *testing.T) {
 	expect(t, a.postV("/vehicles/"+itoa(k390)+"/archive", nil), http.StatusSeeOther)
 	rec := a.get(page)
 	expect(t, rec, http.StatusOK, "Chain")
-	expectNot(t, rec, `href="/kits/new`, `href="/services/new`, "Not done yet")
+	// The sidebar's Log service (no vehicle) stays; the page's own buttons go.
+	expectNot(t, rec, `href="/kits/new`, `href="/services/new?`, "Not done yet")
 	// The archived vehicles list shows its next kit without a reminder too.
 	expectNot(t, a.get("/vehicles?archived=1"), "Not done yet")
 }

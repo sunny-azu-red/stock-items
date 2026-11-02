@@ -33,7 +33,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
-- Works well on a [phone](docs/screenshots/mobile) in the garage, with dark mode and keyboard shortcuts (`/` search, `n` add item).
+- Works well on a [phone](docs/screenshots/mobile) in the garage, with dark mode and keyboard shortcuts (`/` search, `a` add item, `l` log service).
 
 | Stock grouped by vehicle | Service kit | Vehicles |
 |---|---|---|

@@ -104,7 +104,7 @@
   });
 
   // Typing in a form (other than the stock filters) marks the page as
-  // having unsaved changes, so the "n" shortcut asks before leaving.
+  // having unsaved changes, so the "a" and "l" shortcuts ask before leaving.
   var dirty = false;
   document.addEventListener("input", function (e) {
     if (e.target.form && e.target.form.method === "post") dirty = true;
@@ -584,7 +584,8 @@
 
   // ---- Keyboard shortcuts -------------------------------------------------
   // "/" focuses search (opening the stock page when this page has none),
-  // "n" opens the new item form.
+  // "a" opens Add item and "l" Log service: the first letter of the button
+  // each stands for (the sidebar's), on every page alike.
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;
@@ -592,9 +593,9 @@
     if (e.key === "/") {
       e.preventDefault();
       if (!focusSearch()) window.location.href = "/stock#search";
-    } else if (e.key === "n") {
+    } else if (e.key === "a" || e.key === "l") {
       if (dirty && !window.confirm("Leave this page? Your changes are not saved.")) return;
-      window.location.href = "/items/new";
+      window.location.href = e.key === "a" ? "/items/new" : "/services/new";
     }
   });
   function focusSearch() {

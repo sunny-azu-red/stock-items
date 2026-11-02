@@ -427,13 +427,11 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 		{"/items/" + itoa(pads), "Edit OEM Rear Brake Pads"},
 		{"/vehicles/" + itoa(k390), "Edit KTM 390"},
 		{kit, "Edit Brakes"},
-		{svc, "Edit Chain clean"},
+		{svc, "Edit service · KTM 390"}, // like its heading
 	} {
 		expect(t, a.get(tt.path+"/edit"), http.StatusOK, "<title>"+tt.want)
 		page := a.post(tt.path, url.Values{"vehicle_id": {itoa(k390)}, "unit": {"piece"}, "quantity": {"1"}, "performed_on": {"2026-10-29"}})
 		expect(t, page, http.StatusUnprocessableEntity, "<title>"+tt.want)
-		if tt.path != svc { // a service's heading is "Edit service · vehicle"
-			expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.want+"</h1>")
-		}
+		expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.want+"</h1>")
 	}
 }

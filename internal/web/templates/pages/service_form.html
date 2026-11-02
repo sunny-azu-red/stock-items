@@ -24,8 +24,8 @@
         <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
         <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{if $f.KitID}} <span class="muted small">kit: {{$f.KitName}}</span>{{end}}</div>
         {{else}}
-        <label for="vehicle_id">Vehicle</label>
-        <select class="input" id="vehicle_id" name="vehicle_id">
+        <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
+        <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
@@ -34,13 +34,13 @@
         {{template "err" (index $e "kit_id")}}
       </div>
       <div class="field{{if index $e "title"}} has-error{{end}}">
-        <label for="title">What was done</label>
-        <input class="input" id="title" name="title" value="{{$f.Title}}" placeholder="e.g. Oil service">
+        <div class="label-row"><label for="title">What was done</label>{{template "req"}}</div>
+        <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil service">
         {{template "err" (index $e "title")}}
       </div>
       <div class="field{{if index $e "performed_on"}} has-error{{end}}">
-        <label for="performed_on">Date</label>
-        <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}">
+        <div class="label-row"><label for="performed_on">Date</label>{{template "req"}}</div>
+        <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}" aria-required="true">
         {{template "err" (index $e "performed_on")}}
       </div>
       <div class="field{{if index $e "odometer_km"}} has-error{{end}}">
@@ -49,8 +49,8 @@
         {{template "err" (index $e "odometer_km")}}
       </div>
       <div class="field{{if index $e "labor_cost"}} has-error{{end}}">
-        <label for="labor_cost">Labour / workshop cost</label>
-        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal" placeholder="optional">
+        <label for="labor_cost">Labour cost ({{.Currency}})</label>
+        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal">
         {{template "err" (index $e "labor_cost")}}
       </div>
     </div>
@@ -70,6 +70,7 @@
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
+    {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="{{if $f.ID}}/services/{{$f.ID}}{{else if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} {{if $f.ID}}Save service{{else}}Save &amp; take parts from stock{{end}}</button>
   </div>

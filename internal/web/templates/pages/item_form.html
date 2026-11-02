@@ -18,7 +18,7 @@
     <h2>What is it?</h2>
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
-        <label for="name">Name</label>
+        <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus>
         {{template "err" (index $e "name")}}
       </div>
@@ -74,7 +74,7 @@
       <div class="field{{if index $e "min_quantity"}} has-error{{end}}">
         <div class="label-row"><label for="min_quantity">Keep at least</label>{{template "tip" (dict "ID" "min-tip" "Text" "You get a low-stock warning below this.")}}</div>
         <div class="qty-input">
-          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="optional" aria-describedby="min-tip">
+          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" aria-describedby="min-tip">
           <select class="input" name="min_unit" data-subunit aria-label="Unit">
             {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.MinUnit}}selected{{end}}>{{.Label}}</option>{{end}}
           </select>
@@ -97,16 +97,16 @@
   {{if $d.IsNew}}
   <div class="form-section">
     <h2>Bought it just now?</h2>
-    <p class="hint mb">Optional. With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
+    <p class="hint mb">With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
         <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label><span class="pieces-only">{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</span></div>
-        <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
+        <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" aria-describedby="price-tip">
         {{template "err" (index $e "total_price")}}
       </div>
       <div class="field">
         <label for="supplier">Shop</label>
-        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="optional">
+        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}">
       </div>
       <div class="field{{if index $e "bought_on"}} has-error{{end}}">
         <label for="bought_on">Bought on</label>
@@ -137,6 +137,7 @@
   </div>
 
   <div class="form-section form-actions">
+    {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="{{if $f.ShoppingID}}/shopping{{else if $d.IsNew}}/stock{{else}}/items/{{$f.ID}}{{end}}">Cancel</a>
     {{if and $d.IsNew (not $f.ShoppingID)}}<button class="btn" type="submit" name="next" value="new">Save &amp; add another</button>{{end}}
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save item</button>

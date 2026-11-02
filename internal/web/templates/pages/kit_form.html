@@ -18,23 +18,23 @@
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
-        <label for="vehicle_id">Vehicle</label>
-        <select class="input" id="vehicle_id" name="vehicle_id">
+        <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
+        <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
         {{template "err" (index $e "vehicle_id")}}
       </div>
       <div class="field{{if index $e "name"}} has-error{{end}}">
-        <label for="name">Name</label>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" placeholder="e.g. Oil service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>
+        <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" placeholder="e.g. Oil service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>
         <datalist id="kit-names"><option value="Oil service"><option value="Air filter"><option value="Brake pads (front)"><option value="Brake pads (rear)"><option value="Brake fluid"><option value="Coolant"><option value="Chain &amp; sprockets"><option value="Spark plugs"><option value="Valve check"></datalist>
         {{template "err" (index $e "name")}}
       </div>
     </div>
   </div>
   <div class="form-section">
-    <h2>Repeat every (optional)</h2>
+    <h2>Repeat every</h2>
     <div class="form-grid">
       <div class="field{{if index $e "interval_km"}} has-error{{end}}">
         <label for="interval_km">Kilometres</label>
@@ -64,6 +64,7 @@
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Steps, torque values, capacities…">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
+    {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}{{if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}{{else}}/kits/{{$f.ID}}{{end}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save kit</button>
   </div>

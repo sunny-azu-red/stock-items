@@ -93,7 +93,7 @@
         <div><dt>Last price</dt><dd>{{with $d.UnitPrice}}{{unitPrice . $it.Unit}}{{else}}—{{end}}</dd></div>
         <div><dt>Purchases</dt><dd>{{$d.PurchaseCount}}</dd></div>
         <div><dt>Added</dt><dd>{{date $it.CreatedAt}}</dd></div>
-        <div><dt>Updated</dt><dd>{{ago $it.UpdatedAt}}</dd></div>
+        <div><dt>Updated</dt><dd title="{{ago $it.UpdatedAt}}">{{date $it.UpdatedAt}}</dd></div>
       </dl>
       {{with $it.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>
@@ -102,7 +102,7 @@
     <section class="card">
       <div class="card-head"><h2>{{icon "list-checks"}} Used in kits</h2></div>
       <ul class="list">
-        {{range $d.Kits}}<li><span class="grow"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a></span><span class="chip" style="{{chipStyle .VehicleColor}}"><span class="dot"></span>{{.VehicleName}}</span></li>{{end}}
+        {{range $d.Kits}}<li><span class="grow"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a></span>{{template "chip-link" (dict "ID" .VehicleID "Name" .VehicleName "Color" .VehicleColor)}}</li>{{end}}
       </ul>
     </section>
     {{end}}
@@ -116,50 +116,34 @@
   {{/* Only the form that came back with errors keeps its key. */}}
   {{template "form-key" (and $active $m.FormKey)}}
   {{if and $active $e}}{{template "error-summary" $e}}{{end}}
+  {{if eq .Kind "purchase"}}
+  {{template "bought-fields" (dict "ID" "-purchase" "Move" $m "Show" $active "Unit" .Item.Unit "Units" .Units "Currency" .Currency "Today" .Today)}}
+  {{else}}
   <div class="form-grid">
     <div class="field{{if and $active (index $e "amount")}} has-error{{end}}">
-      <label for="amount-{{.Kind}}">{{if eq .Kind "purchase"}}How much did you buy?{{else if eq .Kind "use"}}How much did you use?{{else}}How much is on the shelf?{{end}}</label>
+      <div class="label-row"><label for="amount-{{.Kind}}">{{if eq .Kind "use"}}Amount used{{else}}In stock now{{end}}</label>{{template "req"}}</div>
       <div class="qty-input">
-        <input class="input" id="amount-{{.Kind}}" name="amount" value="{{if $active}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Item.Unit}}">
+        <input class="input" id="amount-{{.Kind}}" name="amount" value="{{if $active}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Item.Unit}}" aria-required="true">
         <select class="input" name="amount_unit" aria-label="Unit">{{range .Units}}<option value="{{.Value}}" {{if eq .Value $m.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
       </div>
       {{if $active}}{{template "err" (index $e "amount")}}{{end}}
     </div>
-    {{if eq .Kind "purchase"}}
-    <div class="field{{if and $active (index $e "total_price")}} has-error{{end}}">
-      {{if eq .Item.Unit "piece"}}
-      <div class="label-row"><label for="price-{{.Kind}}">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</div>
-      <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional" aria-describedby="price-tip">
-      {{else}}
-      <label for="price-{{.Kind}}">Total price ({{.Currency}})</label>
-      <input class="input" id="price-{{.Kind}}" name="total_price" value="{{if $active}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="optional">
-      {{end}}
-      {{if $active}}{{template "err" (index $e "total_price")}}{{end}}
-    </div>
-    <div class="field">
-      <label for="supplier">Shop</label>
-      <input class="input" id="supplier" name="supplier" value="{{if $active}}{{$m.Supplier}}{{end}}" placeholder="optional">
-    </div>
-    <div class="field{{if and $active (index $e "expires_on")}} has-error{{end}}">
-      <div class="label-row"><label for="expires-{{.Kind}}">Best before</label>{{template "tip" (dict "ID" (printf "expires-tip-%s" .Kind) "Text" "Optional. Replaces the item's date; leave empty to keep it.")}}</div>
-      <input class="input" type="date" id="expires-{{.Kind}}" name="expires_on" value="{{if $active}}{{$m.ExpiresOn}}{{end}}" aria-describedby="expires-tip-{{.Kind}}">
-      {{if $active}}{{template "err" (index $e "expires_on")}}{{end}}
-    </div>
-    {{end}}
-    {{if ne .Kind "correction"}}
+    {{if eq .Kind "use"}}
     <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">
-      <label for="date-{{.Kind}}">Date</label>
+      <label for="date-{{.Kind}}">Used on</label>
       <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{if $active}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}">
       {{if $active}}{{template "err" (index $e "occurred_on")}}{{end}}
     </div>
     {{end}}
     <div class="field">
       <label for="note-{{.Kind}}">Note</label>
-      <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}" placeholder="optional">
+      <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}">
     </div>
   </div>
+  {{end}}
   <div class="form-actions">
-    <button class="btn btn-primary" type="submit">{{if eq .Kind "purchase"}}{{icon "plus"}} Add to stock{{else if eq .Kind "use"}}{{icon "minus"}} Take from stock{{else}}{{icon "check"}} Set stock{{end}}</button>
+    {{template "req-note"}}
+    <button class="btn btn-primary" type="submit">{{if eq .Kind "purchase"}}{{icon "package-plus"}} Add to stock{{else if eq .Kind "use"}}{{icon "minus"}} Take from stock{{else}}{{icon "check"}} Set stock{{end}}</button>
   </div>
 </form>
 {{end}}

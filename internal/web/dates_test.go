@@ -64,7 +64,7 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 		due := "<dd>" + stock.FormatKm(15000) + "</dd>"
 		expect(t, a.get(kit), http.StatusOK, due)
 		// The date typed is the day kept, and it was logged today.
-		expect(t, a.get(svc), http.StatusOK, "25 Oct 2026", "<dd>today</dd>")
+		expect(t, a.get(svc), http.StatusOK, "25 Oct 2026", `<dd title="today">1 Nov 2026</dd>`) // not 31 Oct, the UTC day
 
 		// Done eight days ago by the local day (seven in UTC): the reading
 		// at log no longer counts.

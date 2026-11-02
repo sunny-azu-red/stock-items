@@ -633,7 +633,7 @@ func TestAccessibilityDetails(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	pads := itemID(t, a.store, "Rear Brake")
-	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" placeholder="optional" aria-describedby="price-tip"`)
+	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" aria-describedby="price-tip"`)
 	// Only the selected tab is in the tab order; the price label names the currency.
 	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-purchase" aria-controls="panel-purchase" aria-selected="true">`,
 		`id="tab-use" aria-controls="panel-use" aria-selected="false" tabindex="-1">`, "Total price (EUR)")

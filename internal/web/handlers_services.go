@@ -76,7 +76,10 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	p.ItemGroups = itemOptions(items, p.Vehicle)
 	title := "Log service"
 	if f.ID != 0 {
-		title = "Edit " + f.Stored
+		title = "Edit service"
+	}
+	if p.Vehicle != nil {
+		title += " · " + p.Vehicle.Name
 	}
 	s.render(w, r, status, "service_form", View{Title: title, Nav: "services", Data: p})
 	return nil

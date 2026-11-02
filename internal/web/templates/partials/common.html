@@ -48,6 +48,56 @@
 {{end}}
 
 {{/* rowData: one stock row with quick -/+ */}}
+{{/* Beside a required field's label, in its .label-row (the label stays
+     just the field's name; the input says aria-required). The form says
+     once what it means. */}}
+{{define "req"}}<span class="req" aria-hidden="true">*</span>{{end}}
+{{define "req-note"}}<p class="hint req-note"><span class="req" aria-hidden="true">*</span> required</p>{{end}}
+
+{{/* The fields of a purchase: the item page's Bought tab and the shopping
+     list's Bought page. dict "ID" (suffix for the ids) "Move" moveForm
+     "Show" bool (fill in what was posted, and its errors) "Unit" "Units"
+     "Currency" "Today" "Autofocus" bool */}}
+{{define "bought-fields"}}{{$m := .Move}}{{$e := $m.Errors}}{{$s := .Show}}{{$id := .ID}}
+<div class="form-grid">
+  <div class="field{{if and $s (index $e "amount")}} has-error{{end}}">
+    <div class="label-row"><label for="amount{{$id}}">Amount bought</label>{{template "req"}}</div>
+    <div class="qty-input">
+      <input class="input" id="amount{{$id}}" name="amount" value="{{if $s}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Unit}}" aria-required="true"{{if .Autofocus}} autofocus{{end}}>
+      <select class="input" name="amount_unit" aria-label="Unit">{{range .Units}}<option value="{{.Value}}" {{if eq .Value $m.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
+    </div>
+    {{if $s}}{{template "err" (index $e "amount")}}{{end}}
+  </div>
+  <div class="field{{if and $s (index $e "total_price")}} has-error{{end}}">
+    {{if eq .Unit "piece"}}
+    <div class="label-row"><label for="price{{$id}}">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" (print "price-tip" $id) "Text" "For all the pieces together, not the price of one.")}}</div>
+    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" aria-describedby="price-tip{{$id}}">
+    {{else}}
+    <label for="price{{$id}}">Total price ({{.Currency}})</label>
+    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal">
+    {{end}}
+    {{if $s}}{{template "err" (index $e "total_price")}}{{end}}
+  </div>
+  <div class="field">
+    <label for="supplier{{$id}}">Shop</label>
+    <input class="input" id="supplier{{$id}}" name="supplier" value="{{if $s}}{{$m.Supplier}}{{end}}">
+  </div>
+  <div class="field{{if and $s (index $e "occurred_on")}} has-error{{end}}">
+    <label for="date{{$id}}">Bought on</label>
+    <input class="input" type="date" id="date{{$id}}" name="occurred_on" value="{{if $s}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}">
+    {{if $s}}{{template "err" (index $e "occurred_on")}}{{end}}
+  </div>
+  <div class="field{{if and $s (index $e "expires_on")}} has-error{{end}}">
+    <div class="label-row"><label for="expires{{$id}}">Best before</label>{{template "tip" (dict "ID" (print "expires-tip" $id) "Text" "Replaces the item's date; leave it empty to keep that.")}}</div>
+    <input class="input" type="date" id="expires{{$id}}" name="expires_on" value="{{if $s}}{{$m.ExpiresOn}}{{end}}" aria-describedby="expires-tip{{$id}}">
+    {{if $s}}{{template "err" (index $e "expires_on")}}{{end}}
+  </div>
+  <div class="field">
+    <label for="note{{$id}}">Note</label>
+    <input class="input" id="note{{$id}}" name="note" value="{{if $s}}{{$m.Note}}{{end}}">
+  </div>
+</div>{{end}}
+
 {{/* Out of stock, or low with its minimum. Data: stock.Item. */}}
 {{define "stock-badge"}}{{if .IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if .IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref .MinQuantity) .Unit}}</span>{{end}}{{end}}
 

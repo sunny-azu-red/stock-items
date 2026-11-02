@@ -10,7 +10,7 @@
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
-        <div class="label-row"><label for="name">Name</label>{{template "tip" (dict "ID" "name-tip" "Text" "Keep it short: it is used on chips and headings.")}}</div>
+        <div class="label-row"><label for="name">Name</label>{{template "req"}}{{template "tip" (dict "ID" "name-tip" "Text" "Keep it short: it is used on chips and headings.")}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="80" placeholder="e.g. KTM 390" autofocus aria-describedby="name-tip">
         {{template "err" (index $e "name")}}
       </div>
@@ -30,7 +30,7 @@
     </div>
   </div>
   <div class="form-section">
-    <h2>Details (optional)</h2>
+    <h2>Details</h2>
     <div class="form-grid">
       <div class="field"><label for="make">Make</label><input class="input" id="make" name="make" value="{{$f.Make}}" placeholder="e.g. KTM"></div>
       <div class="field"><label for="model">Model</label><input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke"></div>
@@ -42,6 +42,7 @@
     <div class="field mt"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Tyre sizes, oil capacity, torque specs…">{{$f.Notes}}</textarea></div>
   </div>
   <div class="form-section form-actions">
+    {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "check"}} Save vehicle</button>
   </div>

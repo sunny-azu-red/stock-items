@@ -22,7 +22,7 @@
             {{with .Note}}<span class="meta">{{.}}</span>{{end}}
           </span>
           <span class="end qty">{{with .Quantity}}{{qty . $entry.ItemUnit}}{{end}}</span>
-          <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "check"}} Bought</a>
+          <a class="btn btn-sm btn-primary" href="/shopping/{{.ID}}/bought">{{icon "package-plus"}} Bought</a>
           <form class="inline-form" method="post" action="/shopping/{{.ID}}/delete"><input type="hidden" name="version" value="{{.Version}}"><button class="icon-btn" type="submit" aria-label="Remove {{.Title}}" title="Remove">{{icon "x"}}</button></form>
         </li>
         {{end}}
@@ -52,9 +52,9 @@
             {{template "err" (index $e "free_text")}}
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">
-            <label for="quantity">Quantity</label>
+            <div class="label-row"><label for="quantity">Quantity</label>{{template "req"}}</div>
             <div class="qty-input">
-              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" placeholder="e.g. 2 or 4 L" data-part-qty>
+              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" aria-required="true" placeholder="e.g. 2 or 4 L" data-part-qty>
               <select class="input" name="quantity_unit" aria-label="Unit" data-part-unit>
                 <option value="" data-base="">unit</option>
                 {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
@@ -67,7 +67,7 @@
             <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="e.g. ask for the sintered ones">
           </div>
         </div>
-        <div class="form-actions"><button class="btn btn-primary" type="submit">{{icon "plus"}} Add</button></div>
+        <div class="form-actions">{{template "req-note"}}<button class="btn btn-primary" type="submit">{{icon "plus"}} Add</button></div>
       </form>
     </section>
   </div>

@@ -160,7 +160,7 @@ test("quick adjust and record a purchase", async ({ page }) => {
   await row(page, "15W50 PRO 4 XP").getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Silkolene 15W50 PRO 4 XP");
   const bought = page.locator("#panel-purchase");
-  await bought.getByLabel("How much did you buy?").fill("1");
+  await bought.getByLabel("Amount bought").fill("1");
   await bought.locator('select[name="amount_unit"]').selectOption("l");
   await bought.getByLabel("Total price").fill("18,50");
   await bought.getByLabel("Shop").fill("Moto shop");
@@ -213,7 +213,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   const entry = page.locator(".list li").filter({ hasText: "Silkolene" }).first();
   await expect(entry).toContainText("175 ml");
   await entry.getByRole("link", { name: "Bought" }).click();
-  await page.getByLabel("Amount").fill("4");
+  await page.getByLabel("Amount bought").fill("4");
   await page.locator('select[name="amount_unit"]').selectOption("l");
   await page.getByRole("button", { name: "Add to stock" }).click();
   await expect(page.locator(".flash-success")).toContainText("Added 4 L");
@@ -309,7 +309,7 @@ test("fix a logged service", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
-  await page.getByLabel("Labour / workshop cost").fill("120");
+  await page.getByLabel("Labour cost").fill("120");
   await page.getByRole("button", { name: "Save service" }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved Oil service");
   await expect(page.locator('dt:text-is("Labour") + dd')).toHaveText("120.00 EUR");

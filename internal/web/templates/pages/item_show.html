@@ -16,8 +16,8 @@
   </div>
   <div class="item-head-meta">
     {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
-    {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">Low stock</span>{{end}}
-    {{if eq $d.ExpiryState "expired"}}<span class="badge badge-danger">Expired</span>{{else if eq $d.ExpiryState "soon"}}<span class="badge badge-warn">Expires soon</span>{{end}}
+    {{template "stock-badge" $it}}
+    {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
     {{if $it.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $it.ArchivedAt}}</span>{{end}}
     {{with $it.Category}}<a class="item-category" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
   </div>
@@ -54,7 +54,7 @@
     </section>
 
     <section class="card" id="history">
-      <div class="card-head"><h2>{{icon "history"}} History</h2>{{if $d.HistoryCapped}}<a class="more" href="{{withQuery "/activity" $d.AllEntriesQuery}}">All entries →</a>{{else}}<span class="muted small">{{plural (len $d.Movements) "entry"}}</span>{{end}}</div>
+      <div class="card-head"><h2>{{icon "history"}} History</h2>{{if $d.HistoryCapped}}<a class="more" href="{{withQuery "/activity" $d.AllEntriesQuery}}">Full history →</a>{{else}}<span class="muted small">{{plural (len $d.Movements) "entry"}}</span>{{end}}</div>
       {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false "Sort" $d.History)}}
       {{else}}<div class="card-body muted small">No stock changes yet.</div>{{end}}
     </section>

@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
+	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 //go:embed templates
@@ -125,8 +126,10 @@ func (s *Server) funcs() template.FuncMap {
 		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
 		"deref":      derefFloat,
 		"changeName": changeName,
-		"dict":       dict,
-		"add":        func(a, b int) int { return a + b },
+		// expiryState is "expired", "soon" or "" for an item today.
+		"expiryState": func(it stock.Item) string { return it.ExpiryState(s.now(), store.ExpiringDays) },
+		"dict":        dict,
+		"add":         func(a, b int) int { return a + b },
 		"pct": func(have, need float64) int {
 			if need <= 0 {
 				return 100

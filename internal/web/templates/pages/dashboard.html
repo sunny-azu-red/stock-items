@@ -36,7 +36,7 @@
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "wrench"}} Upcoming service</h2><a class="more" href="/services">All kits →</a></div>
+      <div class="card-head"><h2>{{icon "wrench"}} Upcoming service</h2><a class="more" href="/services">All services →</a></div>
       {{if $d.Upcoming}}
         {{range $i, $k := $d.Upcoming}}{{if lt $i 6}}{{template "kit-row" $k}}{{end}}{{end}}
       {{else if $d.KitCount}}
@@ -47,7 +47,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "history"}} Recent activity</h2><a class="more" href="/activity">Everything →</a></div>
+      <div class="card-head"><h2>{{icon "history"}} Recent activity</h2><a class="more" href="/activity">All activity →</a></div>
       {{if $d.Recent}}{{template "activity-list" $d.Recent}}
       {{else}}<div class="card-body muted small">What you buy, use and count, and the parts of your services, will show up here.</div>{{end}}
     </section>
@@ -55,7 +55,7 @@
 
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "warehouse"}} Vehicles</h2><a class="more" href="/vehicles">Manage →</a></div>
+      <div class="card-head"><h2>{{icon "warehouse"}} Vehicles</h2><a class="more" href="/vehicles">All vehicles →</a></div>
       {{if $d.Vehicles}}
       <ul class="list">
         {{range $d.Vehicles}}
@@ -82,10 +82,10 @@
 
     {{if $d.Expiring}}
     <section class="card">
-      <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2></div>
+      <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2><a class="more" href="/stock?exp=1">All expiring →</a></div>
       <ul class="list">
         {{range $d.Expiring}}
-        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end badge {{if eq (.ExpiryState $.Today $d.ExpiringDays) "expired"}}badge-danger{{else}}badge-warn{{end}}">{{date .ExpiresOn}}</span></li>
+        <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end">{{template "expiry-badge" .}}</span></li>
         {{end}}
       </ul>
     </section>

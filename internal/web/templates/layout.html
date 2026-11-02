@@ -55,7 +55,7 @@
 </div>
 
 <nav class="tabbar" aria-label="Main">
-  <a href="/" {{if eq .Nav "dashboard"}}aria-current="page"{{end}}>{{icon "layout-dashboard"}}Home</a>
+  <a href="/" {{if eq .Nav "dashboard"}}aria-current="page"{{end}}>{{icon "layout-dashboard"}}Dashboard</a>
   <a href="/stock" {{if eq .Nav "stock"}}aria-current="page"{{end}}>{{icon "package"}}Stock</a>
   <a href="/services" {{if eq .Nav "services"}}aria-current="page"{{end}}>{{icon "wrench"}}Services</a>
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shopping{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>

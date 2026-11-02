@@ -23,7 +23,6 @@ type dashboardPage struct {
 	Recent          []stock.Movement
 	Stats           store.Stats
 	SuggestionCount int
-	ExpiringDays    int
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
@@ -56,7 +55,6 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	p := dashboardPage{
 		Vehicles: activeVehicles(vehicles), VehicleMap: vehicleMap(vehicles), ItemCount: len(items), KitCount: len(kits),
 		Recent: recent, Stats: stats, SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping))),
-		ExpiringDays: store.ExpiringDays,
 	}
 	today := s.now()
 	for _, it := range items {

@@ -189,7 +189,7 @@ func TestActivityPagesAndItemHistory(t *testing.T) {
 		}
 	}
 	item := "/items/" + itoa(pads)
-	expect(t, a.get(item), http.StatusOK, `href="/activity?item=`+itoa(pads)+`">All entries →</a>`)
+	expect(t, a.get(item), http.StatusOK, `href="/activity?item=`+itoa(pads)+`">Full history →</a>`)
 	page := a.get("/activity?item=" + itoa(pads))
 	expect(t, page, http.StatusOK, "History of OEM Rear Brake Pads", `href="/activity?item=`+itoa(pads)+`&amp;page=2"`,
 		`href="/activity/export.csv?item=`+itoa(pads)+`"`)

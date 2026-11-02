@@ -85,13 +85,15 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 		// from 31 October; and yesterday.
 		last := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, store.ExpiringDays)
 		soon, gone := expiring("Motul", last.Format(time.DateOnly)), expiring("Liqui Moly", "2026-10-31")
-		expect(t, a.get(itemPath(soon)), http.StatusOK, `<span class="badge badge-warn">Expires soon</span>`)
-		expect(t, a.get(itemPath(gone)), http.StatusOK, `<span class="badge badge-danger">Expired</span>`)
+		soonBadge := []string{`<span class="badge badge-warn" title="Best before">`, "Expires " + last.Format("2 Jan 2006") + "</span>"}
+		goneBadge := []string{`<span class="badge badge-danger" title="Best before">`, "Expired 31 Oct 2026</span>"}
+		expect(t, a.get(itemPath(soon)), http.StatusOK, soonBadge...)
+		expect(t, a.get(itemPath(gone)), http.StatusOK, goneBadge...)
 		link := func(id int64) string { return `class="item-name" href="` + itemPath(id) + `"` }
 		rec := a.get("/stock?exp=1")
 		expect(t, rec, http.StatusOK, link(soon), link(gone))
 		expectNot(t, rec, link(oil))
-		expect(t, a.get("/"), http.StatusOK, `badge-warn">`+last.Format("2 Jan 2006")+`</span>`, `badge-danger">31 Oct 2026</span>`)
+		expect(t, a.get("/"), http.StatusOK, append(soonBadge, goneBadge...)...)
 	})
 
 	t.Run("deleted today is the local day", func(t *testing.T) {

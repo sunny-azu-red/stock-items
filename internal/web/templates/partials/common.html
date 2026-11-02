@@ -48,14 +48,21 @@
 {{end}}
 
 {{/* rowData: one stock row with quick -/+ */}}
+{{/* Out of stock, or low with its minimum. Data: stock.Item. */}}
+{{define "stock-badge"}}{{if .IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if .IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref .MinQuantity) .Unit}}</span>{{end}}{{end}}
+
+{{/* The best-before date, coloured and worded by how soon it is (nothing
+     left in stock can expire). Data: stock.Item. */}}
+{{define "expiry-badge"}}{{with .ExpiresOn}}{{$st := expiryState $}}<span class="badge {{if eq $st "expired"}}badge-danger{{else if eq $st "soon"}}badge-warn{{else}}badge-info{{end}}" title="Best before">{{icon "hourglass"}} {{if eq $st "expired"}}Expired {{else if eq $st "soon"}}Expires {{end}}{{date .}}</span>{{end}}{{end}}
+
 {{define "item-row"}}{{$it := .Item}}
 <li class="item-row{{if .Flash}} flash-ok{{end}}" id="item-{{$it.ID}}">
   <div class="qty{{if $it.IsOut}} zero{{else if $it.IsLow}} low{{end}}">{{qty $it.Quantity $it.Unit}}</div>
   <div class="item-main">
     <a class="item-name" href="/items/{{$it.ID}}">{{if $it.HasPhoto}}<img class="thumb" src="/items/{{$it.ID}}/photo?size=thumb" alt="" loading="lazy" width="36" height="36">{{end}}<span>{{if $it.Brand}}<span class="brand">{{$it.Brand}}</span> {{end}}{{$it.Name}}</span></a>
     <div class="item-meta">
-      {{if $it.IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if $it.IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref $it.MinQuantity) $it.Unit}}</span>{{end}}
-      {{with $it.ExpiresOn}}<span class="badge badge-info">{{icon "hourglass"}} {{date .}}</span>{{end}}
+      {{template "stock-badge" $it}}
+      {{template "expiry-badge" $it}}
       {{range $i, $s := $it.SKUs}}<a class="sku sku-link" href="{{skuSearch $s.Code}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Label}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 3}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $it.SKUs) 3}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $it.SKUs) -3) "more part number"}}">+{{add (len $it.SKUs) -3}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
       {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles)}}{{end}}

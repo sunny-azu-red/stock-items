@@ -168,7 +168,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 /* ---------- Cards & grids ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: clip; }
 .card-pad { padding: 18px 19px; }
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 19px; border-bottom: 1px solid var(--border); }
+/* Its links and counts go under the heading when both don't fit, so the
+   heading never squeezes onto two lines. */
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 14px 19px; border-bottom: 1px solid var(--border); }
 .card-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
@@ -389,7 +391,8 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }
 
 .chip-toggle { position: relative; cursor: pointer; font-size: .88rem; padding: 6px 13px; background: var(--surface); color: var(--text); border-color: var(--border); }
 .chip-toggle input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
-.chip-toggle:hover { border-color: var(--chip); }
+.chip-toggle:hover, a.chip:hover { border-color: var(--chip); }
+a.badge:hover { text-decoration: underline; text-underline-offset: 2px; }
 .chip-toggle:has(input:checked), a.chip-toggle.active {
   background: color-mix(in srgb, var(--chip) 18%, var(--surface)); border-color: var(--chip);
   color: color-mix(in srgb, var(--chip) 70%, var(--text));

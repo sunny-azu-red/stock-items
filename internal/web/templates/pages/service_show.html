@@ -4,7 +4,7 @@
   <div>
     <h1>{{$s.Title}}</h1>
     <div class="flex mt">
-      <span class="chip" style="{{chipStyle $s.VehicleColor}}"><span class="dot"></span>{{$s.VehicleName}}</span>
+      {{template "chip-link" (dict "ID" $s.VehicleID "Name" $s.VehicleName "Color" $s.VehicleColor)}}
       {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}</a>{{end}}
     </div>
   </div>

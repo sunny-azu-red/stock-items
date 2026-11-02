@@ -34,10 +34,10 @@
     </section>
 
     <div class="results-head">
-      <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">({{$d.ItemCount}})</span></h2>
+      <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">{{plural $d.ItemCount "item"}}</span></h2>
       <div class="flex">
         <a class="btn btn-sm" href="{{withQuery "/stock/export.txt" $d.StockQuery}}" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</a>
-        <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Open in stock →</a>
+        <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Stock list →</a>
       </div>
     </div>
     {{if $d.Sections}}
@@ -68,13 +68,13 @@
         <div><dt>Model</dt><dd>{{or $v.Model "—"}}</dd></div>
         <div><dt>Year</dt><dd>{{with $v.Year}}{{.}}{{else}}—{{end}}</dd></div>
         <div><dt>Plate</dt><dd>{{or $v.Plate "—"}}</dd></div>
-        <div><dt>VIN</dt><dd class="mono">{{or $v.VIN "—"}}</dd></div>
+        <div><dt>VIN</dt><dd{{if $v.VIN}} class="mono"{{end}}>{{or $v.VIN "—"}}</dd></div>
       </dl>
       {{with $v.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="flex">{{if $d.Labor}}<span class="muted small">{{money $d.Labor}} labour</span>{{end}}<a class="more" href="/services?v={{$v.ID}}">All →</a></span></div>
+      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="flex">{{if $d.Labor}}<span class="muted small">{{money $d.Labor}} labour</span>{{end}}<a class="more" href="/services?v={{$v.ID}}">All services →</a></span></div>
       {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
     </section>
   </div>

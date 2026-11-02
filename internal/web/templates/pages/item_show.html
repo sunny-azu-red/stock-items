@@ -31,7 +31,7 @@
       <div class="card-body">
         <div class="flex between">
           <div>
-            <div class="big-qty {{if $it.IsOut}}qty zero{{else if $it.IsLow}}qty low{{end}}" id="item-qty">{{qty $it.Quantity $it.Unit}}</div>
+            <div class="big-qty{{if $it.IsOut}} zero{{else if $it.IsLow}} low{{end}}" id="item-qty">{{qty $it.Quantity $it.Unit}}</div>
             <div class="muted small">{{with $it.MinQuantity}}keep at least {{qty . $it.Unit}}{{else}}no minimum set{{end}}{{with $d.StockValue}} · worth about {{money .}}{{end}}</div>
           </div>
           {{if not (or $d.OnShopping $it.Archived)}}

@@ -447,8 +447,8 @@ a.badge:hover { text-decoration: underline; text-underline-offset: 2px; }
 .item-list > .item-row:first-child { border-top: 0; }
 .item-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
 .qty { font-weight: 700; font-size: 1rem; text-align: right; white-space: nowrap; }
-.qty.zero { color: var(--danger); }
-.qty.low { color: var(--warn); }
+.qty.zero, .big-qty.zero { color: var(--danger); }
+.qty.low, .big-qty.low { color: var(--warn); }
 .item-main { min-width: 0; }
 .item-name { font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .item-name:hover { color: var(--accent); }
@@ -561,7 +561,7 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .photo > a, .photo img { width: 100%; height: 100%; }
 .photo img { object-fit: cover; }
 .photo .icon { width: 40px; height: 40px; }
-.big-qty { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; --lh: 1.1; }
+.big-qty { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; --lh: 1.1; text-align: left; }
 .sku-table td:first-child { font-family: var(--mono); }
 .sku-link { text-decoration: underline dotted; text-underline-offset: 3px; }
 .sku-link:hover { color: var(--accent); text-decoration-style: solid; }

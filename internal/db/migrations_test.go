@@ -721,3 +721,80 @@ func TestServicePartsMigration(t *testing.T) {
 	}
 	same("Up after fixing")
 }
+
+// 00015 changes the SKU kind 'ean' to 'barcode' in item_skus, updates
+// trash snapshots that hold it, and changes the CHECK constraint to allow
+// 'barcode' instead of 'ean'. Up → Down → Up.
+func TestSKUKindBarcodeMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	// Seed an item with an EAN sku, and a trash snapshot holding an EAN sku.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO items (name, brand, unit, quantity) VALUES ('Brake Cleaner', 'Motorex', 'piece', 5);
+		INSERT INTO item_skus (item_id, code, kind) VALUES (1, '7611197108900', 'ean');
+		INSERT INTO trash (kind, label, payload) VALUES ('item', 'Item: snapshot',
+			'{"item_skus": [{"id": 99, "item_id": 99, "code": "7611197108900", "kind": "ean"}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.UpTo(ctx, 15); err != nil {
+		t.Fatal(err)
+	}
+
+	var kind string
+	if err := pool.QueryRow(ctx, `SELECT kind FROM item_skus WHERE id = 1`).Scan(&kind); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "barcode" {
+		t.Errorf("after Up: kind = %q, want %q", kind, "barcode")
+	}
+
+	var payload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Item: snapshot'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, `"kind": "barcode"`) || strings.Contains(payload, `"kind": "ean"`) {
+		t.Errorf("after Up: trash payload = %s", payload)
+	}
+
+	// Constraint checks: 'barcode' allowed, 'ean' rejected.
+	if _, err := pool.Exec(ctx, `INSERT INTO item_skus (item_id, code, kind) VALUES (1, '7611197115052', 'barcode')`); err != nil {
+		t.Errorf("after Up: inserting barcode kind: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO item_skus (item_id, code, kind) VALUES (1, '96385074', 'ean')`); err == nil {
+		t.Error("after Up: inserting ean kind should have failed CHECK constraint")
+	}
+
+	// Down takes it back to 'ean'.
+	if _, err := provider.DownTo(ctx, 14); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT kind FROM item_skus WHERE id = 1`).Scan(&kind); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "ean" {
+		t.Errorf("after Down: kind = %q, want %q", kind, "ean")
+	}
+
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Item: snapshot'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, `"kind": "ean"`) || strings.Contains(payload, `"kind": "barcode"`) {
+		t.Errorf("after Down: trash payload = %s", payload)
+	}
+
+	// Up again.
+	if _, err := provider.UpTo(ctx, 15); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT kind FROM item_skus WHERE id = 1`).Scan(&kind); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "barcode" {
+		t.Errorf("after second Up: kind = %q, want %q", kind, "barcode")
+	}
+}

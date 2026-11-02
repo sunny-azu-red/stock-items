@@ -149,7 +149,7 @@ func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
 func TestSKUErrorsLandOnTheirRow(t *testing.T) {
 	a := newApp(t)
 	form := url.Values{"name": {"Filter"}, "unit": {"piece"},
-		"sku_code": {"   ", "123"}, "sku_kind": {"oem", "ean"}, "sku_label": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"}}
+		"sku_code": {"   ", "123"}, "sku_kind": {"oem", "barcode"}, "sku_label": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"}}
 	rec := a.post("/items", form)
 	expect(t, rec, http.StatusUnprocessableEntity, "Not a valid barcode")
 	body := rec.Body.String()

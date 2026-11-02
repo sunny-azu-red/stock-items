@@ -89,7 +89,7 @@ const (
 	SKUOEM          SKUKind = "oem"
 	SKUManufacturer SKUKind = "manufacturer"
 	SKURetailer     SKUKind = "retailer"
-	SKUBarcode      SKUKind = "ean" // EAN / UPC / GTIN barcode number
+	SKUBarcode      SKUKind = "barcode" // EAN, UPC, or GTIN-8/12/13/14 barcode
 	SKUOther        SKUKind = "other"
 )
 
@@ -106,7 +106,7 @@ func (k SKUKind) Label() string {
 	case SKURetailer:
 		return "Retailer"
 	case SKUBarcode:
-		return "EAN / Barcode"
+		return "Barcode"
 	default:
 		return "Other"
 	}

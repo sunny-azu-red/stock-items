@@ -24,7 +24,7 @@ form_submissions (one-time form keys; no foreign keys)
 - `archived_at` is set when an item that other records refer to is archived instead of deleted (see below).
 - `expires_on` is set on the item form, or replaced by a purchase that gives the new batch's best-before date (in the same transaction as the movement).
 
-**item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`ean`/`retailer`/`other`; `ean` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
+**item_skus:** many part numbers per item: `code`, `kind` (`oem`/`manufacturer`/`barcode`/`retailer`/`other`; `barcode` codes must be a GTIN-8/12/13/14 with a valid check digit), `label` (e.g. "4 L can"), `pack_size` (base unit). Codes are unique per item.
 
 **item_vehicles:** many-to-many tags.
 - A vehicle with services or kits can't be deleted (`store.DeleteVehicle` returns a `ConflictError`); it is archived instead (`ArchiveVehicle`): it leaves the vehicle lists, pickers, filters and the sidebar, and its kits leave reminders and suggestions (`ListKits` skips them unless asked by id or vehicle), but its services, kits, labour costs and item tags stay. It takes no new services or kits (`checkActiveVehicle`), and no kit moves to it (`UpdateKit`); restoring a deleted past service or kit of it is allowed, as that isn't new work. `ListVehicles` returns archived vehicles too, flagged, for chips and lookups. A vehicle without either is deleted, which only removes its tags.

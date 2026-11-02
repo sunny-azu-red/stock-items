@@ -29,6 +29,13 @@ Before building it, decide whether parts taken from stock for a service count as
 
 Worth doing in one go, after a backup, with an e2e test that undoes a stock change deleted before the migration.
 
+**Also: Counted becomes Adjusted, everywhere.** "Counted" fits the item page's count (set the stock to what is on the shelf), but quick + and an edited count are recorded under it too, and those are adjustments, not counts. Adjusted reads right for all of them. So the stored value above becomes `adjusted`, not `counted`, and the pages change with it:
+
+- the label (`stock.MovementKind.Label`), Activity's chip, the item page's tab (Count → Adjust) and its form (the legend "The count", "Counted on"), the flash "Counted: … in stock", and "Stock already matches the count";
+- the words: the table in [conventions.md](conventions.md#words) and the line in `AGENTS.md`, with Counted moved to the retired forms so `TestVocabulary` catches any left over;
+- the user guide, the README, the tests that name it (`internal/web/formkeys_test.go`, `TestEditACount`) and the screenshots;
+- not "Counted in" on the item form: that is the item's unit, another thing, and keeps its words.
+
 ## Small things noted on 2 November 2026
 
 - **Long amounts on a phone's stock list.** The quantity column is 58px on a phone (`.item-row`, `app.css`), and an amount like "3 825 ml" needs about 63px, so it runs into the gap beside it. It was like this before the consistency pass. A wider or content-sized column moves every row, so choose it by looking at real lists: a wider fixed column, a smaller font for long amounts, or the unit on a second line.

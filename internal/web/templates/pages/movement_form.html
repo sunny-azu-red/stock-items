@@ -41,16 +41,16 @@
       {{if and (eq $m.ItemUnit "piece") (eq $m.Kind "initial")}}{{$tip = "For all the pieces together, not the price of one. With a price or shop, this becomes a purchase."}}
       {{else if eq $m.ItemUnit "piece"}}{{$tip = "For all the pieces together, not the price of one."}}{{end}}
       <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" $tip)}}</div>
-      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" aria-describedby="price-tip">
+      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip">
       {{else}}
       <label for="total_price">Total price ({{.Currency}})</label>
-      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal">
+      <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="e.g. 24.90">
       {{end}}
       {{template "err" (index $e "total_price")}}
     </div>
     <div class="field">
       <label for="supplier">Shop</label>
-      <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}">
+      <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer">
     </div>
     {{end}}
     <div class="field{{if index $e "occurred_on"}} has-error{{end}}">
@@ -60,7 +60,7 @@
     </div>
     <div class="field">
       <label for="note">Note</label>
-      <input class="input" id="note" name="note" value="{{$f.Note}}">
+      <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="{{if eq $m.Kind "purchase"}}e.g. on sale, 2 for 1{{else if eq $m.Kind "use"}}e.g. topped up after the trip{{else if eq $m.Kind "correction"}}e.g. found a spare box{{else}}e.g. left over from the old bike{{end}}">
     </div>
   </div>
   <div class="form-actions">

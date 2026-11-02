@@ -347,7 +347,7 @@ select.input { cursor: pointer; }
 .form-actions .req-note { align-self: center; margin-right: auto; }
 .form-actions .req-note ~ .spacer { margin-right: 0; }
 /* The label's size, so a label row with a star is as tall as a plain label. */
-.req { color: var(--danger); font-size: .85rem; font-weight: 600; }
+.req { color: var(--danger); font-size: .85rem; }
 .req-note .req { font-size: inherit; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }

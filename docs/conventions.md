@@ -81,7 +81,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 
 - Record actions sit in the page header: Edit first, Archive (plain style, it can be undone), Delete (red, the trash icon), Restore (primary).
 - Nothing that can be undone asks first; only the trash's Delete permanently and Empty do (`data-confirm`).
-- Required fields carry a red star beside the label (`{{template "req"}}` in a `.label-row`, `aria-required` on the input), and the form a "* required" note at the start of its buttons (`{{template "req-note"}}`). Optional fields aren't marked.
+- Required fields carry a red star beside the label (`{{template "req"}}` in a `.label-row`, `aria-required` on the input), and the form a "* required" note at the start of its buttons (`{{template "req-note"}}`). Optional fields aren't marked; like every field, they show an example as their placeholder ("e.g. 24.90"), never "optional".
 - A best-before date shows through `{{template "expiry-badge"}}` and low stock through `{{template "stock-badge"}}`; a purchase is entered through `{{template "bought-fields"}}`.
 
 ## Code style

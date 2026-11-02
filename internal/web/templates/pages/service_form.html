@@ -50,7 +50,7 @@
       </div>
       <div class="field{{if index $e "labor_cost"}} has-error{{end}}">
         <label for="labor_cost">Labour cost ({{.Currency}})</label>
-        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal">
+        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal" placeholder="e.g. 80">
         {{template "err" (index $e "labor_cost")}}
       </div>
     </div>

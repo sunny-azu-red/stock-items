@@ -137,7 +137,7 @@
     {{end}}
     <div class="field">
       <label for="note-{{.Kind}}">Note</label>
-      <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}">
+      <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}" placeholder="{{if eq .Kind "use"}}e.g. topped up after the trip{{else}}e.g. found a spare box{{end}}">
     </div>
   </div>
   {{end}}

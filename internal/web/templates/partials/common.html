@@ -70,16 +70,16 @@
   <div class="field{{if and $s (index $e "total_price")}} has-error{{end}}">
     {{if eq .Unit "piece"}}
     <div class="label-row"><label for="price{{$id}}">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" (print "price-tip" $id) "Text" "For all the pieces together, not the price of one.")}}</div>
-    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" aria-describedby="price-tip{{$id}}">
+    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip{{$id}}">
     {{else}}
     <label for="price{{$id}}">Total price ({{.Currency}})</label>
-    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal">
+    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="e.g. 24.90">
     {{end}}
     {{if $s}}{{template "err" (index $e "total_price")}}{{end}}
   </div>
   <div class="field">
     <label for="supplier{{$id}}">Shop</label>
-    <input class="input" id="supplier{{$id}}" name="supplier" value="{{if $s}}{{$m.Supplier}}{{end}}">
+    <input class="input" id="supplier{{$id}}" name="supplier" value="{{if $s}}{{$m.Supplier}}{{end}}" placeholder="e.g. Louis or the dealer">
   </div>
   <div class="field{{if and $s (index $e "occurred_on")}} has-error{{end}}">
     <label for="date{{$id}}">Bought on</label>
@@ -93,7 +93,7 @@
   </div>
   <div class="field">
     <label for="note{{$id}}">Note</label>
-    <input class="input" id="note{{$id}}" name="note" value="{{if $s}}{{$m.Note}}{{end}}">
+    <input class="input" id="note{{$id}}" name="note" value="{{if $s}}{{$m.Note}}{{end}}" placeholder="e.g. on sale, 2 for 1">
   </div>
 </div>{{end}}
 

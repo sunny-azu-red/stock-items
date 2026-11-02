@@ -35,8 +35,9 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 | Migrations, UTC sessions | `internal/db/migrations_test.go` | yes | `go test ./internal/db/` |
 | Store (SQL, transactions, ledger invariant, lock order, SQL without zones) | `internal/store/*_test.go` | yes | `go test ./internal/store/` |
 | HTTP handlers and templates (versions, form keys, sorting, the trash round trip of every kind) | `internal/web/*_test.go` | yes | `go test ./internal/web/` |
+| Words: no retired term in the pages, messages, comments or docs ([conventions](conventions.md#words)) | `internal/web/vocabulary_test.go` | no | `go test -run TestVocabulary ./internal/web/` |
 | Photo processing (formats, rotation, limits, vips failures, the vips child's peak memory) | `internal/web/photo_test.go` | no, but libvips-tools | `go test -run Photo ./internal/web/` (`-short` skips the memory test, which makes 50-100 MP images) |
-| Browser end-to-end, desktop and phone | `e2e/tests/*.spec.ts` | yes | `cd e2e && npx playwright test` |
+| Browser end-to-end, desktop and phone, including every page on whole pixels with its text lined up | `e2e/tests/*.spec.ts` | yes | `cd e2e && npx playwright test` |
 
 - Tests live next to the code they test, one file per feature (`items_test.go`, `trash_test.go`, …), as is usual in Go; shared helpers are in `store_test.go` and `web_test.go`. The store's are in the package `store_test` (they use only what the package exports); the web tests are in `web` itself.
 - Each DB test gets a fresh, migrated schema `test_<random>` that is dropped when the test ends. Without `DB_HOST` (and no `.env`) these tests are skipped.
@@ -61,7 +62,7 @@ Actions are pinned to commit SHAs and the base images to digests; [Dependabot](.
 2. **Rules** go in `internal/stock` with table-driven tests.
 3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx` (`inFormTx` for a form's save), and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.
-5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed.
+5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed. Use the existing partials (`bought-fields`, `expiry-badge`, `stock-badge`, `req`, …), the [words](conventions.md#words), and the [whole-pixel rule](conventions.md) for any CSS (`--lh`, px, even sizes); a new page goes in the e2e pixel test's list and the screenshots' `shots`.
 6. Test it over HTTP in the feature's test file in `internal/web` (and in `versions_test.go` and `formkeys_test.go` for a new form or button, and in `trash_matrix_test.go` for a new kind of trash entry), and in the e2e spec for anything interactive.
 7. Run `scripts/check.sh` and `npx playwright test`.
 

@@ -22,17 +22,18 @@ It is built for one household on a home network: no login, one binary, one Postg
   525 ml - Silkolene 15W50 PRO 4 XP
   ```
   CSV export is available too, with last prices and stock value, plus a CSV of the whole history.
-- **Quick −/+** on every row, and a full **history** of every stock change (purchase, use, count, service) with prices and shops. Mistakes can be edited or deleted, and the stock follows.
+- **Quick −/+** on every row, and a full **history** of every stock change (bought, used, counted, service) with prices and shops, filtered by type and year. Mistakes can be edited or deleted, and the stock follows.
 - **Service kits.** For example, "KTM 390 – Oil service" lists the filter, 1.7 L oil and 2 O-rings. You see at once what is on the shelf and what is missing, and one click puts the shortfall on the shopping list.
 - **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
 - **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
+- **Spending at a glance:** the dashboard shows the stock value and what you spent this year (purchases and labour), each opening the list behind it.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.
 - **Undo everything:** every delete (and Bought) has an Undo, and the trash keeps it all until you empty it or permanently delete an entry.
 - **Nothing disappears by accident:** items used in services, kits or purchases, and vehicles with services or kits, are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
-- Works well on a [phone](docs/screenshots/mobile) in the garage, with dark mode and keyboard shortcuts (`/` search, `n` new item).
+- Works well on a [phone](docs/screenshots/mobile) in the garage, with dark mode and keyboard shortcuts (`/` search, `n` add item).
 
 | Stock grouped by vehicle | Service kit | Vehicles |
 |---|---|---|
@@ -93,4 +94,4 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC). Includes [htmx](https://htmx.org) (Zero-Clause BSD).
+MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC). Includes [htmx](https://htmx.org) (Zero-Clause BSD) and the [Inter](https://rsms.me/inter/) typeface (SIL Open Font License).

@@ -499,7 +499,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	s, ctx := newStore(t)
 	v := mustVehicle(t, s, "KTM 390")
 	id := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5, VehicleIDs: []int64{v},
-		SKUs: []stock.SKU{{Code: "M8", Kind: stock.SKUOther, Label: "M8x20"}}})
+		SKUs: []stock.SKU{{Code: "M8", Kind: stock.SKUOther, Brand: "M8x20"}}})
 	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +524,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	}
 	mustRestore(t, s, trashID)
 	it := mustGet(t, s, id)
-	if it.Quantity != 3 || len(it.SKUs) != 1 || it.SKUs[0].Label != "M8x20" || len(it.VehicleIDs) != 1 || !it.HasPhoto {
+	if it.Quantity != 3 || len(it.SKUs) != 1 || it.SKUs[0].Brand != "M8x20" || len(it.VehicleIDs) != 1 || !it.HasPhoto {
 		t.Errorf("item = %+v", it)
 	}
 	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id}); len(moves) != 2 {

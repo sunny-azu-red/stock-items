@@ -155,10 +155,14 @@ func (s *Server) funcs() template.FuncMap {
 		"withQuery": func(path, query string) template.URL {
 			return template.URL(joinQuery(path, query)) //nolint:gosec // our own paths, and a query url.Values encoded
 		},
-		// skuSearch links a part number to the configured search engine,
+		// skuSearch links a part number (optionally with brand) to the configured search engine,
 		// with the configured prefix (e.g. "site:de"), if any, added to the query.
-		"skuSearch": func(code string) template.URL {
-			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code)) //nolint:gosec // the operator's URL, the code escaped
+		"skuSearch": func(code string, brand ...string) template.URL {
+			b := ""
+			if len(brand) > 0 {
+				b = brand[0]
+			}
+			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code, b)) //nolint:gosec // the operator's URL, the code escaped
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },
@@ -319,8 +323,11 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 // a base without exactly one). In the query it is query-escaped, so "A+B"
 // and "A&B=C" stay one value; in the path or the fragment it is
 // path-escaped, so "12/34" stays one segment.
-func skuSearchURL(base, prefix, code string) string {
-	q := code
+func skuSearchURL(base, prefix, code, brand string) string {
+	q := strings.TrimSpace(code)
+	if strings.TrimSpace(brand) != "" {
+		q = strings.TrimSpace(brand) + " " + q
+	}
 	if prefix != "" {
 		q += " " + prefix
 	}

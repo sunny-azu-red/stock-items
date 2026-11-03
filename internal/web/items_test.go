@@ -56,13 +56,13 @@ func TestItemFormFlow(t *testing.T) {
 		"name": {"7100 10W50"}, "brand": {"Motul"}, "unit": {"ml"}, "quantity": {"4"}, "quantity_unit": {"l"},
 		"min_quantity": {"1"}, "min_unit": {"l"}, "vehicle": {itoa(k390), itoa(k1290)},
 		"sku_code": {"104098", "104100", ""}, "sku_kind": {"manufacturer", "manufacturer", "oem"},
-		"sku_label": {"1 L", "4 L", ""}, "sku_pack": {"1", "4", ""}, "sku_pack_unit": {"l", "l", "ml"},
+		"sku_brand": {"Motul", "Motul", ""}, "sku_pack": {"1", "4", ""}, "sku_pack_unit": {"l", "l", "ml"},
 	}
 	rec = a.post("/items", form)
 	expect(t, rec, http.StatusSeeOther)
 	loc := rec.Header().Get("Location")
 	expect(t, a.get(loc), http.StatusOK, "Motul 7100 10W50", "4 L", "104100", "keep at least 1 L",
-		`href="https://duckduckgo.com/?q=104100&#43;site%3Ade" target="_blank"`, `title="Search on duckduckgo.com (site:de)"`)
+		`href="https://duckduckgo.com/?q=Motul&#43;104100&#43;site%3Ade" target="_blank"`, `title="Search on duckduckgo.com (site:de)"`)
 	expect(t, a.get("/stock"), http.StatusOK, `— Search on duckduckgo.com (site:de)"`)
 
 	it, err := a.store.GetItem(context.Background(), itemID(t, a.store, "104098"))
@@ -79,7 +79,7 @@ func TestItemFormFlow(t *testing.T) {
 	expect(t, a.post(loc, form), http.StatusUnprocessableEntity, "Duplicate SKU code")
 
 	// Save & add another keeps vehicles and unit.
-	for _, k := range []string{"sku_code", "sku_label", "sku_pack"} {
+	for _, k := range []string{"sku_code", "sku_brand", "sku_pack"} {
 		form[k] = []string{"", "", ""}
 	}
 	form.Set("name", "Another oil")
@@ -146,10 +146,69 @@ func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
 	}
 }
 
+func TestItemShow_SKUDisplayOrder(t *testing.T) {
+	a := newApp(t)
+	p1L := 1000.0
+	p4L := 4000.0
+	in := stock.ItemInput{
+		Name: "Engine Oil 15W50", Brand: "Silkolene", Unit: stock.UnitML, Quantity: 5000,
+		SKUs: []stock.SKU{
+			{Code: "MOTO-4L", Kind: stock.SKUManufacturer, Brand: "Motorex", PackSize: &p4L},
+			{Code: "MOTO-1L", Kind: stock.SKUManufacturer, Brand: "Motorex", PackSize: &p1L},
+			{Code: "SILK-4L", Kind: stock.SKUManufacturer, Brand: "Silkolene", PackSize: &p4L},
+			{Code: "SILK-1L", Kind: stock.SKUManufacturer, Brand: "Silkolene", PackSize: &p1L},
+			{Code: "5031131762357", Kind: stock.SKUBarcode, Brand: "Silkolene", PackSize: &p1L},
+			{Code: "7611197012818", Kind: stock.SKUBarcode, Brand: "Motorex", PackSize: &p1L},
+		},
+	}
+	in.Normalize()
+	id, err := a.store.CreateItem(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. With Brand = "Silkolene", Silkolene 1L part -> 1L barcode -> 4L part -> Motorex
+	rec := a.get(itemPath(id))
+	expect(t, rec, http.StatusOK)
+	body := rec.Body.String()
+	wantOrder := []string{"SILK-1L", "5031131762357", "SILK-4L", "MOTO-1L", "7611197012818", "MOTO-4L"}
+	lastIdx := 0
+	for _, code := range wantOrder {
+		idx := strings.Index(body[lastIdx:], `>`+code+`</a>`)
+		if idx < 0 {
+			t.Fatalf("code %q not found after index %d in body", code, lastIdx)
+		}
+		lastIdx += idx
+	}
+
+	// 2. Change Brand to "Motorex"
+	curItem, err := a.store.GetItem(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Brand = "Motorex"
+	in.Version = curItem.Version
+	if err := a.store.UpdateItem(context.Background(), id, in, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	rec = a.get(itemPath(id))
+	expect(t, rec, http.StatusOK)
+	body = rec.Body.String()
+	wantMotorexFirst := []string{"MOTO-1L", "7611197012818", "MOTO-4L", "SILK-1L", "5031131762357", "SILK-4L"}
+	lastIdx = 0
+	for _, code := range wantMotorexFirst {
+		idx := strings.Index(body[lastIdx:], `>`+code+`</a>`)
+		if idx < 0 {
+			t.Fatalf("code %q not found after index %d in body", code, lastIdx)
+		}
+		lastIdx += idx
+	}
+}
+
 func TestSKUErrorsLandOnTheirRow(t *testing.T) {
 	a := newApp(t)
 	form := url.Values{"name": {"Filter"}, "unit": {"piece"},
-		"sku_code": {"   ", "123"}, "sku_kind": {"oem", "barcode"}, "sku_label": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"}}
+		"sku_code": {"   ", "123"}, "sku_kind": {"oem", "barcode"}, "sku_brand": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"}}
 	rec := a.post("/items", form)
 	expect(t, rec, http.StatusUnprocessableEntity, "Not a valid barcode")
 	body := rec.Body.String()

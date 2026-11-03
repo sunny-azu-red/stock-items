@@ -63,7 +63,7 @@
   <div class="stack">
     <section class="card card-pad photo-card">
       <div class="photo">
-        {{if $it.HasPhoto}}<a href="/items/{{$it.ID}}/photo"><img src="/items/{{$it.ID}}/photo" alt="Photo of {{$it.DisplayName}}"></a>{{else}}{{icon "image"}}{{end}}
+        {{if $it.HasPhoto}}<a href="/items/{{$it.ID}}/photo" target="_blank" rel="noopener noreferrer"><img src="/items/{{$it.ID}}/photo" alt="Photo of {{$it.DisplayName}}"></a>{{else}}{{icon "image"}}{{end}}
       </div>
       <div class="flex mt">
         {{if not $it.Archived}}<form method="post" action="/items/{{$it.ID}}/photo" enctype="multipart/form-data" class="flex">
@@ -80,7 +80,7 @@
       {{if $it.SKUs}}
       <table class="table sku-table">
         <tbody>
-        {{range $it.SKUs}}<tr><td><a class="sku-link" href="{{skuSearch .Code}}" target="_blank" rel="noopener noreferrer" title="{{skuSearchTitle}}">{{.Code}}</a></td><td>{{.Kind.Label}}{{with .Label}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
+        {{range $it.DisplaySKUs}}<tr><td><a class="sku-link" href="{{skuSearch .Code .Brand}}" target="_blank" rel="noopener noreferrer" title="{{skuSearchTitle}}">{{.Code}}</a></td><td>{{.Kind.Label}}{{with .Brand}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
         </tbody>
       </table>
       {{else}}<div class="card-body muted small">No part numbers yet. <a href="/items/{{$it.ID}}/edit">Add some</a> to find this item by SKU.</div>{{end}}

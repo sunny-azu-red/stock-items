@@ -137,7 +137,7 @@ func TestWriteCSV(t *testing.T) {
 		{ID: 7, Brand: "OEM", Name: "Oil Filter", Unit: UnitPiece, Quantity: 1, MinQuantity: &min,
 			VehicleIDs: []int64{1}, SKUs: []SKU{{Code: "77038005044", Kind: SKUOEM}}, Notes: "=HYPERLINK()"},
 		{ID: 8, Brand: "Motorex", Name: "Coolant", Unit: UnitML, Quantity: 1500,
-			SKUs: []SKU{{Code: "M30", Kind: SKUManufacturer, Label: "1 L bottle", PackSize: &pack}}},
+			SKUs: []SKU{{Code: "M30", Kind: SKUManufacturer, Brand: "1 L bottle", PackSize: &pack}}},
 	}
 	last := map[int64]LastPurchase{8: {UnitPrice: 0.067, On: bought, Supplier: "moto24"}}
 	var buf bytes.Buffer

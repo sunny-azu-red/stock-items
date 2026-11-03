@@ -14,7 +14,7 @@ type ItemSpec = {
   min?: string;
   vehicles: string[];
   category?: string;
-  skus?: { code: string; kind?: string; label?: string }[];
+  skus?: { code: string; kind?: string; brand?: string; label?: string }[];
 };
 
 const exact = (s: string) => new RegExp(`^\\s*${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
@@ -30,7 +30,7 @@ async function addVehicle(page: Page, name: string, odometer: string) {
 async function addItem(page: Page, it: ItemSpec) {
   await page.goto("/items/new");
   await page.getByLabel("Name", { exact: true }).fill(it.name);
-  if (it.brand) await page.getByLabel("Brand").fill(it.brand);
+  if (it.brand) await page.getByLabel("Brand", { exact: true }).fill(it.brand);
   if (it.volume) await page.locator("label", { hasText: "Volume (ml / L)" }).click();
   await page.getByLabel("In stock").fill(it.qty);
   if (it.qtyUnit) await page.locator('select[name="quantity_unit"]').selectOption(it.qtyUnit);
@@ -43,7 +43,8 @@ async function addItem(page: Page, it: ItemSpec) {
     if (i > 0) await page.getByRole("button", { name: "Add SKU" }).click();
     await page.locator('input[name="sku_code"]').nth(i).fill(sku.code);
     if (sku.kind) await page.locator('select[name="sku_kind"]').nth(i).selectOption(sku.kind);
-    if (sku.label) await page.locator('input[name="sku_label"]').nth(i).fill(sku.label);
+    const brand = sku.brand ?? sku.label;
+    if (brand) await page.locator('input[name="sku_brand"], input[name="sku_label"]').nth(i).fill(brand);
   }
   await page.getByRole("button", { name: "Save item" }).click();
   await expect(page.locator(".flash-success")).toContainText("Added");

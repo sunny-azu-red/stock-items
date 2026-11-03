@@ -19,7 +19,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 	id := mustItem(t, s, stock.ItemInput{
 		Name: "15W50 PRO 4 XP", Brand: "Silkolene", Category: "Oil & fluids", Unit: stock.UnitML, Quantity: 525,
 		MinQuantity: ptr(1000.0), ExpiresOn: &exp, Location: "Shelf A",
-		SKUs:       []stock.SKU{{Code: "80085", Kind: stock.SKUManufacturer, Label: "1 L", PackSize: ptr(1000.0)}, {Code: "80086", Kind: stock.SKUManufacturer, Label: "4 L", PackSize: ptr(4000.0)}},
+		SKUs:       []stock.SKU{{Code: "80085", Kind: stock.SKUManufacturer, Brand: "Silkolene", PackSize: ptr(1000.0)}, {Code: "80086", Kind: stock.SKUManufacturer, Brand: "Silkolene", PackSize: ptr(4000.0)}},
 		VehicleIDs: []int64{a, b},
 	})
 	it := mustGet(t, s, id)
@@ -64,7 +64,7 @@ func TestListItemsFilters(t *testing.T) {
 	s, ctx := newStore(t)
 	k390, k1290, car := mustVehicle(t, s, "KTM 390"), mustVehicle(t, s, "KTM 1290"), mustVehicle(t, s, "Car")
 	soon := time.Now().AddDate(0, 0, 10)
-	mustItem(t, s, stock.ItemInput{Name: "Rear Brake Pads", Brand: "OEM", Category: "Brakes", Unit: stock.UnitPiece, Quantity: 1, VehicleIDs: []int64{k390},
+	mustItem(t, s, stock.ItemInput{Name: "Rear Brake Pads", Brand: "KTM", Category: "Brakes", Unit: stock.UnitPiece, Quantity: 1, VehicleIDs: []int64{k390},
 		SKUs: []stock.SKU{{Code: "90313090000", Kind: stock.SKUOEM}}})
 	mustItem(t, s, stock.ItemInput{Name: "Oil Filter", Brand: "Hiflofiltro", Category: "Filters", Unit: stock.UnitPiece, Quantity: 1, VehicleIDs: []int64{k1290},
 		SKUs: []stock.SKU{{Code: "HF-650", Kind: stock.SKUManufacturer}}})
@@ -77,14 +77,14 @@ func TestListItemsFilters(t *testing.T) {
 		f    store.ItemFilter
 		want []string
 	}{
-		{"all", store.ItemFilter{}, []string{"Brake cleaner", "Oil Filter", "M3.0 Ready To Use", "Rear Brake Pads", "Wiper blades"}},
-		{"any 390", store.ItemFilter{VehicleIDs: []int64{k390}}, []string{"M3.0 Ready To Use", "Rear Brake Pads"}},
-		{"any 390/1290", store.ItemFilter{VehicleIDs: []int64{k390, k1290}}, []string{"Oil Filter", "M3.0 Ready To Use", "Rear Brake Pads"}},
+		{"all", store.ItemFilter{}, []string{"Brake cleaner", "Oil Filter", "Rear Brake Pads", "M3.0 Ready To Use", "Wiper blades"}},
+		{"any 390", store.ItemFilter{VehicleIDs: []int64{k390}}, []string{"Rear Brake Pads", "M3.0 Ready To Use"}},
+		{"any 390/1290", store.ItemFilter{VehicleIDs: []int64{k390, k1290}}, []string{"Oil Filter", "Rear Brake Pads", "M3.0 Ready To Use"}},
 		{"all 390+1290", store.ItemFilter{VehicleIDs: []int64{k390, k1290}, MatchAll: true}, []string{"M3.0 Ready To Use"}},
 		{"general", store.ItemFilter{General: true}, []string{"Brake cleaner"}},
 		{"car + general", store.ItemFilter{VehicleIDs: []int64{car}, General: true}, []string{"Brake cleaner", "Wiper blades"}},
 		{"search name", store.ItemFilter{Query: "brake"}, []string{"Brake cleaner", "Rear Brake Pads"}},
-		{"search brand+name", store.ItemFilter{Query: "OEM Rear"}, []string{"Rear Brake Pads"}},
+		{"search brand+name", store.ItemFilter{Query: "KTM Rear"}, []string{"Rear Brake Pads"}},
 		{"search sku", store.ItemFilter{Query: "90313090000"}, []string{"Rear Brake Pads"}},
 		{"search sku normalized", store.ItemFilter{Query: "hf650"}, []string{"Oil Filter"}},
 		{"search wildcard is literal", store.ItemFilter{Query: "%"}, []string{}},
@@ -115,7 +115,7 @@ func TestListItemsFilters(t *testing.T) {
 		t.Errorf("categories = %v, %v", cats, err)
 	}
 	brands, err := s.Brands(ctx)
-	if want := []string{"Hiflofiltro", "Motorex", "OEM"}; err != nil || !slices.Equal(brands, want) {
+	if want := []string{"Hiflofiltro", "KTM", "Motorex"}; err != nil || !slices.Equal(brands, want) {
 		t.Errorf("brands = %v, %v; want %v", brands, err, want)
 	}
 }

@@ -180,8 +180,8 @@ func FormatMoney(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) }
 // skuCell describes one SKU for the CSV: "Manufacturer:80085 (1 L can, pack 1 L)".
 func skuCell(s SKU, u Unit) string {
 	var extra []string
-	if s.Label != "" {
-		extra = append(extra, s.Label)
+	if s.Brand != "" {
+		extra = append(extra, s.Brand)
 	}
 	if s.PackSize != nil {
 		extra = append(extra, "pack "+FormatQuantity(*s.PackSize, u))

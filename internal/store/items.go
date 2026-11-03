@@ -61,7 +61,7 @@ const itemSelect = `
 SELECT i.id, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.expires_on, i.location,
        i.notes, i.created_at, i.updated_at, i.archived_at, i.version,
        COALESCE((SELECT array_agg(iv.vehicle_id ORDER BY iv.vehicle_id) FROM item_vehicles iv WHERE iv.item_id = i.id), '{}'),
-       COALESCE((SELECT json_agg(json_build_object('id', s.id, 'code', s.code, 'kind', s.kind, 'label', s.label,
+       COALESCE((SELECT json_agg(json_build_object('id', s.id, 'code', s.code, 'kind', s.kind, 'brand', s.brand,
                                                    'pack_size', s.pack_size) ORDER BY s.id)
                  FROM item_skus s WHERE s.item_id = i.id), '[]'),
        EXISTS (SELECT 1 FROM item_photos p WHERE p.item_id = i.id)
@@ -105,7 +105,7 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 		cond := "i.name ILIKE " + p + " OR i.brand ILIKE " + p + " OR i.category ILIKE " + p +
 			" OR i.location ILIKE " + p + " OR i.notes ILIKE " + p +
 			" OR (i.brand || ' ' || i.name) ILIKE " + p +
-			" OR EXISTS (SELECT 1 FROM item_skus s WHERE s.item_id = i.id AND (s.code ILIKE " + p + " OR s.label ILIKE " + p
+			" OR EXISTS (SELECT 1 FROM item_skus s WHERE s.item_id = i.id AND (s.code ILIKE " + p + " OR s.brand ILIKE " + p
 		if norm := normalizeCode(q); norm != "" {
 			cond += " OR regexp_replace(lower(s.code), '[^a-z0-9]', '', 'g') LIKE " + args.add("%"+norm+"%")
 		}
@@ -314,8 +314,8 @@ func replaceSKUsAndTags(ctx context.Context, tx pgx.Tx, id int64, in stock.ItemI
 		return err
 	}
 	for _, sku := range in.SKUs {
-		_, err := tx.Exec(ctx, `INSERT INTO item_skus (item_id, code, kind, label, pack_size) VALUES ($1, $2, $3, $4, $5)`,
-			id, sku.Code, sku.Kind, sku.Label, sku.PackSize)
+		_, err := tx.Exec(ctx, `INSERT INTO item_skus (item_id, code, kind, brand, pack_size) VALUES ($1, $2, $3, $4, $5)`,
+			id, sku.Code, sku.Kind, sku.Brand, sku.PackSize)
 		if isUniqueViolation(err) {
 			return &ConflictError{Field: "skus", Message: "SKU " + sku.Code + " is listed twice"}
 		}
@@ -487,16 +487,21 @@ func (s *Store) Categories(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `
 		SELECT DISTINCT ON (lower(c)) c FROM (
 			SELECT category AS c, 0 AS pref FROM items WHERE category <> ''
-			UNION SELECT unnest(ARRAY['Oil & fluids', 'Filters', 'Brakes', 'Gaskets & O-rings', 'Chain & sprockets',
-			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools']), 1
+			UNION SELECT unnest(ARRAY['Oil & fluids', 'Filters', 'Brakes', 'Gaskets & o-rings', 'Chain & sprockets',
+			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools',
+			                          'Maintenance kits', 'Bearings & seals', 'Controls & cables', 'Suspension']), 1
 		) x ORDER BY lower(c), pref, c`)
 }
 
-// Brands returns the distinct brands in use, plus OEM.
+// Brands returns the distinct brands in use across items and SKUs.
 func (s *Store) Brands(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `
-		SELECT DISTINCT ON (lower(b)) b FROM (SELECT brand AS b, 0 AS pref FROM items WHERE brand <> '' UNION SELECT 'OEM', 1) x
-		ORDER BY lower(b), pref, b`)
+		SELECT DISTINCT ON (lower(b)) b FROM (
+			SELECT brand AS b FROM items WHERE brand <> ''
+			UNION
+			SELECT brand AS b FROM item_skus WHERE brand <> ''
+		) x
+		ORDER BY lower(b), b`)
 }
 
 // Locations returns the distinct storage locations in use.

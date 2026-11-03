@@ -798,3 +798,71 @@ func TestSKUKindBarcodeMigration(t *testing.T) {
 		t.Errorf("after second Up: kind = %q, want %q", kind, "barcode")
 	}
 }
+
+// 00016 renames column 'label' to 'brand' on item_skus and updates trash payloads. Up → Down → Up.
+func TestItemSKUsBrandMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 15); err != nil {
+		t.Fatal(err)
+	}
+	// Seed an item with SKU label, and a trash snapshot holding an item_skus with label.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO items (name, brand, unit, quantity) VALUES ('Brake Cleaner', 'Motorex', 'piece', 5);
+		INSERT INTO item_skus (item_id, code, kind, label) VALUES (1, '308100', 'manufacturer', 'Motorex');
+		INSERT INTO trash (kind, label, payload) VALUES ('item', 'Item: snapshot',
+			'{"item_skus": [{"id": 99, "item_id": 99, "code": "308100", "kind": "manufacturer", "label": "Motorex"}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.UpTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+
+	var brand string
+	if err := pool.QueryRow(ctx, `SELECT brand FROM item_skus WHERE id = 1`).Scan(&brand); err != nil {
+		t.Fatal(err)
+	}
+	if brand != "Motorex" {
+		t.Errorf("after Up: brand = %q, want %q", brand, "Motorex")
+	}
+
+	var payload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Item: snapshot'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, `"brand": "Motorex"`) || strings.Contains(payload, `"label": "Motorex"`) {
+		t.Errorf("after Up: trash payload = %s", payload)
+	}
+
+	// Down takes it back to 'label'.
+	if _, err := provider.DownTo(ctx, 15); err != nil {
+		t.Fatal(err)
+	}
+	var label string
+	if err := pool.QueryRow(ctx, `SELECT label FROM item_skus WHERE id = 1`).Scan(&label); err != nil {
+		t.Fatal(err)
+	}
+	if label != "Motorex" {
+		t.Errorf("after Down: label = %q, want %q", label, "Motorex")
+	}
+
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Item: snapshot'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, `"label": "Motorex"`) || strings.Contains(payload, `"brand": "Motorex"`) {
+		t.Errorf("after Down: trash payload = %s", payload)
+	}
+
+	// Up again.
+	if _, err := provider.UpTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT brand FROM item_skus WHERE id = 1`).Scan(&brand); err != nil {
+		t.Fatal(err)
+	}
+	if brand != "Motorex" {
+		t.Errorf("after second Up: brand = %q, want %q", brand, "Motorex")
+	}
+}

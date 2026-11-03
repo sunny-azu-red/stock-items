@@ -4,6 +4,8 @@
 package stock
 
 import (
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -118,8 +120,88 @@ type SKU struct {
 	ID       int64    `json:"id"`
 	Code     string   `json:"code"`
 	Kind     SKUKind  `json:"kind"`
-	Label    string   `json:"label"`
+	Brand    string   `json:"brand"`
 	PackSize *float64 `json:"pack_size"`
+}
+
+type skuSortKey struct {
+	tier      int     // 0: matches item brand, 1: OEM/KTM, 2: other brand
+	brand     string  // normalized brand name for grouping
+	packSize  float64 // pack size ascending (0 if nil)
+	isBarcode int     // 0: part number, 1: barcode
+}
+
+// SortSKUs returns a copy of skus ordered for display:
+//  1. SKUs matching the current item brand appear first (or OEM/KTM if brand is KTM/OEM).
+//     Then OEM/KTM SKUs appear (if brand was not KTM/OEM), followed by other brands grouped together.
+//  2. Ascending pack size (e.g. 1 L before 4 L; nil/unspecified sizes come first).
+//  3. Part numbers (OEM, Manufacturer, etc.) before barcodes.
+//  4. Stable order for ties.
+func SortSKUs(skus []SKU, itemBrand string) []SKU {
+	if len(skus) <= 1 {
+		return slices.Clone(skus)
+	}
+	brandNorm := strings.ToLower(strings.TrimSpace(itemBrand))
+	isOEMBrand := brandNorm == "oem" || brandNorm == "ktm"
+
+	key := func(s SKU) skuSortKey {
+		b := strings.ToLower(strings.TrimSpace(s.Brand))
+		if b == "" && s.Kind == SKUOEM {
+			b = "ktm"
+		}
+		isOEM := s.Kind == SKUOEM || b == "ktm" || b == "oem" || strings.HasPrefix(b, "ktm")
+		matches := false
+		if isOEMBrand {
+			matches = isOEM
+		} else if brandNorm != "" {
+			matches = b == brandNorm || strings.HasPrefix(b, brandNorm)
+		}
+
+		tier := 2
+		if matches {
+			tier = 0
+		} else if isOEM {
+			tier = 1
+		}
+
+		brandGroup := b
+		if matches {
+			brandGroup = "" // All matching brand SKUs share top group
+		} else if isOEM {
+			brandGroup = "ktm"
+		}
+
+		pack := 0.0
+		if s.PackSize != nil {
+			pack = *s.PackSize
+		}
+
+		barcode := 0
+		if s.Kind == SKUBarcode {
+			barcode = 1
+		}
+
+		return skuSortKey{tier: tier, brand: brandGroup, packSize: pack, isBarcode: barcode}
+	}
+
+	out := slices.Clone(skus)
+	slices.SortStableFunc(out, func(a, b SKU) int {
+		ka, kb := key(a), key(b)
+		if c := cmp.Compare(ka.tier, kb.tier); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(ka.brand, kb.brand); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(ka.packSize, kb.packSize); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(ka.isBarcode, kb.isBarcode); c != 0 {
+			return c
+		}
+		return 0
+	})
+	return out
 }
 
 // Item is a part or consumable in stock.
@@ -146,6 +228,11 @@ type Item struct {
 	// ArchivedAt is set for items no longer kept: they are hidden from
 	// stock, pickers and suggestions, but their history stays.
 	ArchivedAt *time.Time
+}
+
+// DisplaySKUs returns the item's SKUs ordered for display according to its current Brand.
+func (it Item) DisplaySKUs() []SKU {
+	return SortSKUs(it.SKUs, it.Brand)
 }
 
 // Archived reports whether the item has been archived.

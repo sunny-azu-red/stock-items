@@ -773,6 +773,7 @@ func TestPhotoUploadHEIC(t *testing.T) {
 			t.Errorf("%s: %dx%d, want %dx%d", tc.path, b.Dx(), b.Dy(), tc.w, tc.h)
 		}
 	}
+	expect(t, a.get(item), http.StatusOK, `<a href="`+item+`/photo" target="_blank" rel="noopener noreferrer">`)
 	first := a.get(item + "/photo").Body.String()
 	rec = a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black)))
 	f := flashOf(t, rec)

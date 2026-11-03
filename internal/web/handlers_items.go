@@ -18,7 +18,7 @@ import (
 // ---- Item form ----
 
 type skuRow struct {
-	Code, Kind, Label, Pack, PackUnit string
+	Code, Kind, Brand, Pack, PackUnit string
 	Error                             string
 }
 
@@ -78,7 +78,7 @@ func itemFormFromItem(it stock.Item) itemForm {
 		f.ExpiresOn = it.ExpiresOn.Format("2006-01-02")
 	}
 	for _, s := range it.SKUs {
-		row := skuRow{Code: s.Code, Kind: string(s.Kind), Label: s.Label}
+		row := skuRow{Code: s.Code, Kind: string(s.Kind), Brand: s.Brand}
 		if s.PackSize != nil {
 			row.Pack, row.PackUnit = stock.SplitForInput(*s.PackSize, it.Unit)
 		}
@@ -150,7 +150,11 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		in.ExpiresOn = d
 	}
 
-	codes, kinds, labels := r.PostForm["sku_code"], r.PostForm["sku_kind"], r.PostForm["sku_label"]
+	codes, kinds := r.PostForm["sku_code"], r.PostForm["sku_kind"]
+	brands := r.PostForm["sku_brand"]
+	if len(brands) == 0 {
+		brands = r.PostForm["sku_label"]
+	}
 	packs, packUnits := r.PostForm["sku_pack"], r.PostForm["sku_pack_unit"]
 	at := func(vals []string, i int) string {
 		if i < len(vals) {
@@ -160,15 +164,15 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 	}
 	var kept []bool // whether Normalize keeps row i, to map errors back
 	for i := range codes {
-		row := skuRow{Code: at(codes, i), Kind: at(kinds, i), Label: at(labels, i), Pack: at(packs, i), PackUnit: at(packUnits, i)}
-		sku := stock.SKU{Code: row.Code, Kind: stock.SKUKind(row.Kind), Label: row.Label}
+		row := skuRow{Code: at(codes, i), Kind: at(kinds, i), Brand: at(brands, i), Pack: at(packs, i), PackUnit: at(packUnits, i)}
+		sku := stock.SKU{Code: row.Code, Kind: stock.SKUKind(row.Kind), Brand: row.Brand}
 		if p, err := parseOptAmount(row.Pack, unit, row.PackUnit); err != nil {
 			row.Error = "Pack size: " + err.Error()
 			f.Errors.Add("skus", row.Error)
 		} else {
 			sku.PackSize = p
 		}
-		kept = append(kept, strings.TrimSpace(sku.Code) != "" || strings.TrimSpace(sku.Label) != "" || sku.PackSize != nil)
+		kept = append(kept, strings.TrimSpace(sku.Code) != "" || strings.TrimSpace(sku.Brand) != "" || sku.PackSize != nil)
 		f.SKUs = append(f.SKUs, row)
 		in.SKUs = append(in.SKUs, sku)
 	}

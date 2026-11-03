@@ -127,6 +127,7 @@
       rows.appendChild(frag);
       syncUnits(rows.closest("form"));
       var added = rows.lastElementChild;
+      if (added) added.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
       var focus = added && added.querySelector("input, select");
       if (focus) focus.focus();
       return;
@@ -295,9 +296,12 @@
   // JS (or popover support) the plain datalist still works. The list is a
   // popover so cards with overflow: clip do not cut it off.
   var placeOpenCombo = null;
+  var comboSeed = 0;
   function enhanceCombo(input) {
     var list = document.getElementById(input.getAttribute("list"));
-    if (!list || !input.id || !HTMLElement.prototype.showPopover) return;
+    if (!list || !HTMLElement.prototype.showPopover) return;
+    if (input.closest(".combo")) return;
+    if (!input.id) input.id = "combo-" + (++comboSeed);
     var values = Array.prototype.map.call(list.options, function (o) { return o.value; });
     if (!values.length) return; // no chevron that opens nothing
     var wrap = document.createElement("div");

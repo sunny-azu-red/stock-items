@@ -33,7 +33,7 @@ func TestItemInputValidateErrors(t *testing.T) {
 	neg := -1.0
 	in := ItemInput{
 		Unit: "litre", Quantity: -1, MinQuantity: &neg,
-		SKUs: []SKU{{Code: "A", Kind: SKUOEM}, {Code: "a", Kind: SKUOEM}, {Label: "1 L", Kind: "bogus"}},
+		SKUs: []SKU{{Code: "A", Kind: SKUOEM}, {Code: "a", Kind: SKUOEM}, {Brand: "Motorex", Kind: "bogus"}},
 	}
 	in.Normalize()
 	errs := in.Validate()

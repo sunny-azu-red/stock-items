@@ -112,8 +112,8 @@ func (in *ItemInput) Normalize() {
 	skus := in.SKUs[:0]
 	for _, s := range in.SKUs {
 		s.Code = strings.TrimSpace(s.Code)
-		s.Label = strings.TrimSpace(s.Label)
-		if s.Code == "" && s.Label == "" && s.PackSize == nil {
+		s.Brand = strings.TrimSpace(s.Brand)
+		if s.Code == "" && s.Brand == "" && s.PackSize == nil {
 			continue
 		}
 		if s.Kind == "" {
@@ -176,8 +176,8 @@ func (in ItemInput) Validate() Errors {
 	limitText(errs, maxShortText, "Shop", in.Supplier)
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	for i, sku := range in.SKUs {
-		if utf8.RuneCountInString(sku.Code) > maxShortText || utf8.RuneCountInString(sku.Label) > maxShortText {
-			errs.Add(fmt.Sprintf("sku_%d", i), "Code and label can have at most 200 characters")
+		if utf8.RuneCountInString(sku.Code) > maxShortText || utf8.RuneCountInString(sku.Brand) > maxShortText {
+			errs.Add(fmt.Sprintf("sku_%d", i), "Code and brand can have at most 200 characters")
 		}
 	}
 	return errs

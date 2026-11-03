@@ -204,6 +204,38 @@ func TestPartNumberLinks(t *testing.T) {
 			}
 		})
 	}
+	t.Run("with brand", func(t *testing.T) {
+		inWithBrand := stock.ItemInput{
+			Name: "Oil", Unit: stock.UnitML, Brand: "Silkolene",
+			SKUs: []stock.SKU{{Code: "601449901", Kind: stock.SKUManufacturer, Brand: "Silkolene"}},
+		}
+		inWithBrand.Normalize()
+		oilID, err := a.store.CreateItem(context.Background(), inWithBrand)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv, err := New(a.store, Options{
+			SKUSearchURL: "https://www.google.com/search?q={q}",
+			Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, itemPath(oilID), nil))
+		expect(t, rec, http.StatusOK)
+		link := regexp.MustCompile(`<a class="sku-link" href="([^"]*)"`).FindStringSubmatch(rec.Body.String())
+		if len(link) < 2 {
+			t.Fatalf("no sku-link found")
+		}
+		u, err := url.Parse(html.UnescapeString(link[1]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := u.Query().Get("q"); got != "Silkolene 601449901" {
+			t.Errorf("got query %q, want %q", got, "Silkolene 601449901")
+		}
+	})
 	for _, bad := range []string{"https://www.google.com/search?q=", "https://example.com/{q}?q={q}"} {
 		if _, err := New(a.store, Options{SKUSearchURL: bad}); err == nil {
 			t.Errorf("New accepted the search URL %q", bad)

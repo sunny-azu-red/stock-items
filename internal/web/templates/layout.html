@@ -32,9 +32,9 @@
     {{with .NavVehicles}}
     <div>
       <div class="nav-title">Stock by vehicle</div>
-      <nav class="nav nav-vehicles" aria-label="Vehicles">
-        {{range .}}<a href="/stock?v={{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
-        <a href="/stock?general=1"><span class="dot"></span>General</a>
+      <nav class="chips nav-vehicles" aria-label="Vehicles">
+        {{range .}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+        <a class="chip" href="/stock?general=1"><span class="dot"></span>General</a>
       </nav>
     </div>
     {{end}}

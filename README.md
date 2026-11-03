@@ -91,6 +91,7 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 - [Development](docs/development.md): setup, tests, adding features
 - [Deployment](docs/deployment.md): Portainer, Docker, systemd, backups
 - [Conventions](docs/conventions.md): rules for contributors and coding agents (see also [AGENTS.md](AGENTS.md))
+- [Design](docs/design.md): interface standards, component rules, link styles, whole-pixel alignment
 - [Roadmap](docs/roadmap.md): ideas to come back to
 
 ## License

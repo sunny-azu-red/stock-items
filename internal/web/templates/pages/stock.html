@@ -62,7 +62,7 @@
 
 <div id="results" class="loading-dim">
   <div class="results-head">
-    <span class="count">{{plural (len $d.Items) "item"}}{{if $f.Active}} match · <a href="{{withQuery "/stock" $f.Cleared}}">Clear filters</a>{{end}}</span>
+    <span class="count"><span>{{plural (len $d.Items) "item"}}{{if $f.Active}} match{{end}}</span>{{if $f.Active}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.Cleared}}">Clear filters {{icon "x"}}</a>{{end}}</span>
     <div class="flex">
       <span class="segmented" role="group" aria-label="View">
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>

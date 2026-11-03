@@ -205,8 +205,8 @@ func TestKitPartsSort(t *testing.T) {
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=need"`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=have"`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=missing"`)
-	if strings.Contains(rec.Body.String(), "Kit order") {
-		t.Error(`"Kit order" link on the kit's own order`)
+	if strings.Contains(rec.Body.String(), "Reset order") {
+		t.Error(`"Reset order" link on the kit's own order`)
 	}
 	inOrder(t, table(rec.Body.String()), "O-Ring", "Rear Brake Pads", "Silkolene")
 
@@ -247,7 +247,7 @@ func TestStockSortBy(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "Clear filters") {
 		t.Error("a sort counts as a filter")
 	}
-	expect(t, a.get("/stock?q=oil&sort=quantity"), http.StatusOK, `href="/stock?sort=quantity">Clear filters</a>`)
+	expect(t, a.get("/stock?q=oil&sort=quantity"), http.StatusOK, `href="/stock?sort=quantity">Clear filters`)
 
 	// Without a direction, Recently changed starts newest first.
 	expect(t, a.get("/stock?sort=recent"), http.StatusOK,

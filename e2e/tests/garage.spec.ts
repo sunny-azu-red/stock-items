@@ -145,7 +145,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
 
   // The category sits next to the vehicle chips and links back to the filtered stock.
   await silk.locator(".item-name").click();
-  await page.locator(".item-category").click();
+  await page.getByRole("link", { name: "Oil & fluids" }).click();
   await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)fluids/);
   await expect(page.locator(".item-row")).toHaveCount(1);
 });
@@ -929,7 +929,7 @@ async function misaligned(page: Page) {
       for (const k of kids) {
         const t = ownText(k)[0];
         const kcs = getComputedStyle(k);
-        if (!t || mono(k) || lines(k) !== 1 || (el.tagName === "TR" && kcs.verticalAlign !== "middle")) continue;
+        if (!t || mono(k) || lines(k) !== 1 || (el.tagName === "TR" && (kcs.verticalAlign !== "middle" || el.querySelector(".meter")))) continue;
         const [top, bottom] = extent(k);
         if (bottom - top <= 1.5 * parseFloat(kcs.lineHeight)) ms.push([k, caps(t), top, bottom]);
       }

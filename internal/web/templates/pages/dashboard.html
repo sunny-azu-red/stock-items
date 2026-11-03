@@ -59,9 +59,11 @@
       {{if $d.Vehicles}}
       <ul class="list">
         {{range $d.Vehicles}}
-        <li style="{{chipStyle .Color}}">
-          <span class="dot"></span>
-          <span class="grow"><a class="title" href="/vehicles/{{.ID}}">{{.Name}}</a><span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{km .}}{{end}}</span></span>
+        <li>
+          <span class="grow">
+            <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
+            <span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{km .}}{{end}}</span>
+          </span>
           <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
         </li>
         {{end}}

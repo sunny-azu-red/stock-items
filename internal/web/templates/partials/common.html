@@ -36,12 +36,16 @@
 <a class="kit-row" href="/kits/{{.Kit.ID}}">
   <span class="status-icon {{if .Readiness.Ready}}status-ok{{else}}status-short{{end}}">{{if .Readiness.Ready}}{{icon "check"}}{{else}}{{icon "list-checks"}}{{end}}</span>
   <span class="grow">
-    <span class="title">{{.Kit.Name}}</span>
-    <span class="meta">
+    <span class="title-row">
+      <span class="title">{{.Kit.Name}}</span>
       <span class="chip" style="{{chipStyle .Kit.VehicleColor}}"><span class="dot"></span>{{.Kit.VehicleName}}</span>
-      {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
-      {{with .Kit.LastService}}<span>last {{date .PerformedOn}}</span>{{end}}
     </span>
+    {{if or (and (not .VehicleArchived) .Due.Summary) .Kit.LastService}}
+    <span class="meta">
+      {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
+      {{with .Kit.LastService}}<span>{{if and (not $.VehicleArchived) $.Due.Summary}}· {{end}}last {{date .PerformedOn}}</span>{{end}}
+    </span>
+    {{end}}
   </span>
   <span class="badges">{{if not .VehicleArchived}}{{template "due-badge" .Due}}{{end}}{{template "ready-badge" .Readiness}}</span>
 </a>

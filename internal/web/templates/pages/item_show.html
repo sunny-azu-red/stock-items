@@ -16,10 +16,10 @@
   </div>
   <div class="item-head-meta">
     {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
+    {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
     {{template "stock-badge" $it}}
     {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
     {{if $it.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $it.ArchivedAt}}</span>{{end}}
-    {{with $it.Category}}<a class="item-category" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
   </div>
   {{if $it.Archived}}<p class="sub">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
 </div>

@@ -5,7 +5,10 @@
     <span class="avatar">{{icon $v.Kind.Icon}}</span>
     <div>
       <h1>{{$v.Name}}</h1>
-      <p class="sub">{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}{{if $v.Archived}} · <span class="badge badge-muted">{{icon "archive"}} Archived {{date $v.ArchivedAt}}</span>{{end}}</p>
+      <div class="sub">
+        <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
+        {{if $v.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $v.ArchivedAt}}</span>{{end}}
+      </div>
     </div>
   </div>
   <div class="actions">
@@ -34,7 +37,7 @@
     </section>
 
     <div class="results-head">
-      <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">{{plural $d.ItemCount "item"}}</span></h2>
+      <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">· {{plural $d.ItemCount "item"}}</span></h2>
       <div class="flex">
         <a class="btn btn-sm" href="{{withQuery "/stock/export.txt" $d.StockQuery}}" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</a>
         <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Stock list →</a>

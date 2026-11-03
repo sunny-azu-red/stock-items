@@ -18,6 +18,7 @@ import (
 
 	"github.com/sunny-azu-red/stock-items/internal/config"
 	"github.com/sunny-azu-red/stock-items/internal/db"
+	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 	"github.com/sunny-azu-red/stock-items/internal/web"
 )
@@ -85,6 +86,24 @@ func run() error {
 		logger.Info("photos ready", "libvips", v)
 	}
 
+	var nowFunc func() time.Time
+	if pin := os.Getenv("APP_PIN_TIME"); pin != "" {
+		if t, err := time.Parse(time.RFC3339, pin); err == nil {
+			nowFunc = func() time.Time { return t }
+			store.AppToday = func() time.Time { return stock.DateOnly(t.In(cfg.Location)) }
+			if schemaName(cfg.DB) != "public" {
+				ts := t.UTC().Format("2006-01-02 15:04:05-07")
+				for _, table := range []string{"items", "vehicles", "service_kits", "service_records", "stock_movements", "shopping_entries"} {
+					_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN created_at SET DEFAULT '%s'", table, ts))
+				}
+				for _, table := range []string{"items", "vehicles", "service_kits"} {
+					_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN updated_at SET DEFAULT '%s'", table, ts))
+				}
+				_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE trash ALTER COLUMN deleted_at SET DEFAULT '%s'", ts))
+			}
+		}
+	}
+
 	srv, err := web.New(store.New(pool), web.Options{
 		Currency:        cfg.Currency,
 		SKUSearchURL:    cfg.SKUSearchURL,
@@ -92,6 +111,7 @@ func run() error {
 		Version:         buildVersion(),
 		AllowedHosts:    cfg.AllowedHosts,
 		Logger:          logger,
+		Now:             nowFunc,
 	})
 	if err != nil {
 		return err

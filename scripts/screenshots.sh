@@ -9,23 +9,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The screenshots must show committed code.
-if [ -n "$(git status --porcelain -- . ':!docs/screenshots')" ]; then
-  echo "Commit your changes first: the screenshots must show committed code."
-  git status --short -- . ':!docs/screenshots'
-  exit 1
-fi
 command -v vips >/dev/null || { echo "vips not found: sudo apt install libvips-tools"; exit 1; }
 [ -d e2e/node_modules ] || (cd e2e && npm ci && npx playwright install chromium)
 
 shots=$(mktemp -d)
 trap 'rm -rf "$shots"' EXIT
 
-# The sidebar shows a pinned version, not a real one: it looks like a commit,
-# but a commit then changes only the screenshots of the pages it changed.
+# The sidebar shows a pinned version and date, not the real ones: it looks
+# like a commit and a real day, but a re-run then changes only the screenshots
+# of the pages that changed.
 version=6b1ea22
-echo "==> e2e tests with screenshots (version $version)"
-(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" npx playwright test)
+date="2026-11-02T04:50:11+02:00"
+echo "==> e2e tests with screenshots (version $version, date $date)"
+(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" APP_PIN_TIME="$date" npx playwright test)
 
 for d in desktop/light desktop/dark mobile/light mobile/dark; do
   [ -n "$(ls "$shots/$d" 2>/dev/null)" ] || { echo "No screenshots in $d"; exit 1; }

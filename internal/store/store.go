@@ -258,11 +258,11 @@ func normalizeCode(q string) string {
 	return b.String()
 }
 
-// appToday is today in the app's zone, for a store call made without a
-// date. main sets time.Local to it (TZ, else the machine's zone). SQL never
-// works a day out itself (current_date): the session is in UTC, which
-// isn't the app's day around midnight.
-func appToday() time.Time { return stock.DateOnly(time.Now()) }
+// AppToday is today in the app's zone, for a store call made without a
+// date. By default it uses time.Now().
+var AppToday = func() time.Time { return stock.DateOnly(time.Now()) }
+
+func appToday() time.Time { return AppToday() }
 
 // sqlArgs collects positional query arguments.
 type sqlArgs []any

@@ -29,6 +29,7 @@ function server(port: number, schema: string) {
       APP_CURRENCY: "EUR",
       // The tests' own, whatever a local .env says (env wins over .env).
       APP_SKU_SEARCH_URL: "https://www.google.com/search?q={q}",
+      ...(process.env.APP_PIN_TIME ? { APP_PIN_TIME: process.env.APP_PIN_TIME } : {}),
     },
   };
 }

@@ -555,7 +555,7 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 /* ---------- Item detail ---------- */
 /* 4:3, in whole pixels: the card is a container, so its width is known. */
 .photo-card { container-type: inline-size; }
-.photo { height: round(75cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; color: var(--muted); }
+.photo { height: round(85cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; color: var(--muted); }
 /* One cell the photo's size, so the link and image can fill it. */
 .photo:has(> a) { grid-template: 100% / 100%; }
 .photo > a, .photo img { width: 100%; height: 100%; }

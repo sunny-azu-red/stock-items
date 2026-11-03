@@ -6,11 +6,15 @@ import * as path from "node:path";
 // (e2e_*), which is dropped and re-created on start. Database credentials
 // come from ../.env or the environment, exactly like the app.
 const goBin = path.join(os.homedir(), ".local", "go", "bin");
-// SCREENSHOT_VERSION (a pinned hash, from scripts/screenshots.sh) fixes the
-// version the sidebar shows, so retaken screenshots change only with the pages.
+// SCREENSHOT_VERSION and SCREENSHOT_DATE (from scripts/screenshots.sh) fix the
+// version and date the app shows, so retaken screenshots change only with the pages.
 const version = process.env.SCREENSHOT_VERSION ?? "";
 if (version && !/^[0-9a-f]{7,40}$/.test(version)) throw new Error(`SCREENSHOT_VERSION ${version} is not a commit hash`);
-const ldflags = version ? ` -ldflags "-X main.version=${version}"` : "";
+const date = process.env.SCREENSHOT_DATE ?? "";
+const flags: string[] = [];
+if (version) flags.push(`-X main.version=${version}`);
+if (date) flags.push(`-X main.date=${date}`);
+const ldflags = flags.length ? ` -ldflags "${flags.join(" ")}"` : "";
 function server(port: number, schema: string) {
   const binary = path.join("bin", `pitbox-${schema}`);
   return {
@@ -29,7 +33,6 @@ function server(port: number, schema: string) {
       APP_CURRENCY: "EUR",
       // The tests' own, whatever a local .env says (env wins over .env).
       APP_SKU_SEARCH_URL: "https://www.google.com/search?q={q}",
-      ...(process.env.APP_PIN_TIME ? { APP_PIN_TIME: process.env.APP_PIN_TIME } : {}),
     },
   };
 }

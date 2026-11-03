@@ -26,6 +26,10 @@ import (
 // version is set at build time with -ldflags "-X main.version=v1.2.3".
 var version = ""
 
+// date is set at build time with -ldflags "-X main.date=2006-01-02T15:04:05Z"
+// (used by scripts/screenshots.sh via SCREENSHOT_DATE).
+var date = ""
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
@@ -87,8 +91,8 @@ func run() error {
 	}
 
 	var nowFunc func() time.Time
-	if pin := os.Getenv("APP_PIN_TIME"); pin != "" {
-		if t, err := time.Parse(time.RFC3339, pin); err == nil {
+	if date != "" {
+		if t, err := time.Parse(time.RFC3339, date); err == nil {
 			nowFunc = func() time.Time { return t }
 			store.AppToday = func() time.Time { return stock.DateOnly(t.In(cfg.Location)) }
 			if schemaName(cfg.DB) != "public" {

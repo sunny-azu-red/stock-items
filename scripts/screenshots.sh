@@ -21,7 +21,7 @@ trap 'rm -rf "$shots"' EXIT
 version=6b1ea22
 date="2026-11-02T04:50:11+02:00"
 echo "==> e2e tests with screenshots (version $version, date $date)"
-(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" APP_PIN_TIME="$date" npx playwright test)
+(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" SCREENSHOT_DATE="$date" npx playwright test)
 
 for d in desktop/light desktop/dark mobile/light mobile/dark; do
   [ -n "$(ls "$shots/$d" 2>/dev/null)" ] || { echo "No screenshots in $d"; exit 1; }

@@ -14,7 +14,7 @@ type ItemSpec = {
   min?: string;
   vehicles: string[];
   category?: string;
-  skus?: { code: string; kind?: string; brand?: string; label?: string }[];
+  skus?: { code: string; kind?: string; brand?: string; pack?: string; packUnit?: "pcs" | "ml" | "l" | "g" | "kg" }[];
 };
 
 const exact = (s: string) => new RegExp(`^\\s*${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
@@ -43,8 +43,9 @@ async function addItem(page: Page, it: ItemSpec) {
     if (i > 0) await page.getByRole("button", { name: "Add SKU" }).click();
     await page.locator('input[name="sku_code"]').nth(i).fill(sku.code);
     if (sku.kind) await page.locator('select[name="sku_kind"]').nth(i).selectOption(sku.kind);
-    const brand = sku.brand ?? sku.label;
-    if (brand) await page.locator('input[name="sku_brand"], input[name="sku_label"]').nth(i).fill(brand);
+    if (sku.brand) await page.locator('input[name="sku_brand"]').nth(i).fill(sku.brand);
+    if (sku.pack) await page.locator('input[name="sku_pack"]').nth(i).fill(sku.pack);
+    if (sku.packUnit) await page.locator('select[name="sku_pack_unit"]').nth(i).selectOption(sku.packUnit);
   }
   await page.getByRole("button", { name: "Save item" }).click();
   await expect(page.locator(".flash-success")).toContainText("Added");
@@ -62,30 +63,30 @@ test("set up vehicles and the example inventory", async ({ page }) => {
   await addVehicle(page, "KTM 1290", "24500");
 
   const ktm390: ItemSpec[] = [
-    { brand: "OEM", name: "Rear Brake Pads", qty: "1", vehicles: ["KTM 390"], skus: [{ code: "90113090000" }] },
-    { brand: "OEM", name: "Fuel Filter", qty: "1", vehicles: ["KTM 390"] },
-    { brand: "OEM", name: "Air Filter", qty: "1", vehicles: ["KTM 390"] },
-    { brand: "OEM", name: "Oil Filter", qty: "1", min: "1", vehicles: ["KTM 390"], skus: [{ code: "90138015000" }] },
-    { brand: "OEM", name: "Oil Screen 1 O-Ring", qty: "2", vehicles: ["KTM 390"] },
-    { brand: "OEM", name: "Oil Screen 2 O-Ring", qty: "3", vehicles: ["KTM 390"] },
+    { brand: "KTM", name: "Rear Brake Pads", qty: "1", vehicles: ["KTM 390"], skus: [{ code: "90113090000", brand: "KTM" }] },
+    { brand: "KTM", name: "Fuel Filter", qty: "1", vehicles: ["KTM 390"] },
+    { brand: "KTM", name: "Air Filter", qty: "1", vehicles: ["KTM 390"] },
+    { brand: "KTM", name: "Oil Filter", qty: "1", min: "1", vehicles: ["KTM 390"], skus: [{ code: "90138015000", brand: "KTM" }] },
+    { brand: "KTM", name: "Oil Screen 1 O-Ring", qty: "2", vehicles: ["KTM 390"] },
+    { brand: "KTM", name: "Oil Screen 2 O-Ring", qty: "3", vehicles: ["KTM 390"] },
     {
       brand: "Silkolene", name: "15W50 PRO 4 XP", volume: true, qty: "525", qtyUnit: "ml", vehicles: ["KTM 390"], category: "Oil & fluids",
       skus: [
-        { code: "SK-80085", kind: "manufacturer", label: "1 L" },
-        { code: "SK-80086", kind: "manufacturer", label: "4 L" },
-        { code: "SK-80087", kind: "manufacturer", label: "20 L" },
-        { code: "SK-80088", kind: "manufacturer", label: "60 L" },
+        { code: "SK-80085", kind: "manufacturer", brand: "Silkolene", pack: "1", packUnit: "l" },
+        { code: "SK-80086", kind: "manufacturer", brand: "Silkolene", pack: "4", packUnit: "l" },
+        { code: "SK-80087", kind: "manufacturer", brand: "Silkolene", pack: "20", packUnit: "l" },
+        { code: "SK-80088", kind: "manufacturer", brand: "Silkolene", pack: "60", packUnit: "l" },
       ],
     },
   ];
   const ktm1290: ItemSpec[] = [
-    { brand: "OEM", name: "Rear Brake Pads (1290)", qty: "1", vehicles: ["KTM 1290"] },
-    { brand: "Hiflofiltro", name: "Oil Filter", qty: "1", vehicles: ["KTM 1290"], skus: [{ code: "HF-650", kind: "manufacturer" }] },
-    { brand: "OEM", name: "Oil Screen 1+2 O-Ring", qty: "6", vehicles: ["KTM 1290"] },
+    { brand: "KTM", name: "Rear Brake Pads (1290)", qty: "1", vehicles: ["KTM 1290"] },
+    { brand: "Hiflofiltro", name: "Oil Filter", qty: "1", vehicles: ["KTM 1290"], skus: [{ code: "HF-650", kind: "manufacturer", brand: "Hiflofiltro" }] },
+    { brand: "KTM", name: "Oil Screen 1+2 O-Ring", qty: "6", vehicles: ["KTM 1290"] },
     { brand: "Motorex", name: "10W50 Power Synt 4T", volume: true, qty: "1.5", qtyUnit: "l", vehicles: ["KTM 1290"] },
   ];
   const both: ItemSpec[] = [
-    { brand: "OEM", name: "Oil Filter O-Ring", qty: "6", vehicles: ["KTM 390", "KTM 1290"] },
+    { brand: "KTM", name: "Oil Filter O-Ring", qty: "6", vehicles: ["KTM 390", "KTM 1290"] },
     { brand: "Motorex", name: "M3.0 Ready To Use", volume: true, qty: "640", qtyUnit: "ml", vehicles: ["KTM 390", "KTM 1290"] },
   ];
   for (const it of [...ktm390, ...ktm1290, ...both]) await addItem(page, it);
@@ -115,7 +116,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   const text = await copy.getAttribute("data-copied");
   expect(text).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
-  expect(text).toContain("KTM 390 + KTM 1290\n------------------\n640 ml - Motorex M3.0 Ready To Use\n6 pcs - OEM Oil Filter O-Ring");
+  expect(text).toContain("KTM 390 + KTM 1290\n------------------\n6 pcs - KTM Oil Filter O-Ring\n640 ml - Motorex M3.0 Ready To Use");
   expect(text).not.toContain("Hiflofiltro");
 
   // Ticking a second vehicle offers "fits all" without a reload.
@@ -195,11 +196,11 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.getByLabel("Months").fill("12");
   const items = page.locator('select[name="line_item"]');
   const qtys = page.locator('input[name="line_qty"]');
-  await items.nth(0).selectOption({ label: "OEM Oil Filter" });
+  await items.nth(0).selectOption({ label: "KTM Oil Filter" });
   await qtys.nth(0).fill("1");
   await items.nth(1).selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await qtys.nth(1).fill("1.7 L");
-  await items.nth(2).selectOption({ label: "OEM Oil Screen 1 O-Ring" });
+  await items.nth(2).selectOption({ label: "KTM Oil Screen 1 O-Ring" });
   await qtys.nth(2).fill("1");
   await page.getByRole("button", { name: "Save kit" }).click();
 
@@ -232,7 +233,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
   await page.goto("/stock");
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText("3\u202f825 ml");
-  await expect(row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0 pcs");
+  await expect(row(page, "KTM Oil Filter").filter({ hasNotText: "O-Ring" }).locator(".qty")).toHaveText("0 pcs");
 
   await page.goto("/");
   await expect(page.locator("main")).toContainText("in 7\u202f500 km");
@@ -274,19 +275,19 @@ test("edit and delete items", async ({ page }) => {
 
   await page.getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(/\/stock$/);
-  await expect(page.locator(".flash-success")).toContainText("Deleted OEM Fuel Filter");
+  await expect(page.locator(".flash-success")).toContainText("Deleted KTM Fuel Filter");
   await expect(page.locator("#results")).not.toContainText("Fuel Filter");
 });
 
 test("archive an item that a service still refers to", async ({ page }) => {
   page.on("dialog", (d) => d.accept());
-  const filterRow = () => row(page, "OEM Oil Filter").filter({ hasNotText: "O-Ring" });
+  const filterRow = () => row(page, "KTM Oil Filter").filter({ hasNotText: "O-Ring" });
   await page.goto("/stock");
   await filterRow().getByRole("link").first().click();
   const itemURL = page.url();
   await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await page.getByRole("button", { name: "Archive" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Archived OEM Oil Filter");
+  await expect(page.locator(".flash-success")).toContainText("Archived KTM Oil Filter");
   await expect(page.locator(".page-head")).toContainText("Archived");
 
   await page.goto("/stock");
@@ -295,11 +296,11 @@ test("archive an item that a service still refers to", async ({ page }) => {
   // The logged oil service still lists it.
   await page.goto(itemURL);
   await page.locator('main a[href^="/services/"]').first().click();
-  await expect(page.locator("main")).toContainText("OEM Oil Filter");
+  await expect(page.locator("main")).toContainText("KTM Oil Filter");
 
   await page.goto(itemURL);
   await page.getByRole("button", { name: "Restore" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Restored OEM Oil Filter");
+  await expect(page.locator(".flash-success")).toContainText("Restored KTM Oil Filter");
   await page.goto("/stock");
   await expect(filterRow()).toHaveCount(1);
 });
@@ -352,7 +353,7 @@ test("part rows keep a quantity hint until an item is chosen", async ({ page }) 
   const items = page.locator('select[name="part_item"]');
   const qtys = page.locator('input[name="part_qty"]');
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
-  await items.first().selectOption({ label: "OEM Oil Filter" });
+  await items.first().selectOption({ label: "KTM Oil Filter" });
   await expect(qtys.first()).not.toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
   await items.first().selectOption({ label: "Choose an item…" });
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
@@ -362,7 +363,7 @@ test("part rows offer the chosen item's units", async ({ page }) => {
   await page.goto("/services/new");
   const row = page.locator(".part-line:not(.row-head)").first();
   const unit = row.locator('select[name="part_unit"]');
-  await row.locator('select[name="part_item"]').selectOption({ label: "OEM Oil Filter" });
+  await row.locator('select[name="part_item"]').selectOption({ label: "KTM Oil Filter" });
   await expect(unit).toHaveValue("pcs");
   await row.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await expect(unit).toHaveValue("l");
@@ -997,7 +998,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock");
-  await row(page, "OEM Rear Brake Pads").getByRole("link").first().click();
+  await row(page, "KTM Rear Brake Pads").getByRole("link").first().click();
   const edit = page.url() + "/edit";
   await page.goto(edit);
 

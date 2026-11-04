@@ -19,7 +19,7 @@ trap 'rm -rf "$shots"' EXIT
 # like a commit and a real day, but a re-run then changes only the screenshots
 # of the pages that changed.
 version=6b1ea22
-date="2026-11-02T04:50:11+02:00"
+date="2026-11-02T16:00:00+02:00"
 echo "==> e2e tests with screenshots (version $version, date $date)"
 (cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" SCREENSHOT_DATE="$date" npx playwright test)
 

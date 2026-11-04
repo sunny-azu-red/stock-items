@@ -93,17 +93,39 @@ func run() error {
 	var nowFunc func() time.Time
 	if date != "" {
 		if t, err := time.Parse(time.RFC3339, date); err == nil {
-			nowFunc = func() time.Time { return t }
+			start := time.Now()
+			nowFunc = func() time.Time { return t.Add(time.Since(start)) }
 			store.AppToday = func() time.Time { return stock.DateOnly(t.In(cfg.Location)) }
 			if schemaName(cfg.DB) != "public" {
-				ts := t.UTC().Format("2006-01-02 15:04:05-07")
+				ts := t.UTC().Format("2006-01-02 15:04:05.000000-07")
+				serverStart := start.UTC().Format("2006-01-02 15:04:05.000000-07")
+				simNow := fmt.Sprintf("('%s'::timestamptz + (clock_timestamp() - '%s'::timestamptz))", ts, serverStart)
+				simUpdated := fmt.Sprintf("('%s'::timestamptz + interval '24 hours' + (clock_timestamp() - '%s'::timestamptz))", ts, serverStart)
+				exec := func(sql string) {
+					if _, err := pool.Exec(ctx, sql); err != nil {
+						logger.Error("pin timestamp sql", "err", err, "sql", sql)
+					}
+				}
 				for _, table := range []string{"items", "vehicles", "service_kits", "service_records", "stock_movements", "shopping_entries"} {
-					_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN created_at SET DEFAULT '%s'", table, ts))
+					exec(fmt.Sprintf("ALTER TABLE %s ALTER COLUMN created_at SET DEFAULT %s", table, simNow))
 				}
 				for _, table := range []string{"items", "vehicles", "service_kits"} {
-					_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN updated_at SET DEFAULT '%s'", table, ts))
+					exec(fmt.Sprintf("ALTER TABLE %s ALTER COLUMN updated_at SET DEFAULT %s", table, simUpdated))
+					exec(fmt.Sprintf(`
+						CREATE OR REPLACE FUNCTION _pin_%s_timestamps() RETURNS trigger AS $$
+						BEGIN
+							NEW.updated_at := %s;
+							IF NEW.archived_at IS NOT NULL THEN
+								NEW.archived_at := %s;
+							END IF;
+							RETURN NEW;
+						END;
+						$$ LANGUAGE plpgsql;
+						DROP TRIGGER IF EXISTS _pin_%s_timestamps ON %s;
+						CREATE TRIGGER _pin_%s_timestamps BEFORE UPDATE ON %s FOR EACH ROW EXECUTE FUNCTION _pin_%s_timestamps();
+					`, table, simUpdated, simNow, table, table, table, table, table))
 				}
-				_, _ = pool.Exec(ctx, fmt.Sprintf("ALTER TABLE trash ALTER COLUMN deleted_at SET DEFAULT '%s'", ts))
+				exec(fmt.Sprintf("ALTER TABLE trash ALTER COLUMN deleted_at SET DEFAULT %s", simNow))
 			}
 		}
 	}

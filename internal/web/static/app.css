@@ -85,7 +85,7 @@ h1 { font-size: 1.6rem; letter-spacing: -.01em; }
 h2 { font-size: 1.1rem; }
 h3 { font-size: 1rem; }
 p { margin: 0 0 12px; }
-code, .mono { font-family: var(--mono); font-size: .88em; }
+code, .mono { font-family: var(--mono); }
 hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 [hidden] { display: none !important; }
 

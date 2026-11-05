@@ -251,10 +251,10 @@ func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error
 
 // Makes returns the distinct vehicle makes in use.
 func (s *Store) Makes(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `SELECT DISTINCT ON (lower(make)) make FROM vehicles WHERE make <> '' ORDER BY lower(make), make`)
+	return s.distinct(ctx, `SELECT DISTINCT ON (lower(make)) make FROM vehicles WHERE make <> '' ORDER BY lower(make), make COLLATE "C"`)
 }
 
 // Models returns the distinct vehicle models in use.
 func (s *Store) Models(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `SELECT DISTINCT ON (lower(model)) model FROM vehicles WHERE model <> '' ORDER BY lower(model), model`)
+	return s.distinct(ctx, `SELECT DISTINCT ON (lower(model)) model FROM vehicles WHERE model <> '' ORDER BY lower(model), model COLLATE "C"`)
 }

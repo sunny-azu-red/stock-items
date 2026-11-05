@@ -490,7 +490,7 @@ func (s *Store) Categories(ctx context.Context) ([]string, error) {
 			UNION SELECT unnest(ARRAY['Oil & fluids', 'Filters', 'Brakes', 'Gaskets & o-rings', 'Chain & sprockets',
 			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools',
 			                          'Maintenance kits', 'Bearings & seals', 'Controls & cables', 'Suspension']), 1
-		) x ORDER BY lower(c), pref, c`)
+		) x ORDER BY lower(c), pref, c COLLATE "C"`)
 }
 
 // Brands returns the distinct brands in use across items and SKUs.
@@ -501,7 +501,7 @@ func (s *Store) Brands(ctx context.Context) ([]string, error) {
 			UNION
 			SELECT brand AS b FROM item_skus WHERE brand <> ''
 		) x
-		ORDER BY lower(b), b`)
+		ORDER BY lower(b), b COLLATE "C"`)
 }
 
 // Locations returns the distinct storage locations in use.

@@ -493,5 +493,5 @@ func (s *Store) Suppliers(ctx context.Context) ([]string, error) {
 		SELECT DISTINCT ON (lower(supplier)) supplier
 		FROM stock_movements
 		WHERE supplier <> ''
-		ORDER BY lower(supplier), supplier`)
+		ORDER BY lower(supplier), supplier COLLATE "C"`)
 }

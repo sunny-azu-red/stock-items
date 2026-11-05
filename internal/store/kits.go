@@ -36,7 +36,8 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		       lf.id, lf.performed_on, lf.odometer_km, lf.odometer_at_log, lf.created_at,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND NOT sr.kit_intermediate AND sr.odometer_km IS NOT NULL
-		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1)
+		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       v.purchased_on, v.purchased_km
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
@@ -81,7 +82,8 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometerKm, &k.Name, &k.IntervalKm, &k.IntervalMonths,
 			&k.InterIntervalKm, &k.InterIntervalMonths, &k.Notes, &k.ArchivedAt, &k.Version,
 			&lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometerKm,
-			&lfID, &lfDate, &lf.OdometerKm, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometerKm)
+			&lfID, &lfDate, &lf.OdometerKm, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometerKm,
+			&k.VehiclePurchasedOn, &k.VehiclePurchasedKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			if lsInter != nil {

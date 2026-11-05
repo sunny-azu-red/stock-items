@@ -12,7 +12,8 @@ import (
 )
 
 const vehicleSelect = `
-SELECT v.id, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer_km, v.notes,
+SELECT v.id, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer_km,
+       v.purchased_on, v.purchased_km, v.notes,
        v.created_at, v.updated_at, v.archived_at, v.version,
        (SELECT count(*) FROM item_vehicles iv JOIN items i ON i.id = iv.item_id
         WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL)
@@ -21,7 +22,7 @@ FROM vehicles v`
 func scanVehicle(row pgx.Row) (stock.Vehicle, error) {
 	var v stock.Vehicle
 	err := row.Scan(&v.ID, &v.Name, &v.Kind, &v.Make, &v.Model, &v.Year, &v.Plate, &v.VIN, &v.Color,
-		&v.OdometerKm, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt, &v.Version, &v.ItemCount)
+		&v.OdometerKm, &v.PurchasedOn, &v.PurchasedKm, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt, &v.Version, &v.ItemCount)
 	return v, err
 }
 
@@ -53,9 +54,9 @@ func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64
 	var id int64
 	err := s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer_km, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-			in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes,
+			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer_km, purchased_on, purchased_km, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+			in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.PurchasedOn, in.PurchasedKm, in.Notes,
 		).Scan(&id)
 		return vehicleConflict(err)
 	})
@@ -78,13 +79,26 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 				return err
 			}
 		}
+		if in.PurchasedKm != nil {
+			if err := checkVehiclePurchasedKm(ctx, tx, id, *in.PurchasedKm); err != nil {
+				return err
+			}
+		}
+		if in.PurchasedOn != nil {
+			if err := checkVehiclePurchasedOn(ctx, tx, id, *in.PurchasedOn); err != nil {
+				return err
+			}
+		}
 		// A new version: a form opened before this save is stale now.
 		tag, err := tx.Exec(ctx, `
 			UPDATE vehicles SET name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
-			       color = $9, odometer_km = CASE WHEN $12 THEN odometer_km ELSE $10 END, notes = $11, updated_at = now(),
+			       color = $9, odometer_km = CASE WHEN $12 THEN odometer_km ELSE $10 END,
+			       purchased_on = $13, purchased_km = $14,
+			       notes = $11, updated_at = now(),
 			       version = version + 1
 			WHERE id = $1`,
-			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes, in.KeepOdometer)
+			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.OdometerKm, in.Notes, in.KeepOdometer,
+			in.PurchasedOn, in.PurchasedKm)
 		return checkAffected(tag, vehicleConflict(err))
 	})
 }
@@ -141,6 +155,47 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, km *int) err
 	if *km < top {
 		return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
 			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatKm(top))}
+	}
+	return nil
+}
+
+// checkVehiclePurchasedKm refuses a purchase odometer higher than any service logged.
+func checkVehiclePurchasedKm(ctx context.Context, tx pgx.Tx, id int64, km int) error {
+	var lowestKm int
+	var on time.Time
+	err := tx.QueryRow(ctx, `
+		SELECT odometer_km, performed_on FROM service_records
+		WHERE vehicle_id = $1 AND odometer_km IS NOT NULL
+		ORDER BY odometer_km ASC LIMIT 1`, id).Scan(&lowestKm, &on)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if km > lowestKm {
+		return &ConflictError{Field: "purchased_km", Message: fmt.Sprintf(
+			"Higher than the %s logged on %s. Fix or delete that service first.", stock.FormatKm(lowestKm), on.Format("2 Jan 2006"))}
+	}
+	return nil
+}
+
+// checkVehiclePurchasedOn refuses a purchase date later than any service logged.
+func checkVehiclePurchasedOn(ctx context.Context, tx pgx.Tx, id int64, purchasedOn time.Time) error {
+	var earliestDate time.Time
+	err := tx.QueryRow(ctx, `
+		SELECT performed_on FROM service_records
+		WHERE vehicle_id = $1
+		ORDER BY performed_on ASC LIMIT 1`, id).Scan(&earliestDate)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if stock.DateOnly(purchasedOn).After(stock.DateOnly(earliestDate)) {
+		return &ConflictError{Field: "purchased_on", Message: fmt.Sprintf(
+			"Later than the service logged on %s. Fix or delete that service first.", earliestDate.Format("2 Jan 2006"))}
 	}
 	return nil
 }

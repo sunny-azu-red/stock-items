@@ -104,3 +104,49 @@ func TestVehicleMakeModelSuggestions(t *testing.T) {
 		`<datalist id="models"><option value="390 Adventure"></datalist>`,
 	)
 }
+
+func TestVehiclePurchaseBaselineFlow(t *testing.T) {
+	a := newApp(t)
+	// Create vehicle with purchase baseline
+	rec := a.post("/vehicles", url.Values{
+		"name":         {"GreyJoy"},
+		"kind":         {"motorcycle"},
+		"color":        {"#2563eb"},
+		"odometer_km":  {"500"},
+		"purchased_on": {"2026-03-01"},
+		"purchased_km": {"0"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	vPath := rec.Header().Get("Location")
+
+	// Vehicle show page renders purchase details
+	show := a.get(vPath)
+	expect(t, show, http.StatusOK, "GreyJoy", "Purchased", "1 Mar 2026", "0 km")
+
+	// Edit form retains purchase values
+	edit := a.get(vPath + "/edit")
+	expect(t, edit, http.StatusOK, `name="purchased_on" value="2026-03-01"`, `name="purchased_km" value="0"`)
+
+	// Create a kit with interval
+	vID := mustID(t, vPath)
+	rec = a.post("/kits", url.Values{
+		"vehicle_id":  {itoa(vID)},
+		"name":        {"Valve check"},
+		"interval_km": {"15000"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitPath := rec.Header().Get("Location")
+
+	// Services list shows "On track" with remaining km, not "Not done yet"
+	services := a.get("/services")
+	expect(t, services, http.StatusOK, "Valve check", "On track", "in 14\u202f500 km")
+	expectNot(t, services, "Valve check.*last")
+
+	// Kit detail page shows Never under Last done, but accurate Due at and Status
+	kitShow := a.get(kitPath)
+	expect(t, kitShow, http.StatusOK, "Never", "15\u202f000 km", "in 14\u202f500 km")
+
+	// Dashboard includes the kit in upcoming
+	dash := a.get("/")
+	expect(t, dash, http.StatusOK, "Valve check", "On track")
+}

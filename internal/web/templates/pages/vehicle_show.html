@@ -72,6 +72,7 @@
         <div><dt>Year</dt><dd>{{with $v.Year}}{{.}}{{else}}—{{end}}</dd></div>
         <div><dt>Plate</dt><dd>{{or $v.Plate "—"}}</dd></div>
         <div><dt>VIN</dt><dd{{if $v.VIN}} class="mono"{{end}}>{{or $v.VIN "—"}}</dd></div>
+        {{if or $v.PurchasedOn $v.PurchasedKm}}<div><dt>Purchased</dt><dd>{{with $v.PurchasedOn}}{{date .}}{{end}}{{if and $v.PurchasedOn $v.PurchasedKm}} · {{end}}{{with $v.PurchasedKm}}{{km .}}{{end}}</dd></div>{{end}}
       </dl>
       {{with $v.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>

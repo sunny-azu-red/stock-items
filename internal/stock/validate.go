@@ -224,16 +224,18 @@ func IsColor(s string) bool { return colorRe.MatchString(s) }
 
 // VehicleInput is the data needed to create or update a vehicle.
 type VehicleInput struct {
-	Name       string
-	Kind       VehicleKind
-	Make       string
-	Model      string
-	Year       *int
-	Plate      string
-	VIN        string
-	Color      string
-	OdometerKm *int
-	Notes      string
+	Name        string
+	Kind        VehicleKind
+	Make        string
+	Model       string
+	Year        *int
+	Plate       string
+	VIN         string
+	Color       string
+	OdometerKm  *int
+	PurchasedOn *time.Time
+	PurchasedKm *int
+	Notes       string
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
@@ -280,6 +282,21 @@ func (in VehicleInput) Validate() Errors {
 	}
 	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
 		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))
+	}
+	if in.PurchasedOn != nil {
+		if y := in.PurchasedOn.Year(); y < 1900 || y > 2100 {
+			errs.Add("purchased_on", "Date year must be between 1900 and 2100")
+		}
+	}
+	if in.PurchasedKm != nil {
+		if *in.PurchasedKm < 0 {
+			errs.Add("purchased_km", "Purchase odometer cannot be negative")
+		} else if *in.PurchasedKm > MaxOdometerKm {
+			errs.Add("purchased_km", "That is more than "+FormatKm(MaxOdometerKm))
+		}
+	}
+	if in.PurchasedKm != nil && in.OdometerKm != nil && !in.KeepOdometer && *in.OdometerKm < *in.PurchasedKm {
+		errs.Add("odometer_km", "Current odometer cannot be lower than purchase odometer")
 	}
 	limitText(errs, maxShortText, "Make", in.Make)
 	limitText(errs, maxShortText, "Model", in.Model)

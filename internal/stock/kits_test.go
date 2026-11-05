@@ -57,6 +57,28 @@ func TestKitDue(t *testing.T) {
 			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today, OdometerAtLog: ptr(16000)}, LastOdometerKm: ptr(10000)}, ptr(16100), DueOK},
 		{"the service's own reading wins over the odometer at the time",
 			Kit{IntervalKm: ptr(6000), LastService: &ServiceRef{PerformedOn: today, OdometerKm: ptr(15000), OdometerAtLog: ptr(16000)}}, ptr(20600), DueSoon},
+		{"new vehicle ok by km",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0)}, ptr(1000), DueOK},
+		{"new vehicle soon by km",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0)}, ptr(5500), DueSoon},
+		{"new vehicle overdue by km",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0)}, ptr(6001), DueOverdue},
+		{"new vehicle ok by date",
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -100))}, nil, DueOK},
+		{"new vehicle soon by date",
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -350))}, nil, DueSoon},
+		{"new vehicle overdue by date",
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, nil, DueOverdue},
+		{"new vehicle date overdue wins over km ok",
+			Kit{IntervalKm: ptr(6000), IntervalMonths: ptr(12), VehiclePurchasedKm: ptr(0), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, ptr(1000), DueOverdue},
+		{"new vehicle km interval but no odometer",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0)}, nil, DueUnknown},
+		{"new vehicle km interval but only purchase date set",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -100))}, ptr(1000), DueNever},
+		{"new vehicle date interval but only purchase km set",
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedKm: ptr(0)}, ptr(1000), DueNever},
+		{"past service ignores vehicle purchase baseline",
+			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0), LastService: last(10, 10000)}, ptr(11000), DueOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -299,6 +321,34 @@ func TestKitIntermediateSchedules(t *testing.T) {
 		due := k.Due(ptr(3000), day(2028, 1, 1))
 		if due.DueKm == nil || *due.DueKm != 3500 || due.DueDate == nil || !due.DueDate.Equal(day(2028, 1, 1)) {
 			t.Errorf("full due after alternating intermediate = %+v, want 3500 km / 2028-01-01", due)
+		}
+	})
+
+	t.Run("new vehicle baseline with intermediate schedule", func(t *testing.T) {
+		k := Kit{
+			IntervalKm:         ptr(4000),
+			IntervalMonths:     ptr(12),
+			InterIntervalKm:    ptr(2000),
+			VehiclePurchasedKm: ptr(0),
+			VehiclePurchasedOn: ptr(day(2026, 1, 1)),
+		}
+		// At 500 km on 2026-03-01: next is Intermediate at 2000 km.
+		if !k.NextIsIntermediate(ptr(500), day(2026, 3, 1)) {
+			t.Fatal("want NextIsIntermediate = true from new vehicle baseline")
+		}
+		due := k.Due(ptr(500), day(2026, 3, 1))
+		if due.DueKm == nil || *due.DueKm != 2000 || due.DueDate != nil {
+			t.Errorf("inter due from new = %+v, want 2000 km", due)
+		}
+		// Once intermediate is logged at 2000 km, next is Full at 4000 km.
+		inter1 := svc(1, day(2026, 6, 1), 2000, true)
+		k.LastService = inter1
+		if k.NextIsIntermediate(ptr(2500), day(2026, 7, 1)) {
+			t.Fatal("want NextIsIntermediate = false after intermediate service logged")
+		}
+		fullDue := k.Due(ptr(2500), day(2026, 7, 1))
+		if fullDue.DueKm == nil || *fullDue.DueKm != 4000 {
+			t.Errorf("full due after inter = %+v, want 4000 km", fullDue)
 		}
 	})
 }

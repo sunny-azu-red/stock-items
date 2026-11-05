@@ -15,7 +15,8 @@ form_submissions (one-time form keys; no foreign keys)
 
 ## Tables
 
-**vehicles:** name (unique, case-insensitive), kind (`motorcycle`/`car`/`other`), make, model, year, plate, VIN, chip colour, `odometer_km`, notes, `archived_at`.
+**vehicles:** name (unique, case-insensitive), kind (`motorcycle`/`car`/`other`), make, model, year, plate, VIN, chip colour, `odometer_km`, optional `purchased_on` (date) and `purchased_km` (baseline odometer at purchase, migration 00018), notes, `archived_at`.
+- When a service kit has an interval but has never had a service performed (`LastService` is nil), reminders calculate from the vehicle's `purchased_on` and/or `purchased_km` baseline, showing "On track" from factory-new instead of "Not done yet". Logging a service supersedes the purchase baseline for that kit.
 
 **items:** name, brand, category, `unit` (`piece`/`ml`/`g`), `quantity`, `min_quantity` (low-stock threshold), `expires_on`, location, notes.
 - `quantity >= 0` is enforced by a check constraint.

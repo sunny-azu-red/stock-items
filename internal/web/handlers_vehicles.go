@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -20,6 +21,7 @@ type vehicleForm struct {
 	ID                                   int64
 	Name, Kind, Make, Model, Year        string
 	Plate, VIN, Color, OdometerKm, Notes string
+	PurchasedOn, PurchasedKm             string
 	OdometerWas                          string // as the edit form was opened
 	Stored                               string // the saved name while editing, for the heading
 	Version                              int    // as the edit form was opened (see itemForm)
@@ -38,9 +40,14 @@ type vehicleFormPage struct {
 }
 
 func vehicleFormFrom(v stock.Vehicle) vehicleForm {
+	var pOn string
+	if v.PurchasedOn != nil {
+		pOn = v.PurchasedOn.Format("2006-01-02")
+	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
-		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm), Notes: v.Notes,
+		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm),
+		PurchasedOn: pOn, PurchasedKm: optIntString(v.PurchasedKm), Notes: v.Notes,
 		OdometerWas: optIntString(v.OdometerKm), Stored: v.Name, Version: v.Version,
 	}
 }
@@ -49,7 +56,8 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		OdometerKm: formText(r, "odometer_km"), Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
+		OdometerKm: formText(r, "odometer_km"), PurchasedOn: formText(r, "purchased_on"), PurchasedKm: formText(r, "purchased_km"),
+		Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
@@ -63,6 +71,12 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	}
 	if in.OdometerKm, err = parseOptInt(f.OdometerKm); err != nil {
 		f.Errors.Add("odometer_km", err.Error())
+	}
+	if in.PurchasedKm, err = parseOptInt(f.PurchasedKm); err != nil {
+		f.Errors.Add("purchased_km", err.Error())
+	}
+	if in.PurchasedOn, err = parseOptDate(f.PurchasedOn); err != nil {
+		f.Errors.Add("purchased_on", err.Error())
 	}
 	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
 		in.KeepOdometer = optIntString(was) == optIntString(in.OdometerKm)
@@ -427,14 +441,24 @@ type kitView struct {
 // kitViews computes readiness and due state, most urgent first.
 func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView {
 	odo := map[int64]*int{}
+	pOn := map[int64]*time.Time{}
+	pKm := map[int64]*int{}
 	archived := map[int64]bool{}
 	for _, v := range vehicles {
 		odo[v.ID] = v.OdometerKm
+		pOn[v.ID] = v.PurchasedOn
+		pKm[v.ID] = v.PurchasedKm
 		archived[v.ID] = v.Archived()
 	}
 	today := s.now()
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
+		if k.VehiclePurchasedOn == nil {
+			k.VehiclePurchasedOn = pOn[k.VehicleID]
+		}
+		if k.VehiclePurchasedKm == nil {
+			k.VehiclePurchasedKm = pKm[k.VehicleID]
+		}
 		km := odo[k.VehicleID]
 		out[i] = kitView{
 			Kit:             k,

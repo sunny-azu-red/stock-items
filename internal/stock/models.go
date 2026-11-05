@@ -49,21 +49,23 @@ func (k VehicleKind) Icon() string {
 
 // Vehicle is something items are kept in stock for.
 type Vehicle struct {
-	ID         int64
-	Name       string
-	Kind       VehicleKind
-	Make       string
-	Model      string
-	Year       *int
-	Plate      string
-	VIN        string
-	Color      string
-	OdometerKm *int
-	Notes      string
-	ItemCount  int
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Version    int // see Item.Version; odometer readings don't count
+	ID          int64
+	Name        string
+	Kind        VehicleKind
+	Make        string
+	Model       string
+	Year        *int
+	Plate       string
+	VIN         string
+	Color       string
+	OdometerKm  *int
+	PurchasedOn *time.Time
+	PurchasedKm *int
+	Notes       string
+	ItemCount   int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int // see Item.Version; odometer readings don't count
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -367,6 +369,8 @@ type Kit struct {
 	VehicleName         string
 	VehicleColor        string
 	VehicleOdometerKm   *int
+	VehiclePurchasedOn  *time.Time
+	VehiclePurchasedKm  *int
 	Name                string
 	IntervalKm          *int
 	IntervalMonths      *int

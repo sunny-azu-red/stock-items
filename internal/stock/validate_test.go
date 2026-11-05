@@ -163,12 +163,29 @@ func TestVehicleInputValidate(t *testing.T) {
 		t.Errorf("defaults not applied: %+v", in)
 	}
 	year := 1800
-	bad := VehicleInput{Kind: "boat", Color: "red", Year: &year}
+	badDate := time.Date(1850, 1, 1, 0, 0, 0, 0, time.UTC)
+	negKm := -10
+	bad := VehicleInput{Kind: "boat", Color: "red", Year: &year, PurchasedOn: &badDate, PurchasedKm: &negKm}
 	errs := bad.Validate()
-	for _, f := range []string{"name", "kind", "color", "year"} {
+	for _, f := range []string{"name", "kind", "color", "year", "purchased_on", "purchased_km"} {
 		if _, ok := errs[f]; !ok {
 			t.Errorf("expected error for %s, got %v", f, errs)
 		}
+	}
+
+	highPurchased := 20000
+	lowCurrent := 15000
+	inverted := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff", PurchasedKm: &highPurchased, OdometerKm: &lowCurrent}
+	if errs := inverted.Validate(); errs["odometer_km"] == "" {
+		t.Errorf("expected error when current odometer is lower than purchased km, got %v", errs)
+	}
+
+	validDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	zeroKm := 0
+	currKm := 1000
+	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", PurchasedOn: &validDate, PurchasedKm: &zeroKm, OdometerKm: &currKm}
+	if errs := good.Validate(); errs.Any() {
+		t.Errorf("unexpected error on valid input: %v", errs)
 	}
 }
 

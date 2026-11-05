@@ -2,7 +2,7 @@
 
 ## First steps
 
-1. **Add your vehicles** (Vehicles → Add vehicle). Give each a short name such as "KTM 390" and a colour. That name and colour are used everywhere. Enter the odometer if you want km-based reminders. The Make and Model fields suggest makes and models you have already added.
+1. **Add your vehicles** (Vehicles → Add vehicle). Give each a short name such as "KTM 390" and a colour. That name and colour are used everywhere. Enter the odometer if you want km-based reminders, and optionally the purchase date and purchase odometer (0 for a new vehicle) to have service intervals count from when you acquired it before the first service is logged. The Make and Model fields suggest makes and models you have already added.
 2. **Add your items** (Add item, or press `a`):
    - **Name and brand.** Pick or type the manufacturer or factory brand (e.g. "KTM", "Motorex").
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).

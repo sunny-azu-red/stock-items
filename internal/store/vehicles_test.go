@@ -205,3 +205,155 @@ func TestVehicleMakesAndModels(t *testing.T) {
 		t.Errorf("Models = %v, want %v", gotModels, wantModels)
 	}
 }
+
+func TestVehiclePurchaseBaseline(t *testing.T) {
+	s, ctx := newStore(t)
+	pDate := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	pKm := 0
+	odoKm := 1000
+	in := stock.VehicleInput{
+		Name:        "GreyJoy",
+		Kind:        stock.KindMotorcycle,
+		PurchasedOn: &pDate,
+		PurchasedKm: &pKm,
+		OdometerKm:  &odoKm,
+	}
+	in.Normalize()
+	id, err := s.CreateVehicle(ctx, in)
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+
+	v, err := s.GetVehicle(ctx, id)
+	if err != nil {
+		t.Fatalf("GetVehicle: %v", err)
+	}
+	if v.PurchasedOn == nil || !v.PurchasedOn.Equal(pDate) {
+		t.Errorf("PurchasedOn = %v, want %v", v.PurchasedOn, pDate)
+	}
+	if v.PurchasedKm == nil || *v.PurchasedKm != 0 {
+		t.Errorf("PurchasedKm = %v, want 0", v.PurchasedKm)
+	}
+
+	// ListVehicles also scans them
+	list, err := s.ListVehicles(ctx)
+	if err != nil {
+		t.Fatalf("ListVehicles: %v", err)
+	}
+	if len(list) != 1 || list[0].PurchasedOn == nil || !list[0].PurchasedOn.Equal(pDate) || list[0].PurchasedKm == nil || *list[0].PurchasedKm != 0 {
+		t.Fatalf("ListVehicles = %+v", list)
+	}
+
+	// Create a kit for this vehicle
+	kitID, err := s.CreateKit(ctx, stock.KitInput{
+		VehicleID:  id,
+		Name:       "Valve check",
+		IntervalKm: ptr(15000),
+	})
+	if err != nil {
+		t.Fatalf("CreateKit: %v", err)
+	}
+	kit, err := s.GetKit(ctx, kitID)
+	if err != nil {
+		t.Fatalf("GetKit: %v", err)
+	}
+	if kit.VehiclePurchasedOn == nil || !kit.VehiclePurchasedOn.Equal(pDate) {
+		t.Errorf("kit.VehiclePurchasedOn = %v, want %v", kit.VehiclePurchasedOn, pDate)
+	}
+	if kit.VehiclePurchasedKm == nil || *kit.VehiclePurchasedKm != 0 {
+		t.Errorf("kit.VehiclePurchasedKm = %v, want 0", kit.VehiclePurchasedKm)
+	}
+	// Reminders count from 0 km: at 1000 km, 14000 km left -> DueOK
+	due := kit.Due(v.OdometerKm, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC))
+	if due.State != stock.DueOK || due.KmLeft == nil || *due.KmLeft != 14000 {
+		t.Errorf("kit.Due = %+v, want DueOK with 14000 km left", due)
+	}
+
+	// Log a service at 5000 km on 2026-06-01
+	svcDate := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	svcKm := 5000
+	_, err = s.CreateService(ctx, stock.ServiceInput{
+		VehicleID:   id,
+		Title:       "Oil service",
+		PerformedOn: svcDate,
+		OdometerKm:  &svcKm,
+	})
+	if err != nil {
+		t.Fatalf("CreateService: %v", err)
+	}
+
+	// Try to update PurchasedKm higher than the service reading (5000 km)
+	badKm := 6000
+	upd := vehicleV(t, s, id, stock.VehicleInput{
+		Name:        "GreyJoy",
+		Kind:        stock.KindMotorcycle,
+		PurchasedOn: &pDate,
+		PurchasedKm: &badKm,
+		OdometerKm:  &svcKm,
+	})
+	var conflict *store.ConflictError
+	if err := s.UpdateVehicle(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "purchased_km" {
+		t.Errorf("want ConflictError for purchased_km > service km, got %v", err)
+	}
+
+	// Try to update PurchasedOn later than the service date (2026-06-01)
+	badDate := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	upd = vehicleV(t, s, id, stock.VehicleInput{
+		Name:        "GreyJoy",
+		Kind:        stock.KindMotorcycle,
+		PurchasedOn: &badDate,
+		PurchasedKm: &pKm,
+		OdometerKm:  &svcKm,
+	})
+	if err := s.UpdateVehicle(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "purchased_on" {
+		t.Errorf("want ConflictError for purchased_on > service date, got %v", err)
+	}
+
+	// Good update: earlier date and valid km
+	goodDate := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	upd = stock.VehicleInput{
+		Name:        "GreyJoy",
+		Kind:        stock.KindMotorcycle,
+		Color:       "#f97316",
+		PurchasedOn: &goodDate,
+		PurchasedKm: &pKm,
+		OdometerKm:  &svcKm,
+	}
+	upd.Normalize()
+	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, upd)); err != nil {
+		t.Fatalf("good UpdateVehicle: %v", err)
+	}
+	v, _ = s.GetVehicle(ctx, id)
+	if !v.PurchasedOn.Equal(goodDate) {
+		t.Errorf("updated PurchasedOn = %v, want %v", v.PurchasedOn, goodDate)
+	}
+
+	// Trash and restore on a standalone vehicle preserves purchased_on and purchased_km
+	standalone := stock.VehicleInput{
+		Name:        "KillJoy",
+		Kind:        stock.KindMotorcycle,
+		Color:       "#2563eb",
+		PurchasedOn: &goodDate,
+		PurchasedKm: &pKm,
+	}
+	standalone.Normalize()
+	sID, err := s.CreateVehicle(ctx, standalone)
+	if err != nil {
+		t.Fatalf("CreateVehicle standalone: %v", err)
+	}
+	vStand, _ := s.GetVehicle(ctx, sID)
+	trashID, err := s.DeleteVehicle(ctx, sID, vStand.Version)
+	if err != nil {
+		t.Fatalf("DeleteVehicle: %v", err)
+	}
+	if _, err := s.RestoreTrash(ctx, trashID); err != nil {
+		t.Fatalf("RestoreTrash: %v", err)
+	}
+	vStand, err = s.GetVehicle(ctx, sID)
+	if err != nil {
+		t.Fatalf("GetVehicle after restore: %v", err)
+	}
+	if vStand.PurchasedOn == nil || !vStand.PurchasedOn.Equal(goodDate) || vStand.PurchasedKm == nil || *vStand.PurchasedKm != 0 {
+		t.Errorf("restored vehicle = %+v", vStand)
+	}
+}

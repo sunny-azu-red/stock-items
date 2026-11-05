@@ -866,3 +866,48 @@ func TestItemSKUsBrandMigration(t *testing.T) {
 		t.Errorf("after second Up: brand = %q, want %q", brand, "Motorex")
 	}
 }
+
+// 00017 adds intermediate schedule columns on service_kits, intermediate
+// flag on service_kit_lines (allowing the same item in both full and
+// intermediate lines), and kit_intermediate on service_records: Up → Down → Up.
+func TestKitIntermediateMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.UpTo(ctx, 17); err != nil {
+		t.Fatal(err)
+	}
+	// The same item (2, Silkolene oil) can now appear in both full and intermediate lines of kit 1.
+	if _, err := pool.Exec(ctx, `
+		UPDATE service_kits SET inter_interval_km = 3500, inter_interval_months = 12 WHERE id = 1;
+		INSERT INTO service_kit_lines (kit_id, item_id, quantity, intermediate) VALUES (1, 2, 1700, true);
+		UPDATE service_records SET kit_intermediate = true WHERE id = 1;
+		INSERT INTO trash (kind, label, payload) VALUES ('kit', 'Kit: Oil service',
+			'{"service_kits": [{"id": 9, "vehicle_id": 1, "name": "Oil", "inter_interval_km": 3500, "inter_interval_months": null}],
+			  "service_kit_lines": [{"id": 10, "kit_id": 9, "item_id": 1, "quantity": 1, "intermediate": false},
+			                        {"id": 11, "kit_id": 9, "item_id": 1, "quantity": 1, "intermediate": true}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+	var payload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Kit: Oil service'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, "inter_interval") || strings.Contains(payload, `"intermediate"`) {
+		t.Errorf("after Down: trash payload still holds intermediate fields: %s", payload)
+	}
+
+	if _, err := provider.UpTo(ctx, 17); err != nil {
+		t.Fatal(err)
+	}
+}

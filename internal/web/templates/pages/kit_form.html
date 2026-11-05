@@ -60,6 +60,38 @@
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
     <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
   </div>
+  <input type="hidden" id="has_inter" name="has_inter" value="{{if $f.ShowInter}}1{{else}}0{{end}}">
+  <div class="form-section" id="inter-prompt"{{if $f.ShowInter}} hidden{{end}}>
+    <button class="btn btn-sm" type="button" data-show-inter>{{icon "plus"}} Add intermediate schedule</button>
+    <p class="hint mt">For half-interval jobs (like a mid-interval oil &amp; filter change) that use a smaller set of parts between full services.</p>
+  </div>
+  <div class="form-section" id="inter-section"{{if not $f.ShowInter}} hidden{{end}}>
+    <h2>Intermediate schedule</h2>
+    <div class="form-grid">
+      <div class="field{{if index $e "inter_interval_km"}} has-error{{end}}">
+        <label for="inter_interval_km">Intermediate kilometres</label>
+        <input class="input" id="inter_interval_km" name="inter_interval_km" value="{{$f.InterIntervalKm}}" inputmode="numeric" placeholder="e.g. 3500">
+        {{template "err" (index $e "inter_interval_km")}}
+      </div>
+      <div class="field{{if index $e "inter_interval_months"}} has-error{{end}}">
+        <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "ID" "inter-months-tip" "Text" "Leave empty under warranty so intermediate services never push back the full service's date. Set months (e.g. 12) when an intermediate service should also reset the time clock.")}}</div>
+        <input class="input" id="inter_interval_months" name="inter_interval_months" value="{{$f.InterIntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" aria-describedby="inter-months-tip">
+        {{template "err" (index $e "inter_interval_months")}}
+      </div>
+    </div>
+    <p class="hint mt">Alternates with the full schedule above. Leave months empty when the full service has a strict calendar deadline (like a dealer warranty).</p>
+    <h2 class="mt">Intermediate parts</h2>
+    {{template "err" (index $e "inter_lines")}}
+    <div class="rows" id="inter-lines">
+      <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
+      {{range $f.InterLines}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "inter_line")}}{{end}}
+    </div>
+    <template id="inter-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "inter_line")}}</template>
+    <div class="flex mt">
+      <button class="btn btn-sm" type="button" data-add-row="inter-line-template" data-rows="inter-lines">{{icon "plus"}} Add part</button>
+      <button class="btn btn-sm" type="button" data-hide-inter>{{icon "x"}} Remove intermediate schedule</button>
+    </div>
+  </div>
   <div class="form-section">
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Steps, torque values, capacities…">{{$f.Notes}}</textarea></div>
   </div>

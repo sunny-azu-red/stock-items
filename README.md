@@ -25,7 +25,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Quick −/+** on every row, and a full **history** of every stock change (bought, used, counted, service) with prices and shops, filtered by type and year. Mistakes can be edited or deleted, and the stock follows.
 - **Service kits.** For example, "KTM 390 – Oil service" lists the filter, 1.7 L oil and 2 O-rings. You see at once what is on the shelf and what is missing, and one click puts the shortfall on the shopping list.
 - **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
-- **Reminders:** kits can repeat every X km and/or Y months. The dashboard shows what is overdue or due soon.
+- **Reminders:** kits can repeat every X km and/or Y months, with an optional intermediate schedule and parts list for mid-interval jobs (e.g. a DIY oil and filter change halfway between full dealer services). The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. Ticking an entry off records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
 - **Spending at a glance:** the dashboard shows the stock value and what you spent on items this year, each opening the list behind it.
 - **Prices from day one:** a new item can be saved with the price and shop you just bought it at, so it immediately has a last price and counts in the stock value and spending.

@@ -5,7 +5,7 @@
     <h1>{{$s.Title}}</h1>
     <div class="flex mt">
       {{template "chip-link" (dict "ID" $s.VehicleID "Name" $s.VehicleName "Color" $s.VehicleColor)}}
-      {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}</a>{{end}}
+      {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if $s.KitIntermediate}} · Intermediate{{end}}</a>{{end}}
     </div>
   </div>
   <div class="actions">

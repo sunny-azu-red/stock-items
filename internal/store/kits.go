@@ -27,19 +27,30 @@ type KitFilter struct {
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
-		SELECT k.id, k.vehicle_id, v.name, v.color, k.name, k.interval_km, k.interval_months, k.notes, k.archived_at, k.version,
-		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log, ls.created_at,
+		SELECT k.id, k.vehicle_id, v.name, v.color, v.odometer_km, k.name, k.interval_km, k.interval_months,
+		       k.inter_interval_km, k.inter_interval_months, k.notes, k.archived_at, k.version,
+		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log, ls.created_at, ls.kit_intermediate,
 		       (SELECT sr.odometer_km FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
-		        ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1)
+		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       lf.id, lf.performed_on, lf.odometer_km, lf.odometer_at_log, lf.created_at,
+		       (SELECT sr.odometer_km FROM service_records sr
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND NOT sr.kit_intermediate AND sr.odometer_km IS NOT NULL
+		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1)
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at
+			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at, sr.kit_intermediate
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
-			ORDER BY sr.performed_on DESC, sr.id DESC LIMIT 1
+			ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1
 		) ls ON true
+		LEFT JOIN LATERAL (
+			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at
+			FROM service_records sr
+			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND NOT sr.kit_intermediate
+			ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1
+		) lf ON true
 		WHERE true`
 	if len(f.IDs) > 0 {
 		sql += " AND k.id = ANY(" + args.add(f.IDs) + ")"
@@ -63,13 +74,19 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	}
 	kits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Kit, error) {
 		var k stock.Kit
-		var lsID *int64
-		var lsDate, lsLogged *time.Time
-		var ls stock.ServiceRef
-		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.Notes, &k.ArchivedAt, &k.Version, &lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &lsLogged, &k.LastOdometerKm)
+		var lsID, lfID *int64
+		var lsDate, lsLogged, lfDate, lfLogged *time.Time
+		var lsInter *bool
+		var ls, lf stock.ServiceRef
+		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometerKm, &k.Name, &k.IntervalKm, &k.IntervalMonths,
+			&k.InterIntervalKm, &k.InterIntervalMonths, &k.Notes, &k.ArchivedAt, &k.Version,
+			&lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometerKm,
+			&lfID, &lfDate, &lf.OdometerKm, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometerKm)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
+			if lsInter != nil {
+				ls.Intermediate = *lsInter
+			}
 			// The reading when it was logged says where the service was
 			// done only if it was logged within a week of being done, the
 			// day it was logged counted in the app's zone (time.Local).
@@ -77,6 +94,13 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 				ls.OdometerAtLog = nil
 			}
 			k.LastService = &ls
+		}
+		if lfID != nil && lfDate != nil {
+			lf.ID, lf.PerformedOn = *lfID, *lfDate
+			if lfLogged == nil || !stock.LoggedSoonAfter(*lfLogged, *lfDate, time.Local) {
+				lf.OdometerAtLog = nil
+			}
+			k.LastFullService = &lf
 		}
 		return k, err
 	})
@@ -91,7 +115,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		pos[k.ID] = i
 	}
 	rows, err = s.pool.Query(ctx, `
-		SELECT l.kit_id, l.item_id, i.brand, i.name, i.unit, l.quantity, i.quantity, i.archived_at IS NOT NULL
+		SELECT l.kit_id, l.item_id, i.brand, i.name, i.unit, l.quantity, i.quantity, i.archived_at IS NOT NULL, l.intermediate
 		FROM service_kit_lines l JOIN items i ON i.id = l.item_id
 		WHERE l.kit_id = ANY($1)
 		ORDER BY l.id`, ids)
@@ -103,12 +127,17 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var kitID int64
 		var l stock.KitLine
 		var brand, name string
-		if err := rows.Scan(&kitID, &l.ItemID, &brand, &name, &l.Unit, &l.Need, &l.Have, &l.Archived); err != nil {
+		var inter bool
+		if err := rows.Scan(&kitID, &l.ItemID, &brand, &name, &l.Unit, &l.Need, &l.Have, &l.Archived, &inter); err != nil {
 			return nil, err
 		}
 		l.ItemName = displayName(brand, name)
 		k := &kits[pos[kitID]]
-		k.Lines = append(k.Lines, l)
+		if inter {
+			k.InterLines = append(k.InterLines, l)
+		} else {
+			k.Lines = append(k.Lines, l)
+		}
 	}
 	return kits, rows.Err()
 }
@@ -133,16 +162,16 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO service_kits (vehicle_id, name, interval_km, interval_months, notes)
-			VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-			in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.Notes).Scan(&id)
+			INSERT INTO service_kits (vehicle_id, name, interval_km, interval_months, inter_interval_km, inter_interval_months, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+			in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.InterIntervalKm, in.InterIntervalMonths, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
 		if err != nil {
 			return err
 		}
-		return replaceKitLines(ctx, tx, id, in.Lines)
+		return replaceKitLines(ctx, tx, id, in.Lines, in.InterLines)
 	})
 	return id, err
 }
@@ -207,55 +236,74 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// A new version (its lines count as part of the kit): a form opened
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
-			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_km = $4, interval_months = $5, notes = $6,
+			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_km = $4, interval_months = $5,
+			       inter_interval_km = $6, inter_interval_months = $7, notes = $8,
 			       updated_at = now(), version = version + 1
-			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.Notes)
+			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.InterIntervalKm, in.InterIntervalMonths, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
 		if err := checkAffected(tag, err); err != nil {
 			return err
 		}
-		return replaceKitLines(ctx, tx, id, in.Lines)
+		return replaceKitLines(ctx, tx, id, in.Lines, in.InterLines)
 	})
 }
 
-// replaceKitLines replaces a kit's lines. Their items are locked first
-// (see shareItems), and a line read in another unit than its item has now
-// is refused: 1000 ml would otherwise be saved as 1000 g.
-func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines []stock.KitLineInput) error {
-	ids := make([]int64, 0, len(lines))
+// replaceKitLines replaces a kit's full and intermediate lines. Their items
+// are locked first (see shareItems), and a line read in another unit than
+// its item has now is refused: 1000 ml would otherwise be saved as 1000 g.
+func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines, interLines []stock.KitLineInput) error {
+	ids := make([]int64, 0, len(lines)+len(interLines))
 	for _, l := range lines {
+		ids = append(ids, l.ItemID)
+	}
+	for _, l := range interLines {
 		ids = append(ids, l.ItemID)
 	}
 	units, err := shareItems(ctx, tx, ids)
 	if err != nil {
 		return err
 	}
-	for _, l := range lines {
-		u, ok := units[l.ItemID]
-		if !ok {
-			return ErrNotFound
+	checkUnits := func(ls []stock.KitLineInput, field string) error {
+		for _, l := range ls {
+			u, ok := units[l.ItemID]
+			if !ok {
+				return ErrNotFound
+			}
+			if l.Unit != "" && l.Unit != u.unit {
+				return &ConflictError{Field: field, Message: u.name + " is counted in " + string(u.unit) +
+					" now (its unit was changed meanwhile). Check its amount and save again."}
+			}
 		}
-		if l.Unit != "" && l.Unit != u.unit {
-			return &ConflictError{Field: "lines", Message: u.name + " is counted in " + string(u.unit) +
-				" now (its unit was changed meanwhile). Check its amount and save again."}
-		}
+		return nil
+	}
+	if err := checkUnits(lines, "lines"); err != nil {
+		return err
+	}
+	if err := checkUnits(interLines, "inter_lines"); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM service_kit_lines WHERE kit_id = $1`, kitID); err != nil {
 		return err
 	}
-	for _, l := range lines {
-		_, err := tx.Exec(ctx, `INSERT INTO service_kit_lines (kit_id, item_id, quantity) VALUES ($1, $2, $3)`,
-			kitID, l.ItemID, l.Quantity)
-		if isForeignKeyViolation(err) {
-			return ErrNotFound
+	insertLines := func(ls []stock.KitLineInput, inter bool) error {
+		for _, l := range ls {
+			_, err := tx.Exec(ctx, `INSERT INTO service_kit_lines (kit_id, item_id, quantity, intermediate) VALUES ($1, $2, $3, $4)`,
+				kitID, l.ItemID, l.Quantity, inter)
+			if isForeignKeyViolation(err) {
+				return ErrNotFound
+			}
+			if err != nil {
+				return err
+			}
 		}
-		if err != nil {
-			return err
-		}
+		return nil
 	}
-	return nil
+	if err := insertLines(lines, false); err != nil {
+		return err
+	}
+	return insertLines(interLines, true)
 }
 
 // sharedItem is an item a kit line names, as shareItems read it.

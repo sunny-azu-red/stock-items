@@ -20,7 +20,7 @@ type ServiceFilter struct {
 }
 
 const serviceSelect = `
-SELECT sr.id, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.performed_on, sr.odometer_km,
+SELECT sr.id, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.kit_intermediate, sr.performed_on, sr.odometer_km,
        sr.title, sr.notes, sr.labor_cost::float8, sr.created_at, sr.version,
        (SELECT count(*) FROM stock_movements m WHERE m.service_record_id = sr.id)
 FROM service_records sr
@@ -29,7 +29,7 @@ LEFT JOIN service_kits k ON k.id = sr.kit_id`
 
 func scanService(row pgx.Row) (stock.ServiceRecord, error) {
 	var r stock.ServiceRecord
-	err := row.Scan(&r.ID, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.PerformedOn,
+	err := row.Scan(&r.ID, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.KitIntermediate, &r.PerformedOn,
 		&r.OdometerKm, &r.Title, &r.Notes, &r.LaborCost, &r.CreatedAt, &r.Version, &r.PartCount)
 	return r, err
 }
@@ -122,11 +122,11 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO service_records (vehicle_id, kit_id, performed_on, odometer_km, title, notes, labor_cost, odometer_at_log)
-			VALUES ($1, $2, $3, $4, $5, $6, $7,
-			        CASE WHEN $4::integer IS NULL THEN (SELECT odometer_km FROM vehicles WHERE id = $1) END)
+			INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer_km, title, notes, labor_cost, odometer_at_log)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer_km FROM vehicles WHERE id = $1) END)
 			RETURNING id`,
-			in.VehicleID, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost).Scan(&id)
+			in.VehicleID, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -210,9 +210,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// odometer_at_log stays as it was logged: a reading added now wins
 		// over it, and removing that reading again falls back to it.
 		_, err = tx.Exec(ctx, `
-			UPDATE service_records SET kit_id = $2, performed_on = $3, odometer_km = $4, title = $5, notes = $6, labor_cost = $7,
+			UPDATE service_records SET kit_id = $2, kit_intermediate = $3, performed_on = $4, odometer_km = $5, title = $6, notes = $7, labor_cost = $8,
 			       version = version + 1
-			WHERE id = $1`, id, in.KitID, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
+			WHERE id = $1`, id, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.OdometerKm, in.Title, in.Notes, in.LaborCost)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}

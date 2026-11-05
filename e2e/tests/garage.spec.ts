@@ -192,8 +192,8 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.getByRole("link", { name: "Add kit" }).click();
 
   await page.getByLabel("Name").fill("Oil service");
-  await page.getByLabel("Kilometres").fill("7500");
-  await page.getByLabel("Months").fill("12");
+  await page.getByLabel("Kilometres", { exact: true }).fill("7500");
+  await page.getByLabel("Months", { exact: true }).fill("12");
   const items = page.locator('select[name="line_item"]');
   const qtys = page.locator('input[name="line_qty"]');
   await items.nth(0).selectOption({ label: "KTM Oil Filter" });
@@ -992,6 +992,11 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.getByRole("button", { name: "Save item" }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   await check("/items/new with errors");
+  // The kit form with its intermediate schedule expanded and its hint open.
+  await page.goto(kit + "/edit");
+  await page.getByRole("button", { name: "Add intermediate schedule" }).click();
+  await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
+  await check(kit + "/edit with intermediate schedule and hint open");
   expect(problems).toEqual([]);
 });
 
@@ -1099,4 +1104,37 @@ test("Enter in the new item form saves the item", async ({ page }) => {
   await page.getByLabel("Name", { exact: true }).press("Enter");
   await expect(page).toHaveURL(/\/items\/\d+$/);
   await expect(page.locator("h1")).toContainText("Brake cleaner");
+});
+
+test("intermediate schedule on a kit alternates with the full schedule", async ({ page }) => {
+  await page.goto("/services");
+  await page.locator("a.kit-row").first().click();
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+
+  await page.getByRole("button", { name: "Add intermediate schedule" }).click();
+  await page.getByLabel("Intermediate kilometres").fill("3500");
+  await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
+  await expect(page.locator("#inter-months-tip")).toBeVisible();
+  const interItems = page.locator('select[name="inter_line_item"]');
+  const interQtys = page.locator('input[name="inter_line_qty"]');
+  await interItems.nth(0).selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await interQtys.nth(0).fill("1.7 L");
+  await page.getByRole("button", { name: "Save kit" }).click();
+
+  // Because a full service was logged at 12 000 km, the next service is Intermediate at 15 500 km.
+  await expect(page.locator(".page-head")).toContainText("Next: Intermediate");
+  await expect(page.locator("main")).toContainText("Full parts");
+  await expect(page.locator("main")).toContainText("Intermediate parts");
+  await expect(page.locator('dt:text-is("Due at") + dd')).toHaveText("15\u202f500 km");
+
+  // Clicking "Do this service" pre-selects Intermediate and pre-fills the intermediate parts and title.
+  await page.getByRole("link", { name: "Do this service" }).click();
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil service (Intermediate)");
+  await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
+
+  // Toggling to Full in the browser switches the title and parts to Full.
+  await page.locator(".segmented label").filter({ hasText: "Full" }).click();
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil service");
+  await page.locator(".segmented label").filter({ hasText: "Intermediate" }).click();
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil service (Intermediate)");
 });

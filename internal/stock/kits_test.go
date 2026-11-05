@@ -225,3 +225,80 @@ func TestSortKitLines(t *testing.T) {
 		t.Error("SortKitLines changed the kit's own lines")
 	}
 }
+
+func TestKitIntermediateSchedules(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	svc := func(id int64, on time.Time, km int, inter bool) *ServiceRef {
+		return &ServiceRef{ID: id, PerformedOn: on, OdometerKm: &km, Intermediate: inter}
+	}
+
+	// 1. Warranty bike (1290): Full = 4000 km / 12 mo, Intermediate = 2000 km / nil months.
+	t.Run("warranty mode (no intermediate months)", func(t *testing.T) {
+		k := Kit{
+			IntervalKm:      ptr(4000),
+			IntervalMonths:  ptr(12),
+			InterIntervalKm: ptr(2000),
+			Lines:           []KitLine{{ItemID: 1, Need: 1, Have: 1}},
+			InterLines:      []KitLine{{ItemID: 2, Need: 1, Have: 0}},
+		}
+		// After Full at 0 km on 2026-01-01: next is Intermediate at 2000 km.
+		full1 := svc(1, day(2026, 1, 1), 0, false)
+		k.LastService, k.LastFullService = full1, full1
+		if !k.NextIsIntermediate(ptr(500), day(2026, 3, 1)) {
+			t.Fatal("want NextIsIntermediate = true after full service")
+		}
+		due := k.Due(ptr(500), day(2026, 3, 1))
+		if due.DueKm == nil || *due.DueKm != 2000 || due.DueDate != nil {
+			t.Errorf("inter due = %+v, want 2000 km and no date", due)
+		}
+		if r := k.ReadinessAt(ptr(500), day(2026, 3, 1)); r.ShortLines != 1 {
+			t.Errorf("readiness should check InterLines, got %+v", r)
+		}
+
+		// Collision right before warranty deadline (15 Dec 2026, 17 days left, at 2050 km):
+		// Full is DueSoon by warranty date, so Full overrides Intermediate even though Intermediate is overdue by km.
+		if k.NextIsIntermediate(ptr(2050), day(2026, 12, 15)) {
+			t.Error("Full must override Intermediate when warranty deadline is DueSoon")
+		}
+
+		// After Intermediate at 2000 km on 2026-06-01: next is Full, and DueDate is still 2027-01-01!
+		inter1 := svc(2, day(2026, 6, 1), 2000, true)
+		k.LastService = inter1
+		if k.NextIsIntermediate(ptr(2500), day(2026, 12, 5)) {
+			t.Fatal("want NextIsIntermediate = false after intermediate service")
+		}
+		due = k.Due(ptr(2500), day(2026, 12, 5))
+		if due.State != DueSoon || due.DueKm == nil || *due.DueKm != 4000 || due.DueDate == nil || !due.DueDate.Equal(day(2027, 1, 1)) {
+			t.Errorf("full due after intermediate = %+v, want DueSoon at 4000 km / 2027-01-01", due)
+		}
+		if r := k.ReadinessAt(ptr(2500), day(2026, 12, 5)); !r.Ready() {
+			t.Errorf("readiness should check Full Lines, got %+v", r)
+		}
+	})
+
+	// 2. Non-warranty bike (390): Full = 4000 km / 12 mo, Intermediate = 2000 km / 12 mo.
+	t.Run("alternating reset mode (intermediate months set)", func(t *testing.T) {
+		k := Kit{
+			IntervalKm:          ptr(4000),
+			IntervalMonths:      ptr(12),
+			InterIntervalKm:     ptr(2000),
+			InterIntervalMonths: ptr(12),
+		}
+		full1 := svc(1, day(2026, 1, 1), 0, false)
+		k.LastService, k.LastFullService = full1, full1
+		// Low mileage (1500 km after 12 months): Intermediate is due by date (2027-01-01).
+		if !k.NextIsIntermediate(ptr(1500), day(2027, 1, 1)) {
+			t.Fatal("want NextIsIntermediate = true at 1500 km / 12 months")
+		}
+		// Log Intermediate at 1500 km on 2027-01-01: resets 12-month clock for Full to 2028-01-01 and km to 3500!
+		inter1 := svc(2, day(2027, 1, 1), 1500, true)
+		k.LastService = inter1
+		if k.NextIsIntermediate(ptr(1600), day(2027, 2, 1)) {
+			t.Fatal("want NextIsIntermediate = false after intermediate service")
+		}
+		due := k.Due(ptr(3000), day(2028, 1, 1))
+		if due.DueKm == nil || *due.DueKm != 3500 || due.DueDate == nil || !due.DueDate.Equal(day(2028, 1, 1)) {
+			t.Errorf("full due after alternating intermediate = %+v, want 3500 km / 2028-01-01", due)
+		}
+	})
+}

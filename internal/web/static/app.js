@@ -145,6 +145,35 @@
       } else {
         row.remove();
       }
+      return;
+    }
+    var showInter = e.target.closest("[data-show-inter]");
+    if (showInter) {
+      e.preventDefault();
+      var sec = document.getElementById("inter-section");
+      var prompt = document.getElementById("inter-prompt");
+      var flag = document.getElementById("has_inter");
+      if (sec) sec.hidden = false;
+      if (prompt) prompt.hidden = true;
+      if (flag) flag.value = "1";
+      var km = document.getElementById("inter_interval_km");
+      if (km) km.focus();
+      return;
+    }
+    var hideInter = e.target.closest("[data-hide-inter]");
+    if (hideInter) {
+      e.preventDefault();
+      var sec2 = document.getElementById("inter-section");
+      var prompt2 = document.getElementById("inter-prompt");
+      var flag2 = document.getElementById("has_inter");
+      if (sec2) {
+        sec2.hidden = true;
+        sec2.querySelectorAll("input").forEach(function (i) { i.value = ""; });
+        sec2.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
+        sec2.querySelectorAll(".stock-note").forEach(function (n) { n.textContent = ""; });
+      }
+      if (prompt2) prompt2.hidden = false;
+      if (flag2) flag2.value = "0";
     }
   });
 
@@ -175,10 +204,34 @@
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
+    if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
     // A picker that filters the page (Activity's year).
     if (e.target.matches("select[data-submit-on-change]")) e.target.form.requestSubmit();
   });
+
+  // On a new service form for a kit with an intermediate schedule, switching
+  // between Full and Intermediate swaps the pre-filled part rows and title.
+  function switchKitTier(radio) {
+    var form = radio.form;
+    if (!form) return;
+    var tpl = document.getElementById(radio.value === "1" ? "kit-inter-parts" : "kit-full-parts");
+    var rows = document.getElementById("part-lines");
+    if (tpl && rows) {
+      rows.textContent = "";
+      rows.appendChild(tpl.content.cloneNode(true));
+      rows.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
+    }
+    var title = form.querySelector("#title");
+    var name = radio.getAttribute("data-kit-name");
+    if (title && name) {
+      var fullTitle = name;
+      var interTitle = name + " (Intermediate)";
+      if (title.value === fullTitle || title.value === interTitle || !title.value.trim()) {
+        title.value = radio.value === "1" ? interTitle : fullTitle;
+      }
+    }
+  }
 
   // ---- Photos -------------------------------------------------------------
   // A photo input sends itself once a file is chosen. A photo larger than

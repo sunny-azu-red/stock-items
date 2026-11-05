@@ -144,8 +144,8 @@ New migrations are applied automatically on start; to apply them separately, run
 Everything, photos and the trash included, lives in the database:
 
 ```bash
-pg_dump -h <db-host> -U <db-user> -Fc stock_items > stock_items-$(date +%F).dump
-# restore: pg_restore -h <db-host> -U <db-user> -d stock_items --clean stock_items-YYYY-MM-DD.dump
+pg_dump -h <db-host> -U <db-user> -Fc --no-owner stock_items > stock_items-$(date +%F).dump
+# restore: pg_restore -h <db-host> -U <db-user> -d stock_items --clean --no-owner stock_items-YYYY-MM-DD.dump
 ```
 
 You can also download the current stock as CSV from the Stock page.

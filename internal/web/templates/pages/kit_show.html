@@ -1,9 +1,27 @@
-{{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}
+{{define "kit-parts-table"}}
+<div class="table-wrap">
+<table class="table kit-lines">
+  {{$h := .Sort}}<thead><tr><th><span class="sr-only">Status</span></th>{{template "sort-th" ($h.Col "item" "Item" false)}}{{template "sort-th" ($h.Col "need" "Need" true)}}{{template "sort-th" ($h.Col "have" "In stock" true)}}{{template "sort-th" ($h.Col "missing" "Missing" true)}}</tr></thead>
+  <tbody>
+  {{range .Lines}}
+  <tr>
+    <td class="status-col">{{if and .Short (not .Archived)}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
+    <td><a href="/items/{{.ItemID}}">{{.ItemName}}</a>{{if .Archived}} <span class="badge badge-muted" title="This item is archived. Edit the kit to replace or remove it.">Archived</span>{{end}}<div class="meter{{if .Short}} short{{end}}"><span style="width:{{pct .Have .Need}}%"></span></div></td>
+    <td class="num">{{qty .Need .Unit}}</td>
+    <td class="num">{{qty .Have .Unit}}</td>
+    <td class="num">{{if and .Short (not .Archived)}}<span class="delta-neg">{{qty .Short .Unit}}</span>{{else}}—{{end}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}{{$fr := $d.View.FullReadiness}}{{$ir := $d.View.InterReadiness}}
 <a class="back" href="/vehicles/{{$d.Vehicle.ID}}">{{icon "arrow-left"}} {{$d.Vehicle.Name}}</a>
 <div class="page-head">
   <div>
     <h1>{{$k.Name}}</h1>
-    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $k.ArchivedAt}}</span>{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{end}}</div>
+    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $k.ArchivedAt}}</span>{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{end}}</div>
   </div>
   <div class="actions">
     <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
@@ -24,38 +42,44 @@
 </div>
 
 <div class="split">
-  <section class="card">
-    <div class="card-head"><h2>{{icon "list-checks"}} Parts</h2><span class="meta">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural $r.Lines "part"}}{{if $r.ShortLines}} · {{$r.ShortLines}} short{{end}}</span></span></div>
-    {{if $k.Lines}}
-    <div class="table-wrap">
-    <table class="table kit-lines">
-      {{$h := $d.Sort}}<thead><tr><th><span class="sr-only">Status</span></th>{{template "sort-th" ($h.Col "item" "Item" false)}}{{template "sort-th" ($h.Col "need" "Need" true)}}{{template "sort-th" ($h.Col "have" "In stock" true)}}{{template "sort-th" ($h.Col "missing" "Missing" true)}}</tr></thead>
-      <tbody>
-      {{range $d.Lines}}
-      <tr>
-        <td class="status-col">{{if and .Short (not .Archived)}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
-        <td><a href="/items/{{.ItemID}}">{{.ItemName}}</a>{{if .Archived}} <span class="badge badge-muted" title="This item is archived. Edit the kit to replace or remove it.">Archived</span>{{end}}<div class="meter{{if .Short}} short{{end}}"><span style="width:{{pct .Have .Need}}%"></span></div></td>
-        <td class="num">{{qty .Need .Unit}}</td>
-        <td class="num">{{qty .Have .Unit}}</td>
-        <td class="num">{{if and .Short (not .Archived)}}<span class="delta-neg">{{qty .Short .Unit}}</span>{{else}}—{{end}}</td>
-      </tr>
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>{{icon "list-checks"}} {{if $k.HasIntermediate}}Full parts{{else}}Parts{{end}}</h2><span class="meta">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural $fr.Lines "part"}}{{if $fr.ShortLines}} · {{$fr.ShortLines}} short{{end}}</span></span></div>
+      {{if $k.Lines}}
+      {{template "kit-parts-table" (dict "Lines" $d.Lines "Sort" $d.Sort)}}
+      {{else}}
+      <div class="card-body muted small">No parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> this job needs.</div>
       {{end}}
-      </tbody>
-    </table>
-    </div>
-    {{else}}
-    <div class="card-body muted small">No parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> this job needs.</div>
+    </section>
+
+    {{if $k.HasIntermediate}}
+    <section class="card">
+      <div class="card-head"><h2>{{icon "list-checks"}} Intermediate parts</h2><span class="meta">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural $ir.Lines "part"}}{{if $ir.ShortLines}} · {{$ir.ShortLines}} short{{end}}</span></span></div>
+      {{if $k.InterLines}}
+      {{template "kit-parts-table" (dict "Lines" $d.InterLines "Sort" $d.Sort)}}
+      {{else}}
+      <div class="card-body muted small">No intermediate parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> the intermediate job needs.</div>
+      {{end}}
+    </section>
     {{end}}
-  </section>
+  </div>
 
   <div class="stack">
     <section class="card card-pad">
       <h2 class="mb">{{icon "clock"}} Schedule</h2>
       <dl class="facts">
+        {{if $k.HasIntermediate}}
+        <div><dt>Full every</dt><dd>{{if or $k.IntervalKm $k.IntervalMonths}}{{with $k.IntervalKm}}{{km .}}{{end}}{{if and $k.IntervalKm $k.IntervalMonths}} or {{end}}{{with $k.IntervalMonths}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}</dd></div>
+        <div><dt>Intermediate every</dt><dd>{{with $k.InterIntervalKm}}{{km .}}{{end}}{{if and $k.InterIntervalKm $k.InterIntervalMonths}} or {{end}}{{with $k.InterIntervalMonths}}{{plural . "month"}}{{end}}</dd></div>
+        <div><dt>Next up</dt><dd>{{if $d.View.NextInter}}Intermediate{{else}}Full{{end}}</dd></div>
+        <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
+        {{else}}
         <div><dt>Every</dt><dd>{{if or $k.IntervalKm $k.IntervalMonths}}{{with $k.IntervalKm}}{{km .}}{{end}}{{if and $k.IntervalKm $k.IntervalMonths}} or {{end}}{{with $k.IntervalMonths}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}</dd></div>
-        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
+        {{end}}
+        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.HasIntermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{end}}{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{if $due.DueKm}}<div><dt>Due at</dt><dd>{{km $due.DueKm}}</dd></div>{{end}}
         {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}
+        {{if and $k.HasIntermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueKm .DueDate}}<div><dt>Full due</dt><dd>{{with .DueKm}}{{km .}}{{end}}{{if and .DueKm .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
         <div><dt>Odometer now</dt><dd>{{km $d.Vehicle.OdometerKm}}</dd></div>
         {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}
       </dl>

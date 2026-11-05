@@ -415,7 +415,12 @@ func activeVehicles(vehicles []stock.Vehicle, keep ...int64) []stock.Vehicle {
 type kitView struct {
 	Kit             stock.Kit
 	Readiness       stock.Readiness
+	FullReadiness   stock.Readiness
+	InterReadiness  stock.Readiness
 	Due             stock.Due
+	FullDue         stock.Due
+	InterDue        stock.Due
+	NextInter       bool
 	VehicleArchived bool
 }
 
@@ -427,9 +432,21 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 		odo[v.ID] = v.OdometerKm
 		archived[v.ID] = v.Archived()
 	}
+	today := s.now()
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
-		out[i] = kitView{Kit: k, Readiness: k.Readiness(), Due: k.Due(odo[k.VehicleID], s.now()), VehicleArchived: archived[k.VehicleID]}
+		km := odo[k.VehicleID]
+		out[i] = kitView{
+			Kit:             k,
+			Readiness:       k.ReadinessAt(km, today),
+			FullReadiness:   stock.ReadinessOf(k.Lines),
+			InterReadiness:  stock.ReadinessOf(k.InterLines),
+			Due:             k.Due(km, today),
+			FullDue:         k.FullDue(km, today),
+			InterDue:        k.InterDue(km, today),
+			NextInter:       k.NextIsIntermediate(km, today),
+			VehicleArchived: archived[k.VehicleID],
+		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })
 	return out

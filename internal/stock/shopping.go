@@ -3,6 +3,7 @@ package stock
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // Suggestion is an item worth buying, with the reasons why.
@@ -41,8 +42,9 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64) []Sug
 			add(it, *it.MinQuantity-it.Quantity, "Below minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
 		}
 	}
+	today := DateOnly(time.Now())
 	for _, k := range kits {
-		for _, l := range k.Lines {
+		for _, l := range k.ActiveLines(k.VehicleOdometerKm, today) {
 			if l.Archived {
 				continue // no longer kept, so not bought again
 			}

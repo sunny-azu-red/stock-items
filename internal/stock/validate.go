@@ -426,14 +426,17 @@ func CheckEventDate(d *time.Time, today time.Time) string {
 
 // KitInput is the data needed to create or update a service kit.
 type KitInput struct {
-	VehicleID      int64
-	Name           string
-	IntervalKm     *int
-	IntervalMonths *int
-	Notes          string
-	Lines          []KitLineInput
-	Version        int    // as the edit form was opened; unused on create
-	FormKey        string // see ItemInput.FormKey
+	VehicleID           int64
+	Name                string
+	IntervalKm          *int
+	IntervalMonths      *int
+	InterIntervalKm     *int
+	InterIntervalMonths *int
+	Notes               string
+	Lines               []KitLineInput
+	InterLines          []KitLineInput
+	Version             int    // as the edit form was opened; unused on create
+	FormKey             string // see ItemInput.FormKey
 }
 
 // KitLineInput is one item of a kit.
@@ -450,6 +453,7 @@ func (in *KitInput) Normalize() {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Notes = strings.TrimSpace(in.Notes)
 	in.Lines = mergeLines(in.Lines)
+	in.InterLines = mergeLines(in.InterLines)
 }
 
 // Validate checks the input. Call Normalize first.
@@ -467,6 +471,15 @@ func (in KitInput) Validate() Errors {
 	if in.IntervalMonths != nil && *in.IntervalMonths <= 0 {
 		errs.Add("interval_months", "Interval must be greater than zero")
 	}
+	if in.InterIntervalKm != nil && *in.InterIntervalKm <= 0 {
+		errs.Add("inter_interval_km", "Interval must be greater than zero")
+	}
+	if in.InterIntervalMonths != nil && *in.InterIntervalMonths <= 0 {
+		errs.Add("inter_interval_months", "Interval must be greater than zero")
+	}
+	if len(in.InterLines) > 0 && in.InterIntervalKm == nil && in.InterIntervalMonths == nil {
+		errs.Add("inter_interval_km", "Enter when the intermediate service is due")
+	}
 	for i, l := range in.Lines {
 		switch {
 		case l.Quantity <= 0:
@@ -475,6 +488,14 @@ func (in KitInput) Validate() Errors {
 			// Rows of the same item are added up by Normalize, so the form's
 			// rows can each be fine.
 			errs.Add("lines", "Together that is more than "+FormatInt(MaxQuantity)+" of one item")
+		}
+	}
+	for i, l := range in.InterLines {
+		switch {
+		case l.Quantity <= 0:
+			errs.Add(fmt.Sprintf("inter_line_%d", i), "Quantity must be greater than zero")
+		case l.Quantity > MaxQuantity:
+			errs.Add("inter_lines", "Together that is more than "+FormatInt(MaxQuantity)+" of one item")
 		}
 	}
 	if utf8.RuneCountInString(in.Name) > maxShortText {
@@ -486,28 +507,46 @@ func (in KitInput) Validate() Errors {
 	if in.IntervalMonths != nil && *in.IntervalMonths > maxIntervalMon {
 		errs.Add("interval_months", "That is more than 20 years")
 	}
+	if in.InterIntervalKm != nil {
+		if *in.InterIntervalKm > maxIntervalKm {
+			errs.Add("inter_interval_km", "That is more than "+FormatKm(maxIntervalKm))
+		} else if in.IntervalKm != nil && *in.IntervalKm > 0 && *in.InterIntervalKm >= *in.IntervalKm {
+			errs.Add("inter_interval_km", "Intermediate interval must be shorter than the full interval")
+		}
+	}
+	if in.InterIntervalMonths != nil {
+		if *in.InterIntervalMonths > maxIntervalMon {
+			errs.Add("inter_interval_months", "That is more than 20 years")
+		} else if in.IntervalMonths != nil && *in.IntervalMonths > 0 && *in.InterIntervalMonths > *in.IntervalMonths {
+			errs.Add("inter_interval_months", "Intermediate interval cannot exceed the full interval")
+		}
+	}
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs
 }
 
 // ServiceInput is the data needed to log a performed service.
 type ServiceInput struct {
-	VehicleID   int64
-	KitID       *int64
-	PerformedOn time.Time
-	OdometerKm  *int
-	Title       string
-	Notes       string
-	LaborCost   *float64
-	Parts       []KitLineInput
-	Version     int    // as the edit form was opened; unused on create
-	FormKey     string // see ItemInput.FormKey
+	VehicleID       int64
+	KitID           *int64
+	KitIntermediate bool
+	PerformedOn     time.Time
+	OdometerKm      *int
+	Title           string
+	Notes           string
+	LaborCost       *float64
+	Parts           []KitLineInput
+	Version         int    // as the edit form was opened; unused on create
+	FormKey         string // see ItemInput.FormKey
 }
 
 // Normalize trims fields and merges duplicate parts.
 func (in *ServiceInput) Normalize() {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Notes = strings.TrimSpace(in.Notes)
+	if in.KitID == nil {
+		in.KitIntermediate = false
+	}
 	in.Parts = mergeLines(in.Parts)
 }
 

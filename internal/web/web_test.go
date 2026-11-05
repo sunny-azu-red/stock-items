@@ -654,3 +654,89 @@ func TestAccessibilityDetails(t *testing.T) {
 	}
 	expect(t, a.do(page), http.StatusOK, `class="flash flash-error" role="alert"`)
 }
+
+func TestKitIntermediateWebFlow(t *testing.T) {
+	a := newAppAt(t, func() time.Time { return time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC) })
+	_, k1290 := a.seed()
+	hiflo := itemID(t, a.store, "Hiflofiltro")
+	oring := itemID(t, a.store, "O-Ring")
+	oil := itemID(t, a.store, "10W50")
+
+	// Top up oil so we have enough for multiple services.
+	if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: oil, Kind: stock.MoveCorrection, Delta: 10000}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km / empty months for warranty).
+	rec := a.post("/kits", url.Values{
+		"vehicle_id":            {itoa(k1290)},
+		"name":                  {"Oil service"},
+		"interval_km":           {"4000"},
+		"interval_months":       {"12"},
+		"line_item":             {itoa(oil)},
+		"line_qty":              {"3.6 L"},
+		"has_inter":             {"1"},
+		"inter_interval_km":     {"2000"},
+		"inter_interval_months": {""},
+		"inter_line_item":       {itoa(hiflo), itoa(oring), itoa(oil)},
+		"inter_line_qty":        {"1", "2", "3.6 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitPath := rec.Header().Get("Location")
+	kitID := strings.TrimPrefix(kitPath, "/kits/")
+
+	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule.
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "Leave empty under warranty", `value="2000"`)
+
+	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts.
+	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", "Full parts", "Intermediate parts", stock.FormatKm(4000)+" or 12 months", stock.FormatKm(2000))
+
+	// New service from kit pre-selects Full schedule and pre-fills Full parts.
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
+		`name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="Oil service" checked`,
+		`id="title" name="title" value="Oil service"`,
+		`id="kit-full-parts"`, `id="kit-inter-parts"`)
+
+	// Log the Full service at 10,000 km on 2026-01-10.
+	rec = a.post("/services", url.Values{
+		"vehicle_id":       {itoa(k1290)},
+		"kit_id":           {kitID},
+		"kit_name":         {"Oil service"},
+		"kit_intermediate": {"0"},
+		"title":            {"Oil service"},
+		"performed_on":     {"2026-01-10"},
+		"odometer_km":      {"10000"},
+		"part_item":        {itoa(oil)},
+		"part_qty":         {"3.6 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+
+	// Now the kit page automatically advances to Next: Intermediate (due at 12,000 km) and still shows Full due (14,000 km or 10 Jan 2027).
+	expect(t, a.get(kitPath), http.StatusOK, "Next: Intermediate", stock.FormatKm(12000), stock.FormatKm(14000)+" or 10 Jan 2027")
+
+	// New service from kit now pre-selects Intermediate and pre-fills Intermediate parts & title.
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
+		`name="kit_intermediate" value="1" data-kit-tier="inter" data-kit-name="Oil service" checked`,
+		`id="title" name="title" value="Oil service (Intermediate)"`)
+
+	// Log the Intermediate service at 12,000 km on 2026-06-10.
+	rec = a.post("/services", url.Values{
+		"vehicle_id":       {itoa(k1290)},
+		"kit_id":           {kitID},
+		"kit_name":         {"Oil service"},
+		"kit_intermediate": {"1"},
+		"title":            {"Oil service (Intermediate)"},
+		"performed_on":     {"2026-06-10"},
+		"odometer_km":      {"12000"},
+		"part_item":        {itoa(hiflo), itoa(oring), itoa(oil)},
+		"part_qty":         {"1", "2", "3.6 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	interSvcPath := rec.Header().Get("Location")
+
+	// Service page badges it as Intermediate.
+	expect(t, a.get(interSvcPath), http.StatusOK, "Oil service · Intermediate")
+
+	// Kit page now switches back to Next: Full, due at 14,000 km or 10 Jan 2027 (warranty date preserved!).
+	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", stock.FormatKm(14000), "10 Jan 2027", "(intermediate)")
+}

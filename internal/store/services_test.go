@@ -631,3 +631,108 @@ func TestKitNamesAndServiceTitles(t *testing.T) {
 		t.Errorf("user casing should override default, got %v", withLower)
 	}
 }
+
+func TestKitIntermediateStoreFlow(t *testing.T) {
+	s, ctx := newStore(t)
+	k1290 := mustVehicle(t, s, "KTM 1290")
+	oemKit := mustItem(t, s, stock.ItemInput{Name: "Oil Filter Service Kit", Brand: "OEM", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{k1290}})
+	hiflo := mustItem(t, s, stock.ItemInput{Name: "HF650", Brand: "Hiflofiltro", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{k1290}})
+	oring := mustItem(t, s, stock.ItemInput{Name: "Cap O-Ring", Brand: "OEM", Unit: stock.UnitPiece, Quantity: 4, VehicleIDs: []int64{k1290}})
+	oil := mustItem(t, s, stock.ItemInput{Name: "10W50", Brand: "Motorex", Unit: stock.UnitML, Quantity: 10000, VehicleIDs: []int64{k1290}})
+
+	kitIn := stock.KitInput{
+		VehicleID: k1290, Name: "Oil service",
+		IntervalKm: ptr(4000), IntervalMonths: ptr(12),
+		InterIntervalKm: ptr(2000), InterIntervalMonths: nil,
+		Lines:      []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
+		InterLines: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
+	}
+	kitIn.Normalize()
+	kitID, err := s.CreateKit(ctx, kitIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kit, err := s.GetKit(ctx, kitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !kit.HasIntermediate() || len(kit.Lines) != 2 || len(kit.InterLines) != 3 {
+		t.Fatalf("kit = %+v", kit)
+	}
+	today := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	if kit.NextIsIntermediate(kit.VehicleOdometerKm, today) {
+		t.Errorf("want NextIsIntermediate = false before any service")
+	}
+
+	// Log Full service at 10,000 km on 2026-01-10.
+	fullSvc := stock.ServiceInput{
+		VehicleID: k1290, KitID: &kitID, KitIntermediate: false,
+		PerformedOn: today, OdometerKm: ptr(10000), Title: "Oil service",
+		Parts: []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
+	}
+	fullSvc.Normalize()
+	fullID, err := s.CreateService(ctx, fullSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kit, _ = s.GetKit(ctx, kitID)
+	if kit.LastService == nil || kit.LastService.ID != fullID || kit.LastService.Intermediate {
+		t.Fatalf("LastService = %+v", kit.LastService)
+	}
+	if kit.LastFullService == nil || kit.LastFullService.ID != fullID {
+		t.Fatalf("LastFullService = %+v", kit.LastFullService)
+	}
+	if !kit.NextIsIntermediate(kit.VehicleOdometerKm, today) {
+		t.Errorf("want NextIsIntermediate = true after full service")
+	}
+
+	// Log Intermediate service at 12,000 km on 2026-06-10.
+	interDate := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	interSvc := stock.ServiceInput{
+		VehicleID: k1290, KitID: &kitID, KitIntermediate: true,
+		PerformedOn: interDate, OdometerKm: ptr(12000), Title: "Oil service (Intermediate)",
+		Parts: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
+	}
+	interSvc.Normalize()
+	interID, err := s.CreateService(ctx, interSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kit, _ = s.GetKit(ctx, kitID)
+	if kit.LastService == nil || kit.LastService.ID != interID || !kit.LastService.Intermediate {
+		t.Fatalf("LastService = %+v", kit.LastService)
+	}
+	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometerKm != 10000 {
+		t.Fatalf("LastFullService = %+v, km = %v", kit.LastFullService, kit.LastFullOdometerKm)
+	}
+	if kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) {
+		t.Errorf("want NextIsIntermediate = false after intermediate service")
+	}
+	due := kit.Due(kit.VehicleOdometerKm, interDate)
+	if due.DueKm == nil || *due.DueKm != 14000 || due.DueDate == nil || !due.DueDate.Equal(time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("due after intermediate = %+v, want 14000 km / 2027-01-10", due)
+	}
+
+	// Deleting the intermediate service reverts the schedule back to Intermediate and odometer back to 10,000 km.
+	trashID, err := s.DeleteService(ctx, interID, cur(t, s, store.WhatService, interID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit, _ = s.GetKit(ctx, kitID)
+	if !kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) || *kit.VehicleOdometerKm != 10000 {
+		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate), kit.VehicleOdometerKm)
+	}
+
+	// Restoring from trash restores KitIntermediate and odometer.
+	if _, err := s.RestoreTrash(ctx, trashID); err != nil {
+		t.Fatal(err)
+	}
+	kit, _ = s.GetKit(ctx, kitID)
+	if kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) || *kit.VehicleOdometerKm != 12000 {
+		t.Errorf("after restoring intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate), kit.VehicleOdometerKm)
+	}
+	assertLedger(t, s)
+}

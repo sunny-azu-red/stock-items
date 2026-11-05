@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
@@ -125,7 +126,11 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			}
 		}
 		if row.Error != "" {
-			errs.Add("lines", "Check the highlighted rows")
+			errField := "lines"
+			if prefix == "inter_line" {
+				errField = "inter_lines"
+			}
+			errs.Add(errField, "Check the highlighted rows")
 		}
 		rows = append(rows, row)
 	}
@@ -143,16 +148,19 @@ func itemsByID(items []stock.Item) map[int64]stock.Item {
 // ---- Kit form ----
 
 type kitForm struct {
-	ID                               int64
-	VehicleID                        int64
-	Name, IntervalKm, IntervalMonths string
-	Notes                            string
-	Lines                            []lineRow
-	Stored                           string // the saved name while editing, for the heading
-	Version                          int    // as the edit form was opened (see itemForm)
-	Stale                            *staleNote
-	FormKey                          string // see itemForm
-	Errors                           stock.Errors
+	ID                                   int64
+	VehicleID                            int64
+	Name, IntervalKm, IntervalMonths     string
+	InterIntervalKm, InterIntervalMonths string
+	Notes                                string
+	Lines                                []lineRow
+	InterLines                           []lineRow
+	ShowInter                            bool
+	Stored                               string // the saved name while editing, for the heading
+	Version                              int    // as the edit form was opened (see itemForm)
+	Stale                                *staleNote
+	FormKey                              string // see itemForm
+	Errors                               stock.Errors
 }
 
 type kitFormPage struct {
@@ -163,13 +171,22 @@ type kitFormPage struct {
 	KitNames   []string
 }
 
+func hasRowInput(rows []lineRow) bool {
+	for _, r := range rows {
+		if r.ItemID != 0 || r.Qty != "" || r.Error != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status int, f kitForm, isNew bool) error {
 	ctx := r.Context()
 	vehicles, err := s.store.ListVehicles(ctx)
 	if err != nil {
 		return err
 	}
-	items, err := s.pickerItems(ctx, f.Lines)
+	items, err := s.pickerItems(ctx, append(slices.Clone(f.Lines), f.InterLines...))
 	if err != nil {
 		return err
 	}
@@ -177,7 +194,10 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if err != nil {
 		return err
 	}
+	f.ShowInter = f.ShowInter || f.InterIntervalKm != "" || f.InterIntervalMonths != "" || hasRowInput(f.InterLines) ||
+		f.Errors["inter_interval_km"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
 	describeRows(f.Lines, items)
+	describeRows(f.InterLines, items)
 	var vehicle *stock.Vehicle
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
@@ -187,6 +207,9 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	// Offer a few empty rows to fill in (more can be added with JS).
 	for n := 0; n < 3 || len(f.Lines) == 0; n++ {
 		f.Lines = append(f.Lines, lineRow{})
+	}
+	for n := 0; n < 3 || len(f.InterLines) == 0; n++ {
+		f.InterLines = append(f.InterLines, lineRow{})
 	}
 	title := "Add kit"
 	if !isNew {
@@ -206,7 +229,9 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	f := kitForm{
 		Name: formText(r, "name"), IntervalKm: formText(r, "interval_km"), IntervalMonths: formText(r, "interval_months"),
-		Notes: formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
+		InterIntervalKm: formText(r, "inter_interval_km"), InterIntervalMonths: formText(r, "inter_interval_months"),
+		ShowInter: formText(r, "has_inter") == "1",
+		Notes:     formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
@@ -219,7 +244,15 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	if in.IntervalMonths, err = parseOptInt(f.IntervalMonths); err != nil {
 		f.Errors.Add("interval_months", err.Error())
 	}
-	f.Lines, in.Lines = parseLines(r, "line", itemsByID(items), f.Errors)
+	if in.InterIntervalKm, err = parseOptInt(f.InterIntervalKm); err != nil {
+		f.Errors.Add("inter_interval_km", err.Error())
+	}
+	if in.InterIntervalMonths, err = parseOptInt(f.InterIntervalMonths); err != nil {
+		f.Errors.Add("inter_interval_months", err.Error())
+	}
+	byID := itemsByID(items)
+	f.Lines, in.Lines = parseLines(r, "line", byID, f.Errors)
+	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, f.Errors)
 	in.Normalize()
 	for k, v := range in.Validate() {
 		f.Errors.Add(k, v)
@@ -232,10 +265,15 @@ func kitPath(id int64) string { return fmt.Sprintf("/kits/%d", id) }
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
 		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalKm: optIntString(k.IntervalKm),
-		IntervalMonths: optIntString(k.IntervalMonths), Notes: k.Notes, Version: k.Version,
+		IntervalMonths: optIntString(k.IntervalMonths), InterIntervalKm: optIntString(k.InterIntervalKm),
+		InterIntervalMonths: optIntString(k.InterIntervalMonths), ShowInter: k.HasIntermediate(),
+		Notes: k.Notes, Version: k.Version,
 	}
 	for _, l := range k.Lines {
 		f.Lines = append(f.Lines, partRow(l.ItemID, l.Need, l.Unit))
+	}
+	for _, l := range k.InterLines {
+		f.InterLines = append(f.InterLines, partRow(l.ItemID, l.Need, l.Unit))
 	}
 	return f
 }
@@ -412,6 +450,7 @@ type kitPage struct {
 	Services     []stock.ServiceRecord
 	ServiceCount int             // all services logged with the kit, on any vehicle
 	Lines        []stock.KitLine // the kit's lines in the order asked for
+	InterLines   []stock.KitLine // the kit's intermediate lines in the order asked for
 	Sort         sortHeads
 }
 
@@ -444,8 +483,12 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	order := kitSorts.parse(r.URL.Query())
-	p := kitPage{View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
-		Lines: stock.SortKitLines(k.Lines, order.Key, order.Desc), Sort: sortHeads{Order: order, Path: "/kits/" + strconv.FormatInt(id, 10)}}
+	p := kitPage{
+		View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
+		Lines:      stock.SortKitLines(k.Lines, order.Key, order.Desc),
+		InterLines: stock.SortKitLines(k.InterLines, order.Key, order.Desc),
+		Sort:       sortHeads{Order: order, Path: "/kits/" + strconv.FormatInt(id, 10)},
+	}
 	s.render(w, r, http.StatusOK, "kit_show", View{Title: k.Name + " · " + v.Name, Nav: "services", Data: p})
 	return nil
 }
@@ -456,13 +499,23 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if err := parseForm(w, r); err != nil {
+		return err
+	}
 	ctx := r.Context()
 	k, err := s.store.GetKit(ctx, id)
 	if err != nil {
 		return s.gone(r, err, store.WhatKit, id) // deleted in another tab: not a 404
 	}
+	lines := k.ActiveLines(k.VehicleOdometerKm, s.now())
+	switch r.FormValue("intermediate") {
+	case "0":
+		lines = k.Lines
+	case "1":
+		lines = k.InterLines
+	}
 	n, missing := 0, 0
-	for _, l := range k.Lines {
+	for _, l := range lines {
 		if short := l.Short(); short > 0 && !l.Archived {
 			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "Short for "+k.VehicleName+": "+k.Name) // the note suggestions give
 			var invalid stock.Errors

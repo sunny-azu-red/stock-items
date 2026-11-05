@@ -359,23 +359,32 @@ type Movement struct {
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an
-// optional interval used for reminders.
+// optional interval used for reminders (plus an optional intermediate
+// half-interval schedule and parts list).
 type Kit struct {
-	ID             int64
-	VehicleID      int64
-	VehicleName    string
-	VehicleColor   string
-	Name           string
-	IntervalKm     *int
-	IntervalMonths *int
-	Notes          string
-	Lines          []KitLine
-	LastService    *ServiceRef
+	ID                  int64
+	VehicleID           int64
+	VehicleName         string
+	VehicleColor        string
+	VehicleOdometerKm   *int
+	Name                string
+	IntervalKm          *int
+	IntervalMonths      *int
+	InterIntervalKm     *int
+	InterIntervalMonths *int
+	Notes               string
+	Lines               []KitLine
+	InterLines          []KitLine
+	LastService         *ServiceRef
 	// LastOdometerKm is the reading of the latest service with this kit
 	// that has one; km reminders count from it when the last service was
 	// logged without a reading.
 	LastOdometerKm *int
-	Version        int // see Item.Version
+	// LastFullService is the latest full (non-intermediate) service performed
+	// with this kit, and LastFullOdometerKm is the latest full reading.
+	LastFullService    *ServiceRef
+	LastFullOdometerKm *int
+	Version            int // see Item.Version
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -383,6 +392,12 @@ type Kit struct {
 
 // Archived reports whether the kit has been archived.
 func (k Kit) Archived() bool { return k.ArchivedAt != nil }
+
+// HasIntermediate reports whether the kit has an intermediate schedule or
+// intermediate parts.
+func (k Kit) HasIntermediate() bool {
+	return k.InterIntervalKm != nil || k.InterIntervalMonths != nil || len(k.InterLines) > 0
+}
 
 // ServiceRef is the minimal information about a past service.
 type ServiceRef struct {
@@ -392,6 +407,7 @@ type ServiceRef struct {
 	// OdometerAtLog is the vehicle's reading when a service without its
 	// own reading was logged, if that was within a week of doing it.
 	OdometerAtLog *int
+	Intermediate  bool
 }
 
 // KitLine is one item (and needed quantity) of a kit.
@@ -414,21 +430,22 @@ func (l KitLine) Short() float64 {
 
 // ServiceRecord is a performed service job.
 type ServiceRecord struct {
-	ID           int64
-	VehicleID    int64
-	VehicleName  string
-	VehicleColor string
-	KitID        *int64
-	KitName      string
-	PerformedOn  time.Time
-	OdometerKm   *int
-	Title        string
-	Notes        string
-	LaborCost    *float64
-	Parts        []ServicePart
-	PartCount    int
-	CreatedAt    time.Time
-	Version      int // see Item.Version
+	ID              int64
+	VehicleID       int64
+	VehicleName     string
+	VehicleColor    string
+	KitID           *int64
+	KitName         string
+	KitIntermediate bool
+	PerformedOn     time.Time
+	OdometerKm      *int
+	Title           string
+	Notes           string
+	LaborCost       *float64
+	Parts           []ServicePart
+	PartCount       int
+	CreatedAt       time.Time
+	Version         int // see Item.Version
 }
 
 // ServicePart is an item consumed by a service.

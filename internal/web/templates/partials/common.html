@@ -40,8 +40,9 @@
       <span class="title">{{.Kit.Name}}</span>
       <span class="chip" style="{{chipStyle .Kit.VehicleColor}}"><span class="dot"></span>{{.Kit.VehicleName}}</span>
     </span>
-    {{if or (and (not .VehicleArchived) .Due.Summary) .Kit.LastService}}
+    {{if or (and (not .VehicleArchived) (or .Due.Summary .Kit.HasIntermediate)) .Kit.LastService}}
     <span class="meta">
+      {{if and (not .VehicleArchived) .Kit.HasIntermediate}}<span>{{if .NextInter}}Intermediate{{else}}Full{{end}}{{if or .Due.Summary .Kit.LastService}} ·{{end}}</span>{{end}}
       {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
       {{with .Kit.LastService}}<span>{{if and (not $.VehicleArchived) $.Due.Summary}}· {{end}}last {{date .PerformedOn}}</span>{{end}}
     </span>

@@ -356,7 +356,7 @@ func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, er
 	err := q.QueryRow(ctx, `
 		SELECT (SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'purchase'),
 		       (SELECT count(DISTINCT service_record_id) FROM stock_movements WHERE item_id = $1 AND kind = 'service'),
-		       (SELECT count(*) FROM service_kit_lines WHERE item_id = $1)`, id).
+		       (SELECT count(DISTINCT kit_id) FROM service_kit_lines WHERE item_id = $1)`, id).
 		Scan(&u.Purchases, &u.Services, &u.Kits)
 	return u, err
 }

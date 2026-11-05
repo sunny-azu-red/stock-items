@@ -18,12 +18,12 @@ type Readiness struct {
 // Ready reports whether every line is covered (and the kit is not empty).
 func (r Readiness) Ready() bool { return r.Lines > 0 && r.ShortLines == 0 }
 
-// Readiness checks every line of the kit against the current stock. Lines
+// ReadinessOf checks a slice of kit lines against the current stock. Lines
 // for archived items don't count: they are no longer kept, and the kit
 // should be edited.
-func (k Kit) Readiness() Readiness {
+func ReadinessOf(lines []KitLine) Readiness {
 	var r Readiness
-	for _, l := range k.Lines {
+	for _, l := range lines {
 		if l.Archived {
 			continue
 		}
@@ -33,6 +33,26 @@ func (k Kit) Readiness() Readiness {
 		}
 	}
 	return r
+}
+
+// ActiveLines returns the lines for whichever schedule (Intermediate or
+// Full) is due next.
+func (k Kit) ActiveLines(currentKm *int, today time.Time) []KitLine {
+	if k.NextIsIntermediate(currentKm, today) {
+		return k.InterLines
+	}
+	return k.Lines
+}
+
+// ReadinessAt checks the lines of the kit's next due schedule against the
+// current stock.
+func (k Kit) ReadinessAt(currentKm *int, today time.Time) Readiness {
+	return ReadinessOf(k.ActiveLines(currentKm, today))
+}
+
+// Readiness checks the kit's active lines against the current stock.
+func (k Kit) Readiness() Readiness {
+	return k.ReadinessAt(k.VehicleOdometerKm, DateOnly(time.Now()))
 }
 
 // DueState is the reminder state of a kit with an interval.
@@ -108,22 +128,20 @@ func LoggedSoonAfter(loggedAt, performedOn time.Time, loc *time.Location) bool {
 	return days <= LogWindowDays
 }
 
-// Due computes when the kit's service is next due, given the vehicle's
-// current odometer reading and today's date.
-func (k Kit) Due(currentKm *int, today time.Time) Due {
-	if (k.IntervalKm == nil && k.IntervalMonths == nil) || k.Archived() {
+func dueFrom(ref *ServiceRef, fallbackOdo *int, intervalKm, intervalMonths *int, currentKm *int, today time.Time) Due {
+	if intervalKm == nil && intervalMonths == nil {
 		return Due{State: DueNone}
 	}
-	if k.LastService == nil {
+	if ref == nil {
 		return Due{State: DueNever}
 	}
 	var d Due
 	soon, overdue, known := false, false, false
 	// A service logged without a reading counts from the vehicle's reading
 	// at the time; one logged before that was kept, from the latest reading.
-	lastKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
-	if k.IntervalKm != nil && lastKm != nil {
-		dueKm := *lastKm + *k.IntervalKm
+	lastKm := cmp.Or(ref.OdometerKm, ref.OdometerAtLog, fallbackOdo)
+	if intervalKm != nil && lastKm != nil {
+		dueKm := *lastKm + *intervalKm
 		d.DueKm = &dueKm
 		if currentKm != nil {
 			left := dueKm - *currentKm
@@ -131,20 +149,20 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 			known = true
 			// 10% of the interval, at least 500 km, but never more than
 			// half of it (or a short interval is "soon" right away).
-			threshold := min(max(500, *k.IntervalKm/10), *k.IntervalKm/2)
+			threshold := min(max(500, *intervalKm/10), *intervalKm/2)
 			overdue = overdue || left < 0
 			soon = soon || left <= threshold
 		}
 	}
-	if k.IntervalMonths != nil {
-		dueDate := addMonths(DateOnly(k.LastService.PerformedOn), *k.IntervalMonths)
+	if intervalMonths != nil {
+		dueDate := addMonths(DateOnly(ref.PerformedOn), *intervalMonths)
 		d.DueDate = &dueDate
 		days := int(dueDate.Sub(DateOnly(today)).Hours() / 24)
 		d.DaysLeft = &days
 		known = true
 		// DueSoonDays, but never more than half the interval, or a monthly
 		// service would be "soon" right after it was done.
-		intervalDays := int(dueDate.Sub(DateOnly(k.LastService.PerformedOn)).Hours() / 24)
+		intervalDays := int(dueDate.Sub(DateOnly(ref.PerformedOn)).Hours() / 24)
 		overdue = overdue || days < 0
 		soon = soon || days <= min(DueSoonDays, intervalDays/2)
 	}
@@ -159,6 +177,70 @@ func (k Kit) Due(currentKm *int, today time.Time) Due {
 		d.State = DueOK
 	}
 	return d
+}
+
+// InterDue computes when the kit's intermediate schedule is next due,
+// counting from the latest service of any tier (full or intermediate).
+func (k Kit) InterDue(currentKm *int, today time.Time) Due {
+	if !k.HasIntermediate() || k.Archived() {
+		return Due{State: DueNone}
+	}
+	return dueFrom(k.LastService, k.LastOdometerKm, k.InterIntervalKm, k.InterIntervalMonths, currentKm, today)
+}
+
+// FullDue computes when the kit's main (full) schedule is next due.
+// When the last service was intermediate:
+//   - If InterIntervalMonths is set (alternating reset mode), the intermediate
+//     service resets the time clock and advances the km target by InterIntervalKm.
+//   - If InterIntervalMonths is nil (strict warranty mode), the full schedule
+//     counts strictly from LastFullService so intermediate changes never push
+//     back the full service's deadline.
+func (k Kit) FullDue(currentKm *int, today time.Time) Due {
+	if (k.IntervalKm == nil && k.IntervalMonths == nil) || k.Archived() {
+		return Due{State: DueNone}
+	}
+	if !k.HasIntermediate() {
+		return dueFrom(k.LastService, k.LastOdometerKm, k.IntervalKm, k.IntervalMonths, currentKm, today)
+	}
+	lastFull, lastFullOdo := k.LastFullService, k.LastFullOdometerKm
+	if lastFull == nil && k.LastService != nil && !k.LastService.Intermediate {
+		lastFull, lastFullOdo = k.LastService, k.LastOdometerKm
+	}
+	lastWasInter := k.LastService != nil && k.LastService.Intermediate
+	if lastWasInter && (k.InterIntervalMonths != nil || lastFull == nil) {
+		stepKm := cmp.Or(k.InterIntervalKm, k.IntervalKm)
+		return dueFrom(k.LastService, k.LastOdometerKm, stepKm, k.IntervalMonths, currentKm, today)
+	}
+	return dueFrom(lastFull, lastFullOdo, k.IntervalKm, k.IntervalMonths, currentKm, today)
+}
+
+// NextIsIntermediate reports whether the intermediate schedule is the next
+// service due for the kit.
+func (k Kit) NextIsIntermediate(currentKm *int, today time.Time) bool {
+	if !k.HasIntermediate() || k.Archived() || k.LastService == nil || k.LastService.Intermediate {
+		return false
+	}
+	interDue := k.InterDue(currentKm, today)
+	if interDue.State == DueNone {
+		return false
+	}
+	fullDue := k.FullDue(currentKm, today)
+	if k.InterIntervalMonths == nil && (fullDue.State == DueSoon || fullDue.State == DueOverdue) {
+		return false
+	}
+	if fullDue.State.Rank() < interDue.State.Rank() {
+		return false
+	}
+	return true
+}
+
+// Due computes when the kit's next active service (Intermediate or Full) is
+// due, given the vehicle's current odometer reading and today's date.
+func (k Kit) Due(currentKm *int, today time.Time) Due {
+	if k.NextIsIntermediate(currentKm, today) {
+		return k.InterDue(currentKm, today)
+	}
+	return k.FullDue(currentKm, today)
 }
 
 // addMonths adds n months, clamping to the end of the month: 31 Jan + 1

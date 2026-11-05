@@ -12,20 +12,21 @@ import (
 )
 
 type serviceForm struct {
-	ID          int64 // set when editing a logged service
-	VehicleID   int64
-	KitID       int64
-	KitName     string
-	PerformedOn string
-	OdometerKm  string
-	Title       string
-	Notes       string
-	LaborCost   string
-	Parts       []lineRow
-	Version     int // as the edit form was opened (see itemForm)
-	Stale       *staleNote
-	FormKey     string // see itemForm
-	Errors      stock.Errors
+	ID              int64 // set when editing a logged service
+	VehicleID       int64
+	KitID           int64
+	KitName         string
+	KitIntermediate bool
+	PerformedOn     string
+	OdometerKm      string
+	Title           string
+	Notes           string
+	LaborCost       string
+	Parts           []lineRow
+	Version         int // as the edit form was opened (see itemForm)
+	Stale           *staleNote
+	FormKey         string // see itemForm
+	Errors          stock.Errors
 }
 
 type serviceFormPage struct {
@@ -34,6 +35,27 @@ type serviceFormPage struct {
 	Vehicle       *stock.Vehicle
 	ItemGroups    []itemGroup
 	ServiceTitles []string
+	KitHasInter   bool
+	KitFullParts  []lineRow
+	KitInterParts []lineRow
+}
+
+func kitPartRows(lines []stock.KitLine) []lineRow {
+	var rows []lineRow
+	for _, l := range lines {
+		if l.Archived {
+			continue // no longer kept; the kit should be edited
+		}
+		rows = append(rows, partRow(l.ItemID, l.Need, l.Unit))
+	}
+	return rows
+}
+
+func padPartRows(rows []lineRow) []lineRow {
+	for n := 0; n < 2 || len(rows) == 0; n++ {
+		rows = append(rows, lineRow{})
+	}
+	return rows
 }
 
 func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, status int, f serviceForm) error {
@@ -67,14 +89,29 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	}
 	describeRows(f.Parts, items)
 	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID), ServiceTitles: titles}
+	if f.KitID != 0 {
+		k, err := s.store.GetKit(ctx, f.KitID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			p.KitHasInter = k.HasIntermediate() || f.KitIntermediate
+			if f.ID == 0 && p.KitHasInter {
+				p.KitFullParts = kitPartRows(k.Lines)
+				describeRows(p.KitFullParts, items)
+				p.KitFullParts = padPartRows(p.KitFullParts)
+				p.KitInterParts = kitPartRows(k.InterLines)
+				describeRows(p.KitInterParts, items)
+				p.KitInterParts = padPartRows(p.KitInterParts)
+			}
+		}
+	}
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
 			p.Vehicle = &vehicles[i]
 		}
 	}
-	for n := 0; n < 2 || len(f.Parts) == 0; n++ {
-		f.Parts = append(f.Parts, lineRow{})
-	}
+	f.Parts = padPartRows(f.Parts)
 	p.Form = f
 	p.ItemGroups = itemOptions(items, p.Vehicle)
 	title := "Log service"
@@ -101,12 +138,20 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		f.KitID, f.KitName, f.VehicleID, f.Title = k.ID, k.Name, k.VehicleID, k.Name
-		for _, l := range k.Lines {
-			if l.Archived {
-				continue // no longer kept; the kit should be edited
-			}
-			f.Parts = append(f.Parts, partRow(l.ItemID, l.Need, l.Unit))
+		switch q.Get("intermediate") {
+		case "1":
+			f.KitIntermediate = k.HasIntermediate()
+		case "0":
+			f.KitIntermediate = false
+		default:
+			f.KitIntermediate = k.NextIsIntermediate(k.VehicleOdometerKm, s.now())
 		}
+		lines := k.Lines
+		if f.KitIntermediate {
+			f.Title = k.Name + " (Intermediate)"
+			lines = k.InterLines
+		}
+		f.Parts = kitPartRows(lines)
 	}
 	if f.VehicleID != 0 {
 		v, err := s.store.GetVehicle(ctx, f.VehicleID)
@@ -128,10 +173,11 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	f := serviceForm{
 		PerformedOn: formText(r, "performed_on"), OdometerKm: formText(r, "odometer_km"), Title: formText(r, "title"),
 		Notes: formText(r, "notes"), LaborCost: formText(r, "labor_cost"), KitName: formText(r, "kit_name"),
-		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
+		KitIntermediate: formText(r, "kit_intermediate") == "1",
+		Version:         parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
+	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, KitIntermediate: f.KitIntermediate, Version: f.Version, FormKey: f.FormKey}
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID, in.VehicleID = *id, *id
 	}
@@ -215,8 +261,9 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := serviceForm{
-		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, PerformedOn: rec.PerformedOn.Format("2006-01-02"),
-		OdometerKm: optIntString(rec.OdometerKm), Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
+		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitIntermediate: rec.KitIntermediate,
+		PerformedOn: rec.PerformedOn.Format("2006-01-02"), OdometerKm: optIntString(rec.OdometerKm),
+		Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
 	}
 	if rec.KitID != nil {
 		f.KitID = *rec.KitID

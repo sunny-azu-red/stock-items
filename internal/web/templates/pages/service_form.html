@@ -33,6 +33,15 @@
         {{template "err" (index $e "vehicle_id")}}
         {{template "err" (index $e "kit_id")}}
       </div>
+      {{if $d.KitHasInter}}
+      <fieldset class="field">
+        <legend>Schedule</legend>
+        <span class="segmented">
+          <label><input type="radio" name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="{{$f.KitName}}" {{if not $f.KitIntermediate}}checked{{end}}>Full</label>
+          <label><input type="radio" name="kit_intermediate" value="1" data-kit-tier="inter" data-kit-name="{{$f.KitName}}" {{if $f.KitIntermediate}}checked{{end}}>Intermediate</label>
+        </span>
+      </fieldset>
+      {{end}}
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <div class="label-row"><label for="title">What was done</label>{{template "req"}}</div>
         <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil service" list="service-titles">
@@ -63,6 +72,16 @@
       <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
       {{range $f.Parts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
     </div>
+    {{if and (not $f.ID) $d.KitHasInter}}
+    <template id="kit-full-parts">
+      <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
+      {{range $d.KitFullParts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
+    </template>
+    <template id="kit-inter-parts">
+      <div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>
+      {{range $d.KitInterParts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
+    </template>
+    {{end}}
     <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "part")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
     <p class="hint mt">Remove rows for parts you did not use, or that did not come from your stock.</p>

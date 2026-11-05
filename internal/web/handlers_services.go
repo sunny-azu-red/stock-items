@@ -29,10 +29,11 @@ type serviceForm struct {
 }
 
 type serviceFormPage struct {
-	Form       serviceForm
-	Vehicles   []stock.Vehicle
-	Vehicle    *stock.Vehicle
-	ItemGroups []itemGroup
+	Form          serviceForm
+	Vehicles      []stock.Vehicle
+	Vehicle       *stock.Vehicle
+	ItemGroups    []itemGroup
+	ServiceTitles []string
 }
 
 func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, status int, f serviceForm) error {
@@ -42,6 +43,10 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		return err
 	}
 	items, err := s.pickerItems(ctx, f.Parts)
+	if err != nil {
+		return err
+	}
+	titles, err := s.store.ServiceTitles(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,7 +66,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		}
 	}
 	describeRows(f.Parts, items)
-	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID)}
+	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID), ServiceTitles: titles}
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {
 			p.Vehicle = &vehicles[i]

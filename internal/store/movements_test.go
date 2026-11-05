@@ -287,3 +287,34 @@ func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+func TestSuppliers(t *testing.T) {
+	s, ctx := newStore(t)
+	suppliers, err := s.Suppliers(ctx)
+	if err != nil || len(suppliers) != 0 {
+		t.Fatalf("want empty suppliers, got %v (err %v)", suppliers, err)
+	}
+
+	id := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "moto24"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "Louis"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "Moto24"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: ""}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Suppliers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Louis", "Moto24"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Suppliers = %v, want %v", got, want)
+	}
+}

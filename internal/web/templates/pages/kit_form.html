@@ -28,7 +28,7 @@
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" placeholder="e.g. Oil service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>
-        <datalist id="kit-names"><option value="Oil service"><option value="Air filter"><option value="Brake pads (front)"><option value="Brake pads (rear)"><option value="Brake fluid"><option value="Coolant"><option value="Chain &amp; sprockets"><option value="Spark plugs"><option value="Valve check"></datalist>
+        <datalist id="kit-names">{{range $d.KitNames}}<option value="{{.}}">{{end}}</datalist>
         {{template "err" (index $e "name")}}
       </div>
     </div>

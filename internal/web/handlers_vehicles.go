@@ -33,6 +33,8 @@ type vehicleFormPage struct {
 	IsNew   bool
 	Kinds   []stock.VehicleKind
 	Palette []string
+	Makes   []string
+	Models  []string
 }
 
 func vehicleFormFrom(v stock.Vehicle) vehicleForm {
@@ -74,14 +76,25 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 
 func vehiclePath(id int64) string { return fmt.Sprintf("/vehicles/%d", id) }
 
-func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, status int, f vehicleForm, isNew bool) {
+func (s *Server) renderVehicleForm(w http.ResponseWriter, r *http.Request, status int, f vehicleForm, isNew bool) error {
+	ctx := r.Context()
+	makes, err := s.store.Makes(ctx)
+	if err != nil {
+		return err
+	}
+	models, err := s.store.Models(ctx)
+	if err != nil {
+		return err
+	}
 	title := "Add vehicle"
 	if !isNew {
 		title = "Edit " + f.Stored
 	}
 	s.render(w, r, status, "vehicle_form", View{Title: title, Nav: "vehicles", Data: vehicleFormPage{
 		Form: f, IsNew: isNew, Kinds: stock.VehicleKinds, Palette: palette,
+		Makes: makes, Models: models,
 	}})
+	return nil
 }
 
 // vehicleCard is one vehicle on the vehicles page.
@@ -146,8 +159,7 @@ func (s *Server) vehicleNew(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := vehicleForm{Kind: string(stock.KindMotorcycle), Color: palette[len(vehicles)%len(palette)]}
-	s.renderVehicleForm(w, r, http.StatusOK, f, true)
-	return nil
+	return s.renderVehicleForm(w, r, http.StatusOK, f, true)
 }
 
 func (s *Server) vehicleCreate(w http.ResponseWriter, r *http.Request) error {
@@ -171,8 +183,7 @@ func (s *Server) vehicleCreate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, true)
-	return nil
+	return s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, true)
 }
 
 func (s *Server) vehicleEdit(w http.ResponseWriter, r *http.Request) error {
@@ -184,8 +195,7 @@ func (s *Server) vehicleEdit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.renderVehicleForm(w, r, http.StatusOK, vehicleFormFrom(v), false)
-	return nil
+	return s.renderVehicleForm(w, r, http.StatusOK, vehicleFormFrom(v), false)
 }
 
 func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
@@ -220,8 +230,7 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 	if v, err := s.store.GetVehicle(r.Context(), id); err == nil {
 		f.Stored = v.Name
 	}
-	s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, false)
-	return nil
+	return s.renderVehicleForm(w, r, http.StatusUnprocessableEntity, f, false)
 }
 
 func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {

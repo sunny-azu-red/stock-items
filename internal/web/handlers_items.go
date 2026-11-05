@@ -47,19 +47,18 @@ type itemForm struct {
 }
 
 type itemFormPage struct {
-	Form       itemForm
-	IsNew      bool
-	Vehicles   []stock.Vehicle
-	Brands     []string
-	Categories []string
-	Locations  []string
-	Units      []stock.Unit
-	SubUnits   []stock.SubUnit
-	SKUKinds   []stock.SKUKind
-	Matches    []stock.Item // for a new item from the shopping list: items with its name
-	// ShoppingVersion is the shopping entry's version, for its Matches
-	// buttons.
-	ShoppingVersion int
+	Form            itemForm
+	IsNew           bool
+	Vehicles        []stock.Vehicle
+	Brands          []string
+	Categories      []string
+	Locations       []string
+	Suppliers       []string
+	Units           []stock.Unit
+	SubUnits        []stock.SubUnit
+	SKUKinds        []stock.SKUKind
+	Matches         []stock.Item // for a new item from the shopping list: items with its name
+	ShoppingVersion int          // for its Matches buttons
 }
 
 func itemFormFromItem(it stock.Item) itemForm {
@@ -214,11 +213,15 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 	if err != nil {
 		return itemFormPage{}, err
 	}
+	suppliers, err := s.store.Suppliers(ctx)
+	if err != nil {
+		return itemFormPage{}, err
+	}
 	// Always offer an empty SKU row to type into.
 	f.SKUs = append(f.SKUs, skuRow{Kind: string(stock.SKUOEM)})
 	return itemFormPage{
 		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), Brands: brands, Categories: cats, Locations: locs,
-		Units: stock.Units, SubUnits: stock.SubUnits, SKUKinds: stock.SKUKinds,
+		Suppliers: suppliers, Units: stock.Units, SubUnits: stock.SubUnits, SKUKinds: stock.SKUKinds,
 	}, nil
 }
 
@@ -566,6 +569,7 @@ type itemPage struct {
 	Move          movementForm
 	OnShopping    bool
 	SubUnits      []stock.SubUnit
+	Suppliers     []string
 	ExpiryState   string
 	PurchaseCount int
 	Usage         stock.ItemUsage
@@ -620,9 +624,13 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
+	suppliers, err := s.store.Suppliers(ctx)
+	if err != nil {
+		return itemPage{}, err
+	}
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
-		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit),
+		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
 		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},

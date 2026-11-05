@@ -106,7 +106,8 @@
       </div>
       <div class="field">
         <label for="supplier">Shop</label>
-        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer">
+        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer" list="suppliers">
+        <datalist id="suppliers">{{range $d.Suppliers}}<option value="{{.}}">{{end}}</datalist>
       </div>
       <div class="field{{if index $e "bought_on"}} has-error{{end}}">
         <label for="bought_on">Bought on</label>

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -160,5 +161,47 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 	var conflict *store.ConflictError
 	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, in)); !errors.As(err, &conflict) || conflict.Field != "odometer_km" {
 		t.Errorf("clearing: want conflict, got %v", err)
+	}
+}
+
+func TestVehicleMakesAndModels(t *testing.T) {
+	s, ctx := newStore(t)
+	makes, err := s.Makes(ctx)
+	if err != nil || len(makes) != 0 {
+		t.Fatalf("want empty makes, got %v (err %v)", makes, err)
+	}
+	models, err := s.Models(ctx)
+	if err != nil || len(models) != 0 {
+		t.Fatalf("want empty models, got %v (err %v)", models, err)
+	}
+
+	for _, v := range []stock.VehicleInput{
+		{Name: "Bike 1", Make: "KTM", Model: "390 Adventure"},
+		{Name: "Bike 2", Make: "KTM", Model: "1290 Super Adventure S"},
+		{Name: "Car", Make: "Mitsubishi", Model: "Outlander PHEV"},
+		{Name: "Blank", Make: "", Model: ""},
+	} {
+		v.Normalize()
+		if _, err := s.CreateVehicle(ctx, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	gotMakes, err := s.Makes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantMakes := []string{"KTM", "Mitsubishi"}
+	if !slices.Equal(gotMakes, wantMakes) {
+		t.Errorf("Makes = %v, want %v", gotMakes, wantMakes)
+	}
+
+	gotModels, err := s.Models(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantModels := []string{"1290 Super Adventure S", "390 Adventure", "Outlander PHEV"}
+	if !slices.Equal(gotModels, wantModels) {
+		t.Errorf("Models = %v, want %v", gotModels, wantModels)
 	}
 }

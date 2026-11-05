@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -564,4 +565,69 @@ func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 		t.Errorf("service should stay: %v", err)
 	}
 	assertLedger(t, s)
+}
+
+func TestKitNamesAndServiceTitles(t *testing.T) {
+	s, ctx := newStore(t)
+	names, err := s.KitNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDefaults := []string{
+		"Air filter",
+		"Brake fluid",
+		"Brake pads (front)",
+		"Brake pads (rear)",
+		"Cabin filter",
+		"Clutch fluid",
+		"Coolant",
+		"Oil service",
+		"Spark plugs",
+		"Valve check",
+	}
+	if !slices.Equal(names, wantDefaults) {
+		t.Errorf("defaults = %v, want %v", names, wantDefaults)
+	}
+
+	// Dynamic suggestions learn from custom kit names and service titles.
+	v := mustVehicle(t, s, "KTM 390")
+	kitIn := stock.KitInput{VehicleID: v, Name: "Fork seals"}
+	kitIn.Normalize()
+	if _, err := s.CreateKit(ctx, kitIn); err != nil {
+		t.Fatal(err)
+	}
+
+	svcIn := stock.ServiceInput{VehicleID: v, Title: "Brembo rebuild", PerformedOn: time.Now()}
+	svcIn.Normalize()
+	if _, err := s.CreateService(ctx, svcIn); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := s.KitNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(after, "Fork seals") || !slices.Contains(after, "Brembo rebuild") {
+		t.Errorf("expected custom names in %v", after)
+	}
+
+	// ServiceTitles returns the same unified list.
+	titles, err := s.ServiceTitles(ctx)
+	if err != nil || !slices.Equal(titles, after) {
+		t.Errorf("ServiceTitles = %v, want %v (err %v)", titles, after, err)
+	}
+
+	// User casing overrides default Title Case.
+	lowerIn := stock.KitInput{VehicleID: v, Name: "cabin filter"}
+	lowerIn.Normalize()
+	if _, err := s.CreateKit(ctx, lowerIn); err != nil {
+		t.Fatal(err)
+	}
+	withLower, err := s.KitNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(withLower, "cabin filter") || slices.Contains(withLower, "Cabin filter") {
+		t.Errorf("user casing should override default, got %v", withLower)
+	}
 }

@@ -248,3 +248,13 @@ func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error
 	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }
+
+// Makes returns the distinct vehicle makes in use.
+func (s *Store) Makes(ctx context.Context) ([]string, error) {
+	return s.distinct(ctx, `SELECT DISTINCT ON (lower(make)) make FROM vehicles WHERE make <> '' ORDER BY lower(make), make`)
+}
+
+// Models returns the distinct vehicle models in use.
+func (s *Store) Models(ctx context.Context) ([]string, error) {
+	return s.distinct(ctx, `SELECT DISTINCT ON (lower(model)) model FROM vehicles WHERE model <> '' ORDER BY lower(model), model`)
+}

@@ -186,10 +186,11 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 }
 
 type boughtPage struct {
-	Entry   stock.ShoppingEntry
-	Move    movementForm
-	Units   []stock.SubUnit
-	Matches []stock.Item // items already in stock with a free-text entry's name
+	Entry     stock.ShoppingEntry
+	Move      movementForm
+	Units     []stock.SubUnit
+	Matches   []stock.Item // items already in stock with a free-text entry's name
+	Suppliers []string
 }
 
 func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) error {
@@ -213,8 +214,12 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 			return err
 		}
 	}
+	suppliers, err := s.store.Suppliers(r.Context())
+	if err != nil {
+		return err
+	}
 	s.render(w, r, http.StatusOK, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches}})
+		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches, Suppliers: suppliers}})
 	return nil
 }
 
@@ -365,8 +370,12 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
+	suppliers, err := s.store.Suppliers(r.Context())
+	if err != nil {
+		return err
+	}
 	s.render(w, r, http.StatusUnprocessableEntity, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit)}})
+		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Suppliers: suppliers}})
 	return nil
 }
 

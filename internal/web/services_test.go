@@ -252,3 +252,35 @@ func TestServicePartsGoWithTheirService(t *testing.T) {
 	}
 	a.ledger(t)
 }
+
+func TestKitAndServiceSuggestions(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+
+	// New kit form contains default suggestions (including Clutch fluid and Cabin filter, without Chain & sprockets).
+	kitNew := a.get("/kits/new")
+	expect(t, kitNew, http.StatusOK,
+		`<datalist id="kit-names">`,
+		`<option value="Clutch fluid">`,
+		`<option value="Cabin filter">`,
+	)
+	expectNot(t, kitNew, `<option value="Chain &amp; sprockets">`, `<option value="Chain & sprockets">`)
+
+	// Service form has matching service-titles suggestions.
+	svcNew := a.get("/services/new")
+	expect(t, svcNew, http.StatusOK,
+		`<datalist id="service-titles">`,
+		`<option value="Clutch fluid">`,
+		`<option value="Cabin filter">`,
+	)
+
+	// Custom kit name dynamically appears in future kit and service forms.
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)},
+		"name":       {"Fork seals"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+
+	expect(t, a.get("/kits/new"), http.StatusOK, `<option value="Fork seals">`)
+	expect(t, a.get("/services/new"), http.StatusOK, `<option value="Fork seals">`)
+}

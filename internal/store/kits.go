@@ -348,3 +348,21 @@ func (s *Store) RestoreKit(ctx context.Context, id int64, version int) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
 }
+
+// KitNames returns the distinct kit names and service titles in use, plus common defaults.
+func (s *Store) KitNames(ctx context.Context) ([]string, error) {
+	return s.distinct(ctx, `
+		SELECT DISTINCT ON (lower(n)) n FROM (
+			SELECT name AS n, 0 AS pref FROM service_kits WHERE name <> ''
+			UNION
+			SELECT title AS n, 0 AS pref FROM service_records WHERE title <> ''
+			UNION SELECT unnest(ARRAY['Oil service', 'Air filter', 'Brake pads (front)', 'Brake pads (rear)',
+			                          'Brake fluid', 'Cabin filter', 'Clutch fluid', 'Coolant',
+			                          'Spark plugs', 'Valve check']), 1
+		) x ORDER BY lower(n), pref, n`)
+}
+
+// ServiceTitles returns the distinct service titles and kit names in use, plus common defaults.
+func (s *Store) ServiceTitles(ctx context.Context) ([]string, error) {
+	return s.KitNames(ctx)
+}

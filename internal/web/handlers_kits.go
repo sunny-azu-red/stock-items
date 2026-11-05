@@ -160,6 +160,7 @@ type kitFormPage struct {
 	IsNew      bool
 	Vehicles   []stock.Vehicle
 	ItemGroups []itemGroup
+	KitNames   []string
 }
 
 func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status int, f kitForm, isNew bool) error {
@@ -169,6 +170,10 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 		return err
 	}
 	items, err := s.pickerItems(ctx, f.Lines)
+	if err != nil {
+		return err
+	}
+	names, err := s.store.KitNames(ctx)
 	if err != nil {
 		return err
 	}
@@ -189,6 +194,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	}
 	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
 		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), ItemGroups: itemOptions(items, vehicle),
+		KitNames: names,
 	}})
 	return nil
 }

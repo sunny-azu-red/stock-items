@@ -242,3 +242,48 @@ func TestActivityYearFilter(t *testing.T) {
 	expect(t, a.get("/activity?kind=purchase&year=2027"), http.StatusOK, `<option value="2027" selected>2027</option>`, "Nothing matches these filters",
 		`<a class="btn btn-primary" href="/activity">`)
 }
+
+func TestSupplierSuggestions(t *testing.T) {
+	a := newApp(t)
+
+	// In a fresh app, suppliers datalist exists and is empty.
+	expect(t, a.get("/items/new"), http.StatusOK, `<datalist id="suppliers"></datalist>`)
+
+	// Create an item with a purchase from "Louis".
+	rec := a.post("/items", url.Values{
+		"name":        {"Brake Cleaner"},
+		"unit":        {"piece"},
+		"quantity":    {"2"},
+		"supplier":    {"Louis"},
+		"total_price": {"9.90"},
+		"bought_on":   {"2026-10-29"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	itemPath := rec.Header().Get("Location")
+
+	// /items/new now suggests Louis.
+	expect(t, a.get("/items/new"), http.StatusOK, `<datalist id="suppliers"><option value="Louis"></datalist>`)
+
+	// Item page Bought tab (bought-fields) suggests Louis.
+	expect(t, a.get(itemPath), http.StatusOK, `<datalist id="suppliers-purchase"><option value="Louis"></datalist>`)
+
+	// Movement edit form suggests Louis.
+	moves, err := a.store.ListMovements(context.Background(), store.MovementFilter{Kind: stock.MovePurchase})
+	if err != nil || len(moves) == 0 {
+		t.Fatalf("expected purchase movement: %v (err %v)", moves, err)
+	}
+	expect(t, a.get("/movements/"+itoa(moves[0].ID)+"/edit"), http.StatusOK,
+		`<datalist id="suppliers"><option value="Louis"></datalist>`)
+
+	// Shopping Bought form for an item in stock suggests Louis.
+	items, err := a.store.ListItems(context.Background(), store.ItemFilter{})
+	if err != nil || len(items) == 0 {
+		t.Fatal(err)
+	}
+	entryID, err := a.store.AddShopping(context.Background(), stock.ShoppingInput{ItemID: &items[0].ID, Quantity: ptr(1.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect(t, a.get("/shopping/"+itoa(entryID)+"/bought"), http.StatusOK,
+		`<datalist id="suppliers"><option value="Louis"></datalist>`)
+}

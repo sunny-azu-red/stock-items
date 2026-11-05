@@ -47,7 +47,7 @@
         <button type="button" role="tab" id="tab-use" aria-controls="panel-use" aria-selected="{{if eq $m.Kind "use"}}true"{{else}}false" tabindex="-1"{{end}}>{{icon "minus"}} Used</button>
         <button type="button" role="tab" id="tab-correction" aria-controls="panel-correction" aria-selected="{{if eq $m.Kind "correction"}}true"{{else}}false" tabindex="-1"{{end}}>{{icon "list-checks"}} Count</button>
       </div>
-      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
+      {{template "move-form" (dict "Kind" "purchase" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Suppliers" $d.Suppliers "Hidden" (and (ne $m.Kind "purchase") (ne $m.Kind "")))}}
       {{template "move-form" (dict "Kind" "use" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (ne $m.Kind "use"))}}
       {{template "move-form" (dict "Kind" "correction" "Item" $it "Move" $m "Units" $d.SubUnits "Today" $d.Today "Currency" $.Currency "Hidden" (ne $m.Kind "correction"))}}
       {{end}}
@@ -117,7 +117,7 @@
   {{template "form-key" (and $active $m.FormKey)}}
   {{if and $active $e}}{{template "error-summary" $e}}{{end}}
   {{if eq .Kind "purchase"}}
-  {{template "bought-fields" (dict "ID" "-purchase" "Move" $m "Show" $active "Unit" .Item.Unit "Units" .Units "Currency" .Currency "Today" .Today)}}
+  {{template "bought-fields" (dict "ID" "-purchase" "Move" $m "Show" $active "Unit" .Item.Unit "Units" .Units "Currency" .Currency "Today" .Today "Suppliers" .Suppliers)}}
   {{else}}
   <div class="form-grid">
     <div class="field{{if and $active (index $e "amount")}} has-error{{end}}">

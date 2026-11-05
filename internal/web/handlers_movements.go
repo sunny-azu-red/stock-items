@@ -24,13 +24,14 @@ type movementEditForm struct {
 }
 
 type movementPage struct {
-	Movement stock.Movement
-	Name     string // "purchase", "use", …
-	Undo     string // how deleting it changes the stock, e.g. "−1 L"
-	Form     movementEditForm
-	Back     template.URL // the page that opened the form, already checked
-	Units    []stock.SubUnit
-	Gone     bool // deleted since the form was opened: Movement is what the form said
+	Movement  stock.Movement
+	Name      string // "purchase", "use", …
+	Undo      string // how deleting it changes the stock, e.g. "−1 L"
+	Form      movementEditForm
+	Back      template.URL // the page that opened the form, already checked
+	Units     []stock.SubUnit
+	Gone      bool // deleted since the form was opened: Movement is what the form said
+	Suppliers []string
 }
 
 // errItemArchived means the stock change belongs to an archived item, whose
@@ -80,9 +81,10 @@ func (s *Server) movementRefused(w http.ResponseWriter, r *http.Request, m stock
 }
 
 func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) {
+	suppliers, _ := s.store.Suppliers(r.Context())
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
-			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit)}}) //nolint:gosec // Back is a checked local path
+			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers}}) //nolint:gosec // Back is a checked local path
 }
 
 // goneMovementForm shows the edit form of a stock change deleted since it
@@ -112,8 +114,9 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 	if !m.ItemUnit.Valid() {
 		units = stock.SubUnits
 	}
+	suppliers, _ := s.store.Suppliers(r.Context())
 	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
-		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true}}) //nolint:gosec // Back is a checked local path
+		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true, Suppliers: suppliers}}) //nolint:gosec // Back is a checked local path
 	return nil
 }
 

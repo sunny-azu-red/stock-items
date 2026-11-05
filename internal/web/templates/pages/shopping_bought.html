@@ -23,7 +23,7 @@
   {{template "form-key" $m.FormKey}}
   {{template "stale" $m.Stale}}
   {{template "error-summary" $e}}
-  {{template "bought-fields" (dict "ID" "" "Move" $m "Show" true "Unit" $d.Entry.ItemUnit "Units" $d.Units "Currency" .Currency "Autofocus" true)}}
+  {{template "bought-fields" (dict "ID" "" "Move" $m "Show" true "Unit" $d.Entry.ItemUnit "Units" $d.Units "Currency" .Currency "Autofocus" true "Suppliers" $d.Suppliers)}}
   <div class="form-actions">
     {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>

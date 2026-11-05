@@ -486,3 +486,12 @@ func (s *Store) LastUnitPrice(ctx context.Context, itemID int64) (*float64, erro
 	}
 	return p, err
 }
+
+// Suppliers returns the distinct suppliers in use across stock movements.
+func (s *Store) Suppliers(ctx context.Context) ([]string, error) {
+	return s.distinct(ctx, `
+		SELECT DISTINCT ON (lower(supplier)) supplier
+		FROM stock_movements
+		WHERE supplier <> ''
+		ORDER BY lower(supplier), supplier`)
+}

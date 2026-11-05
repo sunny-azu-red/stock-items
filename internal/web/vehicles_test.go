@@ -81,3 +81,26 @@ func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
 	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, "<strong>1</strong> kit")
 }
+
+func TestVehicleMakeModelSuggestions(t *testing.T) {
+	a := newApp(t)
+	// Fresh app has empty makes and models datalists.
+	newForm := a.get("/vehicles/new")
+	expect(t, newForm, http.StatusOK, `<datalist id="makes"></datalist>`, `<datalist id="models"></datalist>`)
+
+	// Creating a vehicle adds its make and model to suggestions.
+	rec := a.post("/vehicles", url.Values{
+		"name":  {"LittleJoy"},
+		"kind":  {"motorcycle"},
+		"make":  {"KTM"},
+		"model": {"390 Adventure"},
+		"color": {"#f26b0f"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+
+	after := a.get("/vehicles/new")
+	expect(t, after, http.StatusOK,
+		`<datalist id="makes"><option value="KTM"></datalist>`,
+		`<datalist id="models"><option value="390 Adventure"></datalist>`,
+	)
+}

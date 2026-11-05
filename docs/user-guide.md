@@ -2,13 +2,13 @@
 
 ## First steps
 
-1. **Add your vehicles** (Vehicles → Add vehicle). Give each a short name such as "KTM 390" and a colour. That name and colour are used everywhere. Enter the odometer if you want km-based reminders.
+1. **Add your vehicles** (Vehicles → Add vehicle). Give each a short name such as "KTM 390" and a colour. That name and colour are used everywhere. Enter the odometer if you want km-based reminders. The Make and Model fields suggest makes and models you have already added.
 2. **Add your items** (Add item, or press `a`):
    - **Name and brand.** Pick or type the manufacturer or factory brand (e.g. "KTM", "Motorex").
    - **Fits these vehicles.** Click every vehicle the part fits. Leave all of them unselected for general stock (cleaners, grease, tools).
    - **Counted in.** Pieces, volume (ml / L) or weight (g / kg). Choose once; it can't be changed after stock changes are recorded, or once the item is in a kit or on the shopping list with a quantity, also when those are in the trash.
    - **In stock.** The amount you have right now, e.g. `525` ml or `1.5` L.
-   - **Bought it just now?** (new items only, optional). Enter the total price and/or the shop, and the date if it wasn't today. The starting stock is then recorded as a purchase, so the item shows a last price, a purchase count, and counts in the stock value and spending. Leave price and shop empty for stock you already had; it is recorded as *Starting stock* on the date given.
+   - **Bought it just now?** (new items only, optional). Enter the total price and/or the shop (picked from previously used shops or typed new), and the date if it wasn't today. The starting stock is then recorded as a purchase, so the item shows a last price, a purchase count, and counts in the stock value and spending. Leave price and shop empty for stock you already had; it is recorded as *Starting stock* on the date given.
    - **Keep at least** (optional). Below this the item shows as *low* and is suggested on the shopping list.
    - **SKUs.** Add every number you might search for: the OEM part number, the manufacturer number, barcode, one row per brand or pack size. Each one links to a web search for it (the search engine is set with `APP_SKU_SEARCH_URL`, see [deployment](deployment.md)).
    - Use **Save & add another** to enter many items in a row. It keeps the vehicles and unit you picked.
@@ -36,7 +36,7 @@
 
 ## Service kits and reminders
 
-A **kit** is the parts list of a recurring job on one vehicle, e.g. *KTM 390 – Oil service*: 1 pcs oil filter, 1.7 L oil, 2 pcs O-ring.
+A **kit** is the parts list of a recurring job on one vehicle, e.g. *KTM 390 – Oil service*: 1 pcs oil filter, 1.7 L oil, 2 pcs O-ring. The **Name** field suggests common maintenance jobs (*Oil service*, *Brake fluid*, *Clutch fluid*, *Cabin filter*, *Coolant*, *Spark plugs*, *Valve check*, ...) and learns any custom kit names or service titles you enter.
 
 On kit and service part rows, pick the unit next to the quantity: choosing an item offers its units and selects L or kg for liquids and weights, so `1.7` means 1.7 L. A unit typed into the quantity (`1700 ml`) wins. Each row shows what is in stock.
 
@@ -46,7 +46,7 @@ On kit and service part rows, pick the unit next to the quantity: choosing an it
 - **Do this service** opens the service form with the kit's parts filled in. Adjust quantities, remove what you didn't use, enter the odometer and save. The parts are taken from stock and the vehicle's odometer is updated. If parts are short, every short row is marked and nothing is saved.
 - Made a mistake? **Edit** the service (on its page): change the date, odometer, title, labour, notes or parts. The old parts go back in stock and the new ones are taken; if a part is short, nothing changes. Or delete the service. Its parts go back in stock, and if it moved the vehicle's odometer (and you haven't changed the odometer since), the odometer goes back too.
 
-You can also log a service without a kit (Services → Log service), e.g. for a one-off repair.
+You can also log a service without a kit (Services → Log service), e.g. for a one-off repair. **What was done** suggests common maintenance jobs as well as your saved kits and past services.
 
 ## Shopping
 

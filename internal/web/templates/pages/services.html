@@ -14,8 +14,8 @@
 
 {{if $d.Vehicles}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
-  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="/services">All vehicles</a>
-  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="/services?v={{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery 0)}}">All vehicles</a>
+  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
 </div>
 {{end}}
 
@@ -35,8 +35,16 @@
     {{end}}
   </section>
   <section class="card">
-    <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2></div>
+    <div class="card-head">
+      <h2>{{icon "list-checks"}} {{if $d.ShowArchivedKits}}Archived kits{{else}}Service kits{{end}}</h2>
+      {{if $d.ShowArchivedKits}}
+        <a class="more" href="{{withQuery "/services" ($d.ArchivedKitsQuery false)}}">← Active kits</a>
+      {{else if $d.ArchivedKitsCount}}
+        <a class="more" href="{{withQuery "/services" ($d.ArchivedKitsQuery true)}}">{{plural $d.ArchivedKitsCount "archived kit"}} →</a>
+      {{end}}
+    </div>
     {{if $d.Kits}}{{range $d.Kits}}{{template "kit-row" .}}{{end}}
+    {{else if $d.ShowArchivedKits}}<div class="card-body muted small">No archived kits.</div>
     {{else}}<div class="card-body muted small">No kits yet. A kit lists the parts of a recurring job (oil service, brake pads…) so you know what to buy before you start.</div>{{end}}
   </section>
 </div>

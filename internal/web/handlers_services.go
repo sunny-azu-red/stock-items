@@ -361,15 +361,17 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 }
 
 type servicesPage struct {
-	Kits      []kitView
-	Services  []stock.ServiceRecord
-	Vehicles  []stock.Vehicle
-	VehicleID int64
-	Archived  bool    // the filtered vehicle is archived: no new services
-	Labor     float64 // labour cost of all the services logged (for the vehicle filter), not just this page
-	Total     int     // how many services are logged (for the filter)
-	Page      int
-	More      bool // there are older services
+	Kits              []kitView
+	Services          []stock.ServiceRecord
+	Vehicles          []stock.Vehicle
+	VehicleID         int64
+	Archived          bool // the filtered vehicle is archived: no new services
+	ShowArchivedKits  bool
+	ArchivedKitsCount int
+	Labor             float64 // labour cost of all the services logged (for the vehicle filter), not just this page
+	Total             int     // how many services are logged (for the filter)
+	Page              int
+	More              bool // there are older services
 }
 
 // servicesPageSize is how many services one page of the log shows.
@@ -381,8 +383,35 @@ func (p servicesPage) PageQuery(n int) string {
 	if p.VehicleID != 0 {
 		q.Set("v", strconv.FormatInt(p.VehicleID, 10))
 	}
+	if p.ShowArchivedKits {
+		q.Set("archived", "1")
+	}
 	if n > 1 {
 		q.Set("page", strconv.Itoa(n))
+	}
+	return q.Encode()
+}
+
+// ArchivedKitsQuery toggles viewing archived kits.
+func (p servicesPage) ArchivedKitsQuery(show bool) string {
+	q := url.Values{}
+	if p.VehicleID != 0 {
+		q.Set("v", strconv.FormatInt(p.VehicleID, 10))
+	}
+	if show {
+		q.Set("archived", "1")
+	}
+	return q.Encode()
+}
+
+// VehicleFilterQuery preserves the archived kits view when switching vehicle chips.
+func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
+	q := url.Values{}
+	if vehicleID != 0 {
+		q.Set("v", strconv.FormatInt(vehicleID, 10))
+	}
+	if p.ShowArchivedKits {
+		q.Set("archived", "1")
 	}
 	return q.Encode()
 }
@@ -393,21 +422,43 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	if id := parseOptID(r.URL.Query().Get("v")); id != nil {
 		p.VehicleID = *id
 	}
+	p.ShowArchivedKits = r.URL.Query().Get("archived") == "1"
 	var err error
-	if p.Vehicles, err = s.store.ListVehicles(ctx); err != nil {
+	var allVehicles []stock.Vehicle
+	if allVehicles, err = s.store.ListVehicles(ctx); err != nil {
 		return err
 	}
-	p.Vehicles = activeVehicles(p.Vehicles, p.VehicleID)
-	for _, v := range p.Vehicles {
+	vehicleArchived := map[int64]bool{}
+	for _, v := range allVehicles {
+		if v.Archived() {
+			vehicleArchived[v.ID] = true
+		}
 		if v.ID == p.VehicleID {
 			p.Archived = v.Archived()
 		}
 	}
-	kits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID})
+	p.Vehicles = activeVehicles(allVehicles, p.VehicleID)
+	allKits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID, IncludeArchived: true})
 	if err != nil {
 		return err
 	}
-	p.Kits = s.kitViews(kits, p.Vehicles)
+	var activeKits, archivedKits []stock.Kit
+	for _, k := range allKits {
+		if p.VehicleID == 0 && vehicleArchived[k.VehicleID] {
+			continue
+		}
+		if k.Archived() {
+			archivedKits = append(archivedKits, k)
+		} else {
+			activeKits = append(activeKits, k)
+		}
+	}
+	p.ArchivedKitsCount = len(archivedKits)
+	if p.ShowArchivedKits {
+		p.Kits = s.kitViews(archivedKits, allVehicles)
+	} else {
+		p.Kits = s.kitViews(activeKits, allVehicles)
+	}
 	f := store.ServiceFilter{VehicleID: p.VehicleID, Limit: servicesPageSize + 1, Offset: (p.Page - 1) * servicesPageSize}
 	if p.Services, err = s.store.ListServices(ctx, f); err != nil {
 		return err

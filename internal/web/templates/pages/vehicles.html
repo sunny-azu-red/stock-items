@@ -19,7 +19,7 @@
         <span><strong>{{.Kits}}</strong> {{if eq .Kits 1}}kit{{else}}kits{{end}}</span>
         <span><strong>{{km $v.OdometerKm}}</strong></span>
       </span>
-      {{with .Next}}{{if not .VehicleArchived}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}{{end}}
+      {{if $v.Archived}}<span class="flex">{{template "archived-badge" $v.ArchivedAt}}</span>{{else}}{{with .Next}}{{if not .VehicleArchived}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}{{end}}{{end}}
     </span>
   </a>
   {{end}}
@@ -27,11 +27,11 @@
 <p class="mt flex">
   <a class="btn" href="/activity">{{icon "history"}} Activity</a>
   {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Trash ({{.TrashCount}})</a>{{end}}
-  {{if $d.ShowArchived}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
+  {{if $d.ShowArchived}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Active vehicles</a>
   {{else if $d.Archived}}<a class="btn btn-ghost" href="/vehicles?archived=1">{{icon "archive"}} {{plural $d.Archived "archived vehicle"}}</a>{{end}}
 </p>
 {{else if $d.ShowArchived}}
-<div class="card card-body muted">No archived vehicles. <a href="/vehicles">Back to vehicles</a></div>
+<div class="card card-body muted">No archived vehicles. <a href="/vehicles">Back to active vehicles</a></div>
 {{else}}
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "No vehicles yet" "Text" "Add your motorcycles and cars, then tag stock items with the vehicles they fit." "Href" "/vehicles/new" "Action" "Add vehicle")}}</div>
 {{end}}

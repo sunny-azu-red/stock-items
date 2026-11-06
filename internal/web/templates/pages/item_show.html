@@ -102,7 +102,7 @@
     <section class="card">
       <div class="card-head"><h2>{{icon "list-checks"}} Used in kits</h2></div>
       <ul class="list">
-        {{range $d.Kits}}<li><span class="grow"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a></span>{{template "chip-link" (dict "ID" .VehicleID "Name" .VehicleName "Color" .VehicleColor)}}</li>{{end}}
+        {{range $d.Kits}}<li><span class="grow title-row"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a>{{if .Archived}}{{template "archived-badge" .ArchivedAt}}{{end}}</span>{{template "chip-link" (dict "ID" .VehicleID "Name" .VehicleName "Color" .VehicleColor)}}</li>{{end}}
       </ul>
     </section>
     {{end}}

@@ -117,7 +117,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		pos[k.ID] = i
 	}
 	rows, err = s.pool.Query(ctx, `
-		SELECT l.kit_id, l.item_id, i.brand, i.name, i.unit, l.quantity, i.quantity, i.archived_at IS NOT NULL, l.intermediate
+		SELECT l.kit_id, l.item_id, i.brand, i.name, i.unit, l.quantity, i.quantity, i.archived_at, l.intermediate
 		FROM service_kit_lines l JOIN items i ON i.id = l.item_id
 		WHERE l.kit_id = ANY($1)
 		ORDER BY l.id`, ids)
@@ -130,9 +130,10 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var l stock.KitLine
 		var brand, name string
 		var inter bool
-		if err := rows.Scan(&kitID, &l.ItemID, &brand, &name, &l.Unit, &l.Need, &l.Have, &l.Archived, &inter); err != nil {
+		if err := rows.Scan(&kitID, &l.ItemID, &brand, &name, &l.Unit, &l.Need, &l.Have, &l.ArchivedAt, &inter); err != nil {
 			return nil, err
 		}
+		l.Archived = l.ArchivedAt != nil
 		l.ItemName = displayName(brand, name)
 		k := &kits[pos[kitID]]
 		if inter {

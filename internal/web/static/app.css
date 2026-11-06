@@ -569,7 +569,10 @@ a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transpare
 .kit-row .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .status-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 .status-ok { background: var(--ok-soft); color: var(--ok); }
-.status-short { background: var(--danger-soft); color: var(--danger); }
+.status-short, .status-danger { background: var(--danger-soft); color: var(--danger); }
+.status-warn { background: var(--warn-soft); color: var(--warn); }
+.status-muted { background: var(--surface-2); color: var(--muted); }
+.status-info { background: var(--info-soft); color: var(--info); }
 /* A kit's parts: table cells vertically centered, keeping status icons,
    wrapped item names, and quantity amounts balanced across the row. */
 .kit-lines .status-col { width: 40px; }

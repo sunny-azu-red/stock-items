@@ -199,8 +199,18 @@ func TestArchiveKitFlow(t *testing.T) {
 	page = a.get(kit)
 	expect(t, page, http.StatusOK, "Archived", `action="`+kit+`/restore"`)
 	expectNot(t, page, "Do this service")
-	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service <span class=\"badge badge-muted\">Archived</span>")
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service", "badge badge-muted", "status-muted")
+	expect(t, a.get("/services"), http.StatusOK, "1 archived kit →")
+	expect(t, a.get("/services?archived=1"), http.StatusOK, "Oil service", "← Active kits")
+	// Archiving the vehicle hides its kits from the all-vehicles services page,
+	// but keeps them visible when filtered to that vehicle.
+	expect(t, a.postV("/vehicles/"+itoa(k390)+"/archive", nil), http.StatusSeeOther)
+	expectNot(t, a.get("/services"), "archived kit →")
+	expect(t, a.get("/services?v="+itoa(k390)), http.StatusOK, "1 archived kit →")
+	expect(t, a.postV("/vehicles/"+itoa(k390)+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.get("/services"), http.StatusOK, "1 archived kit →")
 	expect(t, a.postV(kit+"/restore", nil), http.StatusSeeOther)
+	expectNot(t, a.get("/services"), "archived kit →")
 }
 
 // A service's parts go and come back with it over HTTP: deleted, undone,
@@ -283,4 +293,87 @@ func TestKitAndServiceSuggestions(t *testing.T) {
 
 	expect(t, a.get("/kits/new"), http.StatusOK, `<option value="Fork seals">`)
 	expect(t, a.get("/services/new"), http.StatusOK, `<option value="Fork seals">`)
+}
+
+func TestKitStatusIcons(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+
+	// 1. Kit with no parts (e.g. Valve check).
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)},
+		"name":       {"Valve check"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	valvesPath := rec.Header().Get("Location")
+
+	// On /services: empty kit has status-muted with minus and "No parts" badge.
+	svcPage := a.get("/services")
+	expect(t, svcPage, http.StatusOK,
+		"Valve check",
+		`<span class="status-icon status-muted"><svg class="icon" aria-hidden="true"><use href="#i-minus"></use></svg></span>`,
+		`<span class="badge badge-muted">No parts</span>`,
+	)
+
+	// 2. Kit with short parts.
+	rec = a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)},
+		"name":       {"Brake kit"},
+		"line_item":  {itoa(oil)},
+		"line_qty":   {"9999 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	shortPath := rec.Header().Get("Location")
+
+	svcPage = a.get("/services")
+	expect(t, svcPage, http.StatusOK,
+		"Brake kit",
+		`<span class="status-icon status-short"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span>`,
+		`<span class="badge badge-danger"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 1 part short</span>`,
+	)
+	expect(t, a.get(shortPath), http.StatusOK,
+		`<td class="status-col"><span class="status-icon status-short"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span></td>`,
+	)
+
+	// 3. Kit with ready parts.
+	rec = a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)},
+		"name":       {"Oil service"},
+		"line_item":  {itoa(oil)},
+		"line_qty":   {"100 ml"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	readyPath := rec.Header().Get("Location")
+
+	svcPage = a.get("/services")
+	expect(t, svcPage, http.StatusOK,
+		"Oil service",
+		`<span class="status-icon status-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>`,
+		`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg> Parts ready</span>`,
+	)
+	expect(t, a.get(readyPath), http.StatusOK,
+		`<td class="status-col"><span class="status-icon status-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span></td>`,
+	)
+
+	// 4. Kit with archived part line in kit_show.html.
+	// Archive the item used in the ready kit.
+	expect(t, a.postV(fmt.Sprintf("/items/%d/archive", oil), nil), http.StatusSeeOther)
+	expect(t, a.get(readyPath), http.StatusOK,
+		`<td class="status-col"><span class="status-icon status-muted"><svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg></span></td>`,
+	)
+
+	// 5. Item detail page: "Used in kits" shows archived badge inline.
+	expect(t, a.post("/services", url.Values{
+		"vehicle_id":   {itoa(k390)},
+		"kit_id":       {readyPath[len("/kits/"):]},
+		"title":        {"Oil service"},
+		"performed_on": {"2026-10-29"},
+	}), http.StatusSeeOther)
+	expect(t, a.postV(readyPath+"/archive", nil), http.StatusSeeOther)
+	expect(t, a.get(fmt.Sprintf("/items/%d", oil)), http.StatusOK,
+		`<span class="grow title-row"><a class="title" href="`+readyPath+`">Oil service</a><span class="badge badge-muted" title="Archived `,
+		`<svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg> Archived</span></span>`,
+	)
+	_ = valvesPath
 }

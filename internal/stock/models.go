@@ -416,12 +416,13 @@ type ServiceRef struct {
 
 // KitLine is one item (and needed quantity) of a kit.
 type KitLine struct {
-	ItemID   int64
-	ItemName string
-	Unit     Unit
-	Need     float64
-	Have     float64
-	Archived bool // the item is archived; the kit should be edited
+	ItemID     int64
+	ItemName   string
+	Unit       Unit
+	Need       float64
+	Have       float64
+	Archived   bool // the item is archived; the kit should be edited
+	ArchivedAt *time.Time
 }
 
 // Short is how much is missing to cover this line.

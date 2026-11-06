@@ -325,8 +325,8 @@ func TestArchiveItemFlow(t *testing.T) {
 	expect(t, a.get(path), http.StatusOK, "Archived", `action="`+path+`/restore"`)
 	stockPage := a.get("/stock")
 	expectNot(t, stockPage, "15W50 PRO 4 XP")
-	expect(t, a.get("/stock?archived=1"), http.StatusOK, "15W50 PRO 4 XP")
-	expect(t, a.get(kit), http.StatusOK, "15W50 PRO 4 XP", "badge-muted\" title=\"This item is archived")
+	expect(t, a.get("/stock?archived=1"), http.StatusOK, "15W50 PRO 4 XP", `<span class="badge badge-muted" title="Archived `, `<svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg> Archived</span>`)
+	expect(t, a.get(kit), http.StatusOK, "15W50 PRO 4 XP", `Edit the kit to replace or remove it."><svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg> Archived</span>`)
 
 	// Saving the kit keeps the archived line.
 	expect(t, a.get(kit+"/edit"), http.StatusOK, `value="`+itoa(oil)+`" `)

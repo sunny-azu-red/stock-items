@@ -114,6 +114,10 @@
         <input class="input" type="date" id="bought_on" name="bought_on" value="{{$f.BoughtOn}}">
         {{template "err" (index $e "bought_on")}}
       </div>
+      <div class="field">
+        <label for="bought_note">Note</label>
+        <input class="input" id="bought_note" name="bought_note" value="{{$f.BoughtNote}}" placeholder="e.g. on sale, 2 for 1">
+      </div>
     </div>
   </div>
   {{end}}

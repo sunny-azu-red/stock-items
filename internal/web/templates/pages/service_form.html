@@ -44,7 +44,7 @@
       {{end}}
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <div class="label-row"><label for="title">What was done</label>{{template "req"}}</div>
-        <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil service" list="service-titles">
+        <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil Service" list="service-titles">
         <datalist id="service-titles">{{range $d.ServiceTitles}}<option value="{{.}}">{{end}}</datalist>
         {{template "err" (index $e "title")}}
       </div>

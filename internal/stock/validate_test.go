@@ -59,6 +59,8 @@ func TestItemInputStartMovement(t *testing.T) {
 		{"date only: not bought", ItemInput{Quantity: 2, BoughtOn: &day}, MoveInitial, ""},
 		{"bought but no amount", ItemInput{TotalPrice: ptr(30.0)}, MovePurchase, "quantity"},
 		{"bad price", ItemInput{Quantity: 2, TotalPrice: ptr(-1.0)}, MovePurchase, "total_price"},
+		{"purchase with note", ItemInput{Quantity: 2, TotalPrice: ptr(30.0), BoughtNote: "on sale"}, MovePurchase, ""},
+		{"initial with note", ItemInput{Quantity: 2, BoughtNote: "gift"}, MoveInitial, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,11 +74,11 @@ func TestItemInputStartMovement(t *testing.T) {
 				t.Errorf("unexpected errors: %v", errs)
 			}
 			m := in.StartMovement(7)
-			if m.Kind != tt.kind || m.ItemID != 7 || m.Delta != in.Quantity {
-				t.Errorf("movement = %+v, want kind %s", m, tt.kind)
+			if m.Kind != tt.kind || m.ItemID != 7 || m.Delta != in.Quantity || m.Note != in.BoughtNote {
+				t.Errorf("movement = %+v, want kind %s and note %q", m, tt.kind, in.BoughtNote)
 			}
 			if m.Kind == MoveInitial && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != in.BoughtOn) {
-				t.Errorf("initial stock should carry only its date: %+v", m)
+				t.Errorf("initial stock should carry only its date and note: %+v", m)
 			}
 			if m.Kind == MovePurchase && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
 				t.Errorf("purchase details not carried over: %+v", m)
@@ -330,6 +332,7 @@ func TestTextAndNumberLimits(t *testing.T) {
 	}{
 		{"item brand", ItemInput{Name: "A", Unit: UnitPiece, Brand: long}.Validate(), "form"},
 		{"item notes", ItemInput{Name: "A", Unit: UnitPiece, Notes: longer}.Validate(), "form"},
+		{"item bought note", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: long}.Validate(), "form"},
 		{"sku code", ItemInput{Name: "A", Unit: UnitPiece, SKUs: []SKU{{Code: long, Kind: SKUOther}}}.Validate(), "sku_0"},
 		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(MaxOdometerKm + 1)}.Validate(), "odometer_km"},
 		{"vehicle plate", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Plate: long}.Validate(), "form"},

@@ -574,16 +574,16 @@ func TestKitNamesAndServiceTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefaults := []string{
-		"Air filter",
-		"Brake fluid",
-		"Brake pads (front)",
-		"Brake pads (rear)",
-		"Cabin filter",
-		"Clutch fluid",
+		"Air Filter",
+		"Brake Fluid",
+		"Brake Pads (Front)",
+		"Brake Pads (Rear)",
+		"Cabin Filter",
+		"Clutch Fluid",
 		"Coolant",
-		"Oil service",
-		"Spark plugs",
-		"Valve check",
+		"Oil Service",
+		"Spark Plugs",
+		"Valve Check",
 	}
 	if !slices.Equal(names, wantDefaults) {
 		t.Errorf("defaults = %v, want %v", names, wantDefaults)
@@ -627,7 +627,7 @@ func TestKitNamesAndServiceTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(withLower, "cabin filter") || slices.Contains(withLower, "Cabin filter") {
+	if !slices.Contains(withLower, "cabin filter") || slices.Contains(withLower, "Cabin Filter") {
 		t.Errorf("user casing should override default, got %v", withLower)
 	}
 }

@@ -34,25 +34,33 @@
 
 {{/* A kit as a clickable row: kitView. A kit of an archived vehicle shows
      no reminder, like its own page: nothing is due on a vehicle no longer kept. */}}
+{{define "kit-meta"}}
+{{if not .Kit.Archived}}
+{{if or (and (not .VehicleArchived) (or .Due.Summary .Kit.HasIntermediate)) .Kit.LastService}}
+<span class="meta">
+  {{if and (not .VehicleArchived) .Kit.HasIntermediate}}<span>{{if .NextInter}}Intermediate{{else}}Full{{end}}{{if or .Due.Summary .Kit.LastService}} ·{{end}}</span>{{end}}
+  {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
+  {{with .Kit.LastService}}<span>{{if and (not $.VehicleArchived) $.Due.Summary}}· {{end}}last {{date .PerformedOn}}</span>{{end}}
+</span>
+{{end}}
+{{else}}
+{{with .Kit.LastService}}<span class="meta"><span>last {{date .PerformedOn}}</span></span>{{end}}
+{{end}}
+{{end}}
+
+{{define "kit-status-icon"}}
+<span class="status-icon {{if .Kit.Archived}}status-muted{{else if .Readiness.Ready}}status-ok{{else if eq .Readiness.Lines 0}}status-muted{{else}}status-short{{end}}">{{if .Kit.Archived}}{{icon "archive"}}{{else if .Readiness.Ready}}{{icon "check"}}{{else if eq .Readiness.Lines 0}}{{icon "minus"}}{{else}}{{icon "x"}}{{end}}</span>
+{{end}}
+
 {{define "kit-row"}}
 <a class="kit-row{{if .Kit.Archived}} muted{{end}}" href="/kits/{{.Kit.ID}}">
-  <span class="status-icon {{if .Kit.Archived}}status-muted{{else if .Readiness.Ready}}status-ok{{else if eq .Readiness.Lines 0}}status-muted{{else}}status-short{{end}}">{{if .Kit.Archived}}{{icon "archive"}}{{else if .Readiness.Ready}}{{icon "check"}}{{else if eq .Readiness.Lines 0}}{{icon "minus"}}{{else}}{{icon "x"}}{{end}}</span>
+  {{template "kit-status-icon" .}}
   <span class="grow">
     <span class="title-row">
       <span class="title">{{.Kit.Name}}</span>
       <span class="chip" style="{{chipStyle .Kit.VehicleColor}}"><span class="dot"></span>{{.Kit.VehicleName}}</span>
     </span>
-    {{if not .Kit.Archived}}
-    {{if or (and (not .VehicleArchived) (or .Due.Summary .Kit.HasIntermediate)) .Kit.LastService}}
-    <span class="meta">
-      {{if and (not .VehicleArchived) .Kit.HasIntermediate}}<span>{{if .NextInter}}Intermediate{{else}}Full{{end}}{{if or .Due.Summary .Kit.LastService}} ·{{end}}</span>{{end}}
-      {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
-      {{with .Kit.LastService}}<span>{{if and (not $.VehicleArchived) $.Due.Summary}}· {{end}}last {{date .PerformedOn}}</span>{{end}}
-    </span>
-    {{end}}
-    {{else}}
-    {{with .Kit.LastService}}<span class="meta"><span>last {{date .PerformedOn}}</span></span>{{end}}
-    {{end}}
+    {{template "kit-meta" .}}
   </span>
   <span class="badges">{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{else}}{{if not .VehicleArchived}}{{template "due-badge" .Due}}{{end}}{{template "ready-badge" .Readiness}}{{end}}</span>
 </a>
@@ -171,17 +179,17 @@
 {{define "movement-table"}}{{$h := .Sort}}
 <div class="table-wrap">
 <table class="table">
-  <thead><tr>{{template "sort-th" ($h.Col "date" "Date" false)}}{{if .ShowItem}}{{template "sort-th" ($h.Col "item" "Item" false)}}{{end}}{{template "sort-th" ($h.Col "kind" "Type" false)}}{{template "sort-th" ($h.Col "change" "Change" true)}}{{template "sort-th" ($h.Col "price" "Price" true)}}<th>Note</th><th><span class="sr-only">Edit</span></th></tr></thead>
+  <thead><tr>{{template "sort-th" ($h.Col "date" "Date" false)}}{{if .ShowItem}}{{template "sort-th" ($h.Col "item" "Item" false)}}{{end}}{{template "sort-th" ($h.Col "kind" "Type" false)}}{{template "sort-th" ($h.Col "change" "Change" true)}}{{template "sort-th" ($h.Col "price" "Price" true)}}<th>Note</th><th><span class="sr-only">Actions</span></th></tr></thead>
   <tbody>
   {{range .Movements}}
     <tr>
       <td class="nowrap">{{date .OccurredOn}}</td>
       {{if $.ShowItem}}<td><a href="/items/{{.ItemID}}">{{.ItemName}}</a></td>{{end}}
-      <td class="nowrap">{{if .ServiceRecordID}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{.Kind.Label}}{{end}}</td>
+      <td class="nowrap">{{if .ServiceRecordID}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{.Kind.Label}}{{with .Supplier}} <span class="muted small">· {{.}}</span>{{end}}{{end}}</td>
       <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
       <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
-      <td class="muted small">{{.Supplier}}{{if and .Supplier .Note}} · {{end}}{{if not .ServiceRecordID}}{{.Note}}{{end}}</td>
-      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{end}}</td>
+      <td class="muted small">{{if .ServiceRecordID}}Consumed by service{{else}}{{.Note}}{{end}}</td>
+      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if .ServiceRecordID}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
     </tr>
   {{end}}
   </tbody>

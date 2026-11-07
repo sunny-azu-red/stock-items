@@ -86,3 +86,26 @@ Kit lines and tables use vertical centering (`vertical-align: middle` via standa
 * Keeps the row status disc (`[✕]`, `[✓]`), item name block (including the stock meter), and quantity figures (`NEED`, `IN STOCK`, `MISSING`) vertically balanced.
 * On mobile and narrow viewports where part names wrap onto multiple lines, middle alignment prevents large dead spaces under single-line quantities and maintains a balanced visual row.
 
+---
+
+## 7. Status Discs (`.status-icon`)
+
+Circular 30px indicators (`width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none;`) provide consistent visual anchors and state communication on list rows:
+* **Completed Services** (`service-list`): Green disc (`.status-ok`) with `icon "wrench"`.
+* **Service Kits** (`kit-row`, item page "Used in kits"): Readiness disc communicating stock status:
+  * `.status-ok` with `icon "check"`: All parts for the kit are in stock.
+  * `.status-short` with `icon "x"`: One or more parts are missing/short.
+  * `.status-muted` with `icon "minus"`: Kit has 0 part lines.
+  * `.status-muted` with `icon "archive"`: Kit is archived.
+
+---
+
+## 8. Capitalization: Catalog Entities vs. System Labels
+
+Pitbox maintains a strict distinction in text capitalization:
+* **Catalog Entities & Products (Title Case)**: Part names, brands, categories, services, vehicle names, and service kits use Title Case because they represent named catalog entities:
+  * e.g. `Hiflofiltro Oil Filter`, `Oil Service (Intermediate)`, `Air Filter`, `Brake Pads (Rear)`, `Oil & Fluids`, `Gaskets & O-Rings`.
+* **System Actions, Filters & Statuses (Sentence Case / Status Case)**: Actions, status indicators, notes, and filter options use sentence case or uppercase status:
+  * e.g. `Starting stock`, `All types`, `All vehicles`, `Out of stock`, `Clear filters`, `Consumed by service`, `1 PART SHORT`, `PARTS READY`.
+
+

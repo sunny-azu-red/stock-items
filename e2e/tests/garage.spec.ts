@@ -70,7 +70,7 @@ test("set up vehicles and the example inventory", async ({ page }) => {
     { brand: "KTM", name: "Oil Screen 1 O-Ring", qty: "2", vehicles: ["KTM 390"] },
     { brand: "KTM", name: "Oil Screen 2 O-Ring", qty: "3", vehicles: ["KTM 390"] },
     {
-      brand: "Silkolene", name: "15W50 PRO 4 XP", volume: true, qty: "525", qtyUnit: "ml", vehicles: ["KTM 390"], category: "Oil & fluids",
+      brand: "Silkolene", name: "15W50 PRO 4 XP", volume: true, qty: "525", qtyUnit: "ml", vehicles: ["KTM 390"], category: "Oil & Fluids",
       skus: [
         { code: "SK-80085", kind: "manufacturer", brand: "Silkolene", pack: "1", packUnit: "l" },
         { code: "SK-80086", kind: "manufacturer", brand: "Silkolene", pack: "4", packUnit: "l" },
@@ -145,8 +145,8 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
 
   // The category sits next to the vehicle chips and links back to the filtered stock.
   await silk.locator(".item-name").click();
-  await page.getByRole("link", { name: "Oil & fluids" }).click();
-  await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)fluids/);
+  await page.getByRole("link", { name: "Oil & Fluids" }).click();
+  await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)Fluids/);
   await expect(page.locator(".item-row")).toHaveCount(1);
 });
 
@@ -191,7 +191,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.locator("a.vehicle-card").filter({ has: page.locator(".name", { hasText: exact("KTM 390") }) }).click();
   await page.getByRole("link", { name: "Add kit" }).click();
 
-  await page.getByLabel("Name").fill("Oil service");
+  await page.getByLabel("Name").fill("Oil Service");
   await page.getByLabel("Kilometres", { exact: true }).fill("7500");
   await page.getByLabel("Months", { exact: true }).fill("12");
   const items = page.locator('select[name="line_item"]');
@@ -204,7 +204,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await qtys.nth(2).fill("1");
   await page.getByRole("button", { name: "Save kit" }).click();
 
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await expect(page.locator(".page-head")).toContainText("1 part short");
   await expect(page.locator(".page-head")).toContainText("Not done yet");
   await page.screenshot({ path: testInfo.outputPath("kit-short.png"), fullPage: true });
@@ -221,13 +221,13 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await expect(page.locator(".flash-success")).toContainText("Added 4 L");
 
   await page.goto("/services");
-  await page.getByRole("link", { name: /Oil service/ }).first().click();
+  await page.getByRole("link", { name: /Oil Service/ }).first().click();
   await expect(page.locator(".page-head")).toContainText("Parts ready");
   await page.getByRole("link", { name: "Do this service" }).click();
   await page.getByLabel("Odometer (km)").fill("12000");
   await page.getByRole("button", { name: /Save & take parts/ }).click();
 
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await expect(page.locator("main")).toContainText("1.7 L");
   await expect(page.locator("main")).toContainText("12\u202f000 km");
 
@@ -308,12 +308,12 @@ test("archive an item that a service still refers to", async ({ page }) => {
 test("fix a logged service", async ({ page }) => {
   await page.goto("/activity?kind=service");
   await page.locator('main a[href^="/services/"]').first().click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
   await page.getByLabel("Labour cost").fill("120");
   await page.getByRole("button", { name: "Save service" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Saved Oil service");
+  await expect(page.locator(".flash-success")).toContainText("Saved Oil Service");
   await expect(page.locator('dt:text-is("Labour") + dd')).toHaveText("120.00 EUR");
   await expect(page.locator("main")).toContainText("1.7 L");
 });
@@ -325,10 +325,10 @@ test("undo a deleted service", async ({ page }) => {
   await page.goto("/activity?kind=service");
   await page.locator('main a[href^="/services/"]').first().click();
   await page.getByRole("button", { name: /Delete/ }).click();
-  await expect(page.locator(".flash-success")).toContainText("Deleted Oil service");
+  await expect(page.locator(".flash-success")).toContainText("Deleted Oil Service");
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Restored Service: Oil service");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil service");
+  await expect(page.locator(".flash-success")).toContainText("Restored Service: Oil Service");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await page.goto("/stock");
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText(before as string);
 });
@@ -1129,12 +1129,12 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
 
   // Clicking "Do this service" pre-selects Intermediate and pre-fills the intermediate parts and title.
   await page.getByRole("link", { name: "Do this service" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil service (Intermediate)");
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service (Intermediate)");
   await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
 
   // Toggling to Full in the browser switches the title and parts to Full.
   await page.locator(".segmented label").filter({ hasText: "Full" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil service");
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service");
   await page.locator(".segmented label").filter({ hasText: "Intermediate" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil service (Intermediate)");
+  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service (Intermediate)");
 });

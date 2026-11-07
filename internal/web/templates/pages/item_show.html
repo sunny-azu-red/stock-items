@@ -102,7 +102,14 @@
     <section class="card">
       <div class="card-head"><h2>{{icon "list-checks"}} Used in kits</h2></div>
       <ul class="list">
-        {{range $d.Kits}}<li><span class="grow title-row"><a class="title" href="/kits/{{.ID}}">{{.Name}}</a>{{if .Archived}}{{template "archived-badge" .ArchivedAt}}{{end}}</span>{{template "chip-link" (dict "ID" .VehicleID "Name" .VehicleName "Color" .VehicleColor)}}</li>{{end}}
+        {{range $d.Kits}}<li>
+          {{template "kit-status-icon" .}}
+          <span class="grow">
+            <span class="title-row"><a class="title" href="/kits/{{.Kit.ID}}">{{.Kit.Name}}</a>{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{end}}</span>
+            {{template "kit-meta" .}}
+          </span>
+          {{template "chip-link" (dict "ID" .Kit.VehicleID "Name" .Kit.VehicleName "Color" .Kit.VehicleColor)}}
+        </li>{{end}}
       </ul>
     </section>
     {{end}}

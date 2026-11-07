@@ -221,14 +221,14 @@ func TestSKUErrorsLandOnTheirRow(t *testing.T) {
 
 func TestNewItemBoughtJustNow(t *testing.T) {
 	a := newApp(t)
-	expect(t, a.get("/items/new"), http.StatusOK, "Bought it just now?", `name="bought_on" value="2026-10-29"`)
+	expect(t, a.get("/items/new"), http.StatusOK, "Bought it just now?", `name="bought_on" value="2026-10-29"`, `name="bought_note"`)
 
 	form := url.Values{"name": {"M3.0 Ready To Use"}, "brand": {"Motorex"}, "unit": {"ml"}, "quantity": {"1"}, "quantity_unit": {"l"},
-		"total_price": {"67"}, "supplier": {"moto24"}, "bought_on": {"2026-10-29"}}
+		"total_price": {"67"}, "supplier": {"moto24"}, "bought_on": {"2026-10-29"}, "bought_note": {"promo pack"}}
 	rec := a.post("/items", form)
 	expect(t, rec, http.StatusSeeOther)
 	page := a.get(rec.Header().Get("Location"))
-	expect(t, page, http.StatusOK, "67.00 EUR / L", "<dt>Purchases</dt><dd>1</dd>", "moto24", "Purchase")
+	expect(t, page, http.StatusOK, "67.00 EUR / L", "<dt>Purchases</dt><dd>1</dd>", "moto24", "Purchase", "promo pack")
 	// The app clock, which the purchase is dated by: not the real one.
 	if st, _ := a.store.GetStats(context.Background(), time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)); st.StockValue != 67 || st.SpentThisYear != 67 {
 		t.Errorf("stats = %+v, want 67 value and spending", st)

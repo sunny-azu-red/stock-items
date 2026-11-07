@@ -267,21 +267,21 @@ func TestKitAndServiceSuggestions(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 
-	// New kit form contains default suggestions (including Clutch fluid and Cabin filter, without Chain & sprockets).
+	// New kit form contains default suggestions (including Clutch Fluid and Cabin Filter, without Chain & sprockets).
 	kitNew := a.get("/kits/new")
 	expect(t, kitNew, http.StatusOK,
 		`<datalist id="kit-names">`,
-		`<option value="Clutch fluid">`,
-		`<option value="Cabin filter">`,
+		`<option value="Clutch Fluid">`,
+		`<option value="Cabin Filter">`,
 	)
-	expectNot(t, kitNew, `<option value="Chain &amp; sprockets">`, `<option value="Chain & sprockets">`)
+	expectNot(t, kitNew, `<option value="Chain &amp; Sprockets">`, `<option value="Chain & Sprockets">`, `<option value="Chain &amp; sprockets">`, `<option value="Chain & sprockets">`)
 
 	// Service form has matching service-titles suggestions.
 	svcNew := a.get("/services/new")
 	expect(t, svcNew, http.StatusOK,
 		`<datalist id="service-titles">`,
-		`<option value="Clutch fluid">`,
-		`<option value="Cabin filter">`,
+		`<option value="Clutch Fluid">`,
+		`<option value="Cabin Filter">`,
 	)
 
 	// Custom kit name dynamically appears in future kit and service forms.
@@ -372,7 +372,7 @@ func TestKitStatusIcons(t *testing.T) {
 	}), http.StatusSeeOther)
 	expect(t, a.postV(readyPath+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get(fmt.Sprintf("/items/%d", oil)), http.StatusOK,
-		`<span class="grow title-row"><a class="title" href="`+readyPath+`">Oil service</a><span class="badge badge-muted" title="Archived `,
+		`<span class="title-row"><a class="title" href="`+readyPath+`">Oil service</a><span class="badge badge-muted" title="Archived `,
 		`<svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg> Archived</span></span>`,
 	)
 	_ = valvesPath

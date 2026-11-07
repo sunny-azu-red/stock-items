@@ -99,10 +99,11 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	services, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
 	page := a.get(item)
-	expect(t, page, http.StatusOK, `href="`+edit+`/edit"`)
+	svcLink := `href="/services/` + itoa(*services[0].ServiceRecordID) + `"`
+	expect(t, page, http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Consumed by service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
 	expectNot(t, page, `href="/movements/`+itoa(services[0].ID)+`/edit"`)
 	expect(t, a.get("/movements/"+itoa(services[0].ID)+"/edit"), http.StatusNotFound)
-	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`)
+	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Consumed by service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
 
 	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit purchase", `value="199.00"`, `value="Moto shop"`, `name="amount" value="1"`)
 	expect(t, a.postV(edit, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19.90"}, "occurred_on": {"2027-01-01"}}),

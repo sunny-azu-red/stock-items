@@ -31,11 +31,11 @@ type itemForm struct {
 	ExpiresOn, Location, Notes  string
 	// How the starting stock of a new item was bought (create only), and
 	// the free-text shopping entry it was bought from, if any.
-	TotalPrice, Supplier, BoughtOn string
-	ShoppingID                     int64
-	VehicleIDs                     []int64
-	SKUs                           []skuRow
-	Errors                         stock.Errors
+	TotalPrice, Supplier, BoughtOn, BoughtNote string
+	ShoppingID                                 int64
+	VehicleIDs                                 []int64
+	SKUs                                       []skuRow
+	Errors                                     stock.Errors
 	// Stored is the saved name while editing, for the heading: what is
 	// typed may be blank.
 	Stored string
@@ -115,8 +115,9 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		f.Errors.Add("quantity", "Enter the amount in stock (0 if none)")
 	}
 	if isNew {
-		f.TotalPrice, f.Supplier, f.BoughtOn = formText(r, "total_price"), formText(r, "supplier"), formText(r, "bought_on")
+		f.TotalPrice, f.Supplier, f.BoughtOn, f.BoughtNote = formText(r, "total_price"), formText(r, "supplier"), formText(r, "bought_on"), formText(r, "bought_note")
 		in.Supplier = f.Supplier
+		in.BoughtNote = f.BoughtNote
 		if id := parseOptID(formText(r, "shopping_id")); id != nil {
 			f.ShoppingID = *id
 		}
@@ -563,7 +564,7 @@ type itemPage struct {
 	Vehicles      []stock.Vehicle
 	VehicleMap    map[int64]stock.Vehicle
 	Movements     []stock.Movement
-	Kits          []stock.Kit
+	Kits          []kitView
 	UnitPrice     *float64
 	StockValue    *float64
 	Move          movementForm
@@ -629,7 +630,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		return itemPage{}, err
 	}
 	p := itemPage{
-		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: kits,
+		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: s.kitViews(kits, vehicles),
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),

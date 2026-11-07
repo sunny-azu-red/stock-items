@@ -487,9 +487,9 @@ func (s *Store) Categories(ctx context.Context) ([]string, error) {
 	return s.distinct(ctx, `
 		SELECT DISTINCT ON (lower(c)) c FROM (
 			SELECT category AS c, 0 AS pref FROM items WHERE category <> ''
-			UNION SELECT unnest(ARRAY['Oil & fluids', 'Filters', 'Brakes', 'Gaskets & o-rings', 'Chain & sprockets',
-			                          'Electrical', 'Tyres', 'Cleaning & care', 'Hardware', 'Tools',
-			                          'Maintenance kits', 'Bearings & seals', 'Controls & cables', 'Suspension']), 1
+			UNION SELECT unnest(ARRAY['Oil & Fluids', 'Filters', 'Brakes', 'Gaskets & O-Rings', 'Chain & Sprockets',
+			                          'Electrical', 'Tyres', 'Cleaning & Care', 'Hardware', 'Tools',
+			                          'Maintenance Kits', 'Bearings & Seals', 'Controls & Cables', 'Suspension']), 1
 		) x ORDER BY lower(c), pref, c COLLATE "C"`)
 }
 

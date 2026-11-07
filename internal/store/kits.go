@@ -407,9 +407,9 @@ func (s *Store) KitNames(ctx context.Context) ([]string, error) {
 			SELECT name AS n, 0 AS pref FROM service_kits WHERE name <> ''
 			UNION
 			SELECT title AS n, 0 AS pref FROM service_records WHERE title <> ''
-			UNION SELECT unnest(ARRAY['Oil service', 'Air filter', 'Brake pads (front)', 'Brake pads (rear)',
-			                          'Brake fluid', 'Cabin filter', 'Clutch fluid', 'Coolant',
-			                          'Spark plugs', 'Valve check']), 1
+			UNION SELECT unnest(ARRAY['Oil Service', 'Air Filter', 'Brake Pads (Front)', 'Brake Pads (Rear)',
+			                          'Brake Fluid', 'Cabin Filter', 'Clutch Fluid', 'Coolant',
+			                          'Spark Plugs', 'Valve Check']), 1
 		) x ORDER BY lower(n), pref, n COLLATE "C"`)
 }
 

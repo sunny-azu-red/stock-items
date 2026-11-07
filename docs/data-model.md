@@ -37,7 +37,7 @@ form_submissions (one-time form keys; no foreign keys)
 
 **stock_movements:** the ledger.
 - `kind`: `initial` (stock already on the shelf when the item was created), `purchase`, `use`, `correction` (count/edit/quick +), `service`.
-- A new item's starting stock is a `purchase` when a price or shop is entered on the form (`stock.ItemInput.StartMovement`), otherwise `initial`. Only priced purchases feed the last price, stock value and spending.
+- A new item's starting stock is a `purchase` when a price or shop is entered on the form (`stock.ItemInput.StartMovement`), otherwise `initial`. Starting stock can also carry an optional note (`stock.ItemInput.BoughtNote`). Only priced purchases feed the last price, stock value and spending.
 - `delta`: signed, in base units, rounded to two decimals (`stock.RoundQty`) before it is applied, so the stored delta is exactly the change to the quantity.
 - Optional `total_price` and `supplier` (purchases only: `stock.MovementInput.Validate`), `note`, `occurred_on`. `occurred_on` must be between 1990-01-01 and tomorrow (`stock.CheckEventDate`).
 - `service_record_id` is set for parts used by a service, and only for them: a CHECK (`stock_movements_service_record_check`, migration 00014) holds `(kind = 'service') = (service_record_id IS NOT NULL)`, and `stock.MovementInput.Validate` says the same. Its foreign key is `ON DELETE RESTRICT`: a service with parts can't be deleted in the database, nor its vehicle (which cascades to its services), so a service's parts always point at it. The store returns the parts and deletes their movements before the service (`DeleteService`, `UpdateService`). Migration 00014 stops, changing nothing, if a table row or a trash snapshot breaks the rule (it names their ids).

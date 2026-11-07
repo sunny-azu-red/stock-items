@@ -72,11 +72,12 @@ type ItemInput struct {
 	// QuantityWas is the quantity the edit form was opened with. When
 	// Quantity still equals it, an update leaves the stock alone.
 	QuantityWas *float64
-	// TotalPrice, Supplier and BoughtOn describe how a new item's starting
+	// TotalPrice, Supplier, BoughtOn and BoughtNote describe how a new item's starting
 	// stock was bought. They are only used on create; see StartMovement.
 	TotalPrice *float64
 	Supplier   string
 	BoughtOn   *time.Time
+	BoughtNote string
 	// Version is the item's version as the edit form was opened (see
 	// Item.Version); unused on create.
 	Version int
@@ -93,11 +94,11 @@ func (in ItemInput) Bought() bool { return in.TotalPrice != nil || in.Supplier !
 // was already on the shelf.
 func (in ItemInput) StartMovement(itemID int64) MovementInput {
 	if !in.Bought() {
-		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity, OccurredOn: in.BoughtOn}
+		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity, Note: in.BoughtNote, OccurredOn: in.BoughtOn}
 	}
 	return MovementInput{
 		ItemID: itemID, Kind: MovePurchase, Delta: in.Quantity,
-		TotalPrice: in.TotalPrice, Supplier: in.Supplier, OccurredOn: in.BoughtOn,
+		TotalPrice: in.TotalPrice, Supplier: in.Supplier, Note: in.BoughtNote, OccurredOn: in.BoughtOn,
 	}
 }
 
@@ -109,6 +110,7 @@ func (in *ItemInput) Normalize() {
 	in.Location = strings.TrimSpace(in.Location)
 	in.Notes = strings.TrimSpace(in.Notes)
 	in.Supplier = strings.TrimSpace(in.Supplier)
+	in.BoughtNote = strings.TrimSpace(in.BoughtNote)
 	skus := in.SKUs[:0]
 	for _, s := range in.SKUs {
 		s.Code = strings.TrimSpace(s.Code)
@@ -174,6 +176,7 @@ func (in ItemInput) Validate() Errors {
 	limitText(errs, maxShortText, "Category", in.Category)
 	limitText(errs, maxShortText, "Location", in.Location)
 	limitText(errs, maxShortText, "Shop", in.Supplier)
+	limitText(errs, maxShortText, "Note", in.BoughtNote)
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	for i, sku := range in.SKUs {
 		if utf8.RuneCountInString(sku.Code) > maxShortText || utf8.RuneCountInString(sku.Brand) > maxShortText {

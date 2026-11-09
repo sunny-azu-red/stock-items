@@ -494,3 +494,34 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 		expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.want+"</h1>")
 	}
 }
+
+func TestStockRowCategoryAndSKUThreshold(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+
+	// Create an item with a category and 4 SKUs
+	rec := a.post("/items", url.Values{
+		"name":     {"Air Filter Pro"},
+		"brand":    {"TwinAir"},
+		"category": {"Filters"},
+		"unit":     {"piece"},
+		"sku_code": {"TA-001", "TA-002", "TA-003", "TA-004"},
+		"sku_kind": {"manufacturer", "manufacturer", "manufacturer", "manufacturer"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+
+	// In the stock list, the row displays:
+	// 1. The category badge linking to /stock?cat=Filters
+	// 2. The first 2 SKUs visible, and remaining hidden with "+2 more"
+	stockPage := a.get("/stock")
+	expect(t, stockPage, http.StatusOK,
+		`href="/stock?cat=Filters"`,
+		`title="Show all Filters in stock"`,
+		`Filters</a>`,
+		`>TA-001</a>`,
+		`>TA-002</a>`,
+		`hidden>TA-003</a>`,
+		`hidden>TA-004</a>`,
+		`+2 more</a>`,
+	)
+}

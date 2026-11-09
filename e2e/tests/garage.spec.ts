@@ -134,18 +134,17 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   await expect(page.locator(".item-row")).toHaveCount(1);
   await expect(page.locator(".item-row")).toContainText("Hiflofiltro");
 
-  // Only three part numbers show in a row; "+1 more" reveals the rest in place.
+  // Only two part numbers show in a row; "+2 more" reveals the rest in place.
   const silk = page.locator(".item-row").filter({ hasText: "Silkolene" });
   await page.goto("/stock");
-  await expect(silk.locator(".sku:visible")).toHaveCount(3);
-  await silk.getByRole("link", { name: "Show 1 more part number" }).click();
+  await expect(silk.locator(".sku:visible")).toHaveCount(2);
+  await silk.getByRole("link", { name: "Show 2 more part numbers" }).click();
   await expect(page).toHaveURL(/\/stock$/);
   await expect(silk.locator(".sku:visible")).toHaveCount(4);
-  await expect(silk.getByRole("link", { name: "SK-80088" })).toBeFocused();
+  await expect(silk.getByRole("link", { name: "SK-80087" })).toBeFocused();
 
-  // The category sits next to the vehicle chips and links back to the filtered stock.
-  await silk.locator(".item-name").click();
-  await page.getByRole("link", { name: "Oil & Fluids" }).click();
+  // The category tag sits on the row and links to the filtered stock.
+  await silk.getByRole("link", { name: "Oil & Fluids" }).click();
   await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)Fluids/);
   await expect(page.locator(".item-row")).toHaveCount(1);
 });

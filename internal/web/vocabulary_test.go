@@ -28,6 +28,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `Create a kit`, use: `"Add kit"`},
 		{re: `Activity log`, use: `"Activity"`},
 		{re: `Save changes`, use: `"Save <thing>"`},
+		{re: `\bWhat was done\b`, use: `"Work performed"`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},
 		{re: `data-confirm`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html"},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},

@@ -1055,7 +1055,7 @@ test("a save that seems stuck can be tried again, and saves once", async ({ page
   ]);
   await form.waitForLoadState();
   await form.getByLabel("Vehicle", { exact: true }).selectOption({ label: "KTM 390" });
-  await form.getByLabel("What was done").fill("Chain clean (retried)");
+  await form.getByLabel("Work performed").fill("Chain clean (retried)");
 
   // The first save is held on its way to the server. Once let go it is
   // saved, and only then does the retry arrive, as after a slow network.
@@ -1129,12 +1129,12 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
 
   // Clicking "Do this service" pre-selects Intermediate and pre-fills the intermediate parts and title.
   await page.getByRole("link", { name: "Do this service" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service (Intermediate)");
+  await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
   await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
 
   // Toggling to Full in the browser switches the title and parts to Full.
   await page.locator(".segmented label").filter({ hasText: "Full" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service");
+  await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service");
   await page.locator(".segmented label").filter({ hasText: "Intermediate" }).click();
-  await expect(page.getByLabel("What was done")).toHaveValue("Oil Service (Intermediate)");
+  await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
 });

@@ -47,7 +47,7 @@ On kit and service part rows, pick the unit next to the quantity: choosing an it
 - **Do this service** opens the service form with the kit's parts filled in (for the schedule that is up next when the kit has an intermediate schedule; you can also switch between **Full** and **Intermediate** on the form). Adjust quantities, remove what you didn't use, enter the odometer and save. The parts are taken from stock and the vehicle's odometer is updated. If parts are short, every short row is marked and nothing is saved.
 - Made a mistake? **Edit** the service (on its page): change the date, odometer, title, labour, notes or parts. The old parts go back in stock and the new ones are taken; if a part is short, nothing changes. Or delete the service. Its parts go back in stock, and if it moved the vehicle's odometer (and you haven't changed the odometer since), the odometer goes back too.
 
-You can also log a service without a kit (Services → Log service), e.g. for a one-off repair. **What was done** suggests common maintenance jobs as well as your saved kits and past services.
+You can also log a service without a kit (Services → Log service), e.g. for a one-off repair. **Work performed** suggests common maintenance jobs as well as your saved kits and past services.
 
 ## Shopping
 

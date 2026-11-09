@@ -81,6 +81,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | Shopping list (the list, and its dashboard tile) · N suggested (what the list could take) | To buy |
 | All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
 | All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |
+| Work performed (the service form field) | What was done |
 
 - Record actions sit in the page header: Edit first, Archive (plain style, it can be undone), Delete (red, the trash icon), Restore (primary).
 - Nothing that can be undone asks first; only the trash's Delete permanently and Empty do (`data-confirm`).

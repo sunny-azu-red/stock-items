@@ -3,7 +3,10 @@
 <div class="page-head">
   <div>
     <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
-    <p class="sub">{{if $f.ID}}Saving puts the old parts back in stock and takes the ones below.{{else}}The parts below are taken from stock when you save.{{end}}</p>
+    <div class="sub flex">
+      {{if $f.KitID}}<a class="badge badge-muted" href="/kits/{{$f.KitID}}" target="_blank" title="View kit in new tab">{{icon "list-checks"}} {{$f.KitName}}</a>{{end}}
+      <span>{{if $f.ID}}Saving puts the old parts back in stock and takes the ones below.{{else}}The parts below are taken from stock when you save.{{end}}</span>
+    </div>
   </div>
 </div>
 
@@ -23,24 +26,21 @@
   {{if $f.ID}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}
+  {{if or $f.KitID $f.ID}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   <div class="form-section">
     <div class="form-grid">
+      {{if not (or $f.KitID $f.ID)}}
       <div class="field{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
-        {{if or $f.KitID $f.ID}}
-        <span class="label">Vehicle</span>
-        <input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">
-        <div>{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{if $f.KitID}} <span class="muted small">kit: {{$f.KitName}}</span>{{end}}</div>
-        {{else}}
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
         <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
-        {{end}}
         {{template "err" (index $e "vehicle_id")}}
         {{template "err" (index $e "kit_id")}}
       </div>
+      {{end}}
       {{if $d.KitHasInter}}
       <fieldset class="field">
         <legend>Schedule</legend>
@@ -51,7 +51,7 @@
       </fieldset>
       {{end}}
       <div class="field{{if index $e "title"}} has-error{{end}}">
-        <div class="label-row"><label for="title">What was done</label>{{template "req"}}</div>
+        <div class="label-row"><label for="title">Work performed</label>{{template "req"}}</div>
         <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil Service" list="service-titles">
         {{template "datalist" (dict "ID" "service-titles" "Options" $d.ServiceTitles)}}
         {{template "err" (index $e "title")}}

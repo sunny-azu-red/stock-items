@@ -637,12 +637,12 @@ func TestAccessibilityDetails(t *testing.T) {
 	// Only the selected tab is in the tab order; the price label names the currency.
 	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-bought" aria-controls="panel-bought" aria-selected="true">`,
 		`id="tab-used" aria-controls="panel-used" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
-	// A fixed vehicle has no <label for> pointing at nothing.
+	// A fixed vehicle is carried as a hidden input and has no vehicle picker or label.
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	edit := a.get(rec.Header().Get("Location") + "/edit")
-	expect(t, edit, http.StatusOK, `<span class="label">Vehicle</span>`)
-	expectNot(t, edit, `for="vehicle_id"`)
+	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`">`)
+	expectNot(t, edit, `for="vehicle_id"`, `id="vehicle_id"`)
 	// The item picker is marked when it is what's wrong.
 	expect(t, a.post("/shopping", url.Values{"item_id": {"999999"}}), http.StatusUnprocessableEntity,
 		`<div class="field has-error">
@@ -698,6 +698,8 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
+		`<a class="badge badge-muted" href="/kits/`+kitID+`" target="_blank" title="View kit in new tab"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</a>`,
+		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
 		`name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="Oil service" checked`,
 		`id="title" name="title" value="Oil service"`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`)

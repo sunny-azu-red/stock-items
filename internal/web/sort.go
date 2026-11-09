@@ -84,6 +84,14 @@ func (o sortOrder) Dir() string {
 // Natural reports whether o runs in its key's natural direction.
 func (o sortOrder) Natural() bool { return o.Desc == o.spec.natural(o.Key) }
 
+// Custom reports whether o differs from its spec's default sort.
+func (o sortOrder) Custom() bool {
+	if o.spec == nil {
+		return false
+	}
+	return o.Key != o.spec.Default || !o.Natural()
+}
+
 // set writes o into q as sort and dir, leaving out the page's default key
 // and the key's natural direction, so links stay short.
 func (o sortOrder) set(q url.Values) {
@@ -114,6 +122,26 @@ type sortHeads struct {
 	Path   string
 	Query  url.Values // the page's other parameters, which every link keeps
 	Anchor string     // e.g. "history", to come back to the table
+}
+
+// Custom reports whether the table is sorted differently from its default.
+func (h sortHeads) Custom() bool { return h.Order.Custom() }
+
+// ResetHref returns the URL to restore the table to its default order,
+// keeping any other query parameters the table has.
+func (h sortHeads) ResetHref() template.URL {
+	q := url.Values{}
+	for k, v := range h.Query {
+		q[k] = v
+	}
+	q.Del("sort")
+	q.Del("dir")
+	q.Del("page")
+	href := joinQuery(h.Path, q.Encode())
+	if h.Anchor != "" {
+		href += "#" + h.Anchor
+	}
+	return template.URL(href) //nolint:gosec // the page's own path and a url.Values query
 }
 
 // sortCol is one column header.
@@ -186,7 +214,7 @@ var (
 	}}
 	// An item's history has no item column.
 	historySorts = &sortSpec{Default: store.MoveSortDate, Keys: slices.DeleteFunc(slices.Clone(activitySorts.Keys), func(k sortKey) bool { return k.Key == store.MoveSortItem })}
-	kitSorts     = &sortSpec{Keys: []sortKey{
+	kitSorts     = &sortSpec{Default: stock.KitSortItem, Keys: []sortKey{
 		{Key: stock.KitSortItem},
 		{Key: stock.KitSortNeed, Desc: true},
 		{Key: stock.KitSortHave, Desc: true},

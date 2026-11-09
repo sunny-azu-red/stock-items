@@ -61,15 +61,15 @@ func TestSortHeads(t *testing.T) {
 		t.Errorf("ascending price: %+v", c)
 	}
 
-	// An item's history has no item column, and comes back to the table.
-	hist := sortHeads{Order: historySorts.parse(url.Values{"sort": {"item"}}), Path: "/items/7", Anchor: "history"}
+	// An item's history has no item column, and its links stay on the page.
+	hist := sortHeads{Order: historySorts.parse(url.Values{"sort": {"item"}}), Path: "/items/7"}
 	if hist.Order.Key != "date" || !hist.Order.Desc {
 		t.Errorf("sort=item on an item's history: %+v", hist.Order)
 	}
 	if c := hist.Col("item", "Item", false); c.Href != "" {
 		t.Errorf("item column on an item's history: %+v", c)
 	}
-	if c := hist.Col("date", "Date", false); c.Sort != "descending" || c.Href != "/items/7?dir=asc#history" {
+	if c := hist.Col("date", "Date", false); c.Sort != "descending" || c.Href != "/items/7?dir=asc" {
 		t.Errorf("date on an item's history: %+v", c)
 	}
 
@@ -81,9 +81,41 @@ func TestSortHeads(t *testing.T) {
 			t.Errorf("%s: %+v %v", raw, o, o.Values())
 		}
 	}
-	// A kit's lines have no default key, so no direction either.
-	if o := kitSorts.parse(url.Values{"dir": {"desc"}}); o.Key != "" || o.Desc || len(o.Values()) != 0 {
-		t.Errorf("kit without a key: %+v", o)
+	// A kit's lines default to item ascending, so dir=desc flips it.
+	if o := kitSorts.parse(url.Values{"dir": {"desc"}}); o.Key != "item" || !o.Desc || o.Values().Get("dir") != "desc" {
+		t.Errorf("kit with dir=desc: %+v", o)
+	}
+
+	// Custom reports whether the sort differs from the default.
+	if activitySorts.parse(nil).Custom() {
+		t.Error("activity default sort reported as custom")
+	}
+	if !activitySorts.parse(url.Values{"sort": {"price"}}).Custom() {
+		t.Error("sort=price on activity not reported as custom")
+	}
+	if !activitySorts.parse(url.Values{"dir": {"asc"}}).Custom() {
+		t.Error("dir=asc on activity not reported as custom")
+	}
+	if historySorts.parse(nil).Custom() {
+		t.Error("history default sort reported as custom")
+	}
+	if !historySorts.parse(url.Values{"dir": {"asc"}}).Custom() {
+		t.Error("dir=asc on history not reported as custom")
+	}
+	if kitSorts.parse(nil).Custom() {
+		t.Error("kit default sort reported as custom")
+	}
+	if !kitSorts.parse(url.Values{"sort": {"missing"}}).Custom() {
+		t.Error("sort=missing on kit not reported as custom")
+	}
+	if !kitSorts.parse(url.Values{"dir": {"desc"}}).Custom() {
+		t.Error("dir=desc on kit not reported as custom")
+	}
+	if hist.Custom() {
+		t.Error("sort=item (unknown) on history reported as custom")
+	}
+	if got := hist.ResetHref(); got != "/items/7" {
+		t.Errorf("history ResetHref: %q, want /items/7", got)
 	}
 }
 
@@ -110,21 +142,28 @@ func TestActivitySortHeaders(t *testing.T) {
 		`<th class="num" aria-sort="none"><a class="sort-link" href="/activity?sort=change"`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="/activity?sort=price"`,
 		"Every change to your stock, newest first.")
+	if strings.Contains(rec.Body.String(), "Reset order") {
+		t.Error(`"Reset order" on activity default sort`)
+	}
 
 	// By price, with a kind chosen: the links keep the kind, the chips and
-	// the CSV keep the sort.
+	// the CSV keep the sort, and Reset order goes back keeping the kind.
 	rec = a.get("/activity?sort=price&kind=bought")
 	expect(t, rec, http.StatusOK,
 		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc&amp;kind=bought&amp;sort=price"`,
 		`<th aria-sort="none"><a class="sort-link" href="/activity?kind=bought" title="Sort by Date, descending">`,
 		`href="/activity?sort=price">All types</a>`,
 		`href="/activity?kind=used&amp;sort=price">Used</a>`,
-		`href="/activity/export.csv?kind=bought&amp;sort=price"`)
-	expect(t, rec, http.StatusOK, "Every change to your stock, by price, highest first.")
+		`href="/activity/export.csv?kind=bought&amp;sort=price"`,
+		`href="/activity?kind=bought" title="Show the newest changes first">Reset order`,
+		`class="icon"`,
+		"Every change to your stock, by price, highest first",
+		"·")
 	inOrder(t, table(rec.Body.String()), "Oil shop", "Pads shop")
 	rec = a.get("/activity?sort=price&dir=asc&kind=bought")
 	expect(t, rec, http.StatusOK, `<th class="num" aria-sort="ascending"><a class="sort-link sorted" href="/activity?kind=bought&amp;sort=price"`,
-		"by price, lowest first.")
+		"by price, lowest first",
+		"·")
 	inOrder(t, table(rec.Body.String()), "Pads shop", "Oil shop")
 
 	// The CSV comes in the same order.
@@ -165,20 +204,34 @@ func TestItemHistorySort(t *testing.T) {
 
 	rec := a.get(path)
 	expect(t, rec, http.StatusOK, `id="history"`,
-		`<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc#history"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=price#history"`)
+		`<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc"`,
+		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=price"`)
 	if strings.Contains(rec.Body.String(), "sort=item") {
 		t.Error("an item's history offers to sort by item")
+	}
+	if strings.Contains(rec.Body.String(), "Reset order") {
+		t.Error(`"Reset order" on an item's default history order`)
 	}
 	inOrder(t, table(rec.Body.String()), "Cheap shop", "Dear shop")
 
 	rec = a.get(path + "?sort=price")
-	expect(t, rec, http.StatusOK, `<th class="num" aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc&amp;sort=price#history"`)
+	expect(t, rec, http.StatusOK,
+		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc&amp;sort=price"`,
+		`href="`+path+`" title="Show the newest changes first">`,
+		"Reset order")
 	inOrder(t, table(rec.Body.String()), "Dear shop", "Cheap shop")
 	rec = a.get(path + "?sort=price&dir=asc")
 	inOrder(t, table(rec.Body.String()), "Cheap shop", "Dear shop")
-	// There is no item column to sort by here: the default instead.
-	expect(t, a.get(path+"?sort=item"), http.StatusOK, `<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc#history"`)
+	// Custom direction on the default key also offers Reset order.
+	expect(t, a.get(path+"?dir=asc"), http.StatusOK,
+		`href="`+path+`" title="Show the newest changes first">`,
+		"Reset order")
+	// There is no item column to sort by here: the default instead, with no Reset order.
+	rec = a.get(path + "?sort=item")
+	expect(t, rec, http.StatusOK, `<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc"`)
+	if strings.Contains(rec.Body.String(), "Reset order") {
+		t.Error(`"Reset order" when falling back to default sort`)
+	}
 }
 
 func TestKitPartsSort(t *testing.T) {
@@ -198,33 +251,33 @@ func TestKitPartsSort(t *testing.T) {
 	}
 	path := "/kits/" + itoa(id)
 
-	// The kit's own order, with every column ready to sort.
+	// The kit defaults to item ascending, with every column ready to sort.
 	rec := a.get(path)
 	expect(t, rec, http.StatusOK,
-		`<th aria-sort="none"><a class="sort-link" href="`+path+`?sort=item"`,
+		`<th aria-sort="ascending"><a class="sort-link sorted" href="`+path+`?dir=desc" title="Sort by Item, descending">Item`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=need"`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=have"`,
 		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=missing"`)
 	if strings.Contains(rec.Body.String(), "Reset order") {
-		t.Error(`"Reset order" link on the kit's own order`)
+		t.Error(`"Reset order" link on the kit's default order`)
 	}
 	inOrder(t, table(rec.Body.String()), "O-Ring", "Rear Brake Pads", "Silkolene")
 
-	// What is missing first, then a way back to the kit's order.
+	// What is missing first, then a way back to item ascending.
 	rec = a.get(path + "?sort=missing")
 	expect(t, rec, http.StatusOK,
 		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc&amp;sort=missing"`,
-		`href="`+path+`" title="Show the parts in the order of the kit">`)
+		`href="`+path+`" title="Show the parts sorted by item, A–Z">`)
 	inOrder(t, table(rec.Body.String()), "Silkolene", "Rear Brake Pads", "O-Ring")
 
 	rec = a.get(path + "?sort=item&dir=desc")
-	expect(t, rec, http.StatusOK, `<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?sort=item"`)
+	expect(t, rec, http.StatusOK, `<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`"`)
 	inOrder(t, table(rec.Body.String()), "Silkolene", "OEM Rear Brake Pads", "OEM Oil Filter O-Ring")
-	inOrder(t, table(a.get(path+"?sort=item").Body.String()), "OEM Oil Filter O-Ring", "OEM Rear Brake Pads", "Silkolene")
 	inOrder(t, table(a.get(path+"?sort=have").Body.String()), "Silkolene", "O-Ring", "Rear Brake Pads")
 
-	// Unknown: the kit's own order.
-	inOrder(t, table(a.get(path+"?sort=bogus&dir=desc").Body.String()), "O-Ring", "Rear Brake Pads", "Silkolene")
+	// Unknown: default item ascending, or descending if dir=desc.
+	inOrder(t, table(a.get(path+"?sort=bogus").Body.String()), "OEM Oil Filter O-Ring", "OEM Rear Brake Pads", "Silkolene")
+	inOrder(t, table(a.get(path+"?sort=bogus&dir=desc").Body.String()), "Silkolene", "OEM Rear Brake Pads", "OEM Oil Filter O-Ring")
 }
 
 func TestStockSortBy(t *testing.T) {

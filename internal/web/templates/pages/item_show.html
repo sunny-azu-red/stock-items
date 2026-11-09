@@ -57,7 +57,7 @@
       <div class="card-head">
         <h2>{{icon "history"}} History</h2>
         <span class="meta">
-          {{if $d.History.Order.Key}}<a class="more sort-reset" href="/items/{{$it.ID}}#history" title="Show the newest changes first">{{icon "x"}} Reset order</a><span>·</span>{{end}}
+          {{if $d.History.Custom}}<a class="more sort-reset" href="{{$d.History.ResetHref}}" title="Show the newest changes first">{{icon "x"}} Reset order</a><span>·</span>{{end}}
           {{if $d.HistoryCapped}}<a class="more" href="{{withQuery "/activity" $d.AllEntriesQuery}}">Full history →</a>{{else}}<span>{{plural (len $d.Movements) "entry"}}</span>{{end}}
         </span>
       </div>

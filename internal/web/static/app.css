@@ -135,6 +135,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .page-head .sub { color: var(--muted); margin: 4px 0 0; }
+.page-head .sub.flex { gap: 6px; }
 .item-head { align-items: center; row-gap: 12px; }
 .item-head > .item-head-meta, .item-head > .sub { flex-basis: 100%; margin: 0; }
 .item-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

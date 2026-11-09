@@ -33,7 +33,7 @@
         <button class="btn btn-sm" type="submit">{{icon "shopping-cart"}} Add missing</button>
       </form>
       {{end}}
-      <span class="meta">{{if .Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{.KitID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.ShortLines}} · {{.Readiness.ShortLines}} short{{end}}</span></span>
+      <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts sorted by item, A–Z">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.ShortLines}} · {{.Readiness.ShortLines}} short{{end}}</span></span>
     </span>
   </div>
   {{if .Lines}}

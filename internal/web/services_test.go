@@ -355,6 +355,7 @@ func TestKitStatusIcons(t *testing.T) {
 	)
 	expect(t, a.get(readyPath), http.StatusOK,
 		`<td class="status-col"><span class="status-icon status-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span></td>`,
+		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Parts</h2>`,
 	)
 
 	// 4. Kit with archived part line in kit_show.html.

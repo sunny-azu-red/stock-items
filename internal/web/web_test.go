@@ -688,8 +688,13 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule.
 	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "Leave empty under warranty", `value="2000"`)
 
-	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts.
-	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", "Full parts", "Intermediate parts", stock.FormatKm(4000)+" or 12 months", stock.FormatKm(2000))
+	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts with package icon.
+	expect(t, a.get(kitPath), http.StatusOK,
+		"Next: Full",
+		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Full parts</h2>`,
+		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Intermediate parts</h2>`,
+		stock.FormatKm(4000)+" or 12 months", stock.FormatKm(2000),
+	)
 
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,

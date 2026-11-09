@@ -5,13 +5,12 @@
 <form class="card" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
-  {{with $f.Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}
-  {{if $e}}<div class="form-section">{{template "error-summary" $e}}</div>{{end}}
+  {{template "form-banners" $f}}
   <div class="form-section">
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}{{template "tip" (dict "ID" "name-tip" "Text" "Keep it short: it is used on chips and headings.")}}</div>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="80" placeholder="e.g. KTM 390" autofocus aria-describedby="name-tip">
+        <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" maxlength="80" placeholder="e.g. KTM 390" autofocus aria-describedby="name-tip">
         {{template "err" (index $e "name")}}
       </div>
       <fieldset class="field">
@@ -24,7 +23,7 @@
       <div class="field{{if index $e "color"}} has-error{{end}}">
         <div class="label-row"><label for="color">Colour</label>{{template "tip" (dict "ID" "color-tip" "Text" "Used for the vehicle's tag.")}}</div>
         <input class="input" type="color" id="color" name="color" value="{{$f.Color}}" list="palette" aria-describedby="color-tip">
-        <datalist id="palette">{{range $d.Palette}}<option value="{{.}}">{{end}}</datalist>
+        {{template "datalist" (dict "ID" "palette" "Options" $d.Palette)}}
         {{template "err" (index $e "color")}}
       </div>
     </div>
@@ -35,12 +34,12 @@
       <div class="field">
         <label for="make">Make</label>
         <input class="input" id="make" name="make" value="{{$f.Make}}" placeholder="e.g. KTM" list="makes">
-        <datalist id="makes">{{range $d.Makes}}<option value="{{.}}">{{end}}</datalist>
+        {{template "datalist" (dict "ID" "makes" "Options" $d.Makes)}}
       </div>
       <div class="field">
         <label for="model">Model</label>
         <input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke" list="models">
-        <datalist id="models">{{range $d.Models}}<option value="{{.}}">{{end}}</datalist>
+        {{template "datalist" (dict "ID" "models" "Options" $d.Models)}}
       </div>
       <div class="field{{if index $e "year"}} has-error{{end}}"><label for="year">Year</label><input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021">{{template "err" (index $e "year")}}</div>
       {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}<div class="field{{if index $e "odometer_km"}} has-error{{end}}"><label for="odometer_km">Odometer (km)</label><input class="input" id="odometer_km" name="odometer_km" value="{{$f.OdometerKm}}" inputmode="numeric" placeholder="e.g. 12500">{{template "err" (index $e "odometer_km")}}</div>

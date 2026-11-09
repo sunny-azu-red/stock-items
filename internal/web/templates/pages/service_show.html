@@ -1,10 +1,10 @@
 {{define "content"}}{{$s := .Data}}
-<a class="back" href="/vehicles/{{$s.VehicleID}}">{{icon "arrow-left"}} {{$s.VehicleName}}</a>
+<a class="back" href="{{if $s.Back}}{{$s.Back}}{{else}}/vehicles/{{$s.VehicleID}}{{end}}">{{icon "arrow-left"}} {{if $s.BackLabel}}{{$s.BackLabel}}{{else}}{{$s.VehicleName}}{{end}}</a>
 <div class="page-head">
   <div>
     <h1>{{$s.Title}}</h1>
-    <div class="flex mt">
-      {{template "chip-link" (dict "ID" $s.VehicleID "Name" $s.VehicleName "Color" $s.VehicleColor)}}
+    <div class="sub flex">
+      {{template "chip-link" $s.VehicleChip}}
       {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if $s.KitIntermediate}} · Intermediate{{end}}</a>{{end}}
     </div>
   </div>
@@ -19,7 +19,7 @@
 
 <div class="split">
   <section class="card">
-    <div class="card-head"><h2>{{icon "package"}} Parts used</h2></div>
+    <div class="card-head"><h2>{{icon "package"}} Parts used</h2>{{if $s.Parts}}<span class="meta">{{plural (len $s.Parts) "part"}}</span>{{end}}</div>
     {{if $s.Parts}}
     <table class="table">
       <thead><tr><th class="num">Amount</th><th>Item</th></tr></thead>

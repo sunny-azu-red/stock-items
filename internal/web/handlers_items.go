@@ -152,9 +152,6 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 
 	codes, kinds := r.PostForm["sku_code"], r.PostForm["sku_kind"]
 	brands := r.PostForm["sku_brand"]
-	if len(brands) == 0 {
-		brands = r.PostForm["sku_label"]
-	}
 	packs, packUnits := r.PostForm["sku_pack"], r.PostForm["sku_pack_unit"]
 	at := func(vals []string, i int) string {
 		if i < len(vals) {
@@ -322,7 +319,7 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 				s.redirect(w, r, "/items/new?"+q.Encode(), "Added "+displayInput(in)+". Add the next one.")
 				return nil
 			}
-			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Added "+displayInput(in))
+			s.redirect(w, r, itemPath(id), "Added "+displayInput(in))
 			return nil
 		} else if f.Stale = staleForm(err, "/items/new?shopping="+strconv.FormatInt(f.ShoppingID, 10)); f.Stale == nil && !formConflict(f.Errors, err) {
 			// An entry changed meanwhile (put back from the trash) gets the
@@ -404,7 +401,7 @@ func (s *Server) itemUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateItem(r.Context(), id, in, *s.today())
 		if err == nil {
-			s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Saved "+displayInput(in))
+			s.redirect(w, r, itemPath(id), "Saved "+displayInput(in))
 			return nil
 		}
 		if s.savedAlready(w, r, err, itemPath, "/stock") {
@@ -484,7 +481,7 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if errors.As(err, &conflict) {
 		// Used since the page was opened: keep it and say why.
 		s.setFlash(w, "error", conflict.Message)
-		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "")
+		s.redirect(w, r, itemPath(id), "")
 		return nil
 	} else if err != nil {
 		return err
@@ -518,7 +515,7 @@ func (s *Server) itemArchive(w http.ResponseWriter, r *http.Request) error {
 	if listTrash != 0 {
 		msg = "Archived " + it.DisplayName() + ". Its history stays; restore it any time. Its shopping list entry is in the trash."
 	}
-	s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
+	s.redirect(w, r, itemPath(id), msg)
 	return nil
 }
 
@@ -542,7 +539,7 @@ func (s *Server) itemRestore(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Restored "+it.DisplayName())
+	s.redirect(w, r, itemPath(id), "Restored "+it.DisplayName())
 	return nil
 }
 
@@ -577,6 +574,7 @@ type itemPage struct {
 	HistoryCapped bool   // Movements holds only the first itemHistory entries
 	Today         string // yyyy-mm-dd, the default date of a stock change
 	History       sortHeads
+	BackHref      string
 }
 
 // AllEntriesQuery is the query string of the item's full history on the
@@ -629,12 +627,21 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
+	fallback := "/stock"
+	if it.Archived() {
+		fallback = "/stock?archived=1"
+	}
+	backHref := fallback
+	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/stock") {
+		backHref = ref
+	}
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: s.kitViews(kits, vehicles),
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
-		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
+		History:  sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
+		BackHref: backHref,
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]
@@ -649,7 +656,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		}
 	}
 	if p.Move.Kind == "" {
-		p.Move.Kind = string(stock.MovePurchase)
+		p.Move.Kind = string(stock.MoveBought)
 	}
 	if p.Move.AmountUnit == "" {
 		_, p.Move.AmountUnit = stock.SplitForInput(0, it.Unit)
@@ -673,7 +680,7 @@ func (s *Server) itemShow(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// itemMovement records a purchase, usage or correction from the item page.
+// itemMovement records a purchase, a use or an adjustment from the item page.
 func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {
@@ -700,13 +707,16 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	in := stock.MovementInput{ItemID: id, Kind: stock.MovementKind(f.Kind), Note: f.Note, FormKey: f.FormKey}
+	// Also under its old name: a page opened before the kinds were renamed.
+	kind, _ := stock.ParseMovementKind(f.Kind)
+	in := stock.MovementInput{ItemID: id, Kind: kind, Note: f.Note, FormKey: f.FormKey}
+	f.Kind = string(kind)
 	switch in.Kind {
-	case stock.MovePurchase, stock.MoveUse, stock.MoveCorrection:
+	case stock.MoveBought, stock.MoveUsed, stock.MoveAdjusted:
 	default:
-		// Only these three have a form; "initial" and "service" are recorded
-		// by the app itself.
-		in.Kind, f.Kind = stock.MovePurchase, string(stock.MovePurchase)
+		// Only these three have a form; starting stock and service parts
+		// are recorded by the app itself.
+		in.Kind, f.Kind = stock.MoveBought, string(stock.MoveBought)
 		f.Errors.Add("kind", "Unknown kind of stock change")
 	}
 	amount, err := stock.ParseAmount(f.Amount, it.Unit, f.AmountUnit)
@@ -714,10 +724,10 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		f.Errors.Add("amount", amountError(err, it.Unit, "Enter an amount"))
 	}
 	switch in.Kind {
-	case stock.MoveUse:
+	case stock.MoveUsed:
 		in.Delta = -amount
-	case stock.MoveCorrection:
-		// Corrections set the stock to the counted amount; the store works
+	case stock.MoveAdjusted:
+		// An adjustment sets the stock to the amount on the shelf; the store works
 		// out the change under a row lock.
 		in.Delta = amount
 	default:
@@ -731,7 +741,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		in.OccurredOn = s.today()
 	}
 	// Only the Bought form has a price, shop and best-before date.
-	if in.Kind == stock.MovePurchase {
+	if in.Kind == stock.MoveBought {
 		in.Supplier = f.Supplier
 		if p, err := parseOptMoney(f.TotalPrice); err != nil {
 			f.Errors.Add("total_price", err.Error())
@@ -746,11 +756,11 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 	}
 	if !f.Errors.Any() {
 		var err error
-		if in.Kind == stock.MoveCorrection {
+		if in.Kind == stock.MoveAdjusted {
 			var delta float64
-			delta, err = s.store.CorrectStock(r.Context(), id, amount, in.Note, *in.OccurredOn, f.FormKey)
+			delta, err = s.store.SetStock(r.Context(), id, amount, in.Note, *in.OccurredOn, f.FormKey)
 			if err == nil && delta == 0 {
-				s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Stock already matches the count")
+				s.redirect(w, r, itemPath(id), "Stock already matches that amount")
 				return nil
 			}
 		} else {
@@ -758,11 +768,11 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err == nil {
 			msg := map[stock.MovementKind]string{
-				stock.MovePurchase:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit),
-				stock.MoveUse:        "Used " + stock.FormatQuantity(-in.Delta, it.Unit),
-				stock.MoveCorrection: "Counted: " + stock.FormatQuantity(amount, it.Unit) + " in stock",
+				stock.MoveBought:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit),
+				stock.MoveUsed:     "Used " + stock.FormatQuantity(-in.Delta, it.Unit),
+				stock.MoveAdjusted: "Adjusted: " + stock.FormatQuantity(amount, it.Unit) + " in stock",
 			}[in.Kind]
-			s.redirect(w, r, fmt.Sprintf("/items/%d", id), msg)
+			s.redirect(w, r, itemPath(id), msg)
 			return nil
 		}
 		if s.savedAlready(w, r, err, itemPath, "/stock") {
@@ -829,17 +839,20 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 		if it.Quantity <= 0 {
 			return s.adjustDone(w, r, it, "error", "Nothing left to take")
 		}
-		in = stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -min(step, it.Quantity), Note: "Quick adjust"}
+		in = stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -min(step, it.Quantity), Note: "Quick adjust"}
 	} else {
-		in = stock.MovementInput{ItemID: id, Kind: stock.MoveCorrection, Delta: step, Note: "Quick adjust"}
+		in = stock.MovementInput{ItemID: id, Kind: stock.MoveAdjusted, Delta: step, Note: "Quick adjust"}
 	}
 	in.OccurredOn = s.today()
 	if err := s.store.AddMovement(ctx, in); err != nil {
 		var short *store.InsufficientStockError
+		var conflict *store.ConflictError
 		var verrs stock.Errors
 		switch {
 		case errors.As(err, &short):
 			return s.adjustDone(w, r, it, "error", short.Error())
+		case errors.As(err, &conflict):
+			return s.adjustDone(w, r, it, "error", conflict.Message)
 		case errors.As(err, &verrs):
 			return s.adjustDone(w, r, it, "error", verrs["amount"])
 		}
@@ -899,8 +912,8 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		if sugg := stock.SuggestPurchases([]stock.Item{it}, kits, nil); len(sugg) == 1 {
-			in.Quantity, in.Note = &sugg[0].Quantity, strings.Join(sugg[0].Reasons, "; ")
+		if sugg, ok := stock.SuggestForItem(it, kits, *s.today()); ok {
+			in.Quantity, in.Note = &sugg.Quantity, strings.Join(sugg.Reasons, "; ")
 		}
 	}
 	if _, err := s.store.AddShopping(r.Context(), in); s.savedAlready(w, r, err, nil, back) {
@@ -917,7 +930,11 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, back, it.DisplayName()+" is on the shopping list")
+	msg := it.DisplayName() + " is on the shopping list"
+	if in.Quantity != nil {
+		msg = it.DisplayName() + " (" + stock.FormatQuantity(*in.Quantity, it.Unit) + ") is on the shopping list"
+	}
+	s.redirect(w, r, back, msg)
 	return nil
 }
 

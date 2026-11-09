@@ -33,7 +33,7 @@ func TestStockFilterAndExport(t *testing.T) {
 	}
 
 	oil := itemID(t, a.store, "Silkolene")
-	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"},
 		"total_price": {"19.90"}, "supplier": {"Moto shop"}, "occurred_on": {"2026-10-29"}}), http.StatusSeeOther)
 	rec = a.get("/stock/export.csv")
 	expect(t, rec, http.StatusOK, "id,brand,name", "last_price,price_per,stock_value,last_bought_on,last_shop", "Hiflofiltro",
@@ -133,7 +133,7 @@ func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
 	expect(t, edit, http.StatusOK, `name="quantity_was" value="525"`)
 	version := formVersion(t, edit.Body.String(), path)
 	// Someone uses 25 ml, and quick-adds some, while the form is open...
-	expect(t, a.post(path+"/movements", url.Values{"kind": {"use"}, "amount": {"25"}}), http.StatusSeeOther)
+	expect(t, a.post(path+"/movements", url.Values{"kind": {"used"}, "amount": {"25"}}), http.StatusSeeOther)
 	expect(t, a.post(path+"/adjust", url.Values{"dir": {"up"}}), http.StatusSeeOther)
 	expect(t, a.post(path+"/adjust", url.Values{"dir": {"down"}}), http.StatusSeeOther)
 	// ...then the form is saved with the quantity it showed. Stock changes
@@ -271,7 +271,7 @@ func TestItemPageCountsAllPurchases(t *testing.T) {
 	id := itemID(t, a.store, "Rear Brake")
 	// More purchases than the item page loads history rows for.
 	for range 101 {
-		if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1}); err != nil {
+		if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -367,7 +367,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	expectNot(t, page, `id="panel-purchase"`)
 	expectNot(t, a.get("/stock?archived=1"), `action="`+item+`/adjust"`)
 
-	rec := a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}})
+	rec := a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Kind != "error" {
 		t.Errorf("flash = %+v", f)
@@ -411,9 +411,9 @@ func TestAmountErrorsSayWhy(t *testing.T) {
 	a := newApp(t)
 	a.seed()
 	pads := itemID(t, a.store, "Rear Brake")
-	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {"1.5"}}),
+	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"used"}, "amount": {"1.5"}}),
 		http.StatusUnprocessableEntity, "Pieces must be a whole number")
-	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"use"}, "amount": {""}}),
+	expect(t, a.post("/items/"+itoa(pads)+"/movements", url.Values{"kind": {"used"}, "amount": {""}}),
 		http.StatusUnprocessableEntity, "Enter an amount, e.g. 2")
 }
 

@@ -15,14 +15,14 @@ func TestMovements(t *testing.T) {
 	s, ctx := newStore(t)
 	id := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
 
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 4000, TotalPrice: ptr(60.0), Supplier: "Shop"}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 4000, TotalPrice: ptr(60.0), Supplier: "Shop"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -1700}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -1700}); err != nil {
 		t.Fatal(err)
 	}
 	var short *store.InsufficientStockError
-	err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -5000})
+	err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -5000})
 	if !errors.As(err, &short) || short.Have != 3300 || short.Need != 5000 {
 		t.Fatalf("want InsufficientStockError, got %v", err)
 	}
@@ -30,10 +30,10 @@ func TestMovements(t *testing.T) {
 		t.Errorf("quantity = %v, want 3300", it.Quantity)
 	}
 	var verrs stock.Errors
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: -1}); !errors.As(err, &verrs) {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: -1}); !errors.As(err, &verrs) {
 		t.Errorf("want validation errors, got %v", err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: 999999, Kind: stock.MovePurchase, Delta: 1}); !errors.Is(err, store.ErrNotFound) {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: 999999, Kind: stock.MoveBought, Delta: 1}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 	assertLedger(t, s)
@@ -61,20 +61,20 @@ func TestPurchaseSetsBestBefore(t *testing.T) {
 	fresh := time.Date(2029, 6, 30, 0, 0, 0, 0, time.UTC)
 	id := mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 500, ExpiresOn: &expired})
 
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(expired) {
 		t.Errorf("a purchase without a date should keep the expiry, got %v", it.ExpiresOn)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, ExpiresOn: &fresh}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000, ExpiresOn: &fresh}); err != nil {
 		t.Fatal(err)
 	}
 	if it := mustGet(t, s, id); !it.ExpiresOn.Equal(fresh) {
 		t.Errorf("expiry = %v, want %v", it.ExpiresOn, fresh)
 	}
 	var verrs stock.Errors
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -100, ExpiresOn: &expired}); !errors.As(err, &verrs) {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -100, ExpiresOn: &expired}); !errors.As(err, &verrs) {
 		t.Errorf("use with a best-before date: want validation error, got %v", err)
 	}
 
@@ -96,9 +96,9 @@ func TestLastPurchases(t *testing.T) {
 	older := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	for _, in := range []stock.MovementInput{
-		{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(20.0), Supplier: "A", OccurredOn: &newer},
-		{ItemID: oil, Kind: stock.MovePurchase, Delta: 4000, TotalPrice: ptr(60.0), Supplier: "B", OccurredOn: &older},
-		{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, OccurredOn: &newer}, // no price: ignored
+		{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, TotalPrice: ptr(20.0), Supplier: "A", OccurredOn: &newer},
+		{ItemID: oil, Kind: stock.MoveBought, Delta: 4000, TotalPrice: ptr(60.0), Supplier: "B", OccurredOn: &older},
+		{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, OccurredOn: &newer}, // no price: ignored
 	} {
 		if err := s.AddMovement(ctx, in); err != nil {
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestSpentThisYear(t *testing.T) {
 		{today, 100},             // today counts
 		{day(2030, 3, 11), 1000}, // tomorrow doesn't yet
 	} {
-		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: bike, Title: "Labour", PerformedOn: c.on, LaborCost: ptr(c.price * 2)}); err != nil {
@@ -140,7 +140,7 @@ func TestSpentThisYear(t *testing.T) {
 		}
 	}
 	// No price is no spending.
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &today}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1, OccurredOn: &today}); err != nil {
 		t.Fatal(err)
 	}
 	// Purchases only: the labour is the Services page's.
@@ -166,7 +166,7 @@ func TestMovementsOfAYear(t *testing.T) {
 		time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC),
 		time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC),
 	} {
-		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &on}); err != nil {
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1, OccurredOn: &on}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -181,7 +181,7 @@ func TestMovementsOfAYear(t *testing.T) {
 	// for all items only, and a kind with no entries has no years.
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
 	later := time.Date(2033, 3, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MovePurchase, Delta: 1, OccurredOn: &later}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveBought, Delta: 1, OccurredOn: &later}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -191,8 +191,8 @@ func TestMovementsOfAYear(t *testing.T) {
 	}{
 		{0, "", []int{2033, 2032, 2031, 2030, 2029, 2028}},
 		{oil, "", []int{2031, 2030, 2029, 2028}}, // 2029's one entry and the empty years between count too
-		{pads, stock.MovePurchase, []int{2033}},
-		{oil, stock.MoveUse, nil},
+		{pads, stock.MoveBought, []int{2033}},
+		{oil, stock.MoveUsed, nil},
 	} {
 		if years, err := s.MovementYears(ctx, c.item, c.kind); err != nil || !slices.Equal(years, c.want) {
 			t.Errorf("years of item %d, kind %q = %v, %v; want %v", c.item, c.kind, years, err, c.want)
@@ -204,10 +204,10 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	s, ctx := newStore(t)
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
 	day := stock.DateOnly(time.Now())
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(670.0), OccurredOn: &day}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, TotalPrice: ptr(670.0), OccurredOn: &day}); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveBought})
 	purchase := moves[0].ID
 
 	// The price typo is fixed, and every money figure follows.
@@ -230,7 +230,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	}
 
 	// Using 4.2 L leaves 300 ml: shrinking the purchase below what was used fails.
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -4200}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUsed, Delta: -4200}); err != nil {
 		t.Fatal(err)
 	}
 	var short *store.InsufficientStockError
@@ -242,12 +242,12 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	}
 
 	// Deleting the use puts it back; then the purchase can go too.
-	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUsed})
 	if _, _, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID)); err != nil {
 		t.Fatal(err)
 	}
 	m, _, err := s.DeleteMovement(ctx, purchase, cur(t, s, store.WhatMovement, purchase))
-	if err != nil || m.ItemID != oil || m.Kind != stock.MovePurchase {
+	if err != nil || m.ItemID != oil || m.Kind != stock.MoveBought {
 		t.Fatalf("delete purchase = %+v, %v", m, err)
 	}
 	if it := mustGet(t, s, oil); it.Quantity != 500 {
@@ -296,16 +296,16 @@ func TestSuppliers(t *testing.T) {
 	}
 
 	id := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "moto24"}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000, Supplier: "moto24"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "Louis"}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000, Supplier: "Louis"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: "Moto24"}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000, Supplier: "Moto24"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase, Delta: 1000, Supplier: ""}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought, Delta: 1000, Supplier: ""}); err != nil {
 		t.Fatal(err)
 	}
 

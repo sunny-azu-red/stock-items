@@ -142,9 +142,9 @@ func records() []record {
 			name: "stock change",
 			make: func(t *testing.T, a *testApp) (string, string) {
 				oil := itemID(t, a.store, "Silkolene")
-				expect(t, a.post(itemPath(oil)+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+				expect(t, a.post(itemPath(oil)+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"},
 					"total_price": {"20"}, "occurred_on": {"2026-10-29"}}), http.StatusSeeOther)
-				moves, err := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+				moves, err := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveBought})
 				if err != nil || len(moves) != 1 {
 					t.Fatalf("purchases = %+v, %v", moves, err)
 				}
@@ -153,7 +153,7 @@ func records() []record {
 			},
 			fields: func(a *testApp, note string) url.Values {
 				return url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}, "occurred_on": {"2026-10-29"},
-					"item_id": {itoa(itemID(a.t, a.store, "Silkolene"))}, "kind": {"purchase"}, "note": {note}}
+					"item_id": {itoa(itemID(a.t, a.store, "Silkolene"))}, "kind": {"bought"}, "note": {note}}
 			},
 			note: func(a *testApp, action string) string {
 				m, _ := a.store.GetMovement(ctx, mustID(a.t, action))
@@ -431,7 +431,7 @@ func TestABestBeforeDateMakesTheItemFormStale(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 	action := itemPath(oil)
 	mine := openForm(t, a, action+"/edit", action)
-	expect(t, a.post(action+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+	expect(t, a.post(action+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"},
 		"expires_on": {"2030-01-31"}}), http.StatusSeeOther)
 	expect(t, submit(a, action, mine, records()[0].fields(a, "Mine")), http.StatusUnprocessableEntity, "was changed since you opened this")
 	if it, _ := a.store.GetItem(context.Background(), oil); it.ExpiresOn == nil || it.ExpiresOn.Format("2006-01-02") != "2030-01-31" {
@@ -610,7 +610,7 @@ func TestUndoPathsStillWork(t *testing.T) {
 		a.seed()
 		oil := itemID(t, a.store, "Silkolene")
 		item := itemPath(oil)
-		expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}),
+		expect(t, a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}),
 			http.StatusSeeOther) // in use: archived, not deleted
 		expect(t, a.post(item+"/shopping", url.Values{"quantity": {"1"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
 		rec := saveFresh(t, a, item, item+"/archive", nil)

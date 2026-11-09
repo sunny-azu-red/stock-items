@@ -205,7 +205,7 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 		if itemID != nil && purchase != nil {
 			in := *purchase
 			in.ItemID = *itemID
-			in.Kind = stock.MovePurchase
+			in.Kind = stock.MoveBought
 			if errs := in.Validate(); errs.Any() {
 				return errs
 			}

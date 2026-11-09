@@ -52,15 +52,15 @@ func TestItemInputStartMovement(t *testing.T) {
 		kind     MovementKind
 		errField string // expected validation error, if any
 	}{
-		{"nothing entered: already on the shelf", ItemInput{Quantity: 2}, MoveInitial, ""},
-		{"price: bought", ItemInput{Quantity: 2, TotalPrice: ptr(30.0)}, MovePurchase, ""},
-		{"shop only: bought", ItemInput{Quantity: 2, Supplier: "moto24"}, MovePurchase, ""},
-		{"blank shop: not bought", ItemInput{Quantity: 2, Supplier: "   "}, MoveInitial, ""},
-		{"date only: not bought", ItemInput{Quantity: 2, BoughtOn: &day}, MoveInitial, ""},
-		{"bought but no amount", ItemInput{TotalPrice: ptr(30.0)}, MovePurchase, "quantity"},
-		{"bad price", ItemInput{Quantity: 2, TotalPrice: ptr(-1.0)}, MovePurchase, "total_price"},
-		{"purchase with note", ItemInput{Quantity: 2, TotalPrice: ptr(30.0), BoughtNote: "on sale"}, MovePurchase, ""},
-		{"initial with note", ItemInput{Quantity: 2, BoughtNote: "gift"}, MoveInitial, ""},
+		{"nothing entered: already on the shelf", ItemInput{Quantity: 2}, MoveStarting, ""},
+		{"price: bought", ItemInput{Quantity: 2, TotalPrice: ptr(30.0)}, MoveBought, ""},
+		{"shop only: bought", ItemInput{Quantity: 2, Supplier: "moto24"}, MoveBought, ""},
+		{"blank shop: not bought", ItemInput{Quantity: 2, Supplier: "   "}, MoveStarting, ""},
+		{"date only: not bought", ItemInput{Quantity: 2, BoughtOn: &day}, MoveStarting, ""},
+		{"bought but no amount", ItemInput{TotalPrice: ptr(30.0)}, MoveBought, "quantity"},
+		{"bad price", ItemInput{Quantity: 2, TotalPrice: ptr(-1.0)}, MoveBought, "total_price"},
+		{"purchase with note", ItemInput{Quantity: 2, TotalPrice: ptr(30.0), BoughtNote: "on sale"}, MoveBought, ""},
+		{"initial with note", ItemInput{Quantity: 2, BoughtNote: "gift"}, MoveStarting, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -77,10 +77,10 @@ func TestItemInputStartMovement(t *testing.T) {
 			if m.Kind != tt.kind || m.ItemID != 7 || m.Delta != in.Quantity || m.Note != in.BoughtNote {
 				t.Errorf("movement = %+v, want kind %s and note %q", m, tt.kind, in.BoughtNote)
 			}
-			if m.Kind == MoveInitial && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != in.BoughtOn) {
+			if m.Kind == MoveStarting && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != in.BoughtOn) {
 				t.Errorf("initial stock should carry only its date and note: %+v", m)
 			}
-			if m.Kind == MovePurchase && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
+			if m.Kind == MoveBought && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
 				t.Errorf("purchase details not carried over: %+v", m)
 			}
 		})
@@ -197,26 +197,26 @@ func TestMovementInputValidate(t *testing.T) {
 		in   MovementInput
 		ok   bool
 	}{
-		{"purchase adds", MovementInput{Kind: MovePurchase, Delta: 2}, true},
-		{"purchase cannot remove", MovementInput{Kind: MovePurchase, Delta: -2}, false},
-		{"use removes", MovementInput{Kind: MoveUse, Delta: -500}, true},
-		{"use cannot add", MovementInput{Kind: MoveUse, Delta: 1}, false},
-		{"correction either way", MovementInput{Kind: MoveCorrection, Delta: -1}, true},
-		{"zero", MovementInput{Kind: MoveCorrection, Delta: 0}, false},
+		{"purchase adds", MovementInput{Kind: MoveBought, Delta: 2}, true},
+		{"purchase cannot remove", MovementInput{Kind: MoveBought, Delta: -2}, false},
+		{"use removes", MovementInput{Kind: MoveUsed, Delta: -500}, true},
+		{"use cannot add", MovementInput{Kind: MoveUsed, Delta: 1}, false},
+		{"correction either way", MovementInput{Kind: MoveAdjusted, Delta: -1}, true},
+		{"zero", MovementInput{Kind: MoveAdjusted, Delta: 0}, false},
 		{"unknown kind", MovementInput{Kind: "theft", Delta: -1}, false},
 		{"service part", MovementInput{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))}, true},
 		{"service part without its service", MovementInput{Kind: MoveService, Delta: -1}, false},
-		{"use with a service", MovementInput{Kind: MoveUse, Delta: -1, ServiceRecordID: ptr(int64(3))}, false},
-		{"negative price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(-1.0)}, false},
-		{"NaN price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(math.NaN())}, false},
-		{"huge price", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(1e12)}, false},
-		{"purchase sets best before", MovementInput{Kind: MovePurchase, Delta: 1, ExpiresOn: &time.Time{}}, true},
-		{"use cannot set best before", MovementInput{Kind: MoveUse, Delta: -1, ExpiresOn: &time.Time{}}, false},
-		{"correction cannot set best before", MovementInput{Kind: MoveCorrection, Delta: 1, ExpiresOn: &time.Time{}}, false},
-		{"purchase has a price and shop", MovementInput{Kind: MovePurchase, Delta: 1, TotalPrice: ptr(5.0), Supplier: "Moto shop"}, true},
-		{"use has no price", MovementInput{Kind: MoveUse, Delta: -1, TotalPrice: ptr(5.0)}, false},
-		{"correction has no shop", MovementInput{Kind: MoveCorrection, Delta: 1, Supplier: "Moto shop"}, false},
-		{"initial stock has no price", MovementInput{Kind: MoveInitial, Delta: 1, TotalPrice: ptr(5.0)}, false},
+		{"use with a service", MovementInput{Kind: MoveUsed, Delta: -1, ServiceRecordID: ptr(int64(3))}, false},
+		{"negative price", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(-1.0)}, false},
+		{"NaN price", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(math.NaN())}, false},
+		{"huge price", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(1e12)}, false},
+		{"purchase sets best before", MovementInput{Kind: MoveBought, Delta: 1, ExpiresOn: &time.Time{}}, true},
+		{"use cannot set best before", MovementInput{Kind: MoveUsed, Delta: -1, ExpiresOn: &time.Time{}}, false},
+		{"correction cannot set best before", MovementInput{Kind: MoveAdjusted, Delta: 1, ExpiresOn: &time.Time{}}, false},
+		{"purchase has a price and shop", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(5.0), Supplier: "Moto shop"}, true},
+		{"use has no price", MovementInput{Kind: MoveUsed, Delta: -1, TotalPrice: ptr(5.0)}, false},
+		{"correction has no shop", MovementInput{Kind: MoveAdjusted, Delta: 1, Supplier: "Moto shop"}, false},
+		{"initial stock has no price", MovementInput{Kind: MoveStarting, Delta: 1, TotalPrice: ptr(5.0)}, false},
 	}
 	for _, c := range cases {
 		if got := !c.in.Validate().Any(); got != c.ok {
@@ -271,26 +271,26 @@ func TestApplyEdit(t *testing.T) {
 		price    *float64
 		errField string
 	}{
-		{"fix a purchase price", Movement{Kind: MovePurchase, Delta: 1000, TotalPrice: ptr(670.0)},
-			MovementEdit{Amount: 1000, TotalPrice: ptr(67.0)}, MovePurchase, 1000, ptr(67.0), ""},
-		{"fix a purchase amount", Movement{Kind: MovePurchase, Delta: 1000},
-			MovementEdit{Amount: 4000}, MovePurchase, 4000, nil, ""},
-		{"a use stays negative", Movement{Kind: MoveUse, Delta: -100},
-			MovementEdit{Amount: 250}, MoveUse, -250, nil, ""},
-		{"a use takes no price", Movement{Kind: MoveUse, Delta: -100},
-			MovementEdit{Amount: 100, TotalPrice: ptr(5.0)}, MoveUse, -100, nil, ""},
-		{"priced initial stock becomes a purchase", Movement{Kind: MoveInitial, Delta: 2},
-			MovementEdit{Amount: 2, TotalPrice: ptr(30.0)}, MovePurchase, 2, ptr(30.0), ""},
-		{"initial stock with a shop becomes a purchase", Movement{Kind: MoveInitial, Delta: 2},
-			MovementEdit{Amount: 2, Supplier: "moto24"}, MovePurchase, 2, nil, ""},
-		{"a count that took stock away", Movement{Kind: MoveCorrection, Delta: -75},
-			MovementEdit{Amount: 50, Removed: true, Note: "recount"}, MoveCorrection, -50, nil, ""},
-		{"a count turned around", Movement{Kind: MoveCorrection, Delta: -75},
-			MovementEdit{Amount: 100}, MoveCorrection, 100, nil, ""},
-		{"zero amount", Movement{Kind: MovePurchase, Delta: 1},
-			MovementEdit{}, MovePurchase, 0, nil, "amount"},
-		{"bad price", Movement{Kind: MovePurchase, Delta: 1},
-			MovementEdit{Amount: 1, TotalPrice: ptr(-1.0)}, MovePurchase, 1, ptr(-1.0), "total_price"},
+		{"fix a purchase price", Movement{Kind: MoveBought, Delta: 1000, TotalPrice: ptr(670.0)},
+			MovementEdit{Amount: 1000, TotalPrice: ptr(67.0)}, MoveBought, 1000, ptr(67.0), ""},
+		{"fix a purchase amount", Movement{Kind: MoveBought, Delta: 1000},
+			MovementEdit{Amount: 4000}, MoveBought, 4000, nil, ""},
+		{"a use stays negative", Movement{Kind: MoveUsed, Delta: -100},
+			MovementEdit{Amount: 250}, MoveUsed, -250, nil, ""},
+		{"a use takes no price", Movement{Kind: MoveUsed, Delta: -100},
+			MovementEdit{Amount: 100, TotalPrice: ptr(5.0)}, MoveUsed, -100, nil, ""},
+		{"priced initial stock becomes a purchase", Movement{Kind: MoveStarting, Delta: 2},
+			MovementEdit{Amount: 2, TotalPrice: ptr(30.0)}, MoveBought, 2, ptr(30.0), ""},
+		{"initial stock with a shop becomes a purchase", Movement{Kind: MoveStarting, Delta: 2},
+			MovementEdit{Amount: 2, Supplier: "moto24"}, MoveBought, 2, nil, ""},
+		{"a count that took stock away", Movement{Kind: MoveAdjusted, Delta: -75},
+			MovementEdit{Amount: 50, Removed: true, Note: "recount"}, MoveAdjusted, -50, nil, ""},
+		{"a count turned around", Movement{Kind: MoveAdjusted, Delta: -75},
+			MovementEdit{Amount: 100}, MoveAdjusted, 100, nil, ""},
+		{"zero amount", Movement{Kind: MoveBought, Delta: 1},
+			MovementEdit{}, MoveBought, 0, nil, "amount"},
+		{"bad price", Movement{Kind: MoveBought, Delta: 1},
+			MovementEdit{Amount: 1, TotalPrice: ptr(-1.0)}, MoveBought, 1, ptr(-1.0), "total_price"},
 		{"service parts are not edited here", Movement{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))},
 			MovementEdit{Amount: 1}, "", 0, nil, "form"},
 	}
@@ -317,7 +317,7 @@ func TestApplyEdit(t *testing.T) {
 			}
 		})
 	}
-	m := Movement{Kind: MovePurchase, Delta: 1, OccurredOn: day}
+	m := Movement{Kind: MoveBought, Delta: 1, OccurredOn: day}
 	if in, _ := ApplyEdit(m, MovementEdit{Amount: 1, OccurredOn: &other}); !in.OccurredOn.Equal(other) {
 		t.Errorf("date = %v, want %v", in.OccurredOn, other)
 	}
@@ -336,7 +336,7 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"sku code", ItemInput{Name: "A", Unit: UnitPiece, SKUs: []SKU{{Code: long, Kind: SKUOther}}}.Validate(), "sku_0"},
 		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(MaxOdometerKm + 1)}.Validate(), "odometer_km"},
 		{"vehicle plate", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Plate: long}.Validate(), "form"},
-		{"shop on a purchase", MovementInput{Kind: MovePurchase, Delta: 1, Supplier: long}.Validate(), "form"},
+		{"shop on a purchase", MovementInput{Kind: MoveBought, Delta: 1, Supplier: long}.Validate(), "form"},
 		{"kit months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(241)}.Validate(), "interval_months"},
 		{"kit km", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(1_000_001)}.Validate(), "interval_km"},
 		{"kit line over the maximum", func() Errors {
@@ -344,6 +344,15 @@ func TestTextAndNumberLimits(t *testing.T) {
 			in.Normalize()
 			return in.Validate()
 		}(), "lines"},
+		{"kit intermediate km without full km", KitInput{VehicleID: 1, Name: "A", InterIntervalKm: ptr(2000)}.Validate(), "inter_interval_km"},
+		{"kit intermediate months without full months", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(4000), InterIntervalMonths: ptr(6)}.Validate(), "inter_interval_months"},
+		{"service part over the maximum", func() Errors {
+			in := ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), Parts: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
+			in.Normalize()
+			return in.Validate()
+		}(), "parts"},
+		{"item note with zero starting stock", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: "spare"}.Validate(), "quantity"},
+		{"vehicle purchase km above kept odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(5000), PurchasedKm: ptr(6000), KeepOdometer: true}.Validate(), "purchased_km"},
 		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
 		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "free_text"},
 	}

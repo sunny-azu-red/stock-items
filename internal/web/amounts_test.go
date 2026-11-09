@@ -45,7 +45,7 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 			"part_item": {itoa(item)}, "part_qty": {qty}, "part_unit": {unit}}
 	}
 	use := func(qty, unit string) url.Values {
-		return url.Values{"kind": {"use"}, "amount": {qty}, "amount_unit": {unit}}
+		return url.Values{"kind": {"used"}, "amount": {qty}, "amount_unit": {unit}}
 	}
 
 	for _, tt := range []struct {
@@ -118,7 +118,7 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 		"part_item": {itoa(grease)}, "part_qty": {"0.231"}, "part_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "use at most two decimals of g")
 	expectNot(t, rec, "Only 0.23 g in stock")
-	rec = a.post(itemPath(grease)+"/movements", url.Values{"kind": {"use"}, "amount": {"0.231"}, "amount_unit": {"g"}})
+	rec = a.post(itemPath(grease)+"/movements", url.Values{"kind": {"used"}, "amount": {"0.231"}, "amount_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
 	expectNot(t, rec, "Only 0.23 g in stock")
 	// One hundredth more than there is says so plainly.

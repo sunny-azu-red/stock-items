@@ -22,12 +22,33 @@
 </table>
 </div>
 {{end}}
+{{define "kit-parts-card"}}
+<section class="card">
+  <div class="card-head">
+    <h2>{{icon "list-checks"}} {{.Title}}</h2>
+    <span class="flex">
+      {{if and .CanShop .Readiness.ShortLines}}
+      <form class="inline-form" method="post" action="/kits/{{.KitID}}/shortfall">
+        {{if .Inter}}<input type="hidden" name="intermediate" value="{{.Inter}}">{{end}}
+        <button class="btn btn-sm" type="submit">{{icon "shopping-cart"}} Add missing</button>
+      </form>
+      {{end}}
+      <span class="meta">{{if .Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{.KitID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.ShortLines}} · {{.Readiness.ShortLines}} short{{end}}</span></span>
+    </span>
+  </div>
+  {{if .Lines}}
+  {{template "kit-parts-table" (dict "Lines" .Lines "Sort" .Sort)}}
+  {{else}}
+  <div class="card-body muted small">{{.EmptyText}} <a href="/kits/{{.KitID}}/edit">Add the parts</a> {{.EmptyAdd}}</div>
+  {{end}}
+</section>
+{{end}}
 {{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}{{$fr := $d.View.FullReadiness}}{{$ir := $d.View.InterReadiness}}
-<a class="back" href="/vehicles/{{$d.Vehicle.ID}}">{{icon "arrow-left"}} {{$d.Vehicle.Name}}</a>
+<a class="back" href="{{if $d.Back}}{{$d.Back}}{{else}}/vehicles/{{$d.Vehicle.ID}}{{end}}">{{icon "arrow-left"}} {{if $d.BackLabel}}{{$d.BackLabel}}{{else}}{{$d.Vehicle.Name}}{{end}}</a>
 <div class="page-head">
   <div>
     <h1>{{$k.Name}}</h1>
-    <div class="flex mt">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $k.ArchivedAt}}</span>{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{end}}</div>
+    <div class="sub flex">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{if and $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} short</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} short</span>{{end}}{{end}}{{end}}</div>
   </div>
   <div class="actions">
     <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
@@ -36,7 +57,7 @@
     {{else if $d.Vehicle.Archived}}
     <span class="muted small">Restore {{$d.Vehicle.Name}} to do this service.</span>
     {{else}}
-    {{if not $r.Ready}}{{if $r.Lines}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}{{end}}
+    {{if or (and (not $fr.Ready) $fr.Lines) (and (not $ir.Ready) $ir.Lines)}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}
     <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Do this service</a>
     {{end}}
     {{if $k.Archived}}{{else if $d.ServiceCount}}
@@ -49,24 +70,9 @@
 
 <div class="split">
   <div class="stack">
-    <section class="card">
-      <div class="card-head"><h2>{{icon "list-checks"}} {{if $k.HasIntermediate}}Full parts{{else}}Parts{{end}}</h2><span class="meta">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural $fr.Lines "part"}}{{if $fr.ShortLines}} · {{$fr.ShortLines}} short{{end}}</span></span></div>
-      {{if $k.Lines}}
-      {{template "kit-parts-table" (dict "Lines" $d.Lines "Sort" $d.Sort)}}
-      {{else}}
-      <div class="card-body muted small">No parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> this job needs.</div>
-      {{end}}
-    </section>
-
+    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived) $k.HasIntermediate) "Inter" "0")}}
     {{if $k.HasIntermediate}}
-    <section class="card">
-      <div class="card-head"><h2>{{icon "list-checks"}} Intermediate parts</h2><span class="meta">{{if $d.Sort.Order.Key}}<a class="more sort-reset" href="/kits/{{$k.ID}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural $ir.Lines "part"}}{{if $ir.ShortLines}} · {{$ir.ShortLines}} short{{end}}</span></span></div>
-      {{if $k.InterLines}}
-      {{template "kit-parts-table" (dict "Lines" $d.InterLines "Sort" $d.Sort)}}
-      {{else}}
-      <div class="card-body muted small">No intermediate parts yet. <a href="/kits/{{$k.ID}}/edit">Add the parts</a> the intermediate job needs.</div>
-      {{end}}
-    </section>
+    {{template "kit-parts-card" (dict "Title" "Intermediate parts" "KitID" $k.ID "Lines" $d.InterLines "Readiness" $ir "Sort" $d.Sort "EmptyText" "No intermediate parts yet." "EmptyAdd" "the intermediate job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "1")}}
     {{end}}
   </div>
 
@@ -75,12 +81,12 @@
       <h2 class="mb">{{icon "clock"}} Schedule</h2>
       <dl class="facts">
         {{if $k.HasIntermediate}}
-        <div><dt>Full every</dt><dd>{{if or $k.IntervalKm $k.IntervalMonths}}{{with $k.IntervalKm}}{{km .}}{{end}}{{if and $k.IntervalKm $k.IntervalMonths}} or {{end}}{{with $k.IntervalMonths}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}</dd></div>
-        <div><dt>Intermediate every</dt><dd>{{with $k.InterIntervalKm}}{{km .}}{{end}}{{if and $k.InterIntervalKm $k.InterIntervalMonths}} or {{end}}{{with $k.InterIntervalMonths}}{{plural . "month"}}{{end}}</dd></div>
+        <div><dt>Full every</dt><dd>{{template "kit-interval" (dict "Km" $k.IntervalKm "Months" $k.IntervalMonths)}}</dd></div>
+        <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Km" $k.InterIntervalKm "Months" $k.InterIntervalMonths)}}</dd></div>
         <div><dt>Next up</dt><dd>{{if $d.View.NextInter}}Intermediate{{else}}Full{{end}}</dd></div>
         <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{else}}
-        <div><dt>Every</dt><dd>{{if or $k.IntervalKm $k.IntervalMonths}}{{with $k.IntervalKm}}{{km .}}{{end}}{{if and $k.IntervalKm $k.IntervalMonths}} or {{end}}{{with $k.IntervalMonths}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}</dd></div>
+        <div><dt>Every</dt><dd>{{template "kit-interval" (dict "Km" $k.IntervalKm "Months" $k.IntervalMonths)}}</dd></div>
         {{end}}
         <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.HasIntermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{end}}{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{if $due.DueKm}}<div><dt>Due at</dt><dd>{{km $due.DueKm}}</dd></div>{{end}}
@@ -93,8 +99,8 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "history"}} Done with this kit</h2></div>
-      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">Not done yet.</div>{{end}}
+      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2>{{if $d.Services}}<span class="meta">{{plural (len $d.Services) "service"}}</span>{{end}}</div>
+      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged with this kit yet.</div>{{end}}
     </section>
   </div>
 </div>

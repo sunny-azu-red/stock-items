@@ -42,11 +42,11 @@ func (s *Server) trashThumb(w http.ResponseWriter, r *http.Request) error {
 func restoredPath(res store.Restored) string {
 	switch res.Kind {
 	case store.TrashService:
-		return fmt.Sprintf("/services/%d", res.ID)
+		return servicePath(res.ID)
 	case store.TrashKit:
-		return fmt.Sprintf("/kits/%d", res.ID)
+		return kitPath(res.ID)
 	case store.TrashVehicle:
-		return fmt.Sprintf("/vehicles/%d", res.ID)
+		return vehiclePath(res.ID)
 	case store.TrashShopping, store.TrashBought:
 		return "/shopping"
 	}
@@ -73,7 +73,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		default:
 			return err
 		}
-		s.redirect(w, r, "/trash", "")
+		s.redirect(w, r, s.back(r, "/trash"), "")
 		return nil
 	}
 	msg := "Restored " + strings.TrimSuffix(res.Label, ".") + "."
@@ -86,7 +86,7 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 		msg = "Restored the photo of " + res.Name + "."
 	}
 	if res.Dropped > 0 {
-		msg += fmt.Sprintf(" Left out %d %s to things permanently deleted.", res.Dropped, pluralWord(res.Dropped, "link", "links"))
+		msg += " Left out " + plural(res.Dropped, "link") + " to things permanently deleted."
 	}
 	if res.Replaced != 0 {
 		// The photo it took the place of went to the trash in turn.
@@ -105,14 +105,14 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 	others, err := s.store.PurgeTrash(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", "That was restored or permanently deleted already")
-		s.redirect(w, r, "/trash", "")
+		s.redirect(w, r, s.back(r, "/trash"), "")
 		return nil
 	} else if err != nil {
 		return err
 	}
 	msg := "Permanently deleted"
 	if others > 0 {
-		msg += fmt.Sprintf(", with %d more %s that needed it", others, pluralWord(others, "entry", "entries"))
+		msg += fmt.Sprintf(", with %d more %s that needed it", others, pluralOnly(others, "entry"))
 	}
 	s.redirect(w, r, "/trash", msg)
 	return nil

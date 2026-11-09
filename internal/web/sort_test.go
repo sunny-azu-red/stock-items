@@ -38,17 +38,17 @@ func table(body string) string {
 }
 
 func TestSortHeads(t *testing.T) {
-	q := url.Values{"sort": {"price"}, "kind": {"use"}, "page": {"3"}}
-	h := sortHeads{Order: activitySorts.parse(q), Path: "/activity", Query: url.Values{"kind": {"use"}, "page": {"3"}}}
+	q := url.Values{"sort": {"price"}, "kind": {"used"}, "page": {"3"}}
+	h := sortHeads{Order: activitySorts.parse(q), Path: "/activity", Query: url.Values{"kind": {"used"}, "page": {"3"}}}
 	tests := []struct {
 		key, sort, href string
 	}{
 		// The sorted column flips; the others start in their own direction,
 		// and every link keeps the kind and goes back to the first page.
-		{"price", "descending", "/activity?dir=asc&kind=use&sort=price"},
-		{"date", "none", "/activity?kind=use"},
-		{"item", "none", "/activity?kind=use&sort=item"},
-		{"change", "none", "/activity?kind=use&sort=change"},
+		{"price", "descending", "/activity?dir=asc&kind=used&sort=price"},
+		{"date", "none", "/activity?kind=used"},
+		{"item", "none", "/activity?kind=used&sort=item"},
+		{"change", "none", "/activity?kind=used&sort=change"},
 	}
 	for _, tt := range tests {
 		c := h.Col(tt.key, "X", false)
@@ -57,7 +57,7 @@ func TestSortHeads(t *testing.T) {
 		}
 	}
 	h.Order = activitySorts.parse(url.Values{"sort": {"price"}, "dir": {"asc"}})
-	if c := h.Col("price", "Price", true); c.Sort != "ascending" || string(c.Href) != "/activity?kind=use&sort=price" {
+	if c := h.Col("price", "Price", true); c.Sort != "ascending" || string(c.Href) != "/activity?kind=used&sort=price" {
 		t.Errorf("ascending price: %+v", c)
 	}
 
@@ -94,8 +94,8 @@ func TestActivitySortHeaders(t *testing.T) {
 	pads, oil := itemID(t, a.store, "Rear Brake"), itemID(t, a.store, "Silkolene")
 	on := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	for _, in := range []stock.MovementInput{
-		{ItemID: pads, Kind: stock.MovePurchase, Delta: 1, TotalPrice: ptr(12.5), Supplier: "Pads shop", OccurredOn: &on},
-		{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(30.0), Supplier: "Oil shop", OccurredOn: &on},
+		{ItemID: pads, Kind: stock.MoveBought, Delta: 1, TotalPrice: ptr(12.5), Supplier: "Pads shop", OccurredOn: &on},
+		{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, TotalPrice: ptr(30.0), Supplier: "Oil shop", OccurredOn: &on},
 	} {
 		if err := a.store.AddMovement(ctx, in); err != nil {
 			t.Fatal(err)
@@ -113,25 +113,25 @@ func TestActivitySortHeaders(t *testing.T) {
 
 	// By price, with a kind chosen: the links keep the kind, the chips and
 	// the CSV keep the sort.
-	rec = a.get("/activity?sort=price&kind=purchase")
+	rec = a.get("/activity?sort=price&kind=bought")
 	expect(t, rec, http.StatusOK,
-		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc&amp;kind=purchase&amp;sort=price"`,
-		`<th aria-sort="none"><a class="sort-link" href="/activity?kind=purchase" title="Sort by Date, descending">`,
+		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc&amp;kind=bought&amp;sort=price"`,
+		`<th aria-sort="none"><a class="sort-link" href="/activity?kind=bought" title="Sort by Date, descending">`,
 		`href="/activity?sort=price">All types</a>`,
-		`href="/activity?kind=use&amp;sort=price">Used</a>`,
-		`href="/activity/export.csv?kind=purchase&amp;sort=price"`)
+		`href="/activity?kind=used&amp;sort=price">Used</a>`,
+		`href="/activity/export.csv?kind=bought&amp;sort=price"`)
 	expect(t, rec, http.StatusOK, "Every change to your stock, by price, highest first.")
 	inOrder(t, table(rec.Body.String()), "Oil shop", "Pads shop")
-	rec = a.get("/activity?sort=price&dir=asc&kind=purchase")
-	expect(t, rec, http.StatusOK, `<th class="num" aria-sort="ascending"><a class="sort-link sorted" href="/activity?kind=purchase&amp;sort=price"`,
+	rec = a.get("/activity?sort=price&dir=asc&kind=bought")
+	expect(t, rec, http.StatusOK, `<th class="num" aria-sort="ascending"><a class="sort-link sorted" href="/activity?kind=bought&amp;sort=price"`,
 		"by price, lowest first.")
 	inOrder(t, table(rec.Body.String()), "Pads shop", "Oil shop")
 
 	// The CSV comes in the same order.
-	rec = a.get("/activity/export.csv?sort=price&kind=purchase")
+	rec = a.get("/activity/export.csv?sort=price&kind=bought")
 	expect(t, rec, http.StatusOK)
 	inOrder(t, rec.Body.String(), "Oil shop", "Pads shop")
-	rec = a.get("/activity/export.csv?sort=price&dir=asc&kind=purchase")
+	rec = a.get("/activity/export.csv?sort=price&dir=asc&kind=bought")
 	inOrder(t, rec.Body.String(), "Pads shop", "Oil shop")
 
 	// Unknown values are ignored, and don't end up in any link.
@@ -152,8 +152,8 @@ func TestItemHistorySort(t *testing.T) {
 	ctx := context.Background()
 	pads := itemID(t, a.store, "Rear Brake")
 	for i, in := range []stock.MovementInput{
-		{ItemID: pads, Kind: stock.MovePurchase, Delta: 2, TotalPrice: ptr(40.0), Supplier: "Dear shop"},
-		{ItemID: pads, Kind: stock.MovePurchase, Delta: 2, TotalPrice: ptr(9.0), Supplier: "Cheap shop"},
+		{ItemID: pads, Kind: stock.MoveBought, Delta: 2, TotalPrice: ptr(40.0), Supplier: "Dear shop"},
+		{ItemID: pads, Kind: stock.MoveBought, Delta: 2, TotalPrice: ptr(9.0), Supplier: "Cheap shop"},
 	} {
 		on := time.Date(2026, 10, 10+i, 0, 0, 0, 0, time.UTC)
 		in.OccurredOn = &on

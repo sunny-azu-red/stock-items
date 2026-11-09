@@ -226,7 +226,7 @@ func TestUndatedCallsUseTheAppsDay(t *testing.T) {
 		t.Errorf("expiring = %v, want Last day and Yesterday", got)
 	}
 
-	m := stock.MovementInput{ItemID: id, Kind: stock.MoveCorrection, Delta: 5}
+	m := stock.MovementInput{ItemID: id, Kind: stock.MoveAdjusted, Delta: 5}
 	if err := s.AddMovement(ctx, m); err != nil {
 		t.Fatal(err)
 	}

@@ -258,10 +258,10 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 		{
 			name: "purchase", page: "/items/{oil}", action: "/items/{oil}/movements",
 			fields: func(a *testApp) url.Values {
-				return url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}
+				return url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}
 			},
 			changed: func(a *testApp) url.Values {
-				return url.Values{"kind": {"purchase"}, "amount": {"2"}, "amount_unit": {"l"}, "total_price": {"40"}}
+				return url.Values{"kind": {"bought"}, "amount": {"2"}, "amount_unit": {"l"}, "total_price": {"40"}}
 			},
 			to: func(a *testApp) string { return itemPath(itemID(a.t, a.store, "Silkolene")) },
 			check: func(t *testing.T, a *testApp) {
@@ -273,10 +273,10 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 		{
 			name: "use", page: "/items/{oil}", action: "/items/{oil}/movements",
 			fields: func(a *testApp) url.Values {
-				return url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}}
+				return url.Values{"kind": {"used"}, "amount": {"100"}, "amount_unit": {"ml"}}
 			},
 			changed: func(a *testApp) url.Values {
-				return url.Values{"kind": {"use"}, "amount": {"200"}, "amount_unit": {"ml"}}
+				return url.Values{"kind": {"used"}, "amount": {"200"}, "amount_unit": {"ml"}}
 			},
 			to: func(a *testApp) string { return itemPath(itemID(a.t, a.store, "Silkolene")) },
 			check: func(t *testing.T, a *testApp) {
@@ -286,14 +286,14 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 			},
 		},
 		{
-			// Counted 500, then 400 used and the retry arrives: it must not set
+			// Adjusted to 500, then 400 used and the retry arrives: it must not set
 			// the stock back to 500.
-			name: "count", page: "/items/{oil}", action: "/items/{oil}/movements",
+			name: "adjustment", page: "/items/{oil}", action: "/items/{oil}/movements",
 			fields: func(a *testApp) url.Values {
-				return url.Values{"kind": {"correction"}, "amount": {"500"}, "amount_unit": {"ml"}}
+				return url.Values{"kind": {"adjusted"}, "amount": {"500"}, "amount_unit": {"ml"}}
 			},
 			changed: func(a *testApp) url.Values {
-				return url.Values{"kind": {"correction"}, "amount": {"500"}, "amount_unit": {"ml"}}
+				return url.Values{"kind": {"adjusted"}, "amount": {"500"}, "amount_unit": {"ml"}}
 			},
 			to: func(a *testApp) string { return itemPath(itemID(a.t, a.store, "Silkolene")) },
 			check: func(t *testing.T, a *testApp) {
@@ -442,9 +442,9 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 			}
 			fields := c.fields(a)
 			key := keys[0]
-			if kind := fields.Get("kind"); kind == "use" {
+			if kind := fields.Get("kind"); kind == "used" {
 				key = keys[1]
-			} else if kind == "correction" {
+			} else if kind == "adjusted" {
 				key = keys[2]
 			}
 			version := ""
@@ -456,15 +456,15 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 			if f := flashOf(t, first); f.Kind == "error" || f.Message == savedAlreadyMsg {
 				t.Fatalf("first save: %+v", f)
 			}
-			if c.name == "count" {
-				// Used meanwhile: a repeated count must not undo it.
-				expect(t, a.post(itemPath(oil)+"/movements", url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}}),
+			if c.name == "adjustment" {
+				// Used meanwhile: a repeated adjustment must not undo it.
+				expect(t, a.post(itemPath(oil)+"/movements", url.Values{"kind": {"used"}, "amount": {"100"}, "amount_unit": {"ml"}}),
 					http.StatusSeeOther)
 			}
 			expectSavedAlready(t, a.post(action, with(c.changed(a), key, version)), c.to(a))
-			if c.name == "count" {
+			if c.name == "adjustment" {
 				if got := a.quantity(t, oil); got != 400 {
-					t.Errorf("oil = %v after the repeat, want 400: the count once, then the use", got)
+					t.Errorf("oil = %v after the repeat, want 400: the adjustment once, then the use", got)
 				}
 			} else {
 				c.check(t, a)
@@ -485,12 +485,12 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 		oil := itemID(t, a.store, "Silkolene")
 		page := itemPath(oil)
 		key := formKeys(t, a, page, page+"/movements")[1] // used
-		rec := a.post(page+"/movements", with(url.Values{"kind": {"use"}, "amount": {"1"}, "amount_unit": {"l"}}, key, ""))
+		rec := a.post(page+"/movements", with(url.Values{"kind": {"used"}, "amount": {"1"}, "amount_unit": {"l"}}, key, ""))
 		expect(t, rec, http.StatusUnprocessableEntity, "Only 525 ml in stock")
 		if keys := keysIn(t, rec.Body.String(), page+"/movements"); len(keys) != 3 || keys[1] != key {
 			t.Errorf("keys after the error = %v, want %s kept on the use form", keys, key)
 		}
-		rec = a.post(page+"/movements", with(url.Values{"kind": {"use"}, "amount": {"500"}, "amount_unit": {"ml"}}, key, ""))
+		rec = a.post(page+"/movements", with(url.Values{"kind": {"used"}, "amount": {"500"}, "amount_unit": {"ml"}}, key, ""))
 		expect(t, rec, http.StatusSeeOther)
 		if f := flashOf(t, rec); f.Message != "Used 500 ml" {
 			t.Errorf("flash = %+v", f)
@@ -567,7 +567,7 @@ func TestFormsWithoutAKeyAreNotSaved(t *testing.T) {
 	a.seed()
 	oil := itemID(t, a.store, "Silkolene")
 	page := itemPath(oil)
-	rec := a.post(page+"/movements", url.Values{"form_key": {""}, "kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"},
+	rec := a.post(page+"/movements", url.Values{"form_key": {""}, "kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"},
 		"total_price": {"23.45"}})
 	expect(t, rec, http.StatusUnprocessableEntity, noFormKey, `value="23.45"`)
 	if got := a.quantity(t, oil); got != 525 {
@@ -577,7 +577,7 @@ func TestFormsWithoutAKeyAreNotSaved(t *testing.T) {
 	if len(keys) != 3 {
 		t.Fatalf("keys = %v", keys)
 	}
-	expect(t, a.post(page+"/movements", with(url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}}, keys[0], "")),
+	expect(t, a.post(page+"/movements", with(url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}}, keys[0], "")),
 		http.StatusSeeOther)
 	if got := a.quantity(t, oil); got != 1525 {
 		t.Errorf("oil = %v, want 1525", got)

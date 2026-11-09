@@ -54,7 +54,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 
 	p := dashboardPage{
 		Vehicles: activeVehicles(vehicles), VehicleMap: vehicleMap(vehicles), ItemCount: len(items), KitCount: len(kits),
-		Recent: recent, Stats: stats, SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping))),
+		Recent: recent, Stats: stats, SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping), *s.today())),
 	}
 	today := s.now()
 	for _, it := range items {
@@ -156,15 +156,13 @@ func (p activityPage) PageQuery(n int) string {
 	return q.Encode()
 }
 
-var activityKinds = []stock.MovementKind{stock.MovePurchase, stock.MoveUse, stock.MoveService, stock.MoveCorrection, stock.MoveInitial}
+var activityKinds = []stock.MovementKind{stock.MoveBought, stock.MoveUsed, stock.MoveService, stock.MoveAdjusted, stock.MoveStarting}
 
-// activityKind reads the ?kind= filter, ignoring unknown kinds.
+// activityKind reads the ?kind= filter, ignoring unknown kinds. Old names
+// (a bookmarked ?kind=purchase) still work.
 func activityKind(r *http.Request) stock.MovementKind {
-	kind := stock.MovementKind(r.URL.Query().Get("kind"))
-	if slices.Contains(activityKinds, kind) {
-		return kind
-	}
-	return ""
+	kind, _ := stock.ParseMovementKind(r.URL.Query().Get("kind"))
+	return kind
 }
 
 // activityYear reads the ?year= filter, ignoring anything but a year.

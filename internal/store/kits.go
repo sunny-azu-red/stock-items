@@ -35,7 +35,8 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
 		       lf.id, lf.performed_on, lf.odometer_km, lf.odometer_at_log, lf.created_at,
 		       (SELECT sr.odometer_km FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND NOT sr.kit_intermediate AND sr.odometer_km IS NOT NULL
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
+		          AND (sr.performed_on < lf.performed_on OR (sr.performed_on = lf.performed_on AND sr.id <= lf.id))
 		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
 		       v.purchased_on, v.purchased_km
 		FROM service_kits k

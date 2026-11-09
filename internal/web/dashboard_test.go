@@ -19,7 +19,7 @@ func TestDashboardSpentThisYear(t *testing.T) {
 		on    time.Time
 		price float64
 	}{{day(2025, 12, 31), 7}, {day(2026, 1, 1), 20}} {
-		if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
+		if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -30,9 +30,9 @@ func TestDashboardSpentThisYear(t *testing.T) {
 	// This year's purchase, not last year's, nor the labour (that is on
 	// the Services page); the tile opens this year's purchases.
 	rec := a.get("/")
-	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=purchase&amp;year=2026">`, "Spent in 2026", "20.00 EUR")
+	expect(t, rec, http.StatusOK, `<a class="card tile" href="/activity?kind=bought&amp;year=2026">`, "Spent in 2026", "20.00 EUR")
 	expectNot(t, rec, "50.00 EUR", "27.00 EUR", "12 months")
-	purchases := a.get("/activity?kind=purchase&year=2026")
+	purchases := a.get("/activity?kind=bought&year=2026")
 	expect(t, purchases, http.StatusOK, "1 Jan 2026")
 	expectNot(t, purchases, "31 Dec 2025")
 

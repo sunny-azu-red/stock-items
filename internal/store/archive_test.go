@@ -120,7 +120,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	k390 := mustVehicle(t, s, "KTM 390")
 	filter := mustItem(t, s, stock.ItemInput{Name: "Old filter", Unit: stock.UnitPiece, Quantity: 3})
 	spare := mustItem(t, s, stock.ItemInput{Name: "Spare bolt", Unit: stock.UnitPiece, Quantity: 3})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 2, TotalPrice: ptr(20.0)}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveBought, Delta: 2, TotalPrice: ptr(20.0)}); err != nil {
 		t.Fatal(err)
 	}
 	kitIn := stock.KitInput{VehicleID: k390, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: filter, Quantity: 1}}}
@@ -186,7 +186,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	}
 
 	// An item nothing refers to is deleted with its own history.
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: spare, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: spare, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeleteItem(ctx, spare, cur(t, s, store.WhatItem, spare)); err != nil {
@@ -320,10 +320,10 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUsed})
 	use := moves[0].ID
 	_, useTrash, err := s.DeleteMovement(ctx, use, cur(t, s, store.WhatMovement, use))
 	if err != nil {
@@ -337,10 +337,10 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ = s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUse})
+	moves, _ = s.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveUsed})
 	use = moves[0].ID
 	if _, err := s.ArchiveItem(ctx, filter, cur(t, s, store.WhatItem, filter)); err != nil {
 		t.Fatal(err)
@@ -350,9 +350,9 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	_, _, delErr := s.DeleteMovement(ctx, use, cur(t, s, store.WhatMovement, use))
 	_, restoreUseErr := s.RestoreTrash(ctx, useTrash)
 	_, newSvcErr := s.CreateService(ctx, service(1))
-	_, correctErr := s.CorrectStock(ctx, filter, 10, "", time.Now(), "")
+	_, correctErr := s.SetStock(ctx, filter, 10, "", time.Now(), "")
 	for what, err := range map[string]error{
-		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MovePurchase, Delta: 1}),
+		"add":             s.AddMovement(ctx, stock.MovementInput{ItemID: filter, Kind: stock.MoveBought, Delta: 1}),
 		"correct":         correctErr,
 		"edit a change":   s.UpdateMovement(ctx, use, editV(t, s, use, stock.MovementEdit{Amount: 2})),
 		"delete a change": delErr,

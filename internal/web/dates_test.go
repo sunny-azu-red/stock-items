@@ -38,7 +38,7 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 		expect(t, a.get(itemPath(oil)), http.StatusOK, `name="occurred_on" value="2026-11-01"`)
 		// A quick change has no date field: it is dated the local day too.
 		expect(t, a.post(itemPath(oil)+"/adjust", url.Values{"dir": {"down"}}), http.StatusSeeOther)
-		moves, err := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+		moves, err := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUsed})
 		if err != nil || len(moves) != 1 {
 			t.Fatalf("uses = %+v, %v", moves, err)
 		}

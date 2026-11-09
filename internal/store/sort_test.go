@@ -94,12 +94,12 @@ func TestMovementSortOrders(t *testing.T) {
 		}
 		ids = append(ids, newest)
 	}
-	move(filter, stock.MovePurchase, 2, ptr(20.0), day(10, 1))   // m1
-	move(fluid, stock.MovePurchase, 1000, ptr(15.0), day(10, 2)) // m2
-	move(filter, stock.MoveUse, -1, nil, day(10, 3))             // m3
-	move(fluid, stock.MoveUse, -250, nil, day(10, 3))            // m4
-	move(fluid, stock.MoveCorrection, 50, nil, day(10, 4))       // m5
-	move(filter, stock.MovePurchase, 1, ptr(20.0), day(10, 4))   // m6
+	move(filter, stock.MoveBought, 2, ptr(20.0), day(10, 1))   // m1
+	move(fluid, stock.MoveBought, 1000, ptr(15.0), day(10, 2)) // m2
+	move(filter, stock.MoveUsed, -1, nil, day(10, 3))          // m3
+	move(fluid, stock.MoveUsed, -250, nil, day(10, 3))         // m4
+	move(fluid, stock.MoveAdjusted, 50, nil, day(10, 4))       // m5
+	move(filter, stock.MoveBought, 1, ptr(20.0), day(10, 4))   // m6
 	if !slices.IsSorted(ids) || len(slices.Compact(slices.Clone(ids))) != 6 {
 		t.Fatalf("ids = %v", ids)
 	}
@@ -116,9 +116,9 @@ func TestMovementSortOrders(t *testing.T) {
 		// Within an item (or kind, change, price), newest first.
 		{store.MoveSortItem, false, []int{6, 3, 1, 5, 4, 2}},
 		{store.MoveSortItem, true, []int{5, 4, 2, 6, 3, 1}},
-		// By the labels shown: Bought, Counted, Used.
-		{store.MoveSortKind, false, []int{6, 2, 1, 5, 4, 3}},
-		{store.MoveSortKind, true, []int{4, 3, 5, 6, 2, 1}},
+		// By the labels shown: Adjusted, Bought, Used.
+		{store.MoveSortKind, false, []int{5, 6, 2, 1, 4, 3}},
+		{store.MoveSortKind, true, []int{4, 3, 6, 2, 1, 5}},
 		// Grouped by unit (ml before pieces) both ways.
 		{store.MoveSortChange, false, []int{4, 5, 2, 3, 6, 1}},
 		{store.MoveSortChange, true, []int{2, 5, 4, 1, 6, 3}},

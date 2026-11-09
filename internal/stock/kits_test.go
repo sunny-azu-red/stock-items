@@ -73,6 +73,8 @@ func TestKitDue(t *testing.T) {
 			Kit{IntervalKm: ptr(6000), IntervalMonths: ptr(12), VehiclePurchasedKm: ptr(0), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, ptr(1000), DueOverdue},
 		{"new vehicle km interval but no odometer",
 			Kit{IntervalKm: ptr(6000), VehiclePurchasedKm: ptr(0)}, nil, DueUnknown},
+		{"new vehicle km and date interval with purchase km only and no odometer",
+			Kit{IntervalKm: ptr(6000), IntervalMonths: ptr(12), VehiclePurchasedKm: ptr(0)}, nil, DueUnknown},
 		{"new vehicle km interval but only purchase date set",
 			Kit{IntervalKm: ptr(6000), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -100))}, ptr(1000), DueNever},
 		{"new vehicle date interval but only purchase km set",
@@ -340,15 +342,32 @@ func TestKitIntermediateSchedules(t *testing.T) {
 		if due.DueKm == nil || *due.DueKm != 2000 || due.DueDate != nil {
 			t.Errorf("inter due from new = %+v, want 2000 km", due)
 		}
-		// Once intermediate is logged at 2000 km, next is Full at 4000 km.
+		// Once intermediate is logged at 2000 km, next is Full at 4000 km and
+		// the annual warranty deadline remains anchored at 2027-01-01.
 		inter1 := svc(1, day(2026, 6, 1), 2000, true)
 		k.LastService = inter1
 		if k.NextIsIntermediate(ptr(2500), day(2026, 7, 1)) {
 			t.Fatal("want NextIsIntermediate = false after intermediate service logged")
 		}
 		fullDue := k.Due(ptr(2500), day(2026, 7, 1))
-		if fullDue.DueKm == nil || *fullDue.DueKm != 4000 {
-			t.Errorf("full due after inter = %+v, want 4000 km", fullDue)
+		if fullDue.DueKm == nil || *fullDue.DueKm != 4000 || fullDue.DueDate == nil || !fullDue.DueDate.Equal(day(2027, 1, 1)) {
+			t.Errorf("full due after inter = %+v, want 4000 km / 2027-01-01", fullDue)
+		}
+	})
+
+	t.Run("alternating mode promotes to full when full km threshold is reached", func(t *testing.T) {
+		k := Kit{
+			IntervalKm:          ptr(4000),
+			IntervalMonths:      ptr(12),
+			InterIntervalKm:     ptr(2000),
+			InterIntervalMonths: ptr(12),
+			LastService:         svc(1, day(2026, 1, 1), 0, false),
+			LastFullService:     svc(1, day(2026, 1, 1), 0, false),
+		}
+		// Rode past both intermediate (2000 km) and full (4000 km) without logging intermediate:
+		// Full service must take over.
+		if k.NextIsIntermediate(ptr(4100), day(2026, 6, 1)) {
+			t.Error("want NextIsIntermediate = false when full km is already overdue")
 		}
 	})
 }

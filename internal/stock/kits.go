@@ -128,6 +128,13 @@ func LoggedSoonAfter(loggedAt, performedOn time.Time, loc *time.Location) bool {
 	return days <= LogWindowDays
 }
 
+// dueSoonKm returns the distance threshold within which a km interval counts
+// as "due soon": 10% of the interval, at least 500 km, but never more than
+// half of it (or a short interval is "soon" right away).
+func dueSoonKm(intervalKm int) int {
+	return min(max(500, intervalKm/10), intervalKm/2)
+}
+
 func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseKm *int, intervalKm, intervalMonths *int, currentKm *int, today time.Time) Due {
 	if intervalKm == nil && intervalMonths == nil {
 		return Due{State: DueNone}
@@ -155,9 +162,7 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseKm *int
 			left := dueKm - *currentKm
 			d.KmLeft = &left
 			known = true
-			// 10% of the interval, at least 500 km, but never more than
-			// half of it (or a short interval is "soon" right away).
-			threshold := min(max(500, *intervalKm/10), *intervalKm/2)
+			threshold := dueSoonKm(*intervalKm)
 			overdue = overdue || left < 0
 			soon = soon || left <= threshold
 		}
@@ -176,7 +181,7 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseKm *int
 	}
 	switch {
 	case !known:
-		if ref == nil && ((intervalKm != nil && lastKm == nil) || (intervalMonths != nil && fromDate == nil)) {
+		if ref == nil && d.DueKm == nil && d.DueDate == nil {
 			d.State = DueNever
 		} else {
 			d.State = DueUnknown
@@ -206,8 +211,8 @@ func (k Kit) InterDue(currentKm *int, today time.Time) Due {
 //   - If InterIntervalMonths is set (alternating reset mode), the intermediate
 //     service resets the time clock and advances the km target by InterIntervalKm.
 //   - If InterIntervalMonths is nil (strict warranty mode), the full schedule
-//     counts strictly from LastFullService so intermediate changes never push
-//     back the full service's deadline.
+//     counts strictly from LastFullService (or the vehicle's purchase baseline)
+//     so intermediate changes never push back the full service's deadline.
 func (k Kit) FullDue(currentKm *int, today time.Time) Due {
 	if (k.IntervalKm == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
@@ -220,9 +225,18 @@ func (k Kit) FullDue(currentKm *int, today time.Time) Due {
 		lastFull, lastFullOdo = k.LastService, k.LastOdometerKm
 	}
 	lastWasInter := k.LastService != nil && k.LastService.Intermediate
-	if lastWasInter && (k.InterIntervalMonths != nil || lastFull == nil) {
+	if lastWasInter {
 		stepKm := cmp.Or(k.InterIntervalKm, k.IntervalKm)
-		return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, stepKm, k.IntervalMonths, currentKm, today)
+		if k.InterIntervalMonths != nil {
+			return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, stepKm, k.IntervalMonths, currentKm, today)
+		}
+		if lastFull == nil && k.VehiclePurchasedKm == nil {
+			interKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
+			if interKm == nil && (k.IntervalMonths == nil || k.VehiclePurchasedOn == nil) {
+				return Due{State: DueUnknown}
+			}
+			return dueFrom(nil, nil, k.VehiclePurchasedOn, interKm, stepKm, k.IntervalMonths, currentKm, today)
+		}
 	}
 	return dueFrom(lastFull, lastFullOdo, k.VehiclePurchasedOn, k.VehiclePurchasedKm, k.IntervalKm, k.IntervalMonths, currentKm, today)
 }
@@ -245,6 +259,9 @@ func (k Kit) NextIsIntermediate(currentKm *int, today time.Time) bool {
 		return false
 	}
 	if fullDue.State.Rank() < interDue.State.Rank() {
+		return false
+	}
+	if (fullDue.State == DueSoon || fullDue.State == DueOverdue) && fullDue.KmLeft != nil && k.IntervalKm != nil && *fullDue.KmLeft <= dueSoonKm(*k.IntervalKm) {
 		return false
 	}
 	return true

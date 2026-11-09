@@ -42,7 +42,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 
 	// A restore that can't work explains why on the trash page.
 	f = flashOf(t, a.postV(svc+"/delete", nil))
-	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"use"}, "amount": {"525"}}), http.StatusSeeOther)
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"used"}, "amount": {"525"}}), http.StatusSeeOther)
 	rec = a.post("/trash/"+itoa(f.Undo)+"/restore", nil)
 	if l := rec.Header().Get("Location"); l != "/trash" {
 		t.Errorf("failed restore went to %q", l)

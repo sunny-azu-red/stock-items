@@ -344,13 +344,13 @@ func TestHostileInput(t *testing.T) {
 		form   url.Values
 		status int
 	}{
-		{"NaN price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"NaN"}}, 422},
-		{"Inf price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"Inf"}}, 422},
-		{"huge price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"1e20"}}, 422},
-		{"grouped price", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "total_price": {"1.500"}}, 422},
-		{"grouped amount", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"1,500"}, "amount_unit": {"ml"}}, 422},
-		{"huge amount", item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"99999999999"}}, 422},
-		{"forged kind", item + "/movements", url.Values{"kind": {"initial"}, "amount": {"1"}}, 422},
+		{"NaN price", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "total_price": {"NaN"}}, 422},
+		{"Inf price", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "total_price": {"Inf"}}, 422},
+		{"huge price", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "total_price": {"1e20"}}, 422},
+		{"grouped price", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "total_price": {"1.500"}}, 422},
+		{"grouped amount", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"1,500"}, "amount_unit": {"ml"}}, 422},
+		{"huge amount", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"99999999999"}}, 422},
+		{"forged kind", item + "/movements", url.Values{"kind": {"starting"}, "amount": {"1"}}, 422},
 		{"huge item quantity", "/items", url.Values{"name": {"X"}, "unit": {"piece"}, "quantity": {"1"}, "min_quantity": {"9999999999"}}, 422},
 		{"huge odometer", "/vehicles", url.Values{"name": {"Big"}, "odometer_km": {"9999999999"}}, 422},
 		{"huge odometer update", "/vehicles/" + itoa(k390) + "/odometer", url.Values{"odometer_km": {"9999999999"}}, 303},
@@ -554,8 +554,8 @@ func TestPolish(t *testing.T) {
 	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1 pcs of OEM Rear Brake Pads"`)
 
 	// A bad date typed in one tab doesn't show up in the others.
-	page := a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})
-	expect(t, page, http.StatusUnprocessableEntity, `id="date-purchase" name="occurred_on" value="2062-01-01"`, `id="date-use" name="occurred_on" value="2026-10-29"`)
+	page := a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})
+	expect(t, page, http.StatusUnprocessableEntity, `id="date-bought" name="occurred_on" value="2062-01-01"`, `id="date-used" name="occurred_on" value="2026-10-29"`)
 
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
@@ -601,7 +601,7 @@ func TestRacesEndInMessages(t *testing.T) {
 		"part_item": {itoa(pads)}, "part_qty": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
-	if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
+	if err := a.store.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveAdjusted, Delta: stock.MaxQuantity}); err != nil {
 		t.Fatal(err)
 	}
 	rec = a.postV(svc+"/delete", nil, "Referer", "http://example.com"+svc)
@@ -625,8 +625,8 @@ func TestEmptyStatesFollowFilters(t *testing.T) {
 	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "Nothing logged for this vehicle yet",
 		`href="/services/new?vehicle=`+itoa(k1290)+`"`)
 	expect(t, a.get("/activity?page=9"), http.StatusOK, "Nothing on this page", `href="/activity"`)
-	expect(t, a.get("/activity?kind=correction"), http.StatusOK, "Nothing matches these filters", "Clear filters")
-	expectNot(t, a.get("/activity?kind=correction"), "No activity yet")
+	expect(t, a.get("/activity?kind=adjusted"), http.StatusOK, "Nothing matches these filters", "Clear filters")
+	expectNot(t, a.get("/activity?kind=adjusted"), "No activity yet")
 }
 
 func TestAccessibilityDetails(t *testing.T) {
@@ -635,8 +635,8 @@ func TestAccessibilityDetails(t *testing.T) {
 	pads := itemID(t, a.store, "Rear Brake")
 	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip"`)
 	// Only the selected tab is in the tab order; the price label names the currency.
-	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-purchase" aria-controls="panel-purchase" aria-selected="true">`,
-		`id="tab-use" aria-controls="panel-use" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
+	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-bought" aria-controls="panel-bought" aria-selected="true">`,
+		`id="tab-used" aria-controls="panel-used" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
 	// A fixed vehicle has no <label for> pointing at nothing.
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
@@ -663,7 +663,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	oil := itemID(t, a.store, "10W50")
 
 	// Top up oil so we have enough for multiple services.
-	if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: oil, Kind: stock.MoveCorrection, Delta: 10000}); err != nil {
+	if err := a.store.AddMovement(context.Background(), stock.MovementInput{ItemID: oil, Kind: stock.MoveAdjusted, Delta: 10000}); err != nil {
 		t.Fatal(err)
 	}
 

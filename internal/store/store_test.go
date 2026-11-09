@@ -172,7 +172,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 	expires := time.Date(2030, 3, 1, 0, 0, 0, 0, time.UTC)
 	mustItem(t, s, stock.ItemInput{Name: "Coolant", Unit: stock.UnitML, Quantity: 1, ExpiresOn: &expires})
 	bought := time.Date(2029, 6, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: mustList(t, s, store.ItemFilter{})[0].ID, Kind: stock.MovePurchase,
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: mustList(t, s, store.ItemFilter{})[0].ID, Kind: stock.MoveBought,
 		Delta: 1, TotalPrice: ptr(10.0), OccurredOn: &bought}); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 	// A purchase dated the day after doesn't count yet.
 	dayAfter := later.AddDate(0, 0, 1)
 	id := mustList(t, s, store.ItemFilter{})[0].ID
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MovePurchase,
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveBought,
 		Delta: 1, TotalPrice: ptr(5.0), OccurredOn: &dayAfter}); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 
 	// Counts and edited quantities are dated by the caller.
 	counted := time.Date(2029, 7, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := s.CorrectStock(ctx, id, 10, "", counted, ""); err != nil {
+	if _, err := s.SetStock(ctx, id, 10, "", counted, ""); err != nil {
 		t.Fatal(err)
 	}
 	edited := time.Date(2029, 7, 2, 0, 0, 0, 0, time.UTC)
@@ -208,7 +208,7 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 	if err := s.UpdateItem(ctx, id, itemV(t, s, id, in), edited); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id, Kind: stock.MoveCorrection})
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id, Kind: stock.MoveAdjusted})
 	if len(moves) != 2 || !moves[0].OccurredOn.Equal(edited) || !moves[1].OccurredOn.Equal(counted) {
 		t.Errorf("corrections = %+v", moves)
 	}
@@ -229,15 +229,15 @@ func TestVersions(t *testing.T) {
 		}
 	}
 	step(store.WhatItem, oil, 1, "created")
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -100}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUsed, Delta: -100}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CorrectStock(ctx, oil, 800, "", time.Now(), ""); err != nil {
+	if _, err := s.SetStock(ctx, oil, 800, "", time.Now(), ""); err != nil {
 		t.Fatal(err)
 	}
 	step(store.WhatItem, oil, 1, "after stock changes")
 	expires := time.Date(2030, 1, 31, 0, 0, 0, 0, time.UTC)
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, ExpiresOn: &expires}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, ExpiresOn: &expires}); err != nil {
 		t.Fatal(err)
 	}
 	step(store.WhatItem, oil, 2, "after a purchase with a best-before date")

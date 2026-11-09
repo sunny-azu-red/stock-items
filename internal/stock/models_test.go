@@ -121,14 +121,31 @@ func TestSortSKUs(t *testing.T) {
 		}
 	})
 
-	t.Run("OEM SKU with empty brand defaults to KTM", func(t *testing.T) {
-		unlabeledOEM := []SKU{
-			{Code: "AFTERMARKET", Kind: SKUManufacturer, Brand: "Brembo"},
-			{Code: "OEMCODE", Kind: SKUOEM, Brand: ""},
+	t.Run("Full tier order: item brand, OEM, Manufacturer, Retailer, Other", func(t *testing.T) {
+		p1pc := 1.0
+		skus := []SKU{
+			{Code: "OTHER-1", Kind: SKUOther, Brand: "Misc", PackSize: &p1pc},
+			{Code: "RET-BAR", Kind: SKUBarcode, Brand: "Louis", PackSize: &p1pc},
+			{Code: "RET-1", Kind: SKURetailer, Brand: "Louis", PackSize: &p1pc},
+			{Code: "MFG-BAR", Kind: SKUBarcode, Brand: "HifloFiltro", PackSize: &p1pc},
+			{Code: "MFG-1", Kind: SKUManufacturer, Brand: "HifloFiltro", PackSize: &p1pc},
+			{Code: "OEM-BAR", Kind: SKUBarcode, Brand: "Yamaha", PackSize: &p1pc},
+			{Code: "OEM-1", Kind: SKUOEM, Brand: "Yamaha", PackSize: &p1pc},
+			{Code: "ITEM-BAR", Kind: SKUBarcode, Brand: "Brembo", PackSize: &p1pc},
+			{Code: "ITEM-1", Kind: SKUManufacturer, Brand: "Brembo", PackSize: &p1pc},
 		}
-		got := SortSKUs(unlabeledOEM, "KTM")
-		if got[0].Code != "OEMCODE" || got[1].Code != "AFTERMARKET" {
-			t.Errorf("got %v, want OEMCODE first", got)
+		got := SortSKUs(skus, "Brembo")
+		wantCodes := []string{
+			"ITEM-1", "ITEM-BAR",
+			"OEM-1", "OEM-BAR",
+			"MFG-1", "MFG-BAR",
+			"RET-1", "RET-BAR",
+			"OTHER-1",
+		}
+		for i, w := range wantCodes {
+			if got[i].Code != w {
+				t.Errorf("[%d] got code %s, want %s", i, got[i].Code, w)
+			}
 		}
 	})
 

@@ -551,7 +551,7 @@ func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: bolt, Kind: stock.MoveCorrection, Delta: stock.MaxQuantity}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: bolt, Kind: stock.MoveAdjusted, Delta: stock.MaxQuantity}); err != nil {
 		t.Fatal(err)
 	}
 	// An edit that leaves the parts as they were is fine.

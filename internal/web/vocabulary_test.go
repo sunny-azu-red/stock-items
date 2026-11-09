@@ -19,7 +19,7 @@ func TestVocabulary(t *testing.T) {
 		allowIn string // a file where it is right
 	}{
 		{re: `\b[Oo]n stock\b`, use: `"in stock"`},
-		{re: `\bCorrection\b`, use: `"Counted" (the kind's label; "count" in a sentence)`},
+		{re: `\b(Correction|Counted)\b`, use: `"Adjusted" (the kind's label; "adjustment" in a sentence)`},
 		{re: `Initial stock`, use: `"Starting stock"`},
 		{re: `\b[1-9][0-9]*x\b`, use: `"N pcs" (FormatQuantity)`},
 		{re: `>\s*Everything\s*<|"Everything"|Everything →`, use: `"All types", "All activity →"`},
@@ -72,6 +72,9 @@ func TestVocabulary(t *testing.T) {
 			}
 			re := regexp.MustCompile(r.re)
 			for _, loc := range re.FindAllStringIndex(text, -1) {
+				if strings.HasPrefix(text[loc[0]:], "Counted in") {
+					continue // the item form's unit label
+				}
 				line := strings.Count(text[:loc[0]], "\n") + 1
 				t.Errorf("%s:%d: %q: write %s", f, line, text[loc[0]:loc[1]], r.use)
 			}

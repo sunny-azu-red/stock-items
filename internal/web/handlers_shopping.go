@@ -40,7 +40,7 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm) (shoppingPage, er
 		return shoppingPage{}, err
 	}
 	return shoppingPage{
-		Entries: entries, Items: items, Form: f, Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries)),
+		Entries: entries, Items: items, Form: f, Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries), *s.today()),
 	}, nil
 }
 
@@ -177,7 +177,7 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 			n++
 		}
 	}
-	msg := fmt.Sprintf("Added %d %s to the shopping list", n, pluralWord(n, "item", "items"))
+	msg := "Added " + plural(n, "item") + " to the shopping list"
 	if n == 0 {
 		msg = "Nothing to add: the shopping list already has it"
 	}
@@ -330,7 +330,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		ExpiresOn: formText(r, "expires_on"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	in := stock.MovementInput{Kind: stock.MovePurchase, Supplier: f.Supplier, Note: f.Note, FormKey: f.FormKey}
+	in := stock.MovementInput{Kind: stock.MoveBought, Supplier: f.Supplier, Note: f.Note, FormKey: f.FormKey}
 	if q, err := stock.ParseAmount(f.Amount, e.ItemUnit, f.AmountUnit); err != nil || q <= 0 {
 		f.Errors.Add("amount", amountError(err, e.ItemUnit, "Enter how much you bought"))
 	} else {

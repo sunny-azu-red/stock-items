@@ -72,7 +72,7 @@ func archivedError(brand, name string) error {
 	return &ConflictError{Field: "form", Message: displayName(brand, name) + " is archived; restore it first."}
 }
 
-// AddMovement records a stock change (purchase, use, correction).
+// AddMovement records a stock change (bought, used or adjusted).
 func (s *Store) AddMovement(ctx context.Context, in stock.MovementInput) error {
 	if errs := in.Validate(); errs.Any() {
 		return errs
@@ -99,12 +99,12 @@ func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (i
 	return id, err
 }
 
-// CorrectStock sets an item's quantity to a counted amount on day on and
-// records the difference as a correction. The difference is worked out
+// SetStock sets an item's quantity to the amount on the shelf on day on
+// and records the difference as an adjustment. The difference is worked out
 // under the row lock, so a change made by someone else in the meantime is
 // not undone. It returns the recorded change (0 when the stock already
-// matched). formKey is the count form's one-time key (see inFormTx).
-func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, note string, on time.Time, formKey string) (float64, error) {
+// matched). formKey is the Adjust form's one-time key (see inFormTx).
+func (s *Store) SetStock(ctx context.Context, itemID int64, target float64, note string, on time.Time, formKey string) (float64, error) {
 	var delta float64
 	err := s.inFormTx(ctx, formKey, WhatItem, &itemID, func(tx pgx.Tx) error {
 		var qty float64
@@ -112,19 +112,19 @@ func (s *Store) CorrectStock(ctx context.Context, itemID int64, count float64, n
 			return notFound(err)
 		}
 		var err error
-		delta, err = correctTo(ctx, tx, itemID, qty, count, note, on)
+		delta, err = adjustTo(ctx, tx, itemID, qty, target, note, on)
 		return err
 	})
 	return delta, err
 }
 
-// correctTo records a correction from qty (read under lock) to target.
-func correctTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string, on time.Time) (float64, error) {
+// adjustTo records an adjustment from qty (read under lock) to target.
+func adjustTo(ctx context.Context, tx pgx.Tx, itemID int64, qty, target float64, note string, on time.Time) (float64, error) {
 	delta := stock.RoundQty(target - qty)
 	if delta == 0 {
 		return 0, nil
 	}
-	_, err := applyMovement(ctx, tx, stock.MovementInput{ItemID: itemID, Kind: stock.MoveCorrection, Delta: delta, Note: note, OccurredOn: &on})
+	_, err := applyMovement(ctx, tx, stock.MovementInput{ItemID: itemID, Kind: stock.MoveAdjusted, Delta: delta, Note: note, OccurredOn: &on})
 	return delta, err
 }
 
@@ -155,7 +155,7 @@ const (
 // kindsByLabel lists the kinds of stock change in the alphabetical order
 // of the labels the pages show, for sorting by kind.
 var kindsByLabel = func() []string {
-	kinds := []stock.MovementKind{stock.MoveInitial, stock.MovePurchase, stock.MoveUse, stock.MoveCorrection, stock.MoveService}
+	kinds := []stock.MovementKind{stock.MoveStarting, stock.MoveBought, stock.MoveUsed, stock.MoveAdjusted, stock.MoveService}
 	slices.SortFunc(kinds, func(a, b stock.MovementKind) int { return strings.Compare(a.Label(), b.Label()) })
 	out := make([]string, len(kinds))
 	for i, k := range kinds {
@@ -324,7 +324,7 @@ func reviseMovement(ctx context.Context, tx pgx.Tx, m lockedMovement, delta floa
 }
 
 // UpdateMovement corrects a recorded stock change (see stock.ApplyEdit).
-// The item's stock moves by the difference; a correction that would leave
+// The item's stock moves by the difference; an edit that would leave
 // less than nothing in stock fails with *InsufficientStockError. Like
 // DeleteMovement, it is a deliberate exception to "every change goes
 // through applyMovement": it rewrites a mistaken entry together with its
@@ -407,11 +407,11 @@ func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
 		SELECT
 		  COALESCE((SELECT sum(i.quantity * lp.unit_price) FROM items i
 		            JOIN LATERAL (SELECT m.total_price / m.delta AS unit_price FROM stock_movements m
-		                          WHERE m.item_id = i.id AND m.kind = 'purchase' AND m.total_price IS NOT NULL AND m.delta > 0
+		                          WHERE m.item_id = i.id AND m.kind = 'bought' AND m.total_price IS NOT NULL AND m.delta > 0
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
 		            WHERE i.archived_at IS NULL), 0)::float8,
 		  COALESCE((SELECT sum(total_price) FROM stock_movements
-		            WHERE kind = 'purchase' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)::float8`, yearStart, day).
+		            WHERE kind = 'bought' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)::float8`, yearStart, day).
 		Scan(&st.StockValue, &st.SpentThisYear)
 	return st, err
 }
@@ -442,7 +442,7 @@ func (s *Store) MovementYears(ctx context.Context, itemID int64, kind stock.Move
 // CountPurchases returns how many purchases have been recorded for an item.
 func (s *Store) CountPurchases(ctx context.Context, itemID int64) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'purchase'`, itemID).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'bought'`, itemID).Scan(&n)
 	return n, err
 }
 
@@ -456,7 +456,7 @@ func (s *Store) LastPurchases(ctx context.Context, itemIDs []int64) (map[int64]s
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (item_id) item_id, (total_price / delta)::float8, occurred_on, supplier
 		FROM stock_movements
-		WHERE item_id = ANY($1) AND kind = 'purchase' AND total_price IS NOT NULL AND delta > 0
+		WHERE item_id = ANY($1) AND kind = 'bought' AND total_price IS NOT NULL AND delta > 0
 		ORDER BY item_id, occurred_on DESC, id DESC`, itemIDs)
 	if err != nil {
 		return nil, err
@@ -479,7 +479,7 @@ func (s *Store) LastUnitPrice(ctx context.Context, itemID int64) (*float64, erro
 	var p *float64
 	err := s.pool.QueryRow(ctx, `
 		SELECT (total_price / delta)::float8 FROM stock_movements
-		WHERE item_id = $1 AND kind = 'purchase' AND total_price IS NOT NULL AND delta > 0
+		WHERE item_id = $1 AND kind = 'bought' AND total_price IS NOT NULL AND delta > 0
 		ORDER BY occurred_on DESC, id DESC LIMIT 1`, itemID).Scan(&p)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

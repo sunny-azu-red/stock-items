@@ -50,7 +50,7 @@
       {{/* Swapped in with the results, so its labels fit the chosen key. The
            hidden fields say what the page shows, so a new key starts in its
            own direction (see parseStockSort). */}}
-      <span id="sort-dir" class="segmented segmented-tight" role="group" aria-label="Sort direction">
+      <span id="sort-dir" class="segmented" role="group" aria-label="Sort direction">
         <input type="hidden" name="was_sort" value="{{$f.Sort.Key}}"><input type="hidden" name="was_dir" value="{{$f.Sort.Dir}}">
         {{$l := $f.DirLabels}}
         <label><input type="radio" id="dir-asc" name="dir" value="asc" {{if not $f.Sort.Desc}}checked{{end}}>{{icon "arrow-up-narrow-wide"}}{{index $l 0}}</label>

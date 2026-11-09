@@ -911,3 +911,124 @@ func TestKitIntermediateMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00018 adds purchased_on and purchased_km on vehicles and strips them from
+// trash payloads on Down: Up → Down → Up.
+func TestVehiclePurchaseBaselineMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 17); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.UpTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE vehicles SET purchased_on = '2026-01-01', purchased_km = 0 WHERE id = 1;
+		INSERT INTO trash (kind, label, payload) VALUES ('vehicle', 'Vehicle: KTM 390',
+			'{"vehicles": [{"id": 9, "name": "KTM 390", "purchased_on": "2026-01-01", "purchased_km": 0}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 17); err != nil {
+		t.Fatal(err)
+	}
+	var payload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = 'Vehicle: KTM 390'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(payload, "purchased_on") || strings.Contains(payload, "purchased_km") {
+		t.Errorf("after Down: trash payload still holds purchase baseline fields: %s", payload)
+	}
+
+	if _, err := provider.UpTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 00019 renames the kinds of stock change to the words the pages use, in
+// the table and in the trash snapshots that restore into it: Up → Down → Up.
+func TestMovementKindNamesMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, realShape); err != nil {
+		t.Fatal(err)
+	}
+	// A deleted purchase and a deleted service (whose parts stay
+	// 'service'), as the trash holds them, next to other values.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO trash (kind, label, payload) VALUES ('movement', 'Bought: Grease',
+			'{"movement_id": 77, "stock_movements": [{"id": 77, "item_id": 3, "kind": "purchase", "delta": 400},
+			                                         {"id": 78, "item_id": 3, "kind": "correction", "delta": -1}]}'::jsonb),
+			('service', 'Service: Oil',
+			'{"service_records": [{"id": 9, "title": "Oil"}], "stock_movements": [{"id": 79, "item_id": 2, "kind": "service", "service_record_id": 9}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	kinds := func() string {
+		t.Helper()
+		var got string
+		if err := pool.QueryRow(ctx, `SELECT string_agg(kind, ',' ORDER BY id) FROM stock_movements`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	payload := func(label string) string {
+		t.Helper()
+		var got string
+		if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = $1`, label).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	before := kinds()
+
+	if _, err := provider.UpTo(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := kinds(), "starting,used,starting,bought,bought,adjusted"; got != want {
+		t.Errorf("after Up: kinds = %s, want %s (were %s)", got, want, before)
+	}
+	if p := payload("Bought: Grease"); !strings.Contains(p, `"kind": "bought"`) || !strings.Contains(p, `"kind": "adjusted"`) ||
+		strings.Contains(p, `"purchase"`) || strings.Contains(p, `"correction"`) || !strings.Contains(p, `"movement_id": 77`) {
+		t.Errorf("after Up: trash payload = %s", p)
+	}
+	if p := payload("Service: Oil"); !strings.Contains(p, `"kind": "service"`) || !strings.Contains(p, `"service_records"`) {
+		t.Errorf("after Up: service payload = %s", p)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO stock_movements (item_id, kind, delta, occurred_on) VALUES (1, 'adjusted', 1, '2026-06-01')`); err != nil {
+		t.Errorf("after Up: inserting adjusted: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO stock_movements (item_id, kind, delta, occurred_on) VALUES (1, 'correction', 1, '2026-06-01')`); err == nil {
+		t.Error("after Up: inserting the old name correction should have failed the CHECK")
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM stock_movements WHERE kind = 'adjusted' AND delta = 1`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(); got != before {
+		t.Errorf("after Down: kinds = %s, want %s", got, before)
+	}
+	if p := payload("Bought: Grease"); !strings.Contains(p, `"kind": "purchase"`) || !strings.Contains(p, `"kind": "correction"`) ||
+		strings.Contains(p, `"bought"`) || strings.Contains(p, `"adjusted"`) {
+		t.Errorf("after Down: trash payload = %s", p)
+	}
+
+	if _, err := provider.UpTo(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := kinds(), "starting,used,starting,bought,bought,adjusted"; got != want {
+		t.Errorf("after second Up: kinds = %s, want %s", got, want)
+	}
+}

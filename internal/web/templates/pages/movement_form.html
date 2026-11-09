@@ -1,5 +1,5 @@
 {{define "content"}}{{$d := .Data}}{{$m := $d.Movement}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<a class="back" href="/items/{{$m.ItemID}}">{{icon "arrow-left"}} {{$m.ItemName}}</a>
+<a class="back" href="{{$d.Back}}">{{icon "arrow-left"}} {{if eq $f.Back (printf "/items/%d" $m.ItemID)}}{{$m.ItemName}}{{else}}Back{{end}}</a>
 <div class="page-head">
   <div>
     <h1>Edit {{$d.Name}}</h1>
@@ -17,9 +17,9 @@
   {{template "stale" $f.Stale}}
   {{template "error-summary" $e}}
   <div class="form-grid">
-    {{if eq $m.Kind "correction"}}
+    {{if eq $m.Kind "adjusted"}}
     <fieldset class="field">
-      <legend>The count</legend>
+      <legend>The adjustment</legend>
       <span class="segmented">
         <label><input type="radio" name="direction" value="added" {{if not $f.Removed}}checked{{end}}>Added stock</label>
         <label><input type="radio" name="direction" value="removed" {{if $f.Removed}}checked{{end}}>Took stock away</label>
@@ -27,18 +27,18 @@
     </fieldset>
     {{end}}
     <div class="field{{if index $e "amount"}} has-error{{end}}">
-      <div class="label-row"><label for="amount">{{if eq $m.Kind "use"}}Amount used{{else if eq $m.Kind "correction"}}By how much?{{else if eq $m.Kind "purchase"}}Amount bought{{else}}Amount{{end}}</label>{{template "req"}}</div>
+      <div class="label-row"><label for="amount">{{if eq $m.Kind "used"}}Amount used{{else if eq $m.Kind "adjusted"}}By how much?{{else if eq $m.Kind "bought"}}Amount bought{{else}}Amount{{end}}</label>{{template "req"}}</div>
       <div class="qty-input">
-        <input class="input" id="amount" name="amount" value="{{$f.Amount}}" inputmode="decimal" aria-required="true" autofocus>
+        <input class="input" id="amount" name="amount" value="{{$f.Amount}}" inputmode="decimal" placeholder="{{placeholderFor $m.ItemUnit}}" aria-required="true" autofocus>
         <select class="input" name="amount_unit" aria-label="Unit">{{range $d.Units}}<option value="{{.Value}}" {{if eq .Value $f.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
       </div>
       {{template "err" (index $e "amount")}}
     </div>
     {{if $m.TakesPrice}}
     <div class="field{{if index $e "total_price"}} has-error{{end}}">
-      {{if or (eq $m.Kind "initial") (eq $m.ItemUnit "piece")}}
+      {{if or (eq $m.Kind "starting") (eq $m.ItemUnit "piece")}}
       {{$tip := "With a price or shop, this becomes a purchase."}}
-      {{if and (eq $m.ItemUnit "piece") (eq $m.Kind "initial")}}{{$tip = "For all the pieces together, not the price of one. With a price or shop, this becomes a purchase."}}
+      {{if and (eq $m.ItemUnit "piece") (eq $m.Kind "starting")}}{{$tip = "For all the pieces together, not the price of one. With a price or shop, this becomes a purchase."}}
       {{else if eq $m.ItemUnit "piece"}}{{$tip = "For all the pieces together, not the price of one."}}{{end}}
       <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" "price-tip" "Text" $tip)}}</div>
       <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip">
@@ -51,17 +51,17 @@
     <div class="field">
       <label for="supplier">Shop</label>
       <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer" list="suppliers">
-      <datalist id="suppliers">{{range $d.Suppliers}}<option value="{{.}}">{{end}}</datalist>
+      {{template "datalist" (dict "ID" "suppliers" "Options" $d.Suppliers)}}
     </div>
     {{end}}
     <div class="field{{if index $e "occurred_on"}} has-error{{end}}">
-      <label for="occurred_on">{{if eq $m.Kind "purchase"}}Bought on{{else if eq $m.Kind "use"}}Used on{{else if eq $m.Kind "correction"}}Counted on{{else}}Date{{end}}</label>
+      <label for="occurred_on">{{if eq $m.Kind "bought"}}Bought on{{else if eq $m.Kind "used"}}Used on{{else if eq $m.Kind "adjusted"}}Adjusted on{{else}}Date{{end}}</label>
       <input class="input" type="date" id="occurred_on" name="occurred_on" value="{{$f.OccurredOn}}">
       {{template "err" (index $e "occurred_on")}}
     </div>
     <div class="field">
       <label for="note">Note</label>
-      <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="{{if eq $m.Kind "purchase"}}e.g. on sale, 2 for 1{{else if eq $m.Kind "use"}}e.g. topped up after the trip{{else if eq $m.Kind "correction"}}e.g. found a spare box{{else}}e.g. left over from the old bike{{end}}">
+      <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="{{if eq $m.Kind "bought"}}e.g. on sale, 2 for 1{{else if eq $m.Kind "used"}}e.g. topped up after the trip{{else if eq $m.Kind "adjusted"}}e.g. found a spare box{{else}}e.g. left over from the old bike{{end}}">
     </div>
   </div>
   <div class="form-actions">

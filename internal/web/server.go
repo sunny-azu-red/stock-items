@@ -185,9 +185,9 @@ func (s *Server) Handler() http.Handler {
 	var handler http.Handler = mux
 	handler = http.NewCrossOriginProtection().Handler(handler)
 	handler = s.checkHost(handler)
+	handler = s.recoverPanics(handler)
 	handler = securityHeaders(handler)
 	handler = s.logRequests(handler)
-	handler = s.recoverPanics(handler)
 	return handler
 }
 

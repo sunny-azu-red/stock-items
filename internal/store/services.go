@@ -160,9 +160,10 @@ func partIDs(parts []stock.KitLineInput) []int64 {
 func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
 	return s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		var kitWas *int64
+		var interWas bool
 		var version int
-		err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id, version FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&in.VehicleID, &kitWas, &version)
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id, kit_intermediate, version FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&in.VehicleID, &kitWas, &interWas, &version)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
 			return err
 		}
@@ -175,6 +176,10 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// vehicle since; only a newly chosen kit must fit the vehicle.
 		if in.KitID == nil || kitWas == nil || *in.KitID != *kitWas {
 			if err := checkServiceKit(ctx, tx, in); err != nil {
+				return err
+			}
+		} else if in.KitIntermediate && !interWas {
+			if err := checkKitHasIntermediate(ctx, tx, *in.KitID); err != nil {
 				return err
 			}
 		}
@@ -241,9 +246,14 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 		return nil
 	}
 	var kitVehicle int64
-	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT vehicle_id, archived_at IS NOT NULL FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
-		Scan(&kitVehicle, &archived); err != nil {
+	var archived, hasInter bool
+	err := tx.QueryRow(ctx, `
+		SELECT vehicle_id, archived_at IS NOT NULL,
+		       (inter_interval_km IS NOT NULL OR inter_interval_months IS NOT NULL OR
+		        EXISTS (SELECT 1 FROM service_kit_lines WHERE kit_id = $1 AND intermediate))
+		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
+		Scan(&kitVehicle, &archived, &hasInter)
+	if err != nil {
 		return notFound(err)
 	}
 	if kitVehicle != in.VehicleID {
@@ -251,6 +261,24 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 	}
 	if archived {
 		return &ConflictError{Field: "form", Message: "This kit is archived; restore it first."}
+	}
+	if in.KitIntermediate && !hasInter {
+		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate schedule"}
+	}
+	return nil
+}
+
+func checkKitHasIntermediate(ctx context.Context, tx pgx.Tx, kitID int64) error {
+	var hasInter bool
+	err := tx.QueryRow(ctx, `
+		SELECT inter_interval_km IS NOT NULL OR inter_interval_months IS NOT NULL OR
+		       EXISTS (SELECT 1 FROM service_kit_lines WHERE kit_id = $1 AND intermediate)
+		FROM service_kits WHERE id = $1 FOR SHARE`, kitID).Scan(&hasInter)
+	if err != nil {
+		return notFound(err)
+	}
+	if !hasInter {
+		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate schedule"}
 	}
 	return nil
 }
@@ -282,21 +310,36 @@ func lockVehicle(ctx context.Context, tx pgx.Tx, id int64) (name string, archive
 // checkPartUnits refuses a part read in another unit than its item has
 // now, like replaceKitLines. The caller holds the items' locks.
 func checkPartUnits(ctx context.Context, tx pgx.Tx, parts []stock.KitLineInput) error {
+	if len(parts) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, brand, name, unit FROM items WHERE id = ANY($1)`, partIDs(parts))
+	if err != nil {
+		return err
+	}
+	type itemInfo struct {
+		brand, name string
+		unit        stock.Unit
+	}
+	byID := make(map[int64]itemInfo, len(parts))
+	for rows.Next() {
+		var id int64
+		var info itemInfo
+		if err := rows.Scan(&id, &info.brand, &info.name, &info.unit); err != nil {
+			rows.Close()
+			return err
+		}
+		byID[id] = info
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	for _, p := range parts {
 		if p.Unit == "" {
 			continue
 		}
-		var brand, name string
-		var unit stock.Unit
-		err := tx.QueryRow(ctx, `SELECT brand, name, unit FROM items WHERE id = $1`, p.ItemID).Scan(&brand, &name, &unit)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue // the parts' movements report it
-		}
-		if err != nil {
-			return err
-		}
-		if unit != p.Unit {
-			return &ConflictError{Field: "parts", Message: displayName(brand, name) + " is counted in " + string(unit) +
+		if info, ok := byID[p.ItemID]; ok && info.unit != p.Unit {
+			return &ConflictError{Field: "parts", Message: displayName(info.brand, info.name) + " is counted in " + string(info.unit) +
 				" now (its unit was changed meanwhile). Check its amount and save again."}
 		}
 	}
@@ -433,13 +476,14 @@ func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, re
 func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	// No new version, like moveOdometer.
 	_, err := tx.Exec(ctx, `
-		UPDATE vehicles v SET odometer_km = back.km, updated_at = now()
+		UPDATE vehicles v SET odometer_km = GREATEST(back.km, v.purchased_km), updated_at = now()
 		FROM service_records sr,
 		     LATERAL (SELECT GREATEST(sr.odometer_before,
 		                              (SELECT max(o.odometer_km) FROM service_records o
 		                               WHERE o.vehicle_id = sr.vehicle_id AND o.id <> sr.id)) AS km) back
 		WHERE sr.id = $1 AND v.id = sr.vehicle_id AND sr.odometer_moved
-		  AND v.odometer_km = sr.odometer_km AND (back.km IS NULL OR back.km < sr.odometer_km)`, serviceID)
+		  AND v.odometer_km = sr.odometer_km
+		  AND (GREATEST(back.km, v.purchased_km) IS NULL OR GREATEST(back.km, v.purchased_km) < sr.odometer_km)`, serviceID)
 	return err
 }
 

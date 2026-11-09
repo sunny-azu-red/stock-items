@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -351,7 +352,7 @@ func (s *Server) kitUpdate(w http.ResponseWriter, r *http.Request) error {
 		if s.savedAlready(w, r, err, kitPath, "/services") {
 			return nil
 		}
-		if f.Stale = staleForm(err, fmt.Sprintf("/kits/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {
+		if f.Stale = staleForm(err, kitPath(id)+"/edit"); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -371,7 +372,7 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/kits/%d", id)
+	page := kitPath(id)
 	k, err := s.store.GetKit(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
 		return nil
@@ -384,12 +385,12 @@ func (s *Server) kitDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	} else if errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
-		s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "")
+		s.redirect(w, r, page, "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", k.VehicleID), "Deleted "+k.Name, trashID)
+	s.redirectUndo(w, r, vehiclePath(k.VehicleID), "Deleted "+k.Name, trashID)
 	return nil
 }
 
@@ -402,7 +403,7 @@ func (s *Server) kitArchive(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/kits/%d", id)
+	page := kitPath(id)
 	k, err := s.store.GetKit(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
 		return nil
@@ -415,7 +416,7 @@ func (s *Server) kitArchive(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Archived "+k.Name+". Its services keep it; restore it any time.")
+	s.redirect(w, r, page, "Archived "+k.Name+". Its services keep it; restore it any time.")
 	return nil
 }
 
@@ -427,7 +428,7 @@ func (s *Server) kitRestore(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/kits/%d", id)
+	page := kitPath(id)
 	k, err := s.store.GetKit(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatKit, id), page, "/services") {
 		return nil
@@ -440,7 +441,7 @@ func (s *Server) kitRestore(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/kits/%d", id), "Restored "+k.Name)
+	s.redirect(w, r, page, "Restored "+k.Name)
 	return nil
 }
 
@@ -452,6 +453,8 @@ type kitPage struct {
 	Lines        []stock.KitLine // the kit's lines in the order asked for
 	InterLines   []stock.KitLine // the kit's intermediate lines in the order asked for
 	Sort         sortHeads
+	Back         string
+	BackLabel    string
 }
 
 func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
@@ -483,11 +486,18 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	order := kitSorts.parse(r.URL.Query())
+	fallback := vehiclePath(k.VehicleID)
+	backHref, backLabel := fallback, v.Name
+	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/services") {
+		backHref, backLabel = ref, "Services"
+	}
 	p := kitPage{
 		View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
 		Lines:      stock.SortKitLines(k.Lines, order.Key, order.Desc),
 		InterLines: stock.SortKitLines(k.InterLines, order.Key, order.Desc),
-		Sort:       sortHeads{Order: order, Path: "/kits/" + strconv.FormatInt(id, 10)},
+		Sort:       sortHeads{Order: order, Path: kitPath(id)},
+		Back:       backHref,
+		BackLabel:  backLabel,
 	}
 	s.render(w, r, http.StatusOK, "kit_show", View{Title: k.Name + " · " + v.Name, Nav: "services", Data: p})
 	return nil
@@ -507,28 +517,47 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return s.gone(r, err, store.WhatKit, id) // deleted in another tab: not a 404
 	}
-	lines := k.ActiveLines(k.VehicleOdometerKm, s.now())
+	n, missing := 0, 0
+	addShort := func(lines []stock.KitLine) error {
+		for _, l := range lines {
+			if short := l.Short(); short > 0 && !l.Archived {
+				changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "Short for "+k.VehicleName+": "+k.Name) // the note suggestions give
+				var invalid stock.Errors
+				if errors.As(err, &invalid) {
+					continue // an amount the list can't hold, like a line's 1.5 pieces from before they had to be whole
+				}
+				if err != nil && !errors.Is(err, store.ErrNotFound) {
+					return err
+				}
+				if changed {
+					n++
+				}
+				missing++
+			}
+		}
+		return nil
+	}
 	switch r.FormValue("intermediate") {
 	case "0":
-		lines = k.Lines
+		if err := addShort(k.Lines); err != nil {
+			return err
+		}
 	case "1":
-		lines = k.InterLines
-	}
-	n, missing := 0, 0
-	for _, l := range lines {
-		if short := l.Short(); short > 0 && !l.Archived {
-			changed, err := s.store.EnsureShopping(ctx, l.ItemID, short, "Short for "+k.VehicleName+": "+k.Name) // the note suggestions give
-			var invalid stock.Errors
-			if errors.As(err, &invalid) {
-				continue // an amount the list can't hold, like a line's 1.5 pieces from before they had to be whole
+		if err := addShort(k.InterLines); err != nil {
+			return err
+		}
+	default:
+		if err := addShort(k.ActiveLines(k.VehicleOdometerKm, s.now())); err != nil {
+			return err
+		}
+		if n == 0 && k.HasIntermediate() {
+			other := k.InterLines
+			if k.NextIsIntermediate(k.VehicleOdometerKm, s.now()) {
+				other = k.Lines
 			}
-			if err != nil && !errors.Is(err, store.ErrNotFound) {
+			if err := addShort(other); err != nil {
 				return err
 			}
-			if changed {
-				n++
-			}
-			missing++
 		}
 	}
 	msg := "Nothing is missing for this kit"
@@ -536,15 +565,8 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 		msg = "Everything missing is already on the shopping list"
 	}
 	if n > 0 {
-		msg = fmt.Sprintf("Added %d missing %s to the shopping list", n, pluralWord(n, "part", "parts"))
+		msg = "Added " + plural(n, "missing part") + " to the shopping list"
 	}
-	s.redirect(w, r, s.back(r, fmt.Sprintf("/kits/%d", id)), msg)
+	s.redirect(w, r, s.back(r, kitPath(id)), msg)
 	return nil
-}
-
-func pluralWord(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }

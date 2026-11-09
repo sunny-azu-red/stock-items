@@ -67,7 +67,7 @@ SELECT i.id, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.
        EXISTS (SELECT 1 FROM item_photos p WHERE p.item_id = i.id)
 FROM items i`
 
-func scanItem(row pgx.Row) (stock.Item, error) {
+func scanItem(row pgx.CollectableRow) (stock.Item, error) {
 	var it stock.Item
 	err := row.Scan(&it.ID, &it.Name, &it.Brand, &it.Category, &it.Unit, &it.Quantity, &it.MinQuantity,
 		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt, &it.Version, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
@@ -146,7 +146,7 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Item, error) { return scanItem(r) })
+	return pgx.CollectRows(rows, scanItem)
 }
 
 // itemOrder is the ORDER BY of ListItems for a sort key, whitelisted: an
@@ -190,7 +190,7 @@ func (s *Store) GetItem(ctx context.Context, id int64) (stock.Item, error) {
 }
 
 // CreateItem stores a new item. Its starting quantity is recorded as a
-// purchase or as "initial" stock (see stock.ItemInput.StartMovement).
+// purchase or as starting stock (see stock.ItemInput.StartMovement).
 func (s *Store) CreateItem(ctx context.Context, in stock.ItemInput) (int64, error) {
 	var id int64
 	err := s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
@@ -249,13 +249,13 @@ func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, erro
 }
 
 // UpdateItem replaces an item's fields, SKUs and tags. A changed quantity
-// is recorded as a "correction" movement; when in.QuantityWas says the
+// is recorded as an adjustment; when in.QuantityWas says the
 // quantity field was left as it was, the stock is not touched (it may have
 // changed since the form was opened). Changing the unit is refused once the
 // item has history or is used in a kit or on the shopping list, as those
 // amounts would no longer make sense, and so is a change while any of
-// those is in the trash, as it would come back in the old unit. A
-// correction is dated on. An item changed since in.Version fails with a
+// those is in the trash, as it would come back in the old unit. An
+// adjustment is dated on. An item changed since in.Version fails with a
 // *StaleError.
 func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on time.Time) error {
 	return s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
@@ -301,7 +301,7 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 			return err
 		}
 		if quantityEdited {
-			if _, err := correctTo(ctx, tx, id, qty, in.Quantity, "Edited quantity", on); err != nil {
+			if _, err := adjustTo(ctx, tx, id, qty, in.Quantity, "Edited quantity", on); err != nil {
 				return err
 			}
 		}
@@ -354,7 +354,7 @@ type queryRower interface {
 func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, error) {
 	var u stock.ItemUsage
 	err := q.QueryRow(ctx, `
-		SELECT (SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'purchase'),
+		SELECT (SELECT count(*) FROM stock_movements WHERE item_id = $1 AND kind = 'bought'),
 		       (SELECT count(DISTINCT service_record_id) FROM stock_movements WHERE item_id = $1 AND kind = 'service'),
 		       (SELECT count(DISTINCT kit_id) FROM service_kit_lines WHERE item_id = $1)`, id).
 		Scan(&u.Purchases, &u.Services, &u.Kits)

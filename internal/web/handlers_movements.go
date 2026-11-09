@@ -15,7 +15,7 @@ import (
 // movementEditForm holds the edit form for a recorded stock change.
 type movementEditForm struct {
 	Amount, AmountUnit, TotalPrice, Supplier, OccurredOn, Note string
-	Removed                                                    bool   // a count that took stock away
+	Removed                                                    bool   // an adjustment that took stock away
 	Back                                                       string // page to return to
 	Version                                                    int    // as the form was opened (see itemForm)
 	Stale                                                      *staleNote
@@ -91,7 +91,8 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 // was opened, as it was posted, saying where the change went. The page no
 // longer knows the change, so it goes by what the form said it was.
 func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int64) error {
-	m := stock.Movement{ID: id, Kind: stock.MovementKind(formText(r, "kind"))}
+	kind, _ := stock.ParseMovementKind(formText(r, "kind")) // also a form opened before the kinds were renamed
+	m := stock.Movement{ID: id, Kind: kind}
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		m.ItemID = *id
 	}
@@ -261,13 +262,13 @@ func movementBack(m stock.Movement) string {
 // changeName names a kind of stock change in a sentence.
 func changeName(k stock.MovementKind) string {
 	switch k {
-	case stock.MovePurchase:
+	case stock.MoveBought:
 		return "purchase"
-	case stock.MoveUse:
+	case stock.MoveUsed:
 		return "use"
-	case stock.MoveCorrection:
-		return "count"
-	case stock.MoveInitial:
+	case stock.MoveAdjusted:
+		return "adjustment"
+	case stock.MoveStarting:
 		return "starting stock"
 	}
 	return "stock change"
@@ -280,7 +281,7 @@ func movementConflict(errs stock.Errors, err error) bool {
 	if errors.As(err, &short) {
 		errs.Add("amount", "Only "+stock.FormatQuantity(short.Have, short.Unit)+
 			" is left in stock, so this change can't take away "+stock.FormatQuantity(short.Need, short.Unit)+
-			". Record what was used first, or do a count.")
+			". Record what was used first, or adjust the stock.")
 		return true
 	}
 	return formConflict(errs, err)

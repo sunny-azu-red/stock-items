@@ -56,13 +56,13 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 			msg = photoTooLarge
 		}
 		s.setFlash(w, "error", msg)
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther) //nolint:gosec // a local path
+		http.Redirect(w, r, itemPath(id), http.StatusSeeOther) //nolint:gosec // a local path
 		return nil
 	}
 	file, _, err := r.FormFile("photo")
 	if err != nil {
 		s.setFlash(w, "error", "Choose a photo to upload")
-		http.Redirect(w, r, fmt.Sprintf("/items/%d", id), http.StatusSeeOther) //nolint:gosec // a local path
+		http.Redirect(w, r, itemPath(id), http.StatusSeeOther) //nolint:gosec // a local path
 		return nil
 	}
 	defer file.Close()
@@ -86,14 +86,19 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	replaced, err := s.store.SetPhoto(r.Context(), id, "image/jpeg", full, thumb)
-	if err != nil {
+	var conflict *store.ConflictError
+	if errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, itemPath(id), "")
+		return nil
+	} else if err != nil {
 		return s.gone(r, err, store.WhatItem, id) // deleted while the photo was processed
 	}
 	if replaced != 0 {
-		s.redirectUndo(w, r, fmt.Sprintf("/items/%d", id), "Replaced the photo", replaced)
+		s.redirectUndo(w, r, itemPath(id), "Replaced the photo", replaced)
 		return nil
 	}
-	s.redirect(w, r, fmt.Sprintf("/items/%d", id), "Saved the photo")
+	s.redirect(w, r, itemPath(id), "Saved the photo")
 	return nil
 }
 
@@ -121,18 +126,23 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	trashID, err := s.store.DeletePhoto(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
+	var conflict *store.ConflictError
+	if errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, itemPath(id), "")
+		return nil
+	} else if errors.Is(err, store.ErrNotFound) {
 		// No photo: say so, unless the item is gone too (then where it went).
 		if _, err := s.store.GetItem(r.Context(), id); err != nil {
 			return s.gone(r, err, store.WhatItem, id)
 		}
-		s.redirect(w, r, fmt.Sprintf("/items/%d", id), "There was no photo to remove")
+		s.redirect(w, r, itemPath(id), "There was no photo to remove")
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, fmt.Sprintf("/items/%d", id), "Removed the photo", trashID)
+	s.redirectUndo(w, r, itemPath(id), "Removed the photo", trashID)
 	return nil
 }
 

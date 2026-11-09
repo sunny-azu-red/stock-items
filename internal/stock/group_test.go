@@ -167,11 +167,11 @@ func TestWriteMovementsCSV(t *testing.T) {
 	day := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
 	svc := int64(3)
 	moves := []Movement{
-		{ItemID: 8, ItemName: "Motorex Coolant", ItemUnit: UnitML, Kind: MovePurchase, Delta: 1000,
+		{ItemID: 8, ItemName: "Motorex Coolant", ItemUnit: UnitML, Kind: MoveBought, Delta: 1000,
 			TotalPrice: ptr(67.0), Supplier: "moto24", Note: "-promo", OccurredOn: day},
 		{ItemID: 8, ItemName: "Motorex Coolant", ItemUnit: UnitML, Kind: MoveService, Delta: -500,
 			Note: "Coolant change", OccurredOn: day, ServiceRecordID: &svc, ServiceTitle: "Coolant change"},
-		{ItemID: 7, ItemName: "OEM Oil Filter", ItemUnit: UnitPiece, Kind: MoveUse, Delta: -1, OccurredOn: day},
+		{ItemID: 7, ItemName: "OEM Oil Filter", ItemUnit: UnitPiece, Kind: MoveUsed, Delta: -1, OccurredOn: day},
 	}
 	var buf bytes.Buffer
 	if err := WriteMovementsCSV(&buf, moves); err != nil {
@@ -179,9 +179,9 @@ func TestWriteMovementsCSV(t *testing.T) {
 	}
 	want := []string{
 		"date,item_id,item,kind,change,change_display,unit,total_price,unit_price,price_per,shop,note,service",
-		"2026-10-29,8,Motorex Coolant,purchase,1000,'+1 L,ml,67.00,67.00,L,moto24,'-promo,", // "+1 L" would be a formula
+		"2026-10-29,8,Motorex Coolant,bought,1000,'+1 L,ml,67.00,67.00,L,moto24,'-promo,", // "+1 L" would be a formula
 		"2026-10-29,8,Motorex Coolant,service,-500,−500 ml,ml,,,,,,Coolant change",
-		"2026-10-29,7,OEM Oil Filter,use,-1,−1 pcs,piece,,,,,,",
+		"2026-10-29,7,OEM Oil Filter,used,-1,−1 pcs,piece,,,,,,",
 	}
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != len(want) {

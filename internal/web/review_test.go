@@ -110,19 +110,19 @@ func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
 	expectNot(t, rec, "Needs odometer")
 }
 
-// A count is dated the day picked in its form, like a purchase or a use.
-func TestACountKeepsItsDate(t *testing.T) {
+// An adjustment is dated the day picked in its form, like a purchase or a use.
+func TestAnAdjustmentKeepsItsDate(t *testing.T) {
 	a := newApp(t)
 	a.seed()
 	oil := itemID(t, a.store, "Silkolene")
-	rec := a.post(itemPath(oil)+"/movements", url.Values{"kind": {"correction"}, "amount": {"500"}, "occurred_on": {"2026-10-20"}})
+	rec := a.post(itemPath(oil)+"/movements", url.Values{"kind": {"adjusted"}, "amount": {"500"}, "occurred_on": {"2026-10-20"}})
 	expect(t, rec, http.StatusSeeOther)
-	moves, err := a.store.ListMovements(context.Background(), store.MovementFilter{ItemID: oil, Kind: stock.MoveCorrection})
+	moves, err := a.store.ListMovements(context.Background(), store.MovementFilter{ItemID: oil, Kind: stock.MoveAdjusted})
 	if err != nil || len(moves) != 1 {
-		t.Fatalf("counts = %+v, %v", moves, err)
+		t.Fatalf("adjustments = %+v, %v", moves, err)
 	}
 	if got := moves[0].OccurredOn.Format(time.DateOnly); got != "2026-10-20" {
-		t.Errorf("count dated %s, want 2026-10-20", got)
+		t.Errorf("adjustment dated %s, want 2026-10-20", got)
 	}
 	if got := a.quantity(t, oil); got != 500 {
 		t.Errorf("oil = %v, want 500", got)
@@ -135,7 +135,7 @@ func TestACountKeepsItsDate(t *testing.T) {
 	}
 	expect(t, a.post("/trash/"+itoa(undo)+"/restore", nil), http.StatusSeeOther)
 	if m, err := a.store.GetMovement(context.Background(), moves[0].ID); err != nil || m.OccurredOn.Format(time.DateOnly) != "2026-10-20" {
-		t.Errorf("restored count = %+v, %v", m, err)
+		t.Errorf("restored adjustment = %+v, %v", m, err)
 	}
 	a.ledger(t)
 }
@@ -306,7 +306,7 @@ func TestArchivingAListedItemKeepsItsEntry(t *testing.T) {
 	ctx := context.Background()
 	pads := itemID(t, a.store, "Rear Brake")
 	item := itemPath(pads)
-	expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"2"}, "total_price": {"40"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"2"}, "total_price": {"40"}}), http.StatusSeeOther)
 	expect(t, a.post(item+"/shopping", url.Values{"quantity": {"2"}}), http.StatusSeeOther)
 
 	rec := a.postV(item+"/archive", nil)

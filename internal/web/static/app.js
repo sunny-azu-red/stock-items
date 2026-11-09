@@ -27,6 +27,24 @@
     toast("Cannot reach the server.", "error");
   });
 
+  // Preserve keyboard focus across htmx out-of-band swap of sort direction.
+  var focusedSortDir = null;
+  document.addEventListener("htmx:beforeRequest", function () {
+    var active = document.activeElement;
+    if (active && (active.id === "dir-asc" || active.id === "dir-desc")) {
+      focusedSortDir = active.id;
+    } else {
+      focusedSortDir = null;
+    }
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    if (focusedSortDir) {
+      var el = document.getElementById(focusedSortDir);
+      if (el) el.focus();
+      focusedSortDir = null;
+    }
+  });
+
   // ---- Confirmations ------------------------------------------------------
   // <form data-confirm="Delete this?"> asks before submitting (also for htmx).
   document.addEventListener("submit", function (e) {
@@ -138,10 +156,17 @@
       var row = rm.closest(".row-line");
       var container = row && row.parentElement;
       if (!row) return;
+      dirty = true;
       // Keep at least one row: clear it instead of removing it.
-      if (container && container.querySelectorAll(".row-line").length <= 1) {
+      if (container && container.querySelectorAll(".row-line:not(.row-head)").length <= 1) {
+        row.classList.remove("has-error");
         row.querySelectorAll("input").forEach(function (i) { i.value = ""; });
         row.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
+        row.querySelectorAll(".stock-note").forEach(function (n) { n.textContent = ""; });
+        row.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
+        row.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
+        row.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
+        syncUnits(row.closest("form"));
       } else {
         row.remove();
       }
@@ -150,6 +175,7 @@
     var showInter = e.target.closest("[data-show-inter]");
     if (showInter) {
       e.preventDefault();
+      dirty = true;
       var sec = document.getElementById("inter-section");
       var prompt = document.getElementById("inter-prompt");
       var flag = document.getElementById("has_inter");
@@ -163,14 +189,20 @@
     var hideInter = e.target.closest("[data-hide-inter]");
     if (hideInter) {
       e.preventDefault();
+      dirty = true;
       var sec2 = document.getElementById("inter-section");
       var prompt2 = document.getElementById("inter-prompt");
       var flag2 = document.getElementById("has_inter");
       if (sec2) {
         sec2.hidden = true;
+        var interRows = sec2.querySelectorAll("#inter-lines .row-line:not(.row-head)");
+        for (var k = 1; k < interRows.length; k++) interRows[k].remove();
         sec2.querySelectorAll("input").forEach(function (i) { i.value = ""; });
         sec2.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
         sec2.querySelectorAll(".stock-note").forEach(function (n) { n.textContent = ""; });
+        sec2.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
+        sec2.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
+        sec2.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
       }
       if (prompt2) prompt2.hidden = false;
       if (flag2) flag2.value = "0";
@@ -185,6 +217,11 @@
     var checked = form.querySelector('input[name="unit"]:checked');
     if (!checked) return;
     var base = checked.value;
+    var price = form.querySelector("#total_price");
+    if (price) {
+      if (base === "piece") price.setAttribute("aria-describedby", "price-tip");
+      else price.removeAttribute("aria-describedby");
+    }
     form.querySelectorAll("select[data-subunit]").forEach(function (sel) {
       var firstValid = null;
       Array.prototype.forEach.call(sel.options, function (o) {
@@ -420,6 +457,7 @@
     }
     function pick(li) {
       input.value = li.textContent;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       hide();
     }

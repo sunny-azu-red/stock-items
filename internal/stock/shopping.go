@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +20,11 @@ type Suggestion struct {
 // listed holds the quantity of each item already on the shopping list (nil
 // when the entry has none); an item is only suggested while the list asks
 // for less than it needs.
-func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64) []Suggestion {
+func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64, now ...time.Time) []Suggestion {
+	today := DateOnly(time.Now())
+	if len(now) > 0 && !now[0].IsZero() {
+		today = DateOnly(now[0])
+	}
 	byID := make(map[int64]Item, len(items))
 	for _, it := range items {
 		byID[it.ID] = it
@@ -42,7 +47,6 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64) []Sug
 			add(it, *it.MinQuantity-it.Quantity, "Below minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
 		}
 	}
-	today := DateOnly(time.Now())
 	for _, k := range kits {
 		for _, l := range k.ActiveLines(k.VehicleOdometerKm, today) {
 			if l.Archived {
@@ -75,4 +79,45 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64) []Sug
 		return out[a].Item.ID < out[b].Item.ID
 	})
 	return out
+}
+
+// SuggestForItem returns the purchase suggestion for a single item, checking
+// its minimum stock and active kit lines first, and falling back to non-active
+// kit tiers (e.g. full parts when intermediate is next) when the user explicitly
+// adds the item to the shopping list from its page.
+func SuggestForItem(it Item, kits []Kit, today time.Time) (Suggestion, bool) {
+	if it.Archived() {
+		return Suggestion{}, false
+	}
+	out := Suggestion{Item: it}
+	add := func(qty float64, reason string) {
+		if qty <= 0 {
+			return
+		}
+		out.Quantity = max(out.Quantity, RoundQty(qty))
+		out.Reasons = append(out.Reasons, reason)
+	}
+	if it.IsLow() {
+		add(*it.MinQuantity-it.Quantity, "Below minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
+	}
+	for _, k := range kits {
+		if k.Archived() {
+			continue
+		}
+		var short float64
+		for _, l := range k.ActiveLines(k.VehicleOdometerKm, today) {
+			if l.ItemID == it.ID && !l.Archived {
+				short = max(short, l.Short())
+			}
+		}
+		if short == 0 {
+			for _, l := range append(slices.Clone(k.Lines), k.InterLines...) {
+				if l.ItemID == it.ID && !l.Archived {
+					short = max(short, l.Short())
+				}
+			}
+		}
+		add(short, "Short for "+k.VehicleName+": "+k.Name)
+	}
+	return out, out.Quantity > 0
 }

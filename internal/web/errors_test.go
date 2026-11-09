@@ -216,7 +216,7 @@ func TestFormsOfDeletedRecordsGoToTheTrash(t *testing.T) {
 		action string
 		form   url.Values
 	}{
-		{item + "/movements", url.Values{"kind": {"purchase"}, "amount": {"2"}}},
+		{item + "/movements", url.Values{"kind": {"bought"}, "amount": {"2"}}},
 		{item + "/shopping", url.Values{"quantity": {"2"}}},
 		{item + "/photo/delete", nil},
 		{kit + "/shortfall", nil},

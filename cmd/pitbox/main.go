@@ -95,7 +95,7 @@ func run() error {
 		if t, err := time.Parse(time.RFC3339, date); err == nil {
 			start := time.Now()
 			nowFunc = func() time.Time { return t.Add(time.Since(start)) }
-			store.AppToday = func() time.Time { return stock.DateOnly(t.In(cfg.Location)) }
+			store.AppToday = func() time.Time { return stock.DateOnly(nowFunc().In(cfg.Location)) }
 			if schemaName(cfg.DB) != "public" {
 				ts := t.UTC().Format("2006-01-02 15:04:05.000000-07")
 				serverStart := start.UTC().Format("2006-01-02 15:04:05.000000-07")

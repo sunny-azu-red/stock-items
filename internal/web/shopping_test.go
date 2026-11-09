@@ -84,9 +84,9 @@ func TestShoppingPartialPurchaseAndBestBefore(t *testing.T) {
 	// The same from the item page; a use can't move the date.
 	item := "/items/" + itoa(oil)
 	expect(t, a.get(item), http.StatusOK, `name="expires_on"`, "Best before")
-	expect(t, a.post(item+"/movements", url.Values{"kind": {"purchase"}, "amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2030-01-31"}}), http.StatusSeeOther)
-	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}, "expires_on": {"2020-01-01"}}), http.StatusSeeOther)
-	expect(t, a.post(item+"/movements", url.Values{"kind": {"use"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"1980-01-01"}}),
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}, "expires_on": {"2030-01-31"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"used"}, "amount": {"100"}, "amount_unit": {"ml"}, "expires_on": {"2020-01-01"}}), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"used"}, "amount": {"100"}, "amount_unit": {"ml"}, "occurred_on": {"1980-01-01"}}),
 		http.StatusUnprocessableEntity, "Date is too far in the past")
 	if it, _ := a.store.GetItem(ctx, oil); it.ExpiresOn.Format("2006-01-02") != "2030-01-31" {
 		t.Errorf("expiry = %v, want 2030-01-31", it.ExpiresOn)

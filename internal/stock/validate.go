@@ -90,14 +90,14 @@ type ItemInput struct {
 func (in ItemInput) Bought() bool { return in.TotalPrice != nil || in.Supplier != "" }
 
 // StartMovement is the movement recording a new item's starting stock: a
-// purchase when a price or shop was given, otherwise "initial" stock that
+// purchase when a price or shop was given, otherwise starting stock that
 // was already on the shelf.
 func (in ItemInput) StartMovement(itemID int64) MovementInput {
 	if !in.Bought() {
-		return MovementInput{ItemID: itemID, Kind: MoveInitial, Delta: in.Quantity, Note: in.BoughtNote, OccurredOn: in.BoughtOn}
+		return MovementInput{ItemID: itemID, Kind: MoveStarting, Delta: in.Quantity, Note: in.BoughtNote, OccurredOn: in.BoughtOn}
 	}
 	return MovementInput{
-		ItemID: itemID, Kind: MovePurchase, Delta: in.Quantity,
+		ItemID: itemID, Kind: MoveBought, Delta: in.Quantity,
 		TotalPrice: in.TotalPrice, Supplier: in.Supplier, Note: in.BoughtNote, OccurredOn: in.BoughtOn,
 	}
 }
@@ -146,6 +146,8 @@ func (in ItemInput) Validate() Errors {
 		errs.Add("quantity", "Quantity cannot be negative")
 	} else if in.Bought() && in.Quantity == 0 {
 		errs.Add("quantity", "Enter how much you bought")
+	} else if in.BoughtNote != "" && in.Quantity == 0 {
+		errs.Add("quantity", "Enter the starting stock for this note")
 	}
 	if !validMoney(in.TotalPrice) {
 		errs.Add("total_price", "Enter a price between 0 and "+FormatInt(MaxMoney))
@@ -298,8 +300,12 @@ func (in VehicleInput) Validate() Errors {
 			errs.Add("purchased_km", "That is more than "+FormatKm(MaxOdometerKm))
 		}
 	}
-	if in.PurchasedKm != nil && in.OdometerKm != nil && !in.KeepOdometer && *in.OdometerKm < *in.PurchasedKm {
-		errs.Add("odometer_km", "Current odometer cannot be lower than purchase odometer")
+	if in.PurchasedKm != nil && in.OdometerKm != nil && *in.OdometerKm < *in.PurchasedKm {
+		if in.KeepOdometer {
+			errs.Add("purchased_km", "Purchase odometer cannot be higher than the current odometer")
+		} else {
+			errs.Add("odometer_km", "Current odometer cannot be lower than purchase odometer")
+		}
 	}
 	limitText(errs, maxShortText, "Make", in.Make)
 	limitText(errs, maxShortText, "Model", in.Model)
@@ -332,15 +338,15 @@ func (in MovementInput) Validate() Errors {
 		errs.Add("amount", "Amount must not be zero")
 	}
 	switch in.Kind {
-	case MovePurchase, MoveInitial:
+	case MoveBought, MoveStarting:
 		if in.Delta < 0 {
 			errs.Add("amount", "A purchase must add stock")
 		}
-	case MoveUse, MoveService:
+	case MoveUsed, MoveService:
 		if in.Delta > 0 {
 			errs.Add("amount", "Using stock must remove stock")
 		}
-	case MoveCorrection:
+	case MoveAdjusted:
 	default:
 		errs.Add("kind", "Unknown movement type")
 	}
@@ -351,12 +357,12 @@ func (in MovementInput) Validate() Errors {
 	}
 	if !validMoney(in.TotalPrice) {
 		errs.Add("total_price", "Enter a price between 0 and "+FormatInt(MaxMoney))
-	} else if (in.TotalPrice != nil || in.Supplier != "") && in.Kind != MovePurchase {
+	} else if (in.TotalPrice != nil || in.Supplier != "") && in.Kind != MoveBought {
 		// Spending reads only purchases, so a price anywhere else would be
 		// stored but never counted.
 		errs.Add("total_price", "Only a purchase has a price or shop")
 	}
-	if in.ExpiresOn != nil && in.Kind != MovePurchase {
+	if in.ExpiresOn != nil && in.Kind != MoveBought {
 		errs.Add("expires_on", "Only a purchase can set the best-before date")
 	}
 	limitText(errs, maxShortText, "Shop", in.Supplier)
@@ -370,12 +376,12 @@ func (in MovementInput) Validate() Errors {
 func (m Movement) Editable() bool { return m.Kind != MoveService }
 
 // TakesPrice reports whether a stock change can carry a price and shop.
-func (m Movement) TakesPrice() bool { return m.Kind == MovePurchase || m.Kind == MoveInitial }
+func (m Movement) TakesPrice() bool { return m.Kind == MoveBought || m.Kind == MoveStarting }
 
 // MovementEdit is the corrected data for a recorded stock change. Amount
-// is the size of the change; its sign follows the kind, except for a count
-// (a correction or quick -/+), which can go either way: Removed says it took
-// stock away. A nil OccurredOn keeps the date.
+// is the size of the change; its sign follows the kind, except for an
+// adjustment (the item page's Adjust, an edited quantity or quick -/+),
+// which can go either way: Removed says it took stock away. A nil OccurredOn keeps the date.
 type MovementEdit struct {
 	Amount     float64
 	Removed    bool
@@ -407,13 +413,13 @@ func ApplyEdit(m Movement, e MovementEdit) (MovementInput, Errors) {
 		errs.Add("amount", "Amount must be greater than zero")
 	}
 	in.Delta = e.Amount
-	if m.Kind == MoveUse || (m.Kind == MoveCorrection && e.Removed) {
+	if m.Kind == MoveUsed || (m.Kind == MoveAdjusted && e.Removed) {
 		in.Delta = -e.Amount
 	}
 	if m.TakesPrice() {
 		in.TotalPrice, in.Supplier = e.TotalPrice, strings.TrimSpace(e.Supplier)
-		if in.Kind == MoveInitial && (in.TotalPrice != nil || in.Supplier != "") {
-			in.Kind = MovePurchase
+		if in.Kind == MoveStarting && (in.TotalPrice != nil || in.Supplier != "") {
+			in.Kind = MoveBought
 		}
 	} else {
 		in.TotalPrice, in.Supplier = nil, "" // not shown on the form
@@ -530,14 +536,18 @@ func (in KitInput) Validate() Errors {
 	if in.InterIntervalKm != nil {
 		if *in.InterIntervalKm > maxIntervalKm {
 			errs.Add("inter_interval_km", "That is more than "+FormatKm(maxIntervalKm))
-		} else if in.IntervalKm != nil && *in.IntervalKm > 0 && *in.InterIntervalKm >= *in.IntervalKm {
+		} else if in.IntervalKm == nil {
+			errs.Add("inter_interval_km", "Enter a full km interval first")
+		} else if *in.IntervalKm > 0 && *in.InterIntervalKm >= *in.IntervalKm {
 			errs.Add("inter_interval_km", "Intermediate interval must be shorter than the full interval")
 		}
 	}
 	if in.InterIntervalMonths != nil {
 		if *in.InterIntervalMonths > maxIntervalMon {
 			errs.Add("inter_interval_months", "That is more than 20 years")
-		} else if in.IntervalMonths != nil && *in.IntervalMonths > 0 && *in.InterIntervalMonths > *in.IntervalMonths {
+		} else if in.IntervalMonths == nil {
+			errs.Add("inter_interval_months", "Enter a full time interval first")
+		} else if *in.IntervalMonths > 0 && *in.InterIntervalMonths > *in.IntervalMonths {
 			errs.Add("inter_interval_months", "Intermediate interval cannot exceed the full interval")
 		}
 	}
@@ -589,8 +599,11 @@ func (in ServiceInput) Validate() Errors {
 		errs.Add("labor_cost", "Enter a cost between 0 and "+FormatInt(MaxMoney))
 	}
 	for i, l := range in.Parts {
-		if l.Quantity <= 0 {
+		switch {
+		case l.Quantity <= 0:
 			errs.Add(fmt.Sprintf("line_%d", i), "Quantity must be greater than zero")
+		case l.Quantity > MaxQuantity:
+			errs.Add("parts", "Together that is more than "+FormatInt(MaxQuantity)+" of one item")
 		}
 	}
 	if utf8.RuneCountInString(in.Title) > maxShortText {

@@ -127,50 +127,83 @@ type SKU struct {
 }
 
 type skuSortKey struct {
-	tier      int     // 0: matches item brand, 1: OEM/KTM, 2: other brand
+	tier      int     // 0: matches item brand, 1: OEM, 2: Manufacturer, 3: Retailer, 4: Other/Barcode
 	brand     string  // normalized brand name for grouping
 	packSize  float64 // pack size ascending (0 if nil)
 	isBarcode int     // 0: part number, 1: barcode
 }
 
+func skuKindTier(k SKUKind) int {
+	switch k {
+	case SKUOEM:
+		return 1
+	case SKUManufacturer:
+		return 2
+	case SKURetailer:
+		return 3
+	default:
+		return 4
+	}
+}
+
 // SortSKUs returns a copy of skus ordered for display:
-//  1. SKUs matching the current item brand appear first (or OEM/KTM if brand is KTM/OEM).
-//     Then OEM/KTM SKUs appear (if brand was not KTM/OEM), followed by other brands grouped together.
-//  2. Ascending pack size (e.g. 1 L before 4 L; nil/unspecified sizes come first).
-//  3. Part numbers (OEM, Manufacturer, etc.) before barcodes.
-//  4. Stable order for ties.
+//  1. SKUs matching the current item brand appear first (with their barcodes).
+//     Then OEM SKUs (with their barcodes), Manufacturer SKUs (with their
+//     barcodes), Retailer SKUs (with their barcodes), and Other SKUs.
+//  2. Grouped by brand name within each tier.
+//  3. Ascending pack size (e.g. 1 L before 4 L; nil/unspecified sizes come first).
+//  4. Part numbers before barcodes.
+//  5. Stable order for ties.
 func SortSKUs(skus []SKU, itemBrand string) []SKU {
 	if len(skus) <= 1 {
 		return slices.Clone(skus)
 	}
 	brandNorm := strings.ToLower(strings.TrimSpace(itemBrand))
-	isOEMBrand := brandNorm == "oem" || brandNorm == "ktm"
+
+	// A barcode shares the tier of its brand's non-barcode SKU when present.
+	brandTier := make(map[string]int, len(skus))
+	for _, s := range skus {
+		if s.Kind == SKUBarcode {
+			continue
+		}
+		b := strings.ToLower(strings.TrimSpace(s.Brand))
+		if b == "" {
+			continue
+		}
+		t := skuKindTier(s.Kind)
+		if prev, ok := brandTier[b]; !ok || t < prev {
+			brandTier[b] = t
+		}
+	}
 
 	key := func(s SKU) skuSortKey {
 		b := strings.ToLower(strings.TrimSpace(s.Brand))
-		if b == "" && s.Kind == SKUOEM {
-			b = "ktm"
+		if b == "" && brandNorm != "" && brandNorm != "oem" && (s.Kind == SKUManufacturer || s.Kind == SKUBarcode) {
+			b = brandNorm
 		}
-		isOEM := s.Kind == SKUOEM || b == "ktm" || b == "oem" || strings.HasPrefix(b, "ktm")
+		kindTier := skuKindTier(s.Kind)
+		if s.Kind == SKUBarcode {
+			if t, ok := brandTier[b]; ok {
+				kindTier = t
+			} else if b == "oem" {
+				kindTier = 1
+			}
+		}
+
 		matches := false
-		if isOEMBrand {
-			matches = isOEM
-		} else if brandNorm != "" {
-			matches = b == brandNorm || strings.HasPrefix(b, brandNorm)
+		if brandNorm == "oem" {
+			matches = kindTier == 1 || b == "oem"
+		} else if brandNorm != "" && b != "" {
+			matches = b == brandNorm || strings.HasPrefix(b, brandNorm+" ")
 		}
 
-		tier := 2
-		if matches {
-			tier = 0
-		} else if isOEM {
-			tier = 1
-		}
-
+		tier := kindTier
 		brandGroup := b
 		if matches {
-			brandGroup = "" // All matching brand SKUs share top group
-		} else if isOEM {
-			brandGroup = "ktm"
+			tier = 0
+			if brandNorm != "oem" {
+				brandGroup = "" // All matching brand SKUs share top group
+			}
 		}
 
 		pack := 0.0
@@ -314,28 +347,52 @@ func (it Item) HasVehicle(id int64) bool {
 	return false
 }
 
-// MovementKind is the reason a stock quantity changed.
+// MovementKind is the reason a stock quantity changed. The stored value is
+// the word the pages show, in lower case.
 type MovementKind string
 
 const (
-	MoveInitial    MovementKind = "initial"
-	MovePurchase   MovementKind = "purchase"
-	MoveUse        MovementKind = "use"
-	MoveCorrection MovementKind = "correction"
-	MoveService    MovementKind = "service"
+	MoveStarting MovementKind = "starting"
+	MoveBought   MovementKind = "bought"
+	MoveUsed     MovementKind = "used"
+	MoveAdjusted MovementKind = "adjusted"
+	MoveService  MovementKind = "service"
 )
+
+// MovementKinds lists every kind of stock change.
+var MovementKinds = []MovementKind{MoveStarting, MoveBought, MoveUsed, MoveAdjusted, MoveService}
+
+// legacyKinds maps the values stored before migration 00019 to today's,
+// for links bookmarked and pages opened before it (?kind=purchase, the
+// item page's hidden kind field).
+var legacyKinds = map[string]MovementKind{
+	"initial": MoveStarting, "purchase": MoveBought, "use": MoveUsed, "correction": MoveAdjusted,
+}
+
+// ParseMovementKind reads a kind of stock change from a form or a link,
+// also under its old name. ok is false for anything else.
+func ParseMovementKind(s string) (MovementKind, bool) {
+	k := MovementKind(strings.TrimSpace(s))
+	if slices.Contains(MovementKinds, k) {
+		return k, true
+	}
+	if k, ok := legacyKinds[string(k)]; ok {
+		return k, true
+	}
+	return "", false
+}
 
 // Label is a human readable name for the movement kind.
 func (k MovementKind) Label() string {
 	switch k {
-	case MoveInitial:
+	case MoveStarting:
 		return "Starting stock"
-	case MovePurchase:
+	case MoveBought:
 		return "Bought"
-	case MoveUse:
+	case MoveUsed:
 		return "Used"
-	case MoveCorrection:
-		return "Counted"
+	case MoveAdjusted:
+		return "Adjusted"
 	case MoveService:
 		return "Service"
 	}
@@ -403,6 +460,11 @@ func (k Kit) HasIntermediate() bool {
 	return k.InterIntervalKm != nil || k.InterIntervalMonths != nil || len(k.InterLines) > 0
 }
 
+// VehicleChip returns a Vehicle value with the kit's vehicle chip fields.
+func (k Kit) VehicleChip() Vehicle {
+	return Vehicle{ID: k.VehicleID, Name: k.VehicleName, Color: k.VehicleColor, OdometerKm: k.VehicleOdometerKm}
+}
+
 // ServiceRef is the minimal information about a past service.
 type ServiceRef struct {
 	ID          int64
@@ -451,6 +513,11 @@ type ServiceRecord struct {
 	PartCount       int
 	CreatedAt       time.Time
 	Version         int // see Item.Version
+}
+
+// VehicleChip returns a Vehicle value with the service's vehicle chip fields.
+func (r ServiceRecord) VehicleChip() Vehicle {
+	return Vehicle{ID: r.VehicleID, Name: r.VehicleName, Color: r.VehicleColor}
 }
 
 // ServicePart is an item consumed by a service.

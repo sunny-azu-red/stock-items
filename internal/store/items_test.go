@@ -38,7 +38,7 @@ func TestItemCreateUpdateDelete(t *testing.T) {
 		t.Errorf("updated item = %+v", it)
 	}
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: id})
-	if len(moves) != 2 || moves[0].Kind != stock.MoveCorrection || moves[0].Delta != 975 || moves[1].Kind != stock.MoveInitial {
+	if len(moves) != 2 || moves[0].Kind != stock.MoveAdjusted || moves[0].Delta != 975 || moves[1].Kind != stock.MoveStarting {
 		t.Errorf("movements = %+v", moves)
 	}
 
@@ -163,7 +163,7 @@ func TestPhotos(t *testing.T) {
 func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 	s, ctx := newStore(t)
 	id := mustItem(t, s, stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
 	form := stock.ItemInput{Name: "Spark plug", Unit: stock.UnitPiece, Quantity: 5, QuantityWas: ptr(5.0), Notes: "NGK"}
@@ -181,19 +181,19 @@ func TestUpdateItemKeepsStockChangedMeanwhile(t *testing.T) {
 		t.Errorf("after edited quantity: %v, want 8", it.Quantity)
 	}
 
-	if d, err := s.CorrectStock(ctx, id, 8, "count", time.Now(), ""); err != nil || d != 0 {
-		t.Errorf("CorrectStock to same = %v, %v", d, err)
+	if d, err := s.SetStock(ctx, id, 8, "count", time.Now(), ""); err != nil || d != 0 {
+		t.Errorf("SetStock to same = %v, %v", d, err)
 	}
-	if d, err := s.CorrectStock(ctx, id, 6, "count", time.Now(), ""); err != nil || d != -2 {
-		t.Errorf("CorrectStock to 6 = %v, %v", d, err)
+	if d, err := s.SetStock(ctx, id, 6, "count", time.Now(), ""); err != nil || d != -2 {
+		t.Errorf("SetStock to 6 = %v, %v", d, err)
 	}
 	// Deltas are rounded to the two decimals the ledger keeps (the pages
 	// refuse finer amounts; direct calls get them rounded).
 	var short *store.InsufficientStockError
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -6.006}); !errors.As(err, &short) {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -6.006}); !errors.As(err, &short) {
 		t.Errorf("use 6.006 (6.01) of 6: want InsufficientStockError, got %v", err)
 	}
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -0.0049}); err == nil ||
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -0.0049}); err == nil ||
 		!strings.Contains(err.Error(), "must not be zero") {
 		t.Errorf("use 0.0049 (0): want a zero amount refused, got %v", err)
 	}
@@ -233,14 +233,14 @@ func TestNewItemWithPriceIsAPurchase(t *testing.T) {
 	shelf := mustItem(t, s, stock.ItemInput{Name: "Old grease", Unit: stock.UnitGram, Quantity: 300})
 
 	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: antifreeze})
-	if len(moves) != 1 || moves[0].Kind != stock.MovePurchase || moves[0].Supplier != "moto24" ||
+	if len(moves) != 1 || moves[0].Kind != stock.MoveBought || moves[0].Supplier != "moto24" ||
 		moves[0].TotalPrice == nil || *moves[0].TotalPrice != 67 {
 		t.Errorf("antifreeze movements = %+v", moves)
 	}
 	if p, err := s.LastUnitPrice(ctx, antifreeze); err != nil || p == nil || *p != 0.067 {
 		t.Errorf("last unit price = %v, %v", p, err)
 	}
-	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: shelf}); len(moves) != 1 || moves[0].Kind != stock.MoveInitial {
+	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: shelf}); len(moves) != 1 || moves[0].Kind != stock.MoveStarting {
 		t.Errorf("stock already on the shelf should be initial: %+v", moves)
 	}
 	for _, c := range []struct {

@@ -29,11 +29,8 @@
   {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
   {{else if or $d.Kind $d.Year}}{{template "empty" (dict "Icon" "history" "Title" "Nothing matches these filters" "Href" (withQuery "/activity" $d.AllQuery) "Action" "Clear filters" "ActionIcon" "x")}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}
+  {{if and $d.Movements (or $d.More (gt $d.Page 1))}}
+  {{template "pager" (dict "Prev" (and (gt $d.Page 1) (withQuery "/activity" ($d.PageQuery (add $d.Page -1)))) "Next" (and $d.More (withQuery "/activity" ($d.PageQuery (add $d.Page 1)))))}}
+  {{end}}
 </section>
-{{if or $d.More (gt $d.Page 1)}}
-<p class="mt flex">
-  {{if gt $d.Page 1}}<a class="btn btn-ghost" href="{{withQuery "/activity" ($d.PageQuery (add $d.Page -1))}}">{{icon "arrow-left"}} Newer</a>{{end}}
-  {{if $d.More}}<a class="btn btn-ghost" href="{{withQuery "/activity" ($d.PageQuery (add $d.Page 1))}}">Older {{icon "chevron-right"}}</a>{{end}}
-</p>
-{{end}}
 {{end}}

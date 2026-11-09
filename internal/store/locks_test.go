@@ -164,10 +164,10 @@ func noDeadlock(t *testing.T, what string, err error) {
 func TestDeletingAnItemAndItsStockChangeTakeTurns(t *testing.T) {
 	s, pool, ctx := newStorePool(t)
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
 	use := uses[0].ID
 	itemV, useV := cur(t, s, store.WhatItem, pads), cur(t, s, store.WhatMovement, use)
 
@@ -222,7 +222,7 @@ func TestUndoingBoughtAndEditingThePurchaseTakeTurns(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			buys, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MovePurchase})
+			buys, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveBought})
 			buy := buys[0].ID
 			buyV := cur(t, s, store.WhatMovement, buy)
 
@@ -450,10 +450,10 @@ func TestLinkingAnEntryWhileItsItemIsListed(t *testing.T) {
 func TestEmptyingAndPurgingTheTrashTakeTurns(t *testing.T) {
 	s, pool, ctx := newStorePool(t)
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
 	_, useTrash, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
 	if err != nil {
 		t.Fatal(err)
@@ -568,10 +568,10 @@ func TestRestoringWhileTheItemIsDeleted(t *testing.T) {
 	}{
 		{"stock change", func(t *testing.T, s *store.Store, item int64) int64 {
 			ctx := context.Background()
-			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: item, Kind: stock.MoveUse, Delta: -1}); err != nil {
+			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: item, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 				t.Fatal(err)
 			}
-			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: item, Kind: stock.MoveUse})
+			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: item, Kind: stock.MoveUsed})
 			_, trashID, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
 			if err != nil {
 				t.Fatal(err)

@@ -19,7 +19,7 @@ func TestPagingAndTotals(t *testing.T) {
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece})
 	for i := range 7 {
 		// Two a day, so ties are broken by id.
-		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MovePurchase, Delta: 1, OccurredOn: day(1 + i/2)}); err != nil {
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveBought, Delta: 1, OccurredOn: day(1 + i/2)}); err != nil {
 			t.Fatal(err)
 		}
 	}

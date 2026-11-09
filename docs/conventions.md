@@ -34,7 +34,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Quantities are stored in base units (pieces, ml, g) and converted only at the edges (`stock.ParseAmount`, `stock.FormatQuantity`, `stock.SplitForInput`).
 - Amounts keep at most two decimals of the base unit, and pieces are whole (`numeric(12,2)` columns, `stock.CheckQuantity`). Finer input is refused with the reason, never rounded; `ParseAmount` checks pieces before any rounding, so `1.0004` isn't read as 1. Amounts the code computes (sums, differences, conversions) go through `stock.RoundQty`, which only drops float noise. Money keeps its own rounding (`FormatMoney`), and prices per ml or g (0.067) are not amounts.
 - Pure rules (validation, grouping, due dates, suggestions, exports, how a new item's starting stock is recorded, plausible dates) live in `internal/stock`, have no I/O and are unit tested.
-- Money figures (last price, stock value, spending) read only `purchase` movements. Anything that adds stock the user paid for must be recorded as a purchase, not as `initial` or `correction`.
+- Money figures (last price, stock value, spending) read only `bought` movements. Stock the user paid for must be recorded as `bought`, never as `starting` or `adjusted`.
 - Inputs are cleaned with `Normalize()` and checked with `Validate()`, which returns `stock.Errors` (field → message). Text is limited to 200 characters (4,000 for notes on items, vehicles, kits and services); an over-long field without its own error slot reports on the form's summary (`limitText`).
 
 ## Web
@@ -71,7 +71,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 
 | Say | Not |
 |---|---|
-| Bought · Used · Counted · Service · Starting stock (the kinds of stock change; "purchase", "use", "count" in a sentence; the item tabs are Bought, Used, Count) | Purchase, Correction, Initial stock |
+| Bought · Used · Adjusted · Service · Starting stock (the kinds of stock change; "purchase", "use", "adjustment" in a sentence; the item tabs are Bought, Used, Adjust) | Purchase, Correction, Counted, Initial stock |
 | in stock | on stock |
 | 3 pcs (`stock.FormatQuantity`) | 3x |
 | Type (Activity's column and chips: All types) | What, Everything, kind |

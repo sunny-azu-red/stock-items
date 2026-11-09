@@ -14,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -896,5 +897,34 @@ func TestPhotoUploadWaitsForItsTurn(t *testing.T) {
 	}
 	if strings.Contains(a.get("/trash").Body.String(), "Photo: Silkolene") {
 		t.Error("an upload whose client went away put the old photo in the trash")
+	}
+}
+
+func TestArchivedItemRefusesPhotoChanges(t *testing.T) {
+	needVips(t)
+	a := newApp(t)
+	a.seed()
+	id := itemID(t, a.store, "Silkolene")
+	item := itemPath(id)
+
+	expect(t, a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.Black))), http.StatusSeeOther)
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}), http.StatusSeeOther)
+	expect(t, a.postV(item+"/archive", nil), http.StatusSeeOther)
+
+	// Archived item page hides the photo Remove button.
+	expectNot(t, a.get(item), `action="`+item+`/photo/delete"`)
+
+	// Direct POST to delete or upload a photo on an archived item is refused.
+	rec := a.post(item+"/photo/delete", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "Restore") {
+		t.Errorf("delete photo on archived item: flash = %+v", f)
+	}
+	expect(t, a.get(item+"/photo"), http.StatusOK)
+
+	rec = a.do(photoUpload(t, context.Background(), item, smallPNG(t, color.White)))
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "Restore") {
+		t.Errorf("upload photo on archived item: flash = %+v", f)
 	}
 }

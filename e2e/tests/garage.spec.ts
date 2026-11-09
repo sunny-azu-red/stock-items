@@ -161,7 +161,7 @@ test("quick adjust and record a purchase", async ({ page }) => {
 
   await row(page, "15W50 PRO 4 XP").getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Silkolene 15W50 PRO 4 XP");
-  const bought = page.locator("#panel-purchase");
+  const bought = page.locator("#panel-bought");
   await bought.getByLabel("Amount bought").fill("1");
   await bought.locator('select[name="amount_unit"]').selectOption("l");
   await bought.getByLabel("Total price").fill("18,50");
@@ -678,13 +678,13 @@ test("sort the activity by clicking its headers", async ({ page }) => {
 
   // A kind chip keeps the sort.
   await page.locator(".chips").getByRole("link", { name: "Bought" }).click();
-  await expect(page).toHaveURL(/dir=desc&kind=purchase&sort=item/);
+  await expect(page).toHaveURL(/dir=desc&kind=bought&sort=item/);
   await expect(th("Item")).toHaveAttribute("aria-sort", "descending");
 
   // Keyboard: the headers are links, with a visible focus ring.
   await th("Price").getByRole("link").focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/kind=purchase&sort=price/);
+  await expect(page).toHaveURL(/kind=bought&sort=price/);
   await expect(th("Price")).toHaveAttribute("aria-sort", "descending");
   const cells = await page.locator("table.table tbody tr td:nth-child(5)").allInnerTexts();
   const prices = cells.filter((c) => c.trim()).map((p) => parseFloat(p.replace(/[^\d.]/g, "")));
@@ -695,17 +695,18 @@ test("sort the activity by clicking its headers", async ({ page }) => {
 });
 
 test("pick a year on the Activity page", async ({ page }) => {
-  await page.goto("/activity?kind=purchase");
+  await page.goto("/activity?kind=bought");
   const year = page.getByLabel("Year");
-  const thisYear = String(new Date().getFullYear());
-  await year.selectOption(thisYear);
+  const thisYear = await year.locator('option:not([value=""])').first().getAttribute("value");
+  expect(thisYear).toBeTruthy();
+  await year.selectOption(thisYear!);
   // The page reloads for that year and keeps the kind.
-  await expect(page).toHaveURL(new RegExp(`\\?kind=purchase&year=${thisYear}$`));
-  await expect(year).toHaveValue(thisYear);
+  await expect(page).toHaveURL(new RegExp(`\\?kind=bought&year=${thisYear}$`));
+  await expect(year).toHaveValue(thisYear!);
   await expect(page.getByText(`Every change to your stock in ${thisYear}`)).toBeVisible();
   await expect(page.locator("table.table tbody tr").first()).toBeVisible();
   await year.selectOption({ label: "All years" });
-  await expect(page).toHaveURL(/\?kind=purchase&year=$/);
+  await expect(page).toHaveURL(/\?kind=bought&year=$/);
   await expect(year).toHaveValue("");
 });
 
@@ -979,7 +980,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   const bought = await link("/shopping", 'a[href$="/bought"]');
   const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", "/stock?sort=expiry&dir=desc", item, "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
-    kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", bought, "/activity", "/activity?sort=price", "/activity?kind=purchase&year=2026",
+    kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", bought, "/activity", "/activity?sort=price", "/activity?kind=bought&year=2026",
     movement, "/trash", "/no-such-page"];
   for (const p of paths) {
     await page.goto(p);

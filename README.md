@@ -22,7 +22,7 @@ It is built for one household on a home network: no login, one binary, one Postg
   525 ml - Silkolene 15W50 PRO 4 XP
   ```
   CSV export is available too, with last prices and stock value, plus a CSV of the whole history.
-- **Quick −/+** on every row, and a full **history** of every stock change (bought, used, counted, service) with prices and shops, filtered by type and year. Mistakes can be edited or deleted, and the stock follows.
+- **Quick −/+** on every row, and a full **history** of every stock change (bought, used, adjusted, service) with prices and shops, filtered by type and year. Mistakes can be edited or deleted, and the stock follows.
 - **Service kits.** For example, "KTM 390 – Oil service" lists the filter, 1.7 L oil and 2 O-rings. You see at once what is on the shelf and what is missing, and one click puts the shortfall on the shopping list.
 - **Service log.** "Do this service" takes the parts from stock, records date, odometer and cost, and updates the vehicle's odometer. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
 - **Reminders:** kits can repeat every X km and/or Y months, with an optional intermediate schedule and parts list for mid-interval jobs (e.g. a DIY oil and filter change halfway between full dealer services). The dashboard shows what is overdue or due soon.

@@ -52,7 +52,7 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	}
 }
 
-func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
+func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.VehicleInput) {
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
@@ -75,7 +75,7 @@ func parseVehicleForm(r *http.Request) (vehicleForm, stock.VehicleInput) {
 	if in.PurchasedKm, err = parseOptInt(f.PurchasedKm); err != nil {
 		f.Errors.Add("purchased_km", err.Error())
 	}
-	if in.PurchasedOn, err = parseOptDate(f.PurchasedOn); err != nil {
+	if in.PurchasedOn, err = parseEventDate(f.PurchasedOn, now); err != nil {
 		f.Errors.Add("purchased_on", err.Error())
 	}
 	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
@@ -142,7 +142,7 @@ func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 			vehicles = append(vehicles, v)
 		}
 	}
-	kits, err := s.store.ListKits(ctx, store.KitFilter{IncludeArchived: showArchived})
+	kits, err := s.store.ListKits(ctx, store.KitFilter{IncludeArchived: true})
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 				continue
 			}
 			cards[i].Kits++
-			if kv.Due.State != stock.DueNone && (cards[i].Next == nil || kv.Due.State.Rank() < cards[i].Next.Due.State.Rank()) {
+			if !kv.Kit.Archived() && kv.Due.State != stock.DueNone && (cards[i].Next == nil || kv.Due.State.Rank() < cards[i].Next.Due.State.Rank()) {
 				cards[i].Next = kv
 			}
 		}
@@ -183,7 +183,7 @@ func (s *Server) vehicleCreate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
 		return err
 	}
-	f, in := parseVehicleForm(r)
+	f, in := parseVehicleForm(r, s.now())
 	if !f.Errors.Any() {
 		id, err := s.store.CreateVehicle(r.Context(), in)
 		if err == nil {
@@ -224,7 +224,7 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
 		return err
 	}
-	f, in := parseVehicleForm(r)
+	f, in := parseVehicleForm(r, s.now())
 	f.ID = id
 	if !f.Errors.Any() {
 		err := s.store.UpdateVehicle(r.Context(), id, in)
@@ -235,7 +235,7 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 		if s.savedAlready(w, r, err, vehiclePath, "/vehicles") {
 			return nil
 		}
-		if f.Stale = staleForm(err, fmt.Sprintf("/vehicles/%d/edit", id)); f.Stale == nil && !formConflict(f.Errors, err) {
+		if f.Stale = staleForm(err, vehiclePath(id)+"/edit"); f.Stale == nil && !formConflict(f.Errors, err) {
 			return err
 		}
 	}
@@ -255,7 +255,7 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/vehicles/%d", id)
+	page := vehiclePath(id)
 	v, err := s.store.GetVehicle(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
 		return nil
@@ -268,7 +268,7 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	} else if errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
-		s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "")
+		s.redirect(w, r, page, "")
 		return nil
 	} else if err != nil {
 		return err
@@ -286,7 +286,7 @@ func (s *Server) vehicleArchive(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/vehicles/%d", id)
+	page := vehiclePath(id)
 	v, err := s.store.GetVehicle(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
 		return nil
@@ -299,7 +299,7 @@ func (s *Server) vehicleArchive(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Archived "+v.Name+". Its services and kits stay; restore it any time.")
+	s.redirect(w, r, page, "Archived "+v.Name+". Its services and kits stay; restore it any time.")
 	return nil
 }
 
@@ -311,7 +311,7 @@ func (s *Server) vehicleRestore(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/vehicles/%d", id)
+	page := vehiclePath(id)
 	v, err := s.store.GetVehicle(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatVehicle, id), page, "/vehicles") {
 		return nil
@@ -324,7 +324,7 @@ func (s *Server) vehicleRestore(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, fmt.Sprintf("/vehicles/%d", id), "Restored "+v.Name)
+	s.redirect(w, r, page, "Restored "+v.Name)
 	return nil
 }
 
@@ -336,7 +336,7 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	back := s.back(r, fmt.Sprintf("/vehicles/%d", id))
+	back := s.back(r, vehiclePath(id))
 	km, err := parseOptInt(formText(r, "odometer_km"))
 	if err != nil || km == nil || *km < 0 || *km > stock.MaxOdometerKm {
 		s.setFlash(w, "error", "Enter the odometer reading in km")
@@ -440,26 +440,21 @@ type kitView struct {
 
 // kitViews computes readiness and due state, most urgent first.
 func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView {
-	odo := map[int64]*int{}
-	pOn := map[int64]*time.Time{}
-	pKm := map[int64]*int{}
-	archived := map[int64]bool{}
-	for _, v := range vehicles {
-		odo[v.ID] = v.OdometerKm
-		pOn[v.ID] = v.PurchasedOn
-		pKm[v.ID] = v.PurchasedKm
-		archived[v.ID] = v.Archived()
-	}
+	byVehicle := vehicleMap(vehicles)
 	today := s.now()
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
-		if k.VehiclePurchasedOn == nil {
-			k.VehiclePurchasedOn = pOn[k.VehicleID]
+		km := k.VehicleOdometerKm
+		v, ok := byVehicle[k.VehicleID]
+		if ok {
+			km = v.OdometerKm
+			if k.VehiclePurchasedOn == nil {
+				k.VehiclePurchasedOn = v.PurchasedOn
+			}
+			if k.VehiclePurchasedKm == nil {
+				k.VehiclePurchasedKm = v.PurchasedKm
+			}
 		}
-		if k.VehiclePurchasedKm == nil {
-			k.VehiclePurchasedKm = pKm[k.VehicleID]
-		}
-		km := odo[k.VehicleID]
 		out[i] = kitView{
 			Kit:             k,
 			Readiness:       k.ReadinessAt(km, today),
@@ -469,7 +464,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			FullDue:         k.FullDue(km, today),
 			InterDue:        k.InterDue(km, today),
 			NextInter:       k.NextIsIntermediate(km, today),
-			VehicleArchived: archived[k.VehicleID],
+			VehicleArchived: v.Archived(),
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })

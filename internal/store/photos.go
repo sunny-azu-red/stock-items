@@ -60,8 +60,12 @@ func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, e
 // photo, so the two can't deadlock, and two uploads at once take turns.
 func trashPhoto(ctx context.Context, tx pgx.Tx, itemID int64, detail string) (int64, error) {
 	var name, brand string
-	if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand); err != nil {
+	var archived bool
+	if err := tx.QueryRow(ctx, `SELECT name, brand, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand, &archived); err != nil {
 		return 0, notFound(err)
+	}
+	if archived {
+		return 0, &ConflictError{Field: "form", Message: "Restore " + displayName(brand, name) + " to change its photo"}
 	}
 	var has bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM item_photos WHERE item_id = $1)`, itemID).Scan(&has); err != nil || !has {

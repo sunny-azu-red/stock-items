@@ -176,17 +176,10 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		"subUnits": func() []stock.SubUnit { return stock.SubUnits },
 		// step is how much quick -/+ changes an item's stock, e.g. "100 ml".
-		"step": func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
-		"join": strings.Join,
-		"plural": func(n int, word string) string {
-			if n == 1 {
-				return "1 " + word
-			}
-			if strings.HasSuffix(word, "y") && !strings.HasSuffix(word, "ey") {
-				return fmt.Sprintf("%d %sies", n, strings.TrimSuffix(word, "y"))
-			}
-			return fmt.Sprintf("%d %ss", n, word)
-		},
+		"step":       func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
+		"join":       strings.Join,
+		"plural":     plural,
+		"pluralOnly": pluralOnly,
 		"chipStyle": func(color string) template.CSS {
 			if !stock.IsColor(color) {
 				color = "#888888"
@@ -487,4 +480,25 @@ func dict(kv ...any) (map[string]any, error) {
 		m[k] = kv[i+1]
 	}
 	return m, nil
+}
+
+func plural(n int, word string) string {
+	return fmt.Sprintf("%d %s", n, pluralOnly(n, word))
+}
+
+func pluralOnly(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	if strings.HasSuffix(word, "y") && !strings.HasSuffix(word, "ey") {
+		return strings.TrimSuffix(word, "y") + "ies"
+	}
+	return word + "s"
+}
+
+func pluralWord(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

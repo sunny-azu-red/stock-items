@@ -34,10 +34,10 @@ func TestRestoreRefusesPartsOfAPiece(t *testing.T) {
 	}{
 		{"stock change of an item in stock", func(t *testing.T) int64 {
 			pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
-			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
+			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 				t.Fatal(err)
 			}
-			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
 			_, trashID, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
 			if err != nil {
 				t.Fatal(err)
@@ -161,7 +161,7 @@ func TestUndoBoughtAfterChanges(t *testing.T) {
 		newEntry bool // the entry it ends on isn't the one ticked off
 	}{
 		{"purchase deleted meanwhile", func(t *testing.T, s *store.Store, pads int64) {
-			buys, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MovePurchase})
+			buys, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveBought})
 			if _, _, err := s.DeleteMovement(ctx, buys[0].ID, cur(t, s, store.WhatMovement, buys[0].ID)); err != nil {
 				t.Fatal(err)
 			}
@@ -245,10 +245,10 @@ func TestRestoreNeedsWhatWasDeletedForGood(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -1}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -1}); err != nil {
 		t.Fatal(err)
 	}
-	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
 	_, trashID, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
 	if err != nil {
 		t.Fatal(err)
@@ -375,7 +375,7 @@ func TestTrashRestoresAService(t *testing.T) {
 	// Deleted again, but the oil got used meanwhile: the restore is refused
 	// and nothing changes.
 	trashID, _ = s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -1000}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUsed, Delta: -1000}); err != nil {
 		t.Fatal(err)
 	}
 	var shorts *store.ShortPartsError
@@ -397,10 +397,10 @@ func TestTrashRestoresMovementsKitsAndShopping(t *testing.T) {
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
 
 	// A deleted purchase comes back with its stock.
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MovePurchase, Delta: 1000, TotalPrice: ptr(20.0)}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1000, TotalPrice: ptr(20.0)}); err != nil {
 		t.Fatal(err)
 	}
-	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MovePurchase})
+	moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveBought})
 	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
 	if err != nil {
 		t.Fatal(err)
@@ -477,14 +477,14 @@ func TestTrashUndoesBought(t *testing.T) {
 
 	// Bought in full: the entry comes back. Used since: refused.
 	_, trashID, _ = s.MarkBought(ctx, entry, cur(t, s, store.WhatShopping, entry), &stock.MovementInput{Delta: 3})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUse, Delta: -2}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
 	var short *store.InsufficientStockError
 	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &short) {
 		t.Errorf("undo after using it: want InsufficientStockError, got %v", err)
 	}
-	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUse})
+	uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
 	if _, _, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID)); err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +500,7 @@ func TestTrashRestoresItemsVehiclesAndPhotos(t *testing.T) {
 	v := mustVehicle(t, s, "KTM 390")
 	id := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5, VehicleIDs: []int64{v},
 		SKUs: []stock.SKU{{Code: "M8", Kind: stock.SKUOther, Brand: "M8x20"}}})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUse, Delta: -2}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: id, Kind: stock.MoveUsed, Delta: -2}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SetPhoto(ctx, id, "image/jpeg", []byte{0xff, 0xd8, 1, 2}, []byte{0xff, 0xd8}); err != nil {
@@ -844,10 +844,10 @@ func TestRestoreRefusesAmountsFinerThanTwoDecimals(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUse, Delta: -250.5}); err != nil {
+	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUsed, Delta: -250.5}); err != nil {
 		t.Fatal(err)
 	}
-	moves, err := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUse})
+	moves, err := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUsed})
 	if err != nil || len(moves) != 1 {
 		t.Fatalf("uses: %v, %v", moves, err)
 	}

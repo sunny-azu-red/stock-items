@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -23,6 +24,7 @@ type serviceForm struct {
 	Notes           string
 	LaborCost       string
 	Parts           []lineRow
+	ShortParts      []shortPart
 	Version         int // as the edit form was opened (see itemForm)
 	Stale           *staleNote
 	FormKey         string // see itemForm
@@ -203,9 +205,15 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	return f, in, nil
 }
 
+type shortPart struct {
+	ItemID int64
+	Qty    string
+	Note   string
+}
+
 // serviceConflict maps a store error onto the service form, marking every
 // part that is short on its row.
-func serviceConflict(f serviceForm, err error) bool {
+func serviceConflict(f *serviceForm, err error) bool {
 	var shorts *store.ShortPartsError
 	if errors.As(err, &shorts) {
 		for _, short := range shorts.Parts {
@@ -213,6 +221,18 @@ func serviceConflict(f serviceForm, err error) bool {
 				if f.Parts[i].ItemID == short.ItemID {
 					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " in stock"
 				}
+			}
+			needed := stock.RoundQty(short.Need - short.Have)
+			if needed > 0 {
+				note := "Short for " + f.Title
+				if f.Title == "" {
+					note = "Short for service"
+				}
+				f.ShortParts = append(f.ShortParts, shortPart{
+					ItemID: short.ItemID,
+					Qty:    stock.FormatNumber(needed),
+					Note:   note,
+				})
 			}
 		}
 		f.Errors.Add("lines", fmt.Sprintf("%d %s short", len(shorts.Parts), pluralWord(len(shorts.Parts), "part is", "parts are")))
@@ -242,7 +262,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 		if s.savedAlready(w, r, err, servicePath, "/services") {
 			return nil
 		}
-		if !serviceConflict(f, err) {
+		if !serviceConflict(&f, err) {
 			return err
 		}
 	}
@@ -305,7 +325,7 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 		// Changed or deleted meanwhile: say so, and keep what was typed.
-		if f.Stale = staleForm(err, fmt.Sprintf("/services/%d/edit", id)); f.Stale == nil && !serviceConflict(f, err) {
+		if f.Stale = staleForm(err, servicePath(id)+"/edit"); f.Stale == nil && !serviceConflict(&f, err) {
 			return err
 		}
 	}
@@ -318,6 +338,12 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	return s.renderServiceForm(w, r, http.StatusUnprocessableEntity, f)
 }
 
+type serviceShowPage struct {
+	stock.ServiceRecord
+	Back      string
+	BackLabel string
+}
+
 func (s *Server) serviceShow(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {
@@ -327,7 +353,16 @@ func (s *Server) serviceShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "service_show", View{Title: rec.Title, Nav: "services", Data: rec})
+	fallback := vehiclePath(rec.VehicleID)
+	backHref, backLabel := fallback, rec.VehicleName
+	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/services") {
+		backHref, backLabel = ref, "Services"
+	}
+	s.render(w, r, http.StatusOK, "service_show", View{Title: rec.Title, Nav: "services", Data: serviceShowPage{
+		ServiceRecord: rec,
+		Back:          backHref,
+		BackLabel:     backLabel,
+	}})
 	return nil
 }
 
@@ -339,7 +374,7 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/services/%d", id)
+	page := servicePath(id)
 	rec, err := s.store.GetService(r.Context(), id)
 	if s.staleButton(w, r, s.gone(r, err, store.WhatService, id), page, "/services") {
 		return nil
@@ -356,7 +391,7 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) error {
 	if len(rec.Parts) > 0 {
 		msg += " and put its parts back in stock"
 	}
-	s.redirectUndo(w, r, fmt.Sprintf("/vehicles/%d", rec.VehicleID), msg, trashID)
+	s.redirectUndo(w, r, vehiclePath(rec.VehicleID), msg, trashID)
 	return nil
 }
 

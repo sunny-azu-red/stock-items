@@ -33,6 +33,12 @@ LABEL org.opencontainers.image.title="Pitbox" \
       org.opencontainers.image.description="Pitbox, a Parts & Inventory Tracker: garage stock, service kits and shopping list for your vehicles" \
       org.opencontainers.image.source="https://github.com/sunny-azu-red/stock-items" \
       org.opencontainers.image.licenses="MIT"
+# CI sets this to a new value on every run. A RUN after a changed ARG misses
+# the build cache, so the apt-get upgrade below really runs and the image
+# gets Debian's latest security fixes; otherwise the cached layer would keep
+# the packages from the first build until the base digest moves, and the
+# image scan would fail on every fix Debian ships in between.
+ARG APT_REFRESH
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends libvips-tools libheif-plugin-libde265 ca-certificates tzdata \

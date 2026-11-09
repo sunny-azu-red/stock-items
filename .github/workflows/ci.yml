@@ -187,7 +187,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ steps.version.outputs.version }}
+          # APT_REFRESH changes on every run (and re-run), so the Dockerfile's
+          # apt-get upgrade layer is rebuilt instead of reused from the cache.
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            APT_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
           sbom: true
           provenance: mode=max
           cache-from: type=gha

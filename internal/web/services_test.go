@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -580,45 +579,4 @@ func TestKitPerTierShortfall(t *testing.T) {
 	if len(list) != 2 {
 		t.Fatalf("expected both plug and oil in shopping list, got %+v", list)
 	}
-}
-
-func TestDetailPagesContextualBackLinks(t *testing.T) {
-	a := newApp(t)
-	k390, _ := a.seed()
-	oil := itemID(t, a.store, "Silkolene")
-
-	// 1. Item detail: from /stock?q=silkolene&low=1
-	req := httptest.NewRequest(http.MethodGet, itemPath(oil), nil)
-	req.Header.Set("Referer", "http://example.com/stock?q=silkolene&low=1")
-	rec := a.do(req)
-	expect(t, rec, http.StatusOK, `/stock?q=silkolene&amp;low=1`)
-
-	// 2. Kit detail: from /services
-	rec = a.post("/kits", url.Values{
-		"vehicle_id":      {itoa(k390)},
-		"name":            {"Chain tension"},
-		"interval_km":     {"1000"},
-		"interval_months": {"1"},
-	})
-	expect(t, rec, http.StatusSeeOther)
-	kitURL := rec.Header().Get("Location")
-
-	req = httptest.NewRequest(http.MethodGet, kitURL, nil)
-	req.Header.Set("Referer", "http://example.com/services")
-	rec = a.do(req)
-	expect(t, rec, http.StatusOK, `<a class="back" href="/services">`, "Services")
-
-	// 3. Service detail: from /services?v=...
-	rec = a.post("/services", url.Values{
-		"vehicle_id":   {itoa(k390)},
-		"title":        {"Quick wash"},
-		"performed_on": {"2026-10-25"},
-	})
-	expect(t, rec, http.StatusSeeOther)
-	svcURL := rec.Header().Get("Location")
-
-	req = httptest.NewRequest(http.MethodGet, svcURL, nil)
-	req.Header.Set("Referer", "http://example.com/services?v="+itoa(k390))
-	rec = a.do(req)
-	expect(t, rec, http.StatusOK, `<a class="back" href="/services?v=`+itoa(k390)+`">`, "Services")
 }

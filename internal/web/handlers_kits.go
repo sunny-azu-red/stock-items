@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -453,8 +452,6 @@ type kitPage struct {
 	Lines        []stock.KitLine // the kit's lines in the order asked for
 	InterLines   []stock.KitLine // the kit's intermediate lines in the order asked for
 	Sort         sortHeads
-	Back         string
-	BackLabel    string
 }
 
 func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
@@ -486,18 +483,11 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	order := kitSorts.parse(r.URL.Query())
-	fallback := vehiclePath(k.VehicleID)
-	backHref, backLabel := fallback, v.Name
-	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/services") {
-		backHref, backLabel = ref, "Services"
-	}
 	p := kitPage{
 		View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
 		Lines:      stock.SortKitLines(k.Lines, order.Key, order.Desc),
 		InterLines: stock.SortKitLines(k.InterLines, order.Key, order.Desc),
 		Sort:       sortHeads{Order: order, Path: kitPath(id)},
-		Back:       backHref,
-		BackLabel:  backLabel,
 	}
 	s.render(w, r, http.StatusOK, "kit_show", View{Title: k.Name + " · " + v.Name, Nav: "services", Data: p})
 	return nil

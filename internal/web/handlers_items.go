@@ -574,7 +574,6 @@ type itemPage struct {
 	HistoryCapped bool   // Movements holds only the first itemHistory entries
 	Today         string // yyyy-mm-dd, the default date of a stock change
 	History       sortHeads
-	BackHref      string
 }
 
 // AllEntriesQuery is the query string of the item's full history on the
@@ -627,21 +626,12 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	if err != nil {
 		return itemPage{}, err
 	}
-	fallback := "/stock"
-	if it.Archived() {
-		fallback = "/stock?archived=1"
-	}
-	backHref := fallback
-	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/stock") {
-		backHref = ref
-	}
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: s.kitViews(kits, vehicles),
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
-		History:  sortHeads{Order: order, Path: itemPath(id)},
-		BackHref: backHref,
+		History: sortHeads{Order: order, Path: itemPath(id)},
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]

@@ -1,5 +1,4 @@
 {{define "content"}}{{$d := .Data}}{{$m := $d.Movement}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<a class="back" href="{{$d.Back}}">{{icon "arrow-left"}} {{if eq $f.Back (printf "/items/%d" $m.ItemID)}}{{$m.ItemName}}{{else}}Back{{end}}</a>
 <div class="page-head">
   <div>
     <h1>Edit {{$d.Name}}</h1>

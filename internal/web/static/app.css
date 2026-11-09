@@ -140,8 +140,6 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .item-head > .item-head-meta, .item-head > .sub { flex-basis: 100%; margin: 0; }
 .item-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .page-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.back { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; font-size: .9rem; margin-bottom: 8px; }
-.back:hover { color: var(--text); }
 
 
 /* ---------- Mobile ---------- */
@@ -637,7 +635,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
 
 @media print {
-  .sidebar, .tabbar, .page-head .actions, .filters, .item-actions, .results-head .btn, .back, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
+  .sidebar, .tabbar, .page-head .actions, .filters, .item-actions, .results-head .btn, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
   .shell { display: block; }
   .card { box-shadow: none; }
 }

@@ -1,5 +1,4 @@
 {{define "content"}}{{$s := .Data}}
-<a class="back" href="{{if $s.Back}}{{$s.Back}}{{else}}/vehicles/{{$s.VehicleID}}{{end}}">{{icon "arrow-left"}} {{if $s.BackLabel}}{{$s.BackLabel}}{{else}}{{$s.VehicleName}}{{end}}</a>
 <div class="page-head">
   <div>
     <h1>{{$s.Title}}</h1>

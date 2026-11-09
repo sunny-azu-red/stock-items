@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -338,12 +337,6 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	return s.renderServiceForm(w, r, http.StatusUnprocessableEntity, f)
 }
 
-type serviceShowPage struct {
-	stock.ServiceRecord
-	Back      string
-	BackLabel string
-}
-
 func (s *Server) serviceShow(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {
@@ -353,16 +346,7 @@ func (s *Server) serviceShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	fallback := vehiclePath(rec.VehicleID)
-	backHref, backLabel := fallback, rec.VehicleName
-	if ref := safeBack(r, ""); strings.HasPrefix(ref, "/services") {
-		backHref, backLabel = ref, "Services"
-	}
-	s.render(w, r, http.StatusOK, "service_show", View{Title: rec.Title, Nav: "services", Data: serviceShowPage{
-		ServiceRecord: rec,
-		Back:          backHref,
-		BackLabel:     backLabel,
-	}})
+	s.render(w, r, http.StatusOK, "service_show", View{Title: rec.Title, Nav: "services", Data: rec})
 	return nil
 }
 

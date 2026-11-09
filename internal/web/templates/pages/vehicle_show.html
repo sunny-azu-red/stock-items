@@ -1,5 +1,4 @@
 {{define "content"}}{{$d := .Data}}{{$v := $d.Vehicle}}
-<a class="back" href="/vehicles{{if $v.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Vehicles</a>
 <div class="page-head">
   <div class="vehicle-hero" style="{{chipStyle $v.Color}}">
     <span class="avatar">{{icon $v.Kind.Icon}}</span>

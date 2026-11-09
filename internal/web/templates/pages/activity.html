@@ -1,5 +1,4 @@
 {{define "content"}}{{$d := .Data}}
-{{with $d.Item}}<a class="back" href="/items/{{.ID}}">{{icon "arrow-left"}} {{.DisplayName}}</a>{{end}}
 <div class="page-head">
   <div>
     <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}Activity{{end}}</h1>

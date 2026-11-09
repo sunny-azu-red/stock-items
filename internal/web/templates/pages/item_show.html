@@ -1,5 +1,4 @@
 {{define "content"}}{{$d := .Data}}{{$it := $d.Item}}{{$m := $d.Move}}{{$e := $m.Errors}}
-<a class="back" href="{{if $d.BackHref}}{{$d.BackHref}}{{else}}/stock{{if $it.Archived}}?archived=1{{end}}{{end}}">{{icon "arrow-left"}} Stock</a>
 <div class="page-head item-head">
   <h1>{{$it.DisplayName}}</h1>
   <div class="actions">

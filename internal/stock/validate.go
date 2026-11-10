@@ -16,10 +16,10 @@ const MaxMoney = 100_000_000
 const (
 	maxShortText = 200  // names, brands, shops, notes on a stock change…
 	maxLongText  = 4000 // notes on items, vehicles, kits and services
-	// MaxOdometerKm is the largest odometer reading accepted.
-	MaxOdometerKm  = 10_000_000
-	maxIntervalKm  = 1_000_000
-	maxIntervalMon = 240
+	// MaxOdometer is the largest odometer reading accepted.
+	MaxOdometer         = 10_000_000
+	maxIntervalDistance = 1_000_000
+	maxIntervalMon      = 240
 )
 
 // limitText records an error on the form's summary when value is longer
@@ -241,18 +241,18 @@ func IsColor(s string) bool { return colorRe.MatchString(s) }
 
 // VehicleInput is the data needed to create or update a vehicle.
 type VehicleInput struct {
-	Name        string
-	Kind        VehicleKind
-	Make        string
-	Model       string
-	Year        *int
-	Plate       string
-	VIN         string
-	Color       string
-	OdometerKm  *int
-	PurchasedOn *time.Time
-	PurchasedKm *int
-	Notes       string
+	Name               string
+	Kind               VehicleKind
+	Make               string
+	Model              string
+	Year               *int
+	Plate              string
+	VIN                string
+	Color              string
+	Odometer           *int
+	PurchasedOn        *time.Time
+	OdometerAtPurchase *int
+	Notes              string
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
@@ -294,29 +294,29 @@ func (in VehicleInput) Validate() Errors {
 	if !IsColor(in.Color) {
 		errs.Add("color", "Colour must look like #ff6600")
 	}
-	if in.OdometerKm != nil && *in.OdometerKm < 0 {
-		errs.Add("odometer_km", "Odometer cannot be negative")
+	if in.Odometer != nil && *in.Odometer < 0 {
+		errs.Add("odometer", "Odometer cannot be negative")
 	}
-	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
-		errs.Add("odometer_km", "That is more than "+FormatDistance(MaxOdometerKm))
+	if in.Odometer != nil && *in.Odometer > MaxOdometer {
+		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
 	}
 	if in.PurchasedOn != nil {
 		if y := in.PurchasedOn.Year(); y < 1900 || y > 2100 {
 			errs.Add("purchased_on", "Date year must be between 1900 and 2100")
 		}
 	}
-	if in.PurchasedKm != nil {
-		if *in.PurchasedKm < 0 {
-			errs.Add("purchased_km", "Purchase odometer cannot be negative")
-		} else if *in.PurchasedKm > MaxOdometerKm {
-			errs.Add("purchased_km", "That is more than "+FormatDistance(MaxOdometerKm))
+	if in.OdometerAtPurchase != nil {
+		if *in.OdometerAtPurchase < 0 {
+			errs.Add("odometer_at_purchase", "Purchase odometer cannot be negative")
+		} else if *in.OdometerAtPurchase > MaxOdometer {
+			errs.Add("odometer_at_purchase", "That is more than "+FormatDistance(MaxOdometer))
 		}
 	}
-	if in.PurchasedKm != nil && in.OdometerKm != nil && *in.OdometerKm < *in.PurchasedKm {
+	if in.OdometerAtPurchase != nil && in.Odometer != nil && *in.Odometer < *in.OdometerAtPurchase {
 		if in.KeepOdometer {
-			errs.Add("purchased_km", "Purchase odometer cannot be higher than the current odometer")
+			errs.Add("odometer_at_purchase", "Purchase odometer cannot be higher than the current odometer")
 		} else {
-			errs.Add("odometer_km", "Current odometer cannot be lower than purchase odometer")
+			errs.Add("odometer", "Current odometer cannot be lower than purchase odometer")
 		}
 	}
 	limitText(errs, maxShortText, "Make", in.Make)
@@ -464,17 +464,17 @@ func CheckEventDate(d *time.Time, today time.Time) string {
 
 // KitInput is the data needed to create or update a service kit.
 type KitInput struct {
-	VehicleID           int64
-	Name                string
-	IntervalKm          *int
-	IntervalMonths      *int
-	InterIntervalKm     *int
-	InterIntervalMonths *int
-	Notes               string
-	Lines               []KitLineInput
-	InterLines          []KitLineInput
-	Version             int    // as the edit form was opened; unused on create
-	FormKey             string // see ItemInput.FormKey
+	VehicleID             int64
+	Name                  string
+	IntervalDistance      *int
+	IntervalMonths        *int
+	InterIntervalDistance *int
+	InterIntervalMonths   *int
+	Notes                 string
+	Lines                 []KitLineInput
+	InterLines            []KitLineInput
+	Version               int    // as the edit form was opened; unused on create
+	FormKey               string // see ItemInput.FormKey
 }
 
 // KitLineInput is one item of a kit.
@@ -503,20 +503,20 @@ func (in KitInput) Validate() Errors {
 	if in.Name == "" {
 		errs.Add("name", "Name is required")
 	}
-	if in.IntervalKm != nil && *in.IntervalKm <= 0 {
-		errs.Add("interval_km", "Interval must be greater than zero")
+	if in.IntervalDistance != nil && *in.IntervalDistance <= 0 {
+		errs.Add("interval_distance", "Interval must be greater than zero")
 	}
 	if in.IntervalMonths != nil && *in.IntervalMonths <= 0 {
 		errs.Add("interval_months", "Interval must be greater than zero")
 	}
-	if in.InterIntervalKm != nil && *in.InterIntervalKm <= 0 {
-		errs.Add("inter_interval_km", "Interval must be greater than zero")
+	if in.InterIntervalDistance != nil && *in.InterIntervalDistance <= 0 {
+		errs.Add("inter_interval_distance", "Interval must be greater than zero")
 	}
 	if in.InterIntervalMonths != nil && *in.InterIntervalMonths <= 0 {
 		errs.Add("inter_interval_months", "Interval must be greater than zero")
 	}
-	if len(in.InterLines) > 0 && in.InterIntervalKm == nil && in.InterIntervalMonths == nil {
-		errs.Add("inter_interval_km", "Enter when the intermediate service is due")
+	if len(in.InterLines) > 0 && in.InterIntervalDistance == nil && in.InterIntervalMonths == nil {
+		errs.Add("inter_interval_distance", "Enter when the intermediate service is due")
 	}
 	for i, l := range in.Lines {
 		switch {
@@ -539,19 +539,19 @@ func (in KitInput) Validate() Errors {
 	if utf8.RuneCountInString(in.Name) > maxShortText {
 		errs.Add("name", "Name is too long (max 200 characters)")
 	}
-	if in.IntervalKm != nil && *in.IntervalKm > maxIntervalKm {
-		errs.Add("interval_km", "That is more than "+FormatDistance(maxIntervalKm))
+	if in.IntervalDistance != nil && *in.IntervalDistance > maxIntervalDistance {
+		errs.Add("interval_distance", "That is more than "+FormatDistance(maxIntervalDistance))
 	}
 	if in.IntervalMonths != nil && *in.IntervalMonths > maxIntervalMon {
 		errs.Add("interval_months", "That is more than 20 years")
 	}
-	if in.InterIntervalKm != nil {
-		if *in.InterIntervalKm > maxIntervalKm {
-			errs.Add("inter_interval_km", "That is more than "+FormatDistance(maxIntervalKm))
-		} else if in.IntervalKm == nil {
-			errs.Add("inter_interval_km", "Enter a full distance interval first")
-		} else if *in.IntervalKm > 0 && *in.InterIntervalKm >= *in.IntervalKm {
-			errs.Add("inter_interval_km", "Intermediate interval must be shorter than the full interval")
+	if in.InterIntervalDistance != nil {
+		if *in.InterIntervalDistance > maxIntervalDistance {
+			errs.Add("inter_interval_distance", "That is more than "+FormatDistance(maxIntervalDistance))
+		} else if in.IntervalDistance == nil {
+			errs.Add("inter_interval_distance", "Enter a full distance interval first")
+		} else if *in.IntervalDistance > 0 && *in.InterIntervalDistance >= *in.IntervalDistance {
+			errs.Add("inter_interval_distance", "Intermediate interval must be shorter than the full interval")
 		}
 	}
 	if in.InterIntervalMonths != nil {
@@ -573,7 +573,7 @@ type ServiceInput struct {
 	KitID           *int64
 	KitIntermediate bool
 	PerformedOn     time.Time
-	OdometerKm      *int
+	Odometer        *int
 	Title           string
 	Notes           string
 	LaborCost       *float64
@@ -608,8 +608,8 @@ func (in ServiceInput) Validate() Errors {
 	if in.PerformedOn.IsZero() {
 		errs.Add("performed_on", "Date is required")
 	}
-	if in.OdometerKm != nil && *in.OdometerKm < 0 {
-		errs.Add("odometer_km", "Odometer cannot be negative")
+	if in.Odometer != nil && *in.Odometer < 0 {
+		errs.Add("odometer", "Odometer cannot be negative")
 	}
 	if !validMoney(in.LaborCost) {
 		errs.Add("labor_cost", "Enter a cost between 0 and "+FormatInt(MaxMoney))
@@ -625,8 +625,8 @@ func (in ServiceInput) Validate() Errors {
 	if utf8.RuneCountInString(in.Title) > maxShortText {
 		errs.Add("title", "Work performed is too long (max 200 characters)")
 	}
-	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
-		errs.Add("odometer_km", "That is more than "+FormatDistance(MaxOdometerKm))
+	if in.Odometer != nil && *in.Odometer > MaxOdometer {
+		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
 	}
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs

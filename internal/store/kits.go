@@ -27,31 +27,31 @@ type KitFilter struct {
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
-		SELECT k.id, k.vehicle_id, v.name, v.color, v.odometer_km, k.name, k.interval_km, k.interval_months,
-		       k.inter_interval_km, k.inter_interval_months, k.notes, k.archived_at, k.version,
-		       ls.id, ls.performed_on, ls.odometer_km, ls.odometer_at_log, ls.created_at, ls.kit_intermediate,
-		       (SELECT sr.odometer_km FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
-		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
-		       lf.id, lf.performed_on, lf.odometer_km, lf.odometer_at_log, lf.created_at,
-		       (SELECT sr.odometer_km FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer_km IS NOT NULL
+		SELECT k.id, k.vehicle_id, v.name, v.color, v.odometer, k.name, k.interval_distance, k.interval_months,
+		       k.inter_interval_distance, k.inter_interval_months, k.notes, k.archived_at, k.version,
+		       ls.id, ls.performed_on, ls.odometer, ls.odometer_at_log, ls.created_at, ls.kit_intermediate,
+		       (SELECT sr.odometer FROM service_records sr
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
+		        ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       lf.id, lf.performed_on, lf.odometer, lf.odometer_at_log, lf.created_at,
+		       (SELECT sr.odometer FROM service_records sr
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
 		          AND (sr.performed_on < lf.performed_on OR (sr.performed_on = lf.performed_on AND sr.id <= lf.id))
-		        ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1),
-		       v.purchased_on, v.purchased_km
+		        ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       v.purchased_on, v.odometer_at_purchase
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at, sr.kit_intermediate
+			SELECT sr.id, sr.performed_on, sr.odometer, sr.odometer_at_log, sr.created_at, sr.kit_intermediate
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
-			ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1
+			ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1
 		) ls ON true
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer_km, sr.odometer_at_log, sr.created_at
+			SELECT sr.id, sr.performed_on, sr.odometer, sr.odometer_at_log, sr.created_at
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND NOT sr.kit_intermediate
-			ORDER BY sr.performed_on DESC, sr.odometer_km DESC NULLS LAST, sr.id DESC LIMIT 1
+			ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1
 		) lf ON true
 		WHERE true`
 	if len(f.IDs) > 0 {
@@ -80,11 +80,11 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsDate, lsLogged, lfDate, lfLogged *time.Time
 		var lsInter *bool
 		var ls, lf stock.ServiceRef
-		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometerKm, &k.Name, &k.IntervalKm, &k.IntervalMonths,
-			&k.InterIntervalKm, &k.InterIntervalMonths, &k.Notes, &k.ArchivedAt, &k.Version,
-			&lsID, &lsDate, &ls.OdometerKm, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometerKm,
-			&lfID, &lfDate, &lf.OdometerKm, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometerKm,
-			&k.VehiclePurchasedOn, &k.VehiclePurchasedKm)
+		err := r.Scan(&k.ID, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer, &k.Name, &k.IntervalDistance, &k.IntervalMonths,
+			&k.InterIntervalDistance, &k.InterIntervalMonths, &k.Notes, &k.ArchivedAt, &k.Version,
+			&lsID, &lsDate, &ls.Odometer, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometer,
+			&lfID, &lfDate, &lf.Odometer, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometer,
+			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			if lsInter != nil {
@@ -166,9 +166,9 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO service_kits (vehicle_id, name, interval_km, interval_months, inter_interval_km, inter_interval_months, notes)
+			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months, notes)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.InterIntervalKm, in.InterIntervalMonths, in.Notes).Scan(&id)
+			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InterIntervalDistance, in.InterIntervalMonths, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -240,10 +240,10 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// A new version (its lines count as part of the kit): a form opened
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
-			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_km = $4, interval_months = $5,
-			       inter_interval_km = $6, inter_interval_months = $7, notes = $8,
+			UPDATE service_kits SET vehicle_id = $2, name = $3, interval_distance = $4, interval_months = $5,
+			       inter_interval_distance = $6, inter_interval_months = $7, notes = $8,
 			       updated_at = now(), version = version + 1
-			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalKm, in.IntervalMonths, in.InterIntervalKm, in.InterIntervalMonths, in.Notes)
+			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InterIntervalDistance, in.InterIntervalMonths, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}

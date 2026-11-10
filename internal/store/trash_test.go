@@ -325,8 +325,8 @@ func mustRestore(t *testing.T, s *store.Store, trashID int64) store.Restored {
 
 func TestTrashRestoresAService(t *testing.T) {
 	s, ctx := newStore(t)
-	km := 10000
-	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	odo := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
 	v, _ := s.CreateVehicle(ctx, vin)
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
@@ -334,7 +334,7 @@ func TestTrashRestoresAService(t *testing.T) {
 	kit.Normalize()
 	kitID, _ := s.CreateKit(ctx, kit)
 	reading := 12000
-	in := stock.ServiceInput{VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &reading,
+	in := stock.ServiceInput{VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(), Odometer: &reading,
 		LaborCost: ptr(80.0), Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
 	in.Normalize()
 	svc, err := s.CreateService(ctx, in)
@@ -364,8 +364,8 @@ func TestTrashRestoresAService(t *testing.T) {
 	if got := mustGet(t, s, oil).Quantity; got != 300 {
 		t.Errorf("oil after restore = %v, want 300", got)
 	}
-	if veh, _ := s.GetVehicle(ctx, v); *veh.OdometerKm != 12000 {
-		t.Errorf("odometer = %d, want 12000", *veh.OdometerKm)
+	if veh, _ := s.GetVehicle(ctx, v); *veh.Odometer != 12000 {
+		t.Errorf("odometer = %d, want 12000", *veh.Odometer)
 	}
 	if n, _ := s.CountTrash(ctx); n != 0 {
 		t.Errorf("trash still has %d", n)
@@ -713,9 +713,9 @@ func TestRestoredServiceKeepsTheOdometerInOrder(t *testing.T) {
 	s, ctx := newStore(t)
 	v := mustVehicle(t, s, "KTM 390")
 	day := func(n int) time.Time { return time.Date(2026, 10, n, 0, 0, 0, 0, time.UTC) }
-	logAt := func(on time.Time, km int) int64 {
+	logAt := func(on time.Time, odo int) int64 {
 		t.Helper()
-		in := stock.ServiceInput{VehicleID: v, Title: "Check", PerformedOn: on, OdometerKm: &km}
+		in := stock.ServiceInput{VehicleID: v, Title: "Check", PerformedOn: on, Odometer: &odo}
 		in.Normalize()
 		id, err := s.CreateService(ctx, in)
 		if err != nil {

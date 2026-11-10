@@ -22,7 +22,7 @@ func inZone(t *testing.T, loc *time.Location) {
 // Just after midnight in the app's zone (UTC+3) it is already the next day
 // everywhere in the app, though UTC, and the database's session, is still
 // on the last one: the dates forms suggest, the day a service counts as
-// logged on for its km reminder, what is expiring, and when something was
+// logged on for its distance reminder, what is expiring, and when something was
 // deleted.
 func TestTheAppsDayIsItsZones(t *testing.T) {
 	inZone(t, time.FixedZone("UTC+3", 3*60*60))
@@ -48,7 +48,7 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 	})
 
 	t.Run("a service logged now is logged on the local day", func(t *testing.T) {
-		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_km": {"5000"}})
+		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"}})
 		expect(t, rec, http.StatusSeeOther)
 		kit := rec.Header().Get("Location")
 		// Done a week ago, by the local day: the reading when it was logged

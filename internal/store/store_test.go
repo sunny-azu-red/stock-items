@@ -257,7 +257,7 @@ func TestVersions(t *testing.T) {
 	if err := s.SetOdometer(ctx, v, 12000); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Chain", PerformedOn: time.Now(), OdometerKm: ptr(12500)})
+	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Chain", PerformedOn: time.Now(), Odometer: ptr(12500)})
 	if err != nil {
 		t.Fatal(err)
 	}

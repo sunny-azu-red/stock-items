@@ -34,10 +34,10 @@
   <div class="form-section">
     <h2>Repeat every</h2>
     <div class="form-grid">
-      <div class="field{{if index $e "interval_km"}} has-error{{end}}">
-        <label for="interval_km">Distance ({{distUnit}})</label>
-        <input class="input" id="interval_km" name="interval_km" value="{{$f.IntervalKm}}" inputmode="numeric" placeholder="e.g. 7500">
-        {{template "err" (index $e "interval_km")}}
+      <div class="field{{if index $e "interval_distance"}} has-error{{end}}">
+        <label for="interval_distance">Distance ({{distUnit}})</label>
+        <input class="input" id="interval_distance" name="interval_distance" value="{{$f.IntervalDistance}}" inputmode="numeric" placeholder="e.g. 7500">
+        {{template "err" (index $e "interval_distance")}}
       </div>
       <div class="field{{if index $e "interval_months"}} has-error{{end}}">
         <label for="interval_months">Months</label>
@@ -67,10 +67,10 @@
   <div class="form-section" id="inter-section"{{if not $f.ShowInter}} hidden{{end}}>
     <h2>Intermediate schedule</h2>
     <div class="form-grid">
-      <div class="field{{if index $e "inter_interval_km"}} has-error{{end}}">
-        <label for="inter_interval_km">Intermediate distance ({{distUnit}})</label>
-        <input class="input" id="inter_interval_km" name="inter_interval_km" value="{{$f.InterIntervalKm}}" inputmode="numeric" placeholder="e.g. 3500">
-        {{template "err" (index $e "inter_interval_km")}}
+      <div class="field{{if index $e "inter_interval_distance"}} has-error{{end}}">
+        <label for="inter_interval_distance">Intermediate distance ({{distUnit}})</label>
+        <input class="input" id="inter_interval_distance" name="inter_interval_distance" value="{{$f.InterIntervalDistance}}" inputmode="numeric" placeholder="e.g. 3500">
+        {{template "err" (index $e "inter_interval_distance")}}
       </div>
       <div class="field{{if index $e "inter_interval_months"}} has-error{{end}}">
         <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "ID" "inter-months-tip" "Text" "Leave empty under warranty so intermediate services never push back the full service's date. Set months (e.g. 12) when an intermediate service should also reset the time clock.")}}</div>

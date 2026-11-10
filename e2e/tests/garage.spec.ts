@@ -441,7 +441,7 @@ test("Log service offers the chosen vehicle's kits and keeps what was typed", as
   await odometer.fill("12345");
   await page.getByLabel(/^Labour cost/).fill("80");
   await kit.click();
-  await expect(page).toHaveURL(/\/services\/new\?kit=\d+&performed_on=2026-10-05&odometer_km=12345&labor_cost=80$/);
+  await expect(page).toHaveURL(/\/services\/new\?kit=\d+&performed_on=2026-10-05&odometer=12345&labor_cost=80$/);
   await expect(page.getByLabel("Work performed")).toHaveValue(/^Oil Service/);
   await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-10-05");
   await expect(odometer).toHaveValue("12345");

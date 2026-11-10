@@ -168,19 +168,19 @@ func itemsByID(items []stock.Item) map[int64]stock.Item {
 // ---- Kit form ----
 
 type kitForm struct {
-	ID                                   int64
-	VehicleID                            int64
-	Name, IntervalKm, IntervalMonths     string
-	InterIntervalKm, InterIntervalMonths string
-	Notes                                string
-	Lines                                []lineRow
-	InterLines                           []lineRow
-	ShowInter                            bool
-	Stored                               string // the saved name while editing, for the heading
-	Version                              int    // as the edit form was opened (see itemForm)
-	Stale                                *staleNote
-	FormKey                              string // see itemForm
-	Errors                               stock.Errors
+	ID                                         int64
+	VehicleID                                  int64
+	Name, IntervalDistance, IntervalMonths     string
+	InterIntervalDistance, InterIntervalMonths string
+	Notes                                      string
+	Lines                                      []lineRow
+	InterLines                                 []lineRow
+	ShowInter                                  bool
+	Stored                                     string // the saved name while editing, for the heading
+	Version                                    int    // as the edit form was opened (see itemForm)
+	Stale                                      *staleNote
+	FormKey                                    string // see itemForm
+	Errors                                     stock.Errors
 }
 
 type kitFormPage struct {
@@ -214,8 +214,8 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if err != nil {
 		return err
 	}
-	f.ShowInter = f.ShowInter || f.InterIntervalKm != "" || f.InterIntervalMonths != "" || hasRowInput(f.InterLines) ||
-		f.Errors["inter_interval_km"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
+	f.ShowInter = f.ShowInter || f.InterIntervalDistance != "" || f.InterIntervalMonths != "" || hasRowInput(f.InterLines) ||
+		f.Errors["inter_interval_distance"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
 	describeRows(f.Lines, items, false)
 	describeRows(f.InterLines, items, false)
 	var vehicle *stock.Vehicle
@@ -243,8 +243,8 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 		return kitForm{}, stock.KitInput{}, err
 	}
 	f := kitForm{
-		Name: formText(r, "name"), IntervalKm: formText(r, "interval_km"), IntervalMonths: formText(r, "interval_months"),
-		InterIntervalKm: formText(r, "inter_interval_km"), InterIntervalMonths: formText(r, "inter_interval_months"),
+		Name: formText(r, "name"), IntervalDistance: formText(r, "interval_distance"), IntervalMonths: formText(r, "interval_months"),
+		InterIntervalDistance: formText(r, "inter_interval_distance"), InterIntervalMonths: formText(r, "inter_interval_months"),
 		ShowInter: formText(r, "has_inter") == "1",
 		Notes:     formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
@@ -253,14 +253,14 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 		f.VehicleID = *id
 	}
 	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
-	if in.IntervalKm, err = parseOptInt(f.IntervalKm); err != nil {
-		f.Errors.Add("interval_km", err.Error())
+	if in.IntervalDistance, err = parseOptInt(f.IntervalDistance); err != nil {
+		f.Errors.Add("interval_distance", err.Error())
 	}
 	if in.IntervalMonths, err = parseOptInt(f.IntervalMonths); err != nil {
 		f.Errors.Add("interval_months", err.Error())
 	}
-	if in.InterIntervalKm, err = parseOptInt(f.InterIntervalKm); err != nil {
-		f.Errors.Add("inter_interval_km", err.Error())
+	if in.InterIntervalDistance, err = parseOptInt(f.InterIntervalDistance); err != nil {
+		f.Errors.Add("inter_interval_distance", err.Error())
 	}
 	if in.InterIntervalMonths, err = parseOptInt(f.InterIntervalMonths); err != nil {
 		f.Errors.Add("inter_interval_months", err.Error())
@@ -271,9 +271,9 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	if !f.ShowInter {
 		// The intermediate schedule was removed (or never added): its
 		// fields are dropped here, not only blanked by the page's script.
-		f.InterIntervalKm, f.InterIntervalMonths, f.InterLines = "", "", nil
-		in.InterIntervalKm, in.InterIntervalMonths, in.InterLines = nil, nil, nil
-		for _, k := range []string{"inter_interval_km", "inter_interval_months", "inter_lines"} {
+		f.InterIntervalDistance, f.InterIntervalMonths, f.InterLines = "", "", nil
+		in.InterIntervalDistance, in.InterIntervalMonths, in.InterLines = nil, nil, nil
+		for _, k := range []string{"inter_interval_distance", "inter_interval_months", "inter_lines"} {
 			delete(f.Errors, k)
 		}
 	}
@@ -288,8 +288,8 @@ func kitPath(id int64) string { return fmt.Sprintf("/kits/%d", id) }
 
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
-		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalKm: optIntString(k.IntervalKm),
-		IntervalMonths: optIntString(k.IntervalMonths), InterIntervalKm: optIntString(k.InterIntervalKm),
+		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalDistance: optIntString(k.IntervalDistance),
+		IntervalMonths: optIntString(k.IntervalMonths), InterIntervalDistance: optIntString(k.InterIntervalDistance),
 		InterIntervalMonths: optIntString(k.InterIntervalMonths), ShowInter: k.HasIntermediate(),
 		Notes: k.Notes, Version: k.Version,
 	}
@@ -567,14 +567,14 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	default:
-		if err := addShort(k.ActiveLines(k.VehicleOdometerKm, s.now())); err != nil {
+		if err := addShort(k.ActiveLines(k.VehicleOdometer, s.now())); err != nil {
 			return err
 		}
 		// Nothing missing for the schedule due next: offer the other one's.
 		// Parts that are missing but already listed don't count as nothing.
 		if missing == 0 && k.HasIntermediate() {
 			other := k.InterLines
-			if k.NextIsIntermediate(k.VehicleOdometerKm, s.now()) {
+			if k.NextIsIntermediate(k.VehicleOdometer, s.now()) {
 				other = k.Lines
 			}
 			if err := addShort(other); err != nil {

@@ -18,16 +18,16 @@ import (
 var palette = []string{"#f26b0f", "#2563eb", "#16a34a", "#84cc16", "#dc2626", "#0891b2", "#ca8a04", "#db2777"}
 
 type vehicleForm struct {
-	ID                                   int64
-	Name, Kind, Make, Model, Year        string
-	Plate, VIN, Color, OdometerKm, Notes string
-	PurchasedOn, PurchasedKm             string
-	OdometerWas                          string // as the edit form was opened
-	Stored                               string // the saved name while editing, for the heading
-	Version                              int    // as the edit form was opened (see itemForm)
-	Stale                                *staleNote
-	FormKey                              string // see itemForm
-	Errors                               stock.Errors
+	ID                                 int64
+	Name, Kind, Make, Model, Year      string
+	Plate, VIN, Color, Odometer, Notes string
+	PurchasedOn, OdometerAtPurchase    string
+	OdometerWas                        string // as the edit form was opened
+	Stored                             string // the saved name while editing, for the heading
+	Version                            int    // as the edit form was opened (see itemForm)
+	Stale                              *staleNote
+	FormKey                            string // see itemForm
+	Errors                             stock.Errors
 }
 
 type vehicleFormPage struct {
@@ -46,9 +46,9 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
-		Plate: v.Plate, VIN: v.VIN, Color: v.Color, OdometerKm: optIntString(v.OdometerKm),
-		PurchasedOn: pOn, PurchasedKm: optIntString(v.PurchasedKm), Notes: v.Notes,
-		OdometerWas: optIntString(v.OdometerKm), Stored: v.Name, Version: v.Version,
+		Plate: v.Plate, VIN: v.VIN, Color: v.Color, Odometer: optIntString(v.Odometer),
+		PurchasedOn: pOn, OdometerAtPurchase: optIntString(v.OdometerAtPurchase), Notes: v.Notes,
+		OdometerWas: optIntString(v.Odometer), Stored: v.Name, Version: v.Version,
 	}
 }
 
@@ -56,7 +56,7 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		OdometerKm: formText(r, "odometer_km"), PurchasedOn: formText(r, "purchased_on"), PurchasedKm: formText(r, "purchased_km"),
+		Odometer: formText(r, "odometer"), PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
 		Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
@@ -69,11 +69,11 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 	if in.Year, err = parseOptInt(f.Year); err != nil {
 		f.Errors.Add("year", err.Error())
 	}
-	if in.OdometerKm, err = parseOptInt(f.OdometerKm); err != nil {
-		f.Errors.Add("odometer_km", err.Error())
+	if in.Odometer, err = parseOptInt(f.Odometer); err != nil {
+		f.Errors.Add("odometer", err.Error())
 	}
-	if in.PurchasedKm, err = parseOptInt(f.PurchasedKm); err != nil {
-		f.Errors.Add("purchased_km", err.Error())
+	if in.OdometerAtPurchase, err = parseOptInt(f.OdometerAtPurchase); err != nil {
+		f.Errors.Add("odometer_at_purchase", err.Error())
 	}
 	// Not parseEventDate: a vehicle may have been bought before 1990 (its
 	// Validate allows 1900 on), but not in the future.
@@ -83,7 +83,7 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 		f.Errors.Add("purchased_on", "Date cannot be in the future")
 	}
 	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
-		in.KeepOdometer = optIntString(was) == optIntString(in.OdometerKm)
+		in.KeepOdometer = optIntString(was) == optIntString(in.Odometer)
 	}
 	in.Normalize()
 	for k, v := range in.Validate() {
@@ -341,23 +341,23 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	back := s.back(r, vehiclePath(id))
-	km, err := parseOptInt(formText(r, "odometer_km"))
-	if err != nil || km == nil || *km < 0 || *km > stock.MaxOdometerKm {
+	odo, err := parseOptInt(formText(r, "odometer"))
+	if err != nil || odo == nil || *odo < 0 || *odo > stock.MaxOdometer {
 		s.setFlash(w, "error", "Enter the odometer reading in "+stock.DistanceUnit)
 		s.redirect(w, r, back, "")
 		return nil
 	}
 	var conflict *store.ConflictError
-	if err := s.store.SetOdometer(r.Context(), id, *km); errors.As(err, &conflict) {
+	if err := s.store.SetOdometer(r.Context(), id, *odo); errors.As(err, &conflict) {
 		s.setFlash(w, "error", conflict.Message)
 		s.redirect(w, r, back, "")
 		return nil
 	} else if err != nil {
 		return err
 	}
-	msg := "Set the odometer to " + stock.FormatDistance(*km)
+	msg := "Set the odometer to " + stock.FormatDistance(*odo)
 	if v, err := s.store.GetVehicle(r.Context(), id); err == nil {
-		msg = "Set " + v.Name + "'s odometer to " + stock.FormatDistance(*km)
+		msg = "Set " + v.Name + "'s odometer to " + stock.FormatDistance(*odo)
 	}
 	s.redirect(w, r, back, msg)
 	return nil
@@ -464,28 +464,28 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 	today := s.now()
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
-		km := k.VehicleOdometerKm
+		odo := k.VehicleOdometer
 		v, ok := byVehicle[k.VehicleID]
 		if ok {
-			km = v.OdometerKm
+			odo = v.Odometer
 			if k.VehiclePurchasedOn == nil {
 				k.VehiclePurchasedOn = v.PurchasedOn
 			}
-			if k.VehiclePurchasedKm == nil {
-				k.VehiclePurchasedKm = v.PurchasedKm
+			if k.VehicleOdometerAtPurchase == nil {
+				k.VehicleOdometerAtPurchase = v.OdometerAtPurchase
 			}
 		}
 		out[i] = kitView{
 			Kit:             k,
-			Readiness:       k.ReadinessAt(km, today),
+			Readiness:       k.ReadinessAt(odo, today),
 			FullReadiness:   stock.ReadinessOf(k.Lines),
 			InterReadiness:  stock.ReadinessOf(k.InterLines),
-			Due:             k.Due(km, today),
-			FullDue:         k.FullDue(km, today),
-			InterDue:        k.InterDue(km, today),
-			NextInter:       k.NextIsIntermediate(km, today),
+			Due:             k.Due(odo, today),
+			FullDue:         k.FullDue(odo, today),
+			InterDue:        k.InterDue(odo, today),
+			NextInter:       k.NextIsIntermediate(odo, today),
 			VehicleArchived: v.Archived(),
-			MonthsUncounted: k.MonthsUncounted(km, today),
+			MonthsUncounted: k.MonthsUncounted(odo, today),
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })

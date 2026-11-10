@@ -62,7 +62,7 @@
         <li>
           <span class="grow">
             <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
-            <span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{distance .}}{{end}}</span>
+            <span class="meta">{{plural .ItemCount "item"}}{{with .Odometer}} · {{distance .}}{{end}}</span>
           </span>
           <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
         </li>

@@ -1144,3 +1144,151 @@ func TestLaborCostNoneNotZeroMigration(t *testing.T) {
 		t.Errorf("after second Up: labour = %s, want %s", got, want)
 	}
 }
+
+// 00021 renames the distance columns and their CHECKs, and the same keys in
+// the trash snapshots of deleted vehicles, services and kits, which restore
+// their keys as column names. Nothing else in a payload changes, nor the
+// order of its rows; Down puts the old names back.
+func TestDistanceNamesMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer_km, purchased_km) VALUES ('KTM 390', 12000, 0), ('Golf', NULL, NULL);
+		INSERT INTO service_kits (vehicle_id, name, interval_km, interval_months, inter_interval_km) VALUES
+			(1, 'Oil', 7500, 12, 3750), (1, 'Chain', NULL, 6, NULL);
+		INSERT INTO service_records (vehicle_id, performed_on, title, odometer_km) VALUES
+			(1, '2026-05-01', 'Oil', 11000), (1, '2026-05-02', 'Wash', NULL);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	// Old-name snapshots of each kind, and what must stay as it is: the same
+	// key in another table's rows, values that aren't rows, payloads
+	// without those tables.
+	old := map[string]string{
+		"Vehicle: Golf": `{"vehicles": [{"id": 60, "name": "Golf", "odometer_km": 5000, "purchased_km": null, "version": 3}],
+			"item_vehicles": [{"item_id": 1, "vehicle_id": 60}]}`,
+		"Service: Chain": `{"service_records": [{"id": 50, "vehicle_id": 1, "performed_on": "2026-04-01", "title": "Chain", "odometer_km": 10500, "odometer_at_log": null},
+				{"id": 51, "vehicle_id": 1, "performed_on": "2026-04-02", "title": "No reading"},
+				{"id": 52, "vehicle_id": 1, "performed_on": "2026-04-03", "title": "Null reading", "odometer_km": null}],
+			"stock_movements": [{"id": 5, "odometer_km": 1}]}`,
+		"Kit: Oil": `{"service_kits": [{"id": 9, "vehicle_id": 1, "name": "Oil", "interval_km": 7500, "inter_interval_km": null, "interval_months": 12}],
+			"service_kit_lines": []}`,
+		"Odd":    `{"vehicles": [1, {}, {"odometer_km": 7}], "service_kits": {"interval_km": 1}, "movement_id": 5}`,
+		"Bought": `{"stock_movements": [{"id": 7, "odometer_km": 2}], "movement_id": 7}`,
+	}
+	renamed := map[string]string{
+		"Vehicle: Golf": `{"vehicles": [{"id": 60, "name": "Golf", "odometer": 5000, "odometer_at_purchase": null, "version": 3}],
+			"item_vehicles": [{"item_id": 1, "vehicle_id": 60}]}`,
+		"Service: Chain": `{"service_records": [{"id": 50, "vehicle_id": 1, "performed_on": "2026-04-01", "title": "Chain", "odometer": 10500, "odometer_at_log": null},
+				{"id": 51, "vehicle_id": 1, "performed_on": "2026-04-02", "title": "No reading"},
+				{"id": 52, "vehicle_id": 1, "performed_on": "2026-04-03", "title": "Null reading", "odometer": null}],
+			"stock_movements": [{"id": 5, "odometer_km": 1}]}`,
+		"Kit: Oil": `{"service_kits": [{"id": 9, "vehicle_id": 1, "name": "Oil", "interval_distance": 7500, "inter_interval_distance": null, "interval_months": 12}],
+			"service_kit_lines": []}`,
+		"Odd":    `{"vehicles": [1, {}, {"odometer": 7}], "service_kits": {"interval_km": 1}, "movement_id": 5}`,
+		"Bought": old["Bought"],
+	}
+	for label, payload := range old {
+		if _, err := pool.Exec(ctx, `INSERT INTO trash (kind, label, payload) VALUES ('service', $1, $2::jsonb)`, label, payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payloads := func(when string, want map[string]string) {
+		t.Helper()
+		for label, payload := range want {
+			var same bool
+			var got string
+			if err := pool.QueryRow(ctx, `SELECT payload = $2::jsonb, payload::text FROM trash WHERE label = $1`, label, payload).Scan(&same, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !same {
+				t.Errorf("%s: %s payload = %s", when, label, got)
+			}
+		}
+	}
+	query := func(sql string) string {
+		t.Helper()
+		var got string
+		if err := pool.QueryRow(ctx, sql).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	const values = `SELECT concat_ws(' | ',
+		(SELECT string_agg(concat_ws(',', name, version, odometer, odometer_at_purchase), ';' ORDER BY id) FROM vehicles),
+		(SELECT string_agg(concat_ws(',', name, version, interval_distance, interval_months, inter_interval_distance), ';' ORDER BY id) FROM service_kits),
+		(SELECT string_agg(concat_ws(',', title, version, odometer), ';' ORDER BY id) FROM service_records))`
+	const columns = `SELECT string_agg(table_name || '.' || column_name, ',' ORDER BY table_name, column_name) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name IN ('vehicles', 'service_records', 'service_kits')
+		  AND (column_name LIKE '%odometer%' OR column_name LIKE '%interval%' OR column_name LIKE '%km%')`
+	const checks = `SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint
+		WHERE connamespace = current_schema()::regnamespace AND contype = 'c'
+		  AND conrelid IN ('vehicles'::regclass, 'service_records'::regclass, 'service_kits'::regclass)
+		  AND (conname LIKE '%odometer%' OR conname LIKE '%interval%' OR conname LIKE '%km%')`
+
+	if _, err := provider.UpTo(ctx, 21); err != nil {
+		t.Fatal(err)
+	}
+	// Same values under the new names, each row one version on.
+	if got, want := query(values), "KTM 390,2,12000,0;Golf,2 | Oil,2,7500,12,3750;Chain,2,6 | Oil,2,11000;Wash,2"; got != want {
+		t.Errorf("after Up: values = %s, want %s", got, want)
+	}
+	if got, want := query(columns), "service_kits.inter_interval_distance,service_kits.inter_interval_months,service_kits.interval_distance,service_kits.interval_months,"+
+		"service_records.odometer,service_records.odometer_at_log,service_records.odometer_before,service_records.odometer_moved,"+
+		"vehicles.odometer,vehicles.odometer_at_purchase"; got != want {
+		t.Errorf("after Up: columns = %s, want %s", got, want)
+	}
+	if got, want := query(checks), "service_kits_inter_interval_distance_check,service_kits_inter_interval_months_check,"+
+		"service_kits_interval_distance_check,service_kits_interval_months_check,"+
+		"service_records_odometer_at_log_check,service_records_odometer_before_check,service_records_odometer_check,"+
+		"vehicles_odometer_at_purchase_check,vehicles_odometer_check"; got != want {
+		t.Errorf("after Up: checks = %s, want %s", got, want)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE vehicles SET odometer = -1 WHERE id = 1`); err == nil {
+		t.Error("after Up: a negative odometer should have failed the CHECK")
+	}
+	payloads("after Up", renamed)
+	// The rewritten snapshot restores, as restoreRows inserts it.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO service_records (id, vehicle_id, title, performed_on, odometer) OVERRIDING SYSTEM VALUE
+		SELECT id, vehicle_id, title, performed_on, odometer
+		FROM jsonb_populate_recordset(NULL::service_records, (SELECT payload -> 'service_records' FROM trash WHERE label = 'Service: Chain'))`); err != nil {
+		t.Fatalf("after Up: restoring the snapshot: %v", err)
+	}
+	if got, want := query(`SELECT string_agg(title || '=' || COALESCE(odometer::text, 'none'), ',' ORDER BY id) FROM service_records WHERE id >= 50`),
+		"Chain=10500,No reading=none,Null reading=none"; got != want {
+		t.Errorf("after Up: restored = %s, want %s", got, want)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM service_records WHERE id >= 50`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := query(`SELECT concat_ws(' | ',
+		(SELECT string_agg(concat_ws(',', name, version, odometer_km, purchased_km), ';' ORDER BY id) FROM vehicles),
+		(SELECT string_agg(concat_ws(',', name, version, interval_km, interval_months, inter_interval_km), ';' ORDER BY id) FROM service_kits),
+		(SELECT string_agg(concat_ws(',', title, version, odometer_km), ';' ORDER BY id) FROM service_records))`),
+		"KTM 390,2,12000,0;Golf,2 | Oil,2,7500,12,3750;Chain,2,6 | Oil,2,11000;Wash,2"; got != want {
+		t.Errorf("after Down: values = %s, want %s", got, want)
+	}
+	if got, want := query(checks), "service_kits_inter_interval_km_check,service_kits_inter_interval_months_check,"+
+		"service_kits_interval_km_check,service_kits_interval_months_check,"+
+		"service_records_odometer_at_log_check,service_records_odometer_before_check,service_records_odometer_km_check,"+
+		"vehicles_odometer_km_check,vehicles_purchased_km_check"; got != want {
+		t.Errorf("after Down: checks = %s, want %s", got, want)
+	}
+	payloads("after Down", old)
+
+	if _, err := provider.UpTo(ctx, 21); err != nil {
+		t.Fatal(err)
+	}
+	payloads("after second Up", renamed)
+	if got, want := query(values), "KTM 390,3,12000,0;Golf,3 | Oil,3,7500,12,3750;Chain,3,6 | Oil,3,11000;Wash,3"; got != want {
+		t.Errorf("after second Up: values = %s, want %s", got, want)
+	}
+}

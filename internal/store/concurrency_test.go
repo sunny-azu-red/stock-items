@@ -95,14 +95,14 @@ func TestKitSavesAndServicesDoNotDeadlock(t *testing.T) {
 // deleting one does, so logging and deleting at once can't deadlock.
 func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
 	s, ctx := newStore(t)
-	km := 10000
-	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	odo := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
 	v, _ := s.CreateVehicle(ctx, vin)
 	a := mustItem(t, s, stock.ItemInput{Name: "A", Unit: stock.UnitPiece, Quantity: 1000})
 	b := mustItem(t, s, stock.ItemInput{Name: "B", Unit: stock.UnitPiece, Quantity: 1000})
 	var reading sync.Mutex
-	next := km
+	next := odo
 	var wg sync.WaitGroup
 	errs := make(chan error, 200)
 	for range 4 {
@@ -114,7 +114,7 @@ func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
 				next += 10
 				r := next
 				reading.Unlock()
-				in := stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(), OdometerKm: &r,
+				in := stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(), Odometer: &r,
 					Parts: []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}}
 				id, err := s.CreateService(ctx, in)
 				if err != nil {

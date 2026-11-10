@@ -54,6 +54,6 @@ func TestMessagesNameWhatTheyActedOn(t *testing.T) {
 	flash(a.post("/trash/"+itoa(flashOf(t, rec).Undo)+"/restore", nil), "Restored Chain lube to the shopping list")
 
 	// The odometer, and the trash.
-	flash(a.post("/vehicles/"+itoa(k390)+"/odometer", url.Values{"odometer_km": {"12500"}}), "Set KTM 390's odometer to 12 500 km")
+	flash(a.post("/vehicles/"+itoa(k390)+"/odometer", url.Values{"odometer": {"12500"}}), "Set KTM 390's odometer to 12 500 km")
 	flash(a.post("/trash/empty", nil), "Emptied the trash")
 }

@@ -185,8 +185,8 @@
       if (sec) sec.hidden = false;
       if (prompt) prompt.hidden = true;
       if (flag) flag.value = "1";
-      var km = document.getElementById("inter_interval_km");
-      if (km) km.focus();
+      var dist = document.getElementById("inter_interval_distance");
+      if (dist) dist.focus();
       return;
     }
     var hideInter = e.target.closest("[data-hide-inter]");
@@ -258,7 +258,7 @@
   // odometer and labour changed so far (only those: an untouched form
   // gives the kit's plain link).
   function showKitStarts(select) {
-    var odo = select.form && select.form.elements.odometer_km;
+    var odo = select.form && select.form.elements.odometer;
     if (odo) {
       var opt = select.options[select.selectedIndex];
       var last = opt && opt.getAttribute("data-odometer");
@@ -279,7 +279,7 @@
     if (!form) return;
     if (!start.hasAttribute("data-href")) start.setAttribute("data-href", start.getAttribute("href"));
     var url = new URL(start.getAttribute("data-href"), location.href);
-    ["performed_on", "odometer_km", "labor_cost"].forEach(function (name) {
+    ["performed_on", "odometer", "labor_cost"].forEach(function (name) {
       var input = form.elements[name];
       var v = input ? input.value.trim() : "";
       if (v && v !== input.defaultValue.trim()) url.searchParams.set(name, v);

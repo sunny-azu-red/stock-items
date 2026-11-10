@@ -507,7 +507,7 @@ func TestArchivedLeadsTheLine(t *testing.T) {
 	k390, _ := a.seed()
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
-	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalKm: ptr(5000),
+	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalDistance: ptr(5000),
 		Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 500, Unit: stock.UnitML}}}
 	in.Normalize()
 	kit, err := a.store.CreateKit(ctx, in)
@@ -595,16 +595,16 @@ func TestRefusedFormsKeepNewFields(t *testing.T) {
 
 	// A purchase odometer above the odometer: refused.
 	expect(t, a.post("/vehicles", url.Values{
-		"name": {"Duke"}, "kind": {"motorcycle"}, "odometer_km": {"100"}, "purchased_on": {"2026-06-01"}, "purchased_km": {"500"},
-	}), http.StatusUnprocessableEntity, `name="purchased_on" value="2026-06-01"`, `name="purchased_km" value="500"`)
+		"name": {"Duke"}, "kind": {"motorcycle"}, "odometer": {"100"}, "purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"500"},
+	}), http.StatusUnprocessableEntity, `name="purchased_on" value="2026-06-01"`, `name="odometer_at_purchase" value="500"`)
 
 	// No name: refused.
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "interval_km": {"4000"},
-		"has_inter": {"1"}, "inter_interval_km": {"2000"}, "inter_interval_months": {"6"},
+		"vehicle_id": {itoa(k390)}, "interval_distance": {"4000"},
+		"has_inter": {"1"}, "inter_interval_distance": {"2000"}, "inter_interval_months": {"6"},
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
-	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_km" value="2000"`, `name="inter_interval_months" value="6"`)
+	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_distance" value="2000"`, `name="inter_interval_months" value="6"`)
 	if !regexp.MustCompile(`(?s)id="inter-lines".*?value="` + itoa(oil) + `"[^>]* selected.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
 		t.Error("the kit form lost the intermediate part")
 	}

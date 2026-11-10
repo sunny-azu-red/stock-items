@@ -45,7 +45,7 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64, today
 		}
 	}
 	for _, k := range kits {
-		for _, l := range k.ActiveLines(k.VehicleOdometerKm, today) {
+		for _, l := range k.ActiveLines(k.VehicleOdometer, today) {
 			if l.Archived {
 				continue // no longer kept, so not bought again
 			}
@@ -102,7 +102,7 @@ func SuggestForItem(it Item, kits []Kit, today time.Time) (Suggestion, bool) {
 			continue
 		}
 		var short float64
-		for _, l := range k.ActiveLines(k.VehicleOdometerKm, today) {
+		for _, l := range k.ActiveLines(k.VehicleOdometer, today) {
 			if l.ItemID == it.ID && !l.Archived {
 				short = max(short, l.Short())
 			}

@@ -21,7 +21,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_km": {"7,500"}, "interval_months": {"12"},
+		"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"7,500"}, "interval_months": {"12"},
 		"line_item": {itoa(oil), itoa(pads), ""}, "line_qty": {"1.7 L", "1", ""},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -33,7 +33,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	// Logging the service fails while oil is short.
 	svc := url.Values{
 		"vehicle_id": {itoa(k390)}, "kit_id": {kitPath[len("/kits/"):]}, "title": {"Oil service"},
-		"performed_on": {"2026-10-20"}, "odometer_km": {"12000"},
+		"performed_on": {"2026-10-20"}, "odometer": {"12000"},
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"1.7 L", "1"},
 	}
 	expect(t, a.post("/services", svc), http.StatusUnprocessableEntity, shortBadge("525 ml", "1.7 L"))
@@ -57,8 +57,8 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	expect(t, a.get("/services"), http.StatusOK, "Oil service")
 
 	v, _ := a.store.GetVehicle(context.Background(), k390)
-	if *v.OdometerKm != 12000 {
-		t.Errorf("odometer = %d", *v.OdometerKm)
+	if *v.Odometer != 12000 {
+		t.Errorf("odometer = %d", *v.Odometer)
 	}
 	expect(t, a.postV(svcPath+"/delete", nil), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), oil); it.Quantity != 4525 {
@@ -86,11 +86,11 @@ func TestServiceDateIsChecked(t *testing.T) {
 func TestDeletingAServicePutsTheOdometerBack(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}, "odometer_km": {"120000"}})
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}, "odometer": {"120000"}})
 	expect(t, rec, http.StatusSeeOther)
-	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="120000"`)
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer" value="120000"`)
 	expect(t, a.postV(rec.Header().Get("Location")+"/delete", nil), http.StatusSeeOther)
-	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer_km" value="10000"`)
+	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, `name="odometer" value="10000"`)
 }
 
 func TestEditService(t *testing.T) {
@@ -99,7 +99,7 @@ func TestEditService(t *testing.T) {
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
-		"odometer_km": {"11000"}, "labor_cost": {"1000"}, "part_item": {itoa(oil)}, "part_qty": {"100"}})
+		"odometer": {"11000"}, "labor_cost": {"1000"}, "part_item": {itoa(oil)}, "part_qty": {"100"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
 
@@ -108,10 +108,10 @@ func TestEditService(t *testing.T) {
 		`action="`+svc+`"`, "Save service", haveBadge("525 ml")) // 425 ml left + the 100 ml this service returns
 
 	expect(t, a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
-		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),
+		"odometer": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"5 L"}}),
 		http.StatusUnprocessableEntity, shortBadge("525 ml", "5 L"))
 	rec = a.postV(svc, url.Values{"vehicle_id": {"999"}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
-		"odometer_km": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"200"}})
+		"odometer": {"11000"}, "labor_cost": {"100"}, "part_item": {itoa(oil)}, "part_qty": {"200"}})
 	expect(t, rec, http.StatusSeeOther)
 	if l := rec.Header().Get("Location"); l != svc {
 		t.Errorf("location = %q", l)
@@ -393,68 +393,68 @@ func TestVehiclePurchaseBaselineEnforcedAcrossServicesAndOdometer(t *testing.T) 
 
 	// Set purchase baseline: 2026-06-01 at 1000 km, current odometer 5000 km.
 	expect(t, a.postV(vPath, url.Values{
-		"name":         {"KTM 390"},
-		"kind":         {"motorcycle"},
-		"odometer_km":  {"5000"},
-		"purchased_on": {"2026-06-01"},
-		"purchased_km": {"1000"},
+		"name":                 {"KTM 390"},
+		"kind":                 {"motorcycle"},
+		"odometer":             {"5000"},
+		"purchased_on":         {"2026-06-01"},
+		"odometer_at_purchase": {"1000"},
 	}), http.StatusSeeOther)
 
-	// SetOdometer below purchased_km is refused.
-	rec := a.post(vPath+"/odometer", url.Values{"odometer_km": {"800"}})
+	// SetOdometer below odometer_at_purchase is refused.
+	rec := a.post(vPath+"/odometer", url.Values{"odometer": {"800"}})
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "purchase odometer") {
-		t.Fatalf("SetOdometer below purchased_km: flash = %+v", f)
+		t.Fatalf("SetOdometer below odometer_at_purchase: flash = %+v", f)
 	}
 
-	// Logging a service before purchased_on or below purchased_km is refused.
+	// Logging a service before purchased_on or below odometer_at_purchase is refused.
 	rec = a.post("/services", url.Values{
 		"vehicle_id":   {itoa(k390)},
 		"title":        {"Early service"},
 		"performed_on": {"2026-05-01"},
-		"odometer_km":  {"1500"},
+		"odometer":     {"1500"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity, "Earlier than 1 Jun 2026, when the vehicle was purchased")
 
 	rec = a.post("/services", url.Values{
 		"vehicle_id":   {itoa(k390)},
-		"title":        {"Low km service"},
+		"title":        {"Low odometer service"},
 		"performed_on": {"2026-07-01"},
-		"odometer_km":  {"900"},
+		"odometer":     {"900"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity, "Lower than 1\u202f000 km, the vehicle&#39;s purchase odometer")
 
-	// Raising purchased_km above the current odometer while KeepOdometer is true
+	// Raising odometer_at_purchase above the current odometer while KeepOdometer is true
 	// is refused cleanly instead of failing the DB CHECK.
 	expect(t, a.postV(vPath, url.Values{
-		"name":         {"KTM 390"},
-		"kind":         {"motorcycle"},
-		"odometer_km":  {"5000"},
-		"odometer_was": {"5000"},
-		"purchased_on": {"2026-06-01"},
-		"purchased_km": {"6000"},
+		"name":                 {"KTM 390"},
+		"kind":                 {"motorcycle"},
+		"odometer":             {"5000"},
+		"odometer_was":         {"5000"},
+		"purchased_on":         {"2026-06-01"},
+		"odometer_at_purchase": {"6000"},
 	}), http.StatusUnprocessableEntity, "Purchase odometer cannot be higher than the current odometer")
 
 	// Deleting a service that moved the odometer from 5000 -> 12000 after
-	// purchased_km was raised to 8000 clamps odometer_km to 8000 (not 5000).
+	// odometer_at_purchase was raised to 8000 clamps odometer to 8000 (not 5000).
 	rec = a.post("/services", url.Values{
 		"vehicle_id":   {itoa(k390)},
 		"title":        {"Big trip service"},
 		"performed_on": {"2026-08-01"},
-		"odometer_km":  {"12000"},
+		"odometer":     {"12000"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	svcPath := rec.Header().Get("Location")
 	expect(t, a.postV(vPath, url.Values{
-		"name":         {"KTM 390"},
-		"kind":         {"motorcycle"},
-		"odometer_km":  {"12000"},
-		"odometer_was": {"12000"},
-		"purchased_on": {"2026-06-01"},
-		"purchased_km": {"8000"},
+		"name":                 {"KTM 390"},
+		"kind":                 {"motorcycle"},
+		"odometer":             {"12000"},
+		"odometer_was":         {"12000"},
+		"purchased_on":         {"2026-06-01"},
+		"odometer_at_purchase": {"8000"},
 	}), http.StatusSeeOther)
 	expect(t, a.postV(svcPath+"/delete", nil), http.StatusSeeOther)
-	expect(t, a.get(vPath), http.StatusOK, `name="odometer_km" value="8000"`)
+	expect(t, a.get(vPath), http.StatusOK, `name="odometer" value="8000"`)
 }
 
 func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
@@ -475,16 +475,16 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 	// Intermediate tier is short (needs 2 washers), while Full is currently active
 	// (no past full service, so NextIsIntermediate is false in warranty mode).
 	rec = a.post("/kits", url.Values{
-		"vehicle_id":        {itoa(k390)},
-		"name":              {"Warranty service"},
-		"interval_km":       {"15000"},
-		"interval_months":   {"12"},
-		"has_inter":         {"1"},
-		"inter_interval_km": {"5000"},
-		"line_item":         {itoa(oil)},
-		"line_qty":          {"500 ml"},
-		"inter_line_item":   {itoa(washerID)},
-		"inter_line_qty":    {"2"},
+		"vehicle_id":              {itoa(k390)},
+		"name":                    {"Warranty service"},
+		"interval_distance":       {"15000"},
+		"interval_months":         {"12"},
+		"has_inter":               {"1"},
+		"inter_interval_distance": {"5000"},
+		"line_item":               {itoa(oil)},
+		"line_qty":                {"500 ml"},
+		"inter_line_item":         {itoa(washerID)},
+		"inter_line_qty":          {"2"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
@@ -507,7 +507,7 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 		"vehicle_id":   {itoa(k390)},
 		"title":        {"Oil service"},
 		"performed_on": {"2026-10-20"},
-		"odometer_km":  {"12000"},
+		"odometer":     {"12000"},
 		"part_item":    {itoa(oil)},
 		"part_qty":     {"1.7 L"},
 	}
@@ -562,8 +562,8 @@ func TestServiceFormShowsKitError(t *testing.T) {
 	k390 := a.vehicle(t, "KTM 390")
 	oil := itemID(t, a.store, "Silkolene")
 	kit := url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_km": {"4000"},
-		"has_inter": {"1"}, "inter_interval_km": {"2000"},
+		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_distance": {"4000"},
+		"has_inter": {"1"}, "inter_interval_distance": {"2000"},
 		"line_item": {itoa(oil)}, "line_qty": {"100 ml"},
 	}
 	rec := a.post("/kits", kit)
@@ -573,7 +573,7 @@ func TestServiceFormShowsKitError(t *testing.T) {
 
 	// Another tab removes the intermediate schedule.
 	kit.Del("has_inter")
-	kit.Del("inter_interval_km")
+	kit.Del("inter_interval_distance")
 	expect(t, a.postV(kitURL, kit), http.StatusSeeOther)
 
 	rec = a.post("/services", url.Values{
@@ -600,16 +600,16 @@ func TestKitPerTierShortfall(t *testing.T) {
 	// Kit has Full tier needing 1.7 L oil (1175 ml short)
 	// and Intermediate tier needing 2 spark plugs (2 pcs short)
 	rec = a.post("/kits", url.Values{
-		"vehicle_id":        {itoa(k390)},
-		"name":              {"Major & Minor"},
-		"interval_km":       {"15000"},
-		"interval_months":   {"12"},
-		"has_inter":         {"1"},
-		"inter_interval_km": {"5000"},
-		"line_item":         {itoa(oil)},
-		"line_qty":          {"1.7 L"},
-		"inter_line_item":   {itoa(plugID)},
-		"inter_line_qty":    {"2"},
+		"vehicle_id":              {itoa(k390)},
+		"name":                    {"Major & Minor"},
+		"interval_distance":       {"15000"},
+		"interval_months":         {"12"},
+		"has_inter":               {"1"},
+		"inter_interval_distance": {"5000"},
+		"line_item":               {itoa(oil)},
+		"line_qty":                {"1.7 L"},
+		"inter_line_item":         {itoa(plugID)},
+		"inter_line_qty":          {"2"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
@@ -647,8 +647,8 @@ func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	plugID := mustID(t, rec.Header().Get("Location"))
 	rec = a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_km": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_km": {"5000"},
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
 		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"},
 		"inter_line_item": {itoa(plugID)}, "inter_line_qty": {"2"},
 	})
@@ -679,7 +679,7 @@ func TestServiceFormHeader(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	oil := itemID(t, a.store, "Silkolene")
-	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalKm: ptr(5000),
+	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalDistance: ptr(5000),
 		Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 500, Unit: stock.UnitML}}}
 	in.Normalize()
 	kit, err := a.store.CreateKit(context.Background(), in)
@@ -712,8 +712,8 @@ func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 	ring := itemID(t, a.store, "O-Ring")
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_km": {"4000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_km": {"2000"}, "inter_interval_months": {"6"},
+		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_distance": {"4000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_distance": {"2000"}, "inter_interval_months": {"6"},
 		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"},
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
@@ -727,8 +727,8 @@ func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
 			t.Fatalf("%s: %v", when, err)
 		}
 		if len(k.Lines) != 2 || len(k.InterLines) != 1 || k.InterLines[0].ItemID != oil || k.InterLines[0].Need != 1000 ||
-			k.InterIntervalKm == nil || *k.InterIntervalKm != 2000 || k.InterIntervalMonths == nil || *k.InterIntervalMonths != 6 {
-			t.Errorf("%s: kit = lines %+v, intermediate %+v, every %v km / %v months", when, k.Lines, k.InterLines, k.InterIntervalKm, k.InterIntervalMonths)
+			k.InterIntervalDistance == nil || *k.InterIntervalDistance != 2000 || k.InterIntervalMonths == nil || *k.InterIntervalMonths != 6 {
+			t.Errorf("%s: kit = lines %+v, intermediate %+v, every %v / %v months", when, k.Lines, k.InterLines, k.InterIntervalDistance, k.InterIntervalMonths)
 		}
 	}
 	check("made")
@@ -782,8 +782,8 @@ func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
 	k1290 := a.vehicle(t, "KTM 1290")
 	vPath := vehiclePath(k1290)
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k1290)}, "name": {"Major Service"}, "interval_km": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_km": {"7500"},
+		"vehicle_id": {itoa(k1290)}, "name": {"Major Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_distance": {"7500"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
@@ -791,7 +791,7 @@ func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
 	today := "2026-10-29" // newApp's day
 	expect(t, a.post("/services", url.Values{
 		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_intermediate": {"1"},
-		"title": {"Major Service"}, "performed_on": {today}, "odometer_km": {"7500"},
+		"title": {"Major Service"}, "performed_on": {today}, "odometer": {"7500"},
 	}), http.StatusSeeOther)
 
 	hint := "so a warranty's yearly service isn't missed"
@@ -800,7 +800,7 @@ func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
 	expectNot(t, page, "On track")
 	expect(t, a.get(vPath), http.StatusOK, "Major Service repeats by months", hint)
 
-	expect(t, a.postV(vPath, url.Values{"name": {"KTM 1290"}, "kind": {"motorcycle"}, "odometer_km": {"7500"}, "odometer_was": {"7500"},
+	expect(t, a.postV(vPath, url.Values{"name": {"KTM 1290"}, "kind": {"motorcycle"}, "odometer": {"7500"}, "odometer_was": {"7500"},
 		"purchased_on": {today}}), http.StatusSeeOther)
 	page = a.get(kitURL)
 	expect(t, page, http.StatusOK, "On track")
@@ -821,8 +821,8 @@ func TestServiceFormFromAKit(t *testing.T) {
 	oil := itemID(t, a.store, "10W50")
 	filter := itemID(t, a.store, "Hiflofiltro")
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_km": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_km": {"7500"},
+		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_distance": {"7500"},
 		"line_item": {itoa(oil)}, "line_qty": {"1 L"},
 		"inter_line_item": {itoa(filter)}, "inter_line_qty": {"1"},
 	})
@@ -850,7 +850,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	// Refused: no title. The kit name posted is stale.
 	rec = a.post("/services", url.Values{
 		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Old Name"}, "kit_intermediate": {"1"},
-		"title": {""}, "performed_on": {"2026-10-20"}, "odometer_km": {"7600"},
+		"title": {""}, "performed_on": {"2026-10-20"}, "odometer": {"7600"},
 		"part_item": {itoa(filter), itoa(oil)}, "part_qty": {"1", "750 ml"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity,
@@ -869,7 +869,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	// Saved as Intermediate; the edit shows the same header and the tier.
 	rec = a.post("/services", url.Values{
 		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
-		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer_km": {"7600"},
+		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer": {"7600"},
 		"part_item": {itoa(filter)}, "part_qty": {"1"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -918,8 +918,8 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 	k1290 := a.vehicle(t, "KTM 1290")
 	oil := itemID(t, a.store, "10W50")
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_km": {"15000"},
-		"has_inter": {"0"}, "inter_interval_km": {"7500"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
+		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_distance": {"15000"},
+		"has_inter": {"0"}, "inter_interval_distance": {"7500"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 		"line_item": {itoa(oil)}, "line_qty": {"4 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -929,7 +929,7 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if k.HasIntermediate() || len(k.InterLines) != 0 {
-		t.Errorf("has_inter=0 saved an intermediate schedule: every %v km, lines %+v", k.InterIntervalKm, k.InterLines)
+		t.Errorf("has_inter=0 saved an intermediate schedule: every %v, lines %+v", k.InterIntervalDistance, k.InterLines)
 	}
 
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(k.ID)}, "title": {"Oil Service"},

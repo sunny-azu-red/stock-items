@@ -166,10 +166,10 @@ func TestVehicleInputValidate(t *testing.T) {
 	}
 	year := 1800
 	badDate := time.Date(1850, 1, 1, 0, 0, 0, 0, time.UTC)
-	negKm := -10
-	bad := VehicleInput{Kind: "boat", Color: "red", Year: &year, PurchasedOn: &badDate, PurchasedKm: &negKm}
+	negOdo := -10
+	bad := VehicleInput{Kind: "boat", Color: "red", Year: &year, PurchasedOn: &badDate, OdometerAtPurchase: &negOdo}
 	errs := bad.Validate()
-	for _, f := range []string{"name", "kind", "color", "year", "purchased_on", "purchased_km"} {
+	for _, f := range []string{"name", "kind", "color", "year", "purchased_on", "odometer_at_purchase"} {
 		if _, ok := errs[f]; !ok {
 			t.Errorf("expected error for %s, got %v", f, errs)
 		}
@@ -177,15 +177,15 @@ func TestVehicleInputValidate(t *testing.T) {
 
 	highPurchased := 20000
 	lowCurrent := 15000
-	inverted := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff", PurchasedKm: &highPurchased, OdometerKm: &lowCurrent}
-	if errs := inverted.Validate(); errs["odometer_km"] == "" {
-		t.Errorf("expected error when current odometer is lower than purchased km, got %v", errs)
+	inverted := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff", OdometerAtPurchase: &highPurchased, Odometer: &lowCurrent}
+	if errs := inverted.Validate(); errs["odometer"] == "" {
+		t.Errorf("expected error when current odometer is lower than the purchase odometer, got %v", errs)
 	}
 
 	validDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	zeroKm := 0
-	currKm := 1000
-	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", PurchasedOn: &validDate, PurchasedKm: &zeroKm, OdometerKm: &currKm}
+	zeroOdo := 0
+	currOdo := 1000
+	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
 	if errs := good.Validate(); errs.Any() {
 		t.Errorf("unexpected error on valid input: %v", errs)
 	}
@@ -353,25 +353,25 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"item notes", ItemInput{Name: "A", Unit: UnitPiece, Notes: longer}.Validate(), "form"},
 		{"item bought note", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: long}.Validate(), "form"},
 		{"sku code", ItemInput{Name: "A", Unit: UnitPiece, SKUs: []SKU{{Code: long, Kind: SKUOther}}}.Validate(), "sku_0"},
-		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(MaxOdometerKm + 1)}.Validate(), "odometer_km"},
+		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(MaxOdometer + 1)}.Validate(), "odometer"},
 		{"vehicle plate", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Plate: long}.Validate(), "form"},
 		{"shop on a purchase", MovementInput{Kind: MoveBought, Delta: 1, Supplier: long}.Validate(), "form"},
 		{"kit months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(241)}.Validate(), "interval_months"},
-		{"kit km", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(1_000_001)}.Validate(), "interval_km"},
+		{"kit distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(1_000_001)}.Validate(), "interval_distance"},
 		{"kit line over the maximum", func() Errors {
 			in := KitInput{VehicleID: 1, Name: "A", Lines: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
 			in.Normalize()
 			return in.Validate()
 		}(), "lines"},
-		{"kit intermediate km without full km", KitInput{VehicleID: 1, Name: "A", InterIntervalKm: ptr(2000)}.Validate(), "inter_interval_km"},
-		{"kit intermediate months without full months", KitInput{VehicleID: 1, Name: "A", IntervalKm: ptr(4000), InterIntervalMonths: ptr(6)}.Validate(), "inter_interval_months"},
+		{"kit intermediate distance without full distance", KitInput{VehicleID: 1, Name: "A", InterIntervalDistance: ptr(2000)}.Validate(), "inter_interval_distance"},
+		{"kit intermediate months without full months", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(4000), InterIntervalMonths: ptr(6)}.Validate(), "inter_interval_months"},
 		{"service part over the maximum", func() Errors {
 			in := ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), Parts: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
 			in.Normalize()
 			return in.Validate()
 		}(), "parts"},
 		{"item note with zero starting stock", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: "spare"}.Validate(), "quantity"},
-		{"vehicle purchase km above kept odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", OdometerKm: ptr(5000), PurchasedKm: ptr(6000), KeepOdometer: true}.Validate(), "purchased_km"},
+		{"vehicle purchase odometer above kept odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(5000), OdometerAtPurchase: ptr(6000), KeepOdometer: true}.Validate(), "odometer_at_purchase"},
 		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
 		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "free_text"},
 	}

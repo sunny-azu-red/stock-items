@@ -108,7 +108,7 @@ func (a *testApp) seed() (k390, k1290 int64) {
 	a.t.Helper()
 	ctx := context.Background()
 	mk := func(name string) int64 {
-		in := stock.VehicleInput{Name: name, OdometerKm: ptr(10000)}
+		in := stock.VehicleInput{Name: name, Odometer: ptr(10000)}
 		in.Normalize()
 		id, err := a.store.CreateVehicle(ctx, in)
 		if err != nil {
@@ -264,7 +264,7 @@ func TestPagesRenderWithData(t *testing.T) {
 	expect(t, a.get("/items/"+itoa(oil)), http.StatusOK, "525 ml", "Starting stock")
 	expect(t, a.get("/items/"+itoa(oil)+"/edit"), http.StatusOK, `value="525"`)
 	expect(t, a.get("/kits/new?vehicle="+itoa(k390)), http.StatusOK, "For KTM 390")
-	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `name="odometer_km" value=""`, "Last reading 10\u202f000 km")
+	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `name="odometer" value=""`, "Last reading 10\u202f000 km")
 }
 
 func TestErrorsAndInfrastructure(t *testing.T) {
@@ -352,9 +352,9 @@ func TestHostileInput(t *testing.T) {
 		{"huge amount", item + "/movements", url.Values{"kind": {"bought"}, "amount": {"99999999999"}}, 422},
 		{"forged kind", item + "/movements", url.Values{"kind": {"starting"}, "amount": {"1"}}, 422},
 		{"huge item quantity", "/items", url.Values{"name": {"X"}, "unit": {"piece"}, "quantity": {"1"}, "min_quantity": {"9999999999"}}, 422},
-		{"huge odometer", "/vehicles", url.Values{"name": {"Big"}, "odometer_km": {"9999999999"}}, 422},
-		{"huge odometer update", "/vehicles/" + itoa(k390) + "/odometer", url.Values{"odometer_km": {"9999999999"}}, 303},
-		{"huge interval", "/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"K"}, "interval_km": {"99999999999"}}, 422},
+		{"huge odometer", "/vehicles", url.Values{"name": {"Big"}, "odometer": {"9999999999"}}, 422},
+		{"huge odometer update", "/vehicles/" + itoa(k390) + "/odometer", url.Values{"odometer": {"9999999999"}}, 303},
+		{"huge interval", "/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"K"}, "interval_distance": {"99999999999"}}, 422},
 		{"huge labour", "/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"S"}, "performed_on": {"2026-10-01"}, "labor_cost": {"1e15"}}, 422},
 		{"NaN suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"NaN"}}, 303},
 		{"huge suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"1e20"}}, 303},
@@ -669,17 +669,17 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km / empty months for warranty).
 	rec := a.post("/kits", url.Values{
-		"vehicle_id":            {itoa(k1290)},
-		"name":                  {"Oil service"},
-		"interval_km":           {"4000"},
-		"interval_months":       {"12"},
-		"line_item":             {itoa(oil)},
-		"line_qty":              {"3.6 L"},
-		"has_inter":             {"1"},
-		"inter_interval_km":     {"2000"},
-		"inter_interval_months": {""},
-		"inter_line_item":       {itoa(hiflo), itoa(oring), itoa(oil)},
-		"inter_line_qty":        {"1", "2", "3.6 L"},
+		"vehicle_id":              {itoa(k1290)},
+		"name":                    {"Oil service"},
+		"interval_distance":       {"4000"},
+		"interval_months":         {"12"},
+		"line_item":               {itoa(oil)},
+		"line_qty":                {"3.6 L"},
+		"has_inter":               {"1"},
+		"inter_interval_distance": {"2000"},
+		"inter_interval_months":   {""},
+		"inter_line_item":         {itoa(hiflo), itoa(oring), itoa(oil)},
+		"inter_line_qty":          {"1", "2", "3.6 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
@@ -712,7 +712,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		"kit_intermediate": {"0"},
 		"title":            {"Oil service"},
 		"performed_on":     {"2026-01-10"},
-		"odometer_km":      {"10000"},
+		"odometer":         {"10000"},
 		"part_item":        {itoa(oil)},
 		"part_qty":         {"3.6 L"},
 	})
@@ -734,7 +734,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		"kit_intermediate": {"1"},
 		"title":            {"Oil service (Intermediate)"},
 		"performed_on":     {"2026-06-10"},
-		"odometer_km":      {"12000"},
+		"odometer":         {"12000"},
 		"part_item":        {itoa(hiflo), itoa(oring), itoa(oil)},
 		"part_qty":         {"1", "2", "3.6 L"},
 	})

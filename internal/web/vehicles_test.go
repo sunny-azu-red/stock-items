@@ -13,12 +13,12 @@ import (
 func TestVehicleFlow(t *testing.T) {
 	a := newApp(t)
 	expect(t, a.post("/vehicles", url.Values{"name": {""}, "color": {"nope"}}), http.StatusUnprocessableEntity, "Name is required")
-	rec := a.post("/vehicles", url.Values{"name": {"Golf"}, "kind": {"car"}, "color": {"#2563eb"}, "year": {"2015"}, "odometer_km": {"150 000"}})
+	rec := a.post("/vehicles", url.Values{"name": {"Golf"}, "kind": {"car"}, "color": {"#2563eb"}, "year": {"2015"}, "odometer": {"150 000"}})
 	expect(t, rec, http.StatusSeeOther)
 	path := rec.Header().Get("Location")
 	expect(t, a.get(path), http.StatusOK, "Golf", "2015", `value="150000"`)
 	expect(t, a.post("/vehicles", url.Values{"name": {"golf"}}), http.StatusUnprocessableEntity, "already exists")
-	expect(t, a.post(path+"/odometer", url.Values{"odometer_km": {"151000"}}), http.StatusSeeOther)
+	expect(t, a.post(path+"/odometer", url.Values{"odometer": {"151000"}}), http.StatusSeeOther)
 	expect(t, a.postV(path, url.Values{"name": {"VW Golf"}, "kind": {"car"}, "color": {"#2563eb"}}), http.StatusSeeOther)
 	expect(t, a.get("/vehicles"), http.StatusOK, "VW Golf")
 	expect(t, a.postV(path+"/delete", nil), http.StatusSeeOther)
@@ -31,7 +31,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	path := "/vehicles/" + itoa(k390)
 	expect(t, a.get(path), http.StatusOK, `action="`+path+`/delete"`)
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"},
-		"odometer_km": {"12000"}}), http.StatusSeeOther)
+		"odometer": {"12000"}}), http.StatusSeeOther)
 	page := a.get(path)
 	expect(t, page, http.StatusOK, `action="`+path+`/archive"`)
 	expectNot(t, page, `action="`+path+`/delete"`)
@@ -52,7 +52,7 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expect(t, a.get("/items/"+itoa(pads)+"/edit"), http.StatusOK, `name="vehicle" value="`+itoa(k390)+`" checked`)
 
 	// The odometer can't go below the service's reading.
-	rec := a.post(path+"/odometer", url.Values{"odometer_km": {"11000"}})
+	rec := a.post(path+"/odometer", url.Values{"odometer": {"11000"}})
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "12\u202f000 km") {
 		t.Errorf("flash = %+v", f)
@@ -70,12 +70,12 @@ func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
 	version := formVersion(t, edit.Body.String(), path)
 	// A new reading, and a service that moves it on, while the form is
 	// open: neither makes the form stale.
-	expect(t, a.post(path+"/odometer", url.Values{"odometer_km": {"12000"}}), http.StatusSeeOther)
+	expect(t, a.post(path+"/odometer", url.Values{"odometer": {"12000"}}), http.StatusSeeOther)
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"},
-		"odometer_km": {"12500"}}), http.StatusSeeOther)
+		"odometer": {"12500"}}), http.StatusSeeOther)
 	expect(t, a.post(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
-		"odometer_km": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}, "version": {version}}), http.StatusSeeOther)
-	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.OdometerKm != 12500 || v.Plate != "B-123" {
+		"odometer": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}, "version": {version}}), http.StatusSeeOther)
+	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.Odometer != 12500 || v.Plate != "B-123" {
 		t.Errorf("vehicle = %+v", v)
 	}
 	// Archived vehicles still show their kits.
@@ -116,7 +116,7 @@ func TestDistanceUnit(t *testing.T) {
 	a := newApp(t)
 	expect(t, a.get("/vehicles/new"), http.StatusOK, "Odometer (mi)", "Purchased at (mi)")
 	rec := a.post("/vehicles", url.Values{
-		"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#2563eb"}, "odometer_km": {"12000"},
+		"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#2563eb"}, "odometer": {"12000"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	vPath := rec.Header().Get("Location")
@@ -133,12 +133,12 @@ func TestVehiclePurchaseBaselineFlow(t *testing.T) {
 	a := newApp(t)
 	// Create vehicle with purchase baseline
 	rec := a.post("/vehicles", url.Values{
-		"name":         {"GreyJoy"},
-		"kind":         {"motorcycle"},
-		"color":        {"#2563eb"},
-		"odometer_km":  {"500"},
-		"purchased_on": {"2026-03-01"},
-		"purchased_km": {"0"},
+		"name":                 {"GreyJoy"},
+		"kind":                 {"motorcycle"},
+		"color":                {"#2563eb"},
+		"odometer":             {"500"},
+		"purchased_on":         {"2026-03-01"},
+		"odometer_at_purchase": {"0"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	vPath := rec.Header().Get("Location")
@@ -149,19 +149,19 @@ func TestVehiclePurchaseBaselineFlow(t *testing.T) {
 
 	// Edit form retains purchase values
 	edit := a.get(vPath + "/edit")
-	expect(t, edit, http.StatusOK, `name="purchased_on" value="2026-03-01"`, `name="purchased_km" value="0"`)
+	expect(t, edit, http.StatusOK, `name="purchased_on" value="2026-03-01"`, `name="odometer_at_purchase" value="0"`)
 
 	// Create a kit with interval
 	vID := mustID(t, vPath)
 	rec = a.post("/kits", url.Values{
-		"vehicle_id":  {itoa(vID)},
-		"name":        {"Valve check"},
-		"interval_km": {"15000"},
+		"vehicle_id":        {itoa(vID)},
+		"name":              {"Valve check"},
+		"interval_distance": {"15000"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
 
-	// Services list shows "On track" with remaining km, not "Not done yet"
+	// Services list shows "On track" with the remaining distance, not "Not done yet"
 	services := a.get("/services")
 	expect(t, services, http.StatusOK, "Valve check", "On track", "in 14\u202f500 km")
 	expectNot(t, services, "Valve check.*last")

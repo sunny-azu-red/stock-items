@@ -20,7 +20,7 @@ func TestKitsAndServices(t *testing.T) {
 	filter := mustItem(t, s, stock.ItemInput{Name: "Oil Filter", Brand: "OEM", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{k390}})
 	oil := mustItem(t, s, stock.ItemInput{Name: "15W50", Brand: "Silkolene", Unit: stock.UnitML, Quantity: 525, VehicleIDs: []int64{k390}})
 
-	kitIn := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalKm: ptr(7500), IntervalMonths: ptr(12),
+	kitIn := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalDistance: ptr(7500), IntervalMonths: ptr(12),
 		Lines: []stock.KitLineInput{{ItemID: filter, Quantity: 1}, {ItemID: oil, Quantity: 1700}}}
 	kitIn.Normalize()
 	kitID, err := s.CreateKit(ctx, kitIn)
@@ -31,7 +31,7 @@ func TestKitsAndServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := kit.ReadinessAt(kit.VehicleOdometerKm, store.AppToday()); r.Lines != 2 || r.ShortLines != 1 || kit.VehicleName != "KTM 390" || kit.LastService != nil {
+	if r := kit.ReadinessAt(kit.VehicleOdometer, store.AppToday()); r.Lines != 2 || r.ShortLines != 1 || kit.VehicleName != "KTM 390" || kit.LastService != nil {
 		t.Errorf("kit = %+v readiness %+v", kit, r)
 	}
 	if got := kit.Due(nil, time.Now()).State; got != stock.DueNever {
@@ -39,7 +39,7 @@ func TestKitsAndServices(t *testing.T) {
 	}
 
 	// Not enough oil: the whole service must roll back.
-	svc := stock.ServiceInput{VehicleID: k390, KitID: &kitID, PerformedOn: time.Now(), OdometerKm: ptr(15000), Title: "Oil service",
+	svc := stock.ServiceInput{VehicleID: k390, KitID: &kitID, PerformedOn: time.Now(), Odometer: ptr(15000), Title: "Oil service",
 		Parts: []stock.KitLineInput{{ItemID: filter, Quantity: 1}, {ItemID: oil, Quantity: 1700}}}
 	var short *store.InsufficientStockError
 	if _, err := s.CreateService(ctx, svc); !errors.As(err, &short) || short.ItemName != "Silkolene 15W50" {
@@ -84,8 +84,8 @@ func TestKitsAndServices(t *testing.T) {
 		t.Errorf("oil after service = %v, want 2825", it.Quantity)
 	}
 	v, _ := s.GetVehicle(ctx, k390)
-	if v.OdometerKm == nil || *v.OdometerKm != 15000 {
-		t.Errorf("odometer = %v", v.OdometerKm)
+	if v.Odometer == nil || *v.Odometer != 15000 {
+		t.Errorf("odometer = %v", v.Odometer)
 	}
 	rec, err := s.GetService(ctx, svcID)
 	if err != nil {
@@ -98,18 +98,18 @@ func TestKitsAndServices(t *testing.T) {
 	if kit.LastService == nil || kit.LastService.ID != svcID {
 		t.Errorf("last service = %+v", kit.LastService)
 	}
-	if got := kit.Due(v.OdometerKm, time.Now()).State; got != stock.DueOK {
+	if got := kit.Due(v.Odometer, time.Now()).State; got != stock.DueOK {
 		t.Errorf("due after service = %s", got)
 	}
 
 	// A lower odometer reading never moves the odometer backwards.
-	older := stock.ServiceInput{VehicleID: k390, PerformedOn: time.Now().AddDate(-1, 0, 0), OdometerKm: ptr(9000), Title: "Chain"}
+	older := stock.ServiceInput{VehicleID: k390, PerformedOn: time.Now().AddDate(-1, 0, 0), Odometer: ptr(9000), Title: "Chain"}
 	if _, err := s.CreateService(ctx, older); err != nil {
 		t.Fatal(err)
 	}
 	v, _ = s.GetVehicle(ctx, k390)
-	if *v.OdometerKm != 15000 {
-		t.Errorf("odometer moved backwards to %d", *v.OdometerKm)
+	if *v.Odometer != 15000 {
+		t.Errorf("odometer moved backwards to %d", *v.Odometer)
 	}
 	assertLedger(t, s)
 
@@ -140,12 +140,12 @@ func TestKitsAndServices(t *testing.T) {
 func TestKitMovedToAnotherVehicle(t *testing.T) {
 	s, ctx := newStore(t)
 	v1, v2 := mustVehicle(t, s, "KTM 390"), mustVehicle(t, s, "KTM 1290")
-	in := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalKm: ptr(6000)}
+	in := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000)}
 	kit, err := s.CreateKit(ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v1, KitID: &kit, Title: "Oil", PerformedOn: time.Now(), OdometerKm: ptr(20000)}); err != nil {
+	if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v1, KitID: &kit, Title: "Oil", PerformedOn: time.Now(), Odometer: ptr(20000)}); err != nil {
 		t.Fatal(err)
 	}
 	in.VehicleID = v2
@@ -165,10 +165,10 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()
 	n := 0
-	vehicle := func(km *int) int64 {
+	vehicle := func(odo *int) int64 {
 		t.Helper()
 		n++
-		in := stock.VehicleInput{Name: fmt.Sprintf("Bike %d", n), OdometerKm: km}
+		in := stock.VehicleInput{Name: fmt.Sprintf("Bike %d", n), Odometer: odo}
 		in.Normalize()
 		id, err := s.CreateVehicle(ctx, in)
 		if err != nil {
@@ -176,9 +176,9 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		}
 		return id
 	}
-	service := func(vehicleID int64, km int) int64 {
+	service := func(vehicleID int64, odo int) int64 {
 		t.Helper()
-		in := stock.ServiceInput{VehicleID: vehicleID, Title: "Chain clean", PerformedOn: time.Now(), OdometerKm: &km}
+		in := stock.ServiceInput{VehicleID: vehicleID, Title: "Chain clean", PerformedOn: time.Now(), Odometer: &odo}
 		in.Normalize()
 		id, err := s.CreateService(ctx, in)
 		if err != nil {
@@ -192,9 +192,9 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return v.OdometerKm
+		return v.Odometer
 	}
-	km := func(v int) *int { return &v }
+	odo := func(v int) *int { return &v }
 
 	tests := []struct {
 		name string
@@ -203,47 +203,47 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		want  *int
 	}{
 		{"a typo is undone", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			return v, service(v, 120000)
-		}, km(10000)},
+		}, odo(10000)},
 		{"the newest of two goes back to the older one", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			service(v, 11000)
 			return v, service(v, 12000)
-		}, km(11000)},
+		}, odo(11000)},
 		{"a service at the current reading moved nothing", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			service(v, 9000)
 			if err := s.SetOdometer(ctx, v, 12000); err != nil {
 				t.Fatal(err)
 			}
 			return v, service(v, 12000)
-		}, km(12000)},
+		}, odo(12000)},
 		{"an older service moved nothing", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			service(v, 11000)
 			return v, service(v, 10500)
-		}, km(11000)},
+		}, odo(11000)},
 		{"a reading entered by hand since is kept", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			svc := service(v, 12000)
 			if err := s.SetOdometer(ctx, v, 12500); err != nil {
 				t.Fatal(err)
 			}
 			return v, svc
-		}, km(12500)},
+		}, odo(12500)},
 		{"a vehicle without a reading gets none back", func() (int64, int64) {
 			v := vehicle(nil)
 			return v, service(v, 12000)
 		}, nil},
 		{"services from before the change are left alone", func() (int64, int64) {
-			v := vehicle(km(10000))
+			v := vehicle(odo(10000))
 			svc := service(v, 12000)
 			if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer_moved = NULL, odometer_before = NULL WHERE id = $1`, svc); err != nil {
 				t.Fatal(err)
 			}
 			return v, svc
-		}, km(12000)},
+		}, odo(12000)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -341,8 +341,8 @@ func TestServicePartsAlwaysPointAtTheirService(t *testing.T) {
 
 func TestUpdateService(t *testing.T) {
 	s, ctx := newStore(t)
-	km := 10000
-	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	odo := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
 	k390, err := s.CreateVehicle(ctx, vin)
 	if err != nil {
@@ -352,7 +352,7 @@ func TestUpdateService(t *testing.T) {
 	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 2})
 	ring := mustItem(t, s, stock.ItemInput{Name: "O-ring", Unit: stock.UnitPiece, Quantity: 1})
 	typo := 120000
-	in := stock.ServiceInput{VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &typo, LaborCost: ptr(500.0),
+	in := stock.ServiceInput{VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), Odometer: &typo, LaborCost: ptr(500.0),
 		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}}}
 	in.Normalize()
 	id, err := s.CreateService(ctx, in)
@@ -362,7 +362,7 @@ func TestUpdateService(t *testing.T) {
 
 	// Fix the odometer typo and the labour, use less oil, swap the filter for an O-ring.
 	fixed := 12000
-	upd := stock.ServiceInput{VehicleID: 999, Title: "Oil service", PerformedOn: time.Now(), OdometerKm: &fixed, LaborCost: ptr(50.0),
+	upd := stock.ServiceInput{VehicleID: 999, Title: "Oil service", PerformedOn: time.Now(), Odometer: &fixed, LaborCost: ptr(50.0),
 		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1500}, {ItemID: ring, Quantity: 1}}}
 	upd.Normalize()
 	if err := s.UpdateService(ctx, id, serviceV(t, s, id, upd)); err != nil {
@@ -373,11 +373,11 @@ func TestUpdateService(t *testing.T) {
 			t.Errorf("item %d = %v, want %v", item, got, want)
 		}
 	}
-	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 12000 {
-		t.Errorf("odometer = %d, want 12000", *v.OdometerKm)
+	if v, _ := s.GetVehicle(ctx, k390); *v.Odometer != 12000 {
+		t.Errorf("odometer = %d, want 12000", *v.Odometer)
 	}
 	svc, _ := s.GetService(ctx, id)
-	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || *svc.OdometerKm != 12000 {
+	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || *svc.Odometer != 12000 {
 		t.Errorf("service = %+v", svc)
 	}
 
@@ -396,8 +396,8 @@ func TestUpdateService(t *testing.T) {
 	if _, err := s.DeleteService(ctx, id, cur(t, s, store.WhatService, id)); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := s.GetVehicle(ctx, k390); *v.OdometerKm != 10000 {
-		t.Errorf("odometer after delete = %d, want 10000", *v.OdometerKm)
+	if v, _ := s.GetVehicle(ctx, k390); *v.Odometer != 10000 {
+		t.Errorf("odometer after delete = %d, want 10000", *v.Odometer)
 	}
 	if err := s.UpdateService(ctx, id, serviceV(t, s, id, upd)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update deleted service: want ErrNotFound, got %v", err)
@@ -456,11 +456,11 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 
 func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	s, ctx := newStore(t)
-	km := 10000
-	vin := stock.VehicleInput{Name: "KTM 390", OdometerKm: &km}
+	odo := 10000
+	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
 	v, _ := s.CreateVehicle(ctx, vin)
-	kin := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalKm: ptr(6000)}
+	kin := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalDistance: ptr(6000)}
 	kin.Normalize()
 	kit, err := s.CreateKit(ctx, kin)
 	if err != nil {
@@ -468,7 +468,7 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	}
 	logService := func(on time.Time, reading *int) int64 {
 		t.Helper()
-		in := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: on, OdometerKm: reading}
+		in := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: on, Odometer: reading}
 		in.Normalize()
 		id, err := s.CreateService(ctx, in)
 		if err != nil {
@@ -488,12 +488,12 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	if k.LastService == nil || k.LastService.OdometerAtLog == nil || *k.LastService.OdometerAtLog != 16000 {
 		t.Fatalf("last service = %+v", k.LastService)
 	}
-	if d := k.Due(ptr(16100), time.Now()); d.State != stock.DueOK || *d.DueKm != 22000 {
+	if d := k.Due(ptr(16100), time.Now()); d.State != stock.DueOK || *d.DueOdometer != 22000 {
 		t.Errorf("due = %+v, want ok at 22 000 km", d)
 	}
 
 	// One logged long after it was done says nothing about where it was
-	// done: km count from the last reading again.
+	// done: the distance counts from the last reading again.
 	back := logService(time.Now().AddDate(0, 0, 1).AddDate(0, -1, 0), nil)
 	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service",
 		PerformedOn: time.Now().AddDate(0, -2, 0)})); err != nil {
@@ -522,16 +522,16 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerAtLog != 16000 {
 		t.Errorf("after edit: at log = %d, want 16000", *k.LastService.OdometerAtLog)
 	}
-	edit.OdometerKm = ptr(16500)
+	edit.Odometer = ptr(16500)
 	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatal(err)
 	}
-	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerKm != 16500 || k.Due(ptr(17000), time.Now()).DueKm == nil ||
-		*k.Due(ptr(17000), time.Now()).DueKm != 16500+6000 {
+	if k, _ = s.GetKit(ctx, kit); *k.LastService.Odometer != 16500 || k.Due(ptr(17000), time.Now()).DueOdometer == nil ||
+		*k.Due(ptr(17000), time.Now()).DueOdometer != 16500+6000 {
 		t.Errorf("with a reading: %+v, due %+v", k.LastService, k.Due(ptr(17000), time.Now()))
 	}
 	// Removing the reading again counts from the odometer at log once more.
-	edit.OdometerKm = nil
+	edit.Odometer = nil
 	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
 		t.Fatal(err)
 	}
@@ -642,8 +642,8 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 
 	kitIn := stock.KitInput{
 		VehicleID: k1290, Name: "Oil service",
-		IntervalKm: ptr(4000), IntervalMonths: ptr(12),
-		InterIntervalKm: ptr(2000), InterIntervalMonths: nil,
+		IntervalDistance: ptr(4000), IntervalMonths: ptr(12),
+		InterIntervalDistance: ptr(2000), InterIntervalMonths: nil,
 		Lines:      []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
 		InterLines: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
 	}
@@ -661,14 +661,14 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatalf("kit = %+v", kit)
 	}
 	today := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
-	if kit.NextIsIntermediate(kit.VehicleOdometerKm, today) {
+	if kit.NextIsIntermediate(kit.VehicleOdometer, today) {
 		t.Errorf("want NextIsIntermediate = false before any service")
 	}
 
 	// Log Full service at 10,000 km on 2026-01-10.
 	fullSvc := stock.ServiceInput{
 		VehicleID: k1290, KitID: &kitID, KitIntermediate: false,
-		PerformedOn: today, OdometerKm: ptr(10000), Title: "Oil service",
+		PerformedOn: today, Odometer: ptr(10000), Title: "Oil service",
 		Parts: []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
 	}
 	fullSvc.Normalize()
@@ -684,7 +684,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if kit.LastFullService == nil || kit.LastFullService.ID != fullID {
 		t.Fatalf("LastFullService = %+v", kit.LastFullService)
 	}
-	if !kit.NextIsIntermediate(kit.VehicleOdometerKm, today) {
+	if !kit.NextIsIntermediate(kit.VehicleOdometer, today) {
 		t.Errorf("want NextIsIntermediate = true after full service")
 	}
 
@@ -692,7 +692,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	interDate := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
 	interSvc := stock.ServiceInput{
 		VehicleID: k1290, KitID: &kitID, KitIntermediate: true,
-		PerformedOn: interDate, OdometerKm: ptr(12000), Title: "Oil service (Intermediate)",
+		PerformedOn: interDate, Odometer: ptr(12000), Title: "Oil service (Intermediate)",
 		Parts: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
 	}
 	interSvc.Normalize()
@@ -705,14 +705,14 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if kit.LastService == nil || kit.LastService.ID != interID || !kit.LastService.Intermediate {
 		t.Fatalf("LastService = %+v", kit.LastService)
 	}
-	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometerKm != 10000 {
-		t.Fatalf("LastFullService = %+v, km = %v", kit.LastFullService, kit.LastFullOdometerKm)
+	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometer != 10000 {
+		t.Fatalf("LastFullService = %+v, odometer = %v", kit.LastFullService, kit.LastFullOdometer)
 	}
-	if kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) {
+	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) {
 		t.Errorf("want NextIsIntermediate = false after intermediate service")
 	}
-	due := kit.Due(kit.VehicleOdometerKm, interDate)
-	if due.DueKm == nil || *due.DueKm != 14000 || due.DueDate == nil || !due.DueDate.Equal(time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC)) {
+	due := kit.Due(kit.VehicleOdometer, interDate)
+	if due.DueOdometer == nil || *due.DueOdometer != 14000 || due.DueDate == nil || !due.DueDate.Equal(time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("due after intermediate = %+v, want 14000 km / 2027-01-10", due)
 	}
 
@@ -722,8 +722,8 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if !kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) || *kit.VehicleOdometerKm != 10000 {
-		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate), kit.VehicleOdometerKm)
+	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 {
+		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 
 	// Restoring from trash restores KitIntermediate and odometer.
@@ -731,8 +731,8 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate) || *kit.VehicleOdometerKm != 12000 {
-		t.Errorf("after restoring intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometerKm, interDate), kit.VehicleOdometerKm)
+	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 12000 {
+		t.Errorf("after restoring intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 	assertLedger(t, s)
 }

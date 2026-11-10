@@ -53,7 +53,7 @@
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
         <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
           <option value="">Choose…</option>
-          {{range $d.Vehicles}}<option value="{{.ID}}"{{with .OdometerKm}} data-odometer="{{distance .}}"{{end}} {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
+          {{range $d.Vehicles}}<option value="{{.ID}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
         {{template "err" (index $e "vehicle_id")}}
         {{template "err" (index $e "kit_id")}}
@@ -79,10 +79,10 @@
         <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}" aria-required="true">
         {{template "err" (index $e "performed_on")}}
       </div>
-      <div class="field{{if index $e "odometer_km"}} has-error{{end}}">
-        <label for="odometer_km">Odometer ({{distUnit}})</label>
-        <input class="input" id="odometer_km" name="odometer_km" value="{{$f.OdometerKm}}" inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle $d.Vehicle.OdometerKm}}Last reading {{distance $d.Vehicle.OdometerKm}}{{else}}e.g. 15000{{end}}">
-        {{template "err" (index $e "odometer_km")}}
+      <div class="field{{if index $e "odometer"}} has-error{{end}}">
+        <label for="odometer">Odometer ({{distUnit}})</label>
+        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle $d.Vehicle.Odometer}}Last reading {{distance $d.Vehicle.Odometer}}{{else}}e.g. 15000{{end}}">
+        {{template "err" (index $e "odometer")}}
       </div>
       <div class="field{{if index $e "labor_cost"}} has-error{{end}}">
         <label for="labor_cost">Labour cost ({{.Currency}})</label>

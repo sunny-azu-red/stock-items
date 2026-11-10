@@ -649,12 +649,12 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 		return 0, err
 	}
 	var reading *int
-	if km, ok := rec["odometer_km"].(json.Number); ok {
-		n, _ := km.Int64()
+	if odo, ok := rec["odometer"].(json.Number); ok {
+		n, _ := odo.Int64()
 		v := int(n)
 		reading = &v
 	}
-	in := stock.ServiceInput{VehicleID: vehicleID, PerformedOn: performed, OdometerKm: reading}
+	in := stock.ServiceInput{VehicleID: vehicleID, PerformedOn: performed, Odometer: reading}
 	if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
 		return 0, err
 	}

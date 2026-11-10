@@ -19,7 +19,7 @@ type serviceForm struct {
 	KitName         string
 	KitIntermediate bool
 	PerformedOn     string
-	OdometerKm      string
+	Odometer        string
 	Title           string
 	Notes           string
 	LaborCost       string
@@ -162,7 +162,7 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 		case "0":
 			f.KitIntermediate = false
 		default:
-			f.KitIntermediate = k.NextIsIntermediate(k.VehicleOdometerKm, s.now())
+			f.KitIntermediate = k.NextIsIntermediate(k.VehicleOdometer, s.now())
 		}
 		lines := k.Lines
 		if f.KitIntermediate {
@@ -186,8 +186,8 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	if v := strings.TrimSpace(q.Get("performed_on")); v != "" {
 		f.PerformedOn = v
 	}
-	if v := strings.TrimSpace(q.Get("odometer_km")); v != "" {
-		f.OdometerKm = v
+	if v := strings.TrimSpace(q.Get("odometer")); v != "" {
+		f.Odometer = v
 	}
 	if v := strings.TrimSpace(q.Get("labor_cost")); v != "" {
 		f.LaborCost = v
@@ -203,7 +203,7 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 		return serviceForm{}, stock.ServiceInput{}, err
 	}
 	f := serviceForm{
-		PerformedOn: formText(r, "performed_on"), OdometerKm: formText(r, "odometer_km"), Title: formText(r, "title"),
+		PerformedOn: formText(r, "performed_on"), Odometer: formText(r, "odometer"), Title: formText(r, "title"),
 		Notes: formText(r, "notes"), LaborCost: formText(r, "labor_cost"), KitName: formText(r, "kit_name"),
 		KitIntermediate: formText(r, "kit_intermediate") == "1",
 		Version:         parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
@@ -221,8 +221,8 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	} else if d != nil {
 		in.PerformedOn = *d
 	}
-	if in.OdometerKm, err = parseOptInt(f.OdometerKm); err != nil {
-		f.Errors.Add("odometer_km", err.Error())
+	if in.Odometer, err = parseOptInt(f.Odometer); err != nil {
+		f.Errors.Add("odometer", err.Error())
 	}
 	if in.LaborCost, err = parseOptMoney(f.LaborCost); err != nil {
 		f.Errors.Add("labor_cost", err.Error())
@@ -316,7 +316,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitIntermediate: rec.KitIntermediate,
-		PerformedOn: rec.PerformedOn.Format("2006-01-02"), OdometerKm: optIntString(rec.OdometerKm),
+		PerformedOn: rec.PerformedOn.Format("2006-01-02"), Odometer: optIntString(rec.Odometer),
 		Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
 	}
 	if rec.KitID != nil {

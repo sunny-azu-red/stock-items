@@ -80,12 +80,12 @@ func TestServicesPageOfAnArchivedVehicle(t *testing.T) {
 }
 
 // Adding a reading to a service logged without one, then removing it
-// again, leaves the km reminder counting from the odometer when it was
+// again, leaves the distance reminder counting from the odometer when it was
 // logged, as before.
 func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed() // at 10,000 km
-	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_km": {"5000"}})
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	fields := url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {itoa(mustID(t, kit))}, "title": {"Oil service"}, "performed_on": {"2026-10-29"}}
@@ -100,10 +100,10 @@ func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
 	due := "<dd>" + stock.FormatDistance(15000) + "</dd>"
 	expect(t, a.get(kit), http.StatusOK, due)
 
-	fields.Set("odometer_km", "10500")
+	fields.Set("odometer", "10500")
 	expect(t, a.postV(svc, fields), http.StatusSeeOther)
 	expect(t, a.get(kit), http.StatusOK, "<dd>"+stock.FormatDistance(15500)+"</dd>")
-	fields.Del("odometer_km")
+	fields.Del("odometer")
 	expect(t, a.postV(svc, fields), http.StatusSeeOther)
 	rec = a.get(kit)
 	expect(t, rec, http.StatusOK, due)

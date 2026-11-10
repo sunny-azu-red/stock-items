@@ -81,7 +81,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	k390, k1290 := a.seed()
 	oil := itemID(t, a.store, "Silkolene")
 	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_km": {"7500"},
+		"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"7500"},
 		"line_item": {itoa(oil)}, "line_qty": {"100 ml"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -93,9 +93,9 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	// The odometer starts empty, the last reading as its placeholder.
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK,
 		`<div class="form-section" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit", "Not done yet",
-		`name="odometer_km" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
+		`name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
 		`data-odometer="10`+"\u202f"+`000 km"`)
-	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer_km" value="" inputmode="numeric" placeholder="Last reading 10`)
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`)
 	// No vehicle yet, or one without kits: the section waits, hidden.
 	expect(t, a.get("/services/new"), http.StatusOK, `id="kit-starts" hidden`, `data-kit-vehicle="`+itoa(k390)+`" hidden`)
 	expect(t, a.get("/services/new?vehicle="+itoa(k1290)), http.StatusOK, `id="kit-starts" hidden`)
@@ -106,7 +106,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	expectNot(t, a.get(rec.Header().Get("Location")+"/edit"), "kit-starts")
 
 	// Picking the kit keeps the date, odometer and labour typed so far.
-	expect(t, a.get("/services/new?kit="+kitID+"&performed_on=2026-10-01&odometer_km=12345&labor_cost=80"), http.StatusOK,
-		`id="performed_on" name="performed_on" value="2026-10-01"`, `name="odometer_km" value="12345"`, `name="labor_cost" value="80"`,
+	expect(t, a.get("/services/new?kit="+kitID+"&performed_on=2026-10-01&odometer=12345&labor_cost=80"), http.StatusOK,
+		`id="performed_on" name="performed_on" value="2026-10-01"`, `name="odometer" value="12345"`, `name="labor_cost" value="80"`,
 		`value="Oil service"`)
 }

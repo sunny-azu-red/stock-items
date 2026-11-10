@@ -49,23 +49,23 @@ func (k VehicleKind) Icon() string {
 
 // Vehicle is something items are kept in stock for.
 type Vehicle struct {
-	ID          int64
-	Name        string
-	Kind        VehicleKind
-	Make        string
-	Model       string
-	Year        *int
-	Plate       string
-	VIN         string
-	Color       string
-	OdometerKm  *int
-	PurchasedOn *time.Time
-	PurchasedKm *int
-	Notes       string
-	ItemCount   int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Version     int // see Item.Version; odometer readings don't count
+	ID                 int64
+	Name               string
+	Kind               VehicleKind
+	Make               string
+	Model              string
+	Year               *int
+	Plate              string
+	VIN                string
+	Color              string
+	Odometer           *int
+	PurchasedOn        *time.Time
+	OdometerAtPurchase *int
+	Notes              string
+	ItemCount          int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	Version            int // see Item.Version; odometer readings don't count
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -448,31 +448,31 @@ type Movement struct {
 // optional interval used for reminders (plus an optional intermediate
 // half-interval schedule and parts list).
 type Kit struct {
-	ID                  int64
-	VehicleID           int64
-	VehicleName         string
-	VehicleColor        string
-	VehicleOdometerKm   *int
-	VehiclePurchasedOn  *time.Time
-	VehiclePurchasedKm  *int
-	Name                string
-	IntervalKm          *int
-	IntervalMonths      *int
-	InterIntervalKm     *int
-	InterIntervalMonths *int
-	Notes               string
-	Lines               []KitLine
-	InterLines          []KitLine
-	LastService         *ServiceRef
-	// LastOdometerKm is the reading of the latest service with this kit
-	// that has one; km reminders count from it when the last service was
+	ID                        int64
+	VehicleID                 int64
+	VehicleName               string
+	VehicleColor              string
+	VehicleOdometer           *int
+	VehiclePurchasedOn        *time.Time
+	VehicleOdometerAtPurchase *int
+	Name                      string
+	IntervalDistance          *int
+	IntervalMonths            *int
+	InterIntervalDistance     *int
+	InterIntervalMonths       *int
+	Notes                     string
+	Lines                     []KitLine
+	InterLines                []KitLine
+	LastService               *ServiceRef
+	// LastOdometer is the reading of the latest service with this kit
+	// that has one; distance reminders count from it when the last service was
 	// logged without a reading.
-	LastOdometerKm *int
+	LastOdometer *int
 	// LastFullService is the latest full (non-intermediate) service performed
-	// with this kit, and LastFullOdometerKm is the latest full reading.
-	LastFullService    *ServiceRef
-	LastFullOdometerKm *int
-	Version            int // see Item.Version
+	// with this kit, and LastFullOdometer is the latest full reading.
+	LastFullService  *ServiceRef
+	LastFullOdometer *int
+	Version          int // see Item.Version
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -484,19 +484,19 @@ func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 // HasIntermediate reports whether the kit has an intermediate schedule or
 // intermediate parts.
 func (k Kit) HasIntermediate() bool {
-	return k.InterIntervalKm != nil || k.InterIntervalMonths != nil || len(k.InterLines) > 0
+	return k.InterIntervalDistance != nil || k.InterIntervalMonths != nil || len(k.InterLines) > 0
 }
 
 // VehicleChip returns a Vehicle value with the kit's vehicle chip fields.
 func (k Kit) VehicleChip() Vehicle {
-	return Vehicle{ID: k.VehicleID, Name: k.VehicleName, Color: k.VehicleColor, OdometerKm: k.VehicleOdometerKm}
+	return Vehicle{ID: k.VehicleID, Name: k.VehicleName, Color: k.VehicleColor, Odometer: k.VehicleOdometer}
 }
 
 // ServiceRef is the minimal information about a past service.
 type ServiceRef struct {
 	ID          int64
 	PerformedOn time.Time
-	OdometerKm  *int
+	Odometer    *int
 	// OdometerAtLog is the vehicle's reading when a service without its
 	// own reading was logged, if that was within a week of doing it.
 	OdometerAtLog *int
@@ -532,7 +532,7 @@ type ServiceRecord struct {
 	KitName         string
 	KitIntermediate bool
 	PerformedOn     time.Time
-	OdometerKm      *int
+	Odometer        *int
 	Title           string
 	Notes           string
 	LaborCost       *float64

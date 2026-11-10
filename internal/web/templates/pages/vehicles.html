@@ -17,7 +17,7 @@
       <span class="stats">
         <span><strong>{{$v.ItemCount}}</strong> {{pluralOnly $v.ItemCount "item"}}</span>
         <span><strong>{{.Kits}}</strong> {{pluralOnly .Kits "kit"}}</span>
-        <span><strong>{{distance $v.OdometerKm}}</strong></span>
+        <span><strong>{{distance $v.Odometer}}</strong></span>
       </span>
       {{if $v.Archived}}<span class="flex">{{template "archived-badge" $v.ArchivedAt}}</span>{{else}}{{with .Next}}{{if not .VehicleArchived}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}{{end}}{{end}}
     </span>

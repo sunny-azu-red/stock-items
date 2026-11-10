@@ -97,7 +97,7 @@ func records() []record {
 			},
 			fields: func(a *testApp, note string) url.Values {
 				return url.Values{"name": {"KTM 1290"}, "kind": {"motorcycle"}, "color": {"#2563eb"},
-					"odometer_km": {"10000"}, "odometer_was": {"10000"}, "notes": {note}}
+					"odometer": {"10000"}, "odometer_was": {"10000"}, "notes": {note}}
 			},
 			note: func(a *testApp, action string) string {
 				v, _ := a.store.GetVehicle(ctx, mustID(a.t, action))

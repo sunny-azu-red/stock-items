@@ -298,7 +298,7 @@ func (in VehicleInput) Validate() Errors {
 		errs.Add("odometer_km", "Odometer cannot be negative")
 	}
 	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
-		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))
+		errs.Add("odometer_km", "That is more than "+FormatDistance(MaxOdometerKm))
 	}
 	if in.PurchasedOn != nil {
 		if y := in.PurchasedOn.Year(); y < 1900 || y > 2100 {
@@ -309,7 +309,7 @@ func (in VehicleInput) Validate() Errors {
 		if *in.PurchasedKm < 0 {
 			errs.Add("purchased_km", "Purchase odometer cannot be negative")
 		} else if *in.PurchasedKm > MaxOdometerKm {
-			errs.Add("purchased_km", "That is more than "+FormatKm(MaxOdometerKm))
+			errs.Add("purchased_km", "That is more than "+FormatDistance(MaxOdometerKm))
 		}
 	}
 	if in.PurchasedKm != nil && in.OdometerKm != nil && *in.OdometerKm < *in.PurchasedKm {
@@ -540,16 +540,16 @@ func (in KitInput) Validate() Errors {
 		errs.Add("name", "Name is too long (max 200 characters)")
 	}
 	if in.IntervalKm != nil && *in.IntervalKm > maxIntervalKm {
-		errs.Add("interval_km", "That is more than "+FormatKm(maxIntervalKm))
+		errs.Add("interval_km", "That is more than "+FormatDistance(maxIntervalKm))
 	}
 	if in.IntervalMonths != nil && *in.IntervalMonths > maxIntervalMon {
 		errs.Add("interval_months", "That is more than 20 years")
 	}
 	if in.InterIntervalKm != nil {
 		if *in.InterIntervalKm > maxIntervalKm {
-			errs.Add("inter_interval_km", "That is more than "+FormatKm(maxIntervalKm))
+			errs.Add("inter_interval_km", "That is more than "+FormatDistance(maxIntervalKm))
 		} else if in.IntervalKm == nil {
-			errs.Add("inter_interval_km", "Enter a full km interval first")
+			errs.Add("inter_interval_km", "Enter a full distance interval first")
 		} else if *in.IntervalKm > 0 && *in.InterIntervalKm >= *in.IntervalKm {
 			errs.Add("inter_interval_km", "Intermediate interval must be shorter than the full interval")
 		}
@@ -626,7 +626,7 @@ func (in ServiceInput) Validate() Errors {
 		errs.Add("title", "Work performed is too long (max 200 characters)")
 	}
 	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
-		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))
+		errs.Add("odometer_km", "That is more than "+FormatDistance(MaxOdometerKm))
 	}
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs

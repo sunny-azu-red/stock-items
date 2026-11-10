@@ -39,8 +39,8 @@
 {{/* Autocomplete options: dict "ID" string "Options" []string */}}
 {{define "datalist"}}<datalist id="{{.ID}}">{{range .Options}}<option value="{{.}}">{{end}}</datalist>{{end}}
 
-{{/* Formats a km and/or months interval: dict "Km" *int "Months" *int */}}
-{{define "kit-interval"}}{{if or .Km .Months}}{{with .Km}}{{km .}}{{end}}{{if and .Km .Months}} or {{end}}{{with .Months}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}{{end}}
+{{/* Formats a distance and/or months interval: dict "Km" *int "Months" *int */}}
+{{define "kit-interval"}}{{if or .Km .Months}}{{with .Km}}{{distance .}}{{end}}{{if and .Km .Months}} or {{end}}{{with .Months}}{{plural . "month"}}{{end}}{{else}}No interval{{end}}{{end}}
 
 {{define "part-line-head"}}<div class="row-line part-line row-head"><span>Item</span><span>Quantity</span><span></span><span></span></div>{{end}}
 
@@ -247,7 +247,7 @@
   <li>
     <span class="grow">
       <a class="title" href="/services/{{.ID}}">{{.Title}}</a>
-      <span class="meta">{{date .PerformedOn}}{{with .OdometerKm}} · {{km .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
+      <span class="meta">{{date .PerformedOn}}{{with .OdometerKm}} · {{distance .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
     </span>
     {{template "chip" .VehicleChip}}
   </li>

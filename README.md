@@ -68,6 +68,7 @@ All settings come from environment variables or a `.env` file (real environment 
 | `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices (up to 10 characters) |
+| `APP_DISTANCE` | `km` | Label of odometer readings and service intervals, shown as typed, e.g. `mi` (up to 10 characters). Only a label: distances are kept as entered, so changing it doesn't convert them |
 | `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q={q}` | Search engine for SKU links: the brand and number go in place of `{q}`. Must be a full `http(s)://` URL with exactly one `{q}`, or the app won't start |
 | `APP_SKU_SEARCH_PREFIX` | none | Added to every SKU search, e.g. `site:de` |
 | `APP_ALLOWED_HOSTS` | any | Host names and IPs the app answers to, comma-separated (ports ignored), e.g. `pitbox.lan,192.168.1.5`. Other names get 421, which keeps a web page whose name was pointed at your server (DNS rebinding) from using the app; `localhost` and loopback IPs always work |

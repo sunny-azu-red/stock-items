@@ -53,14 +53,14 @@
     <section class="card card-pad">
       <h2 class="mb">{{icon "gauge"}} Odometer</h2>
       {{if $v.Archived}}
-      <p>{{km $v.OdometerKm}}</p>
+      <p>{{distance $v.OdometerKm}}</p>
       <p class="hint mt">Restore this vehicle to log services or add kits.</p>
       {{else}}
       <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
-        <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="e.g. 12500" aria-label="Odometer in km">
+        <input class="input" name="odometer_km" value="{{optInt $v.OdometerKm}}" inputmode="numeric" placeholder="e.g. 12500" aria-label="Odometer in {{distUnit}}">
         <button class="btn" type="submit">Save odometer</button>
       </form>
-      <p class="hint mt">Used for km-based service reminders. Logging a service also updates it.</p>
+      <p class="hint mt">Used for distance-based service reminders. Logging a service also updates it.</p>
       {{end}}
     </section>
 
@@ -71,7 +71,7 @@
         <div><dt>Year</dt><dd>{{with $v.Year}}{{.}}{{else}}—{{end}}</dd></div>
         <div><dt>Plate</dt><dd>{{or $v.Plate "—"}}</dd></div>
         <div><dt>VIN</dt><dd{{if $v.VIN}} class="mono"{{end}}>{{or $v.VIN "—"}}</dd></div>
-        {{if or $v.PurchasedOn $v.PurchasedKm}}<div><dt>Purchased</dt><dd>{{with $v.PurchasedOn}}{{date .}}{{end}}{{if and $v.PurchasedOn $v.PurchasedKm}} · {{end}}{{with $v.PurchasedKm}}{{km .}}{{end}}</dd></div>{{end}}
+        {{if or $v.PurchasedOn $v.PurchasedKm}}<div><dt>Purchased</dt><dd>{{with $v.PurchasedOn}}{{date .}}{{end}}{{if and $v.PurchasedOn $v.PurchasedKm}} · {{end}}{{with $v.PurchasedKm}}{{distance .}}{{end}}</dd></div>{{end}}
       </dl>
       {{with $v.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>

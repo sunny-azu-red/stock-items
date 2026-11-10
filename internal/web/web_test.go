@@ -693,7 +693,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		"Next: Full",
 		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Full parts</h2>`,
 		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Intermediate parts</h2>`,
-		stock.FormatKm(4000)+" or 12 months", stock.FormatKm(2000),
+		stock.FormatDistance(4000)+" or 12 months", stock.FormatDistance(2000),
 	)
 
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.
@@ -719,7 +719,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 
 	// Now the kit page automatically advances to Next: Intermediate (due at 12,000 km) and still shows Full due (14,000 km or 10 Jan 2027).
-	expect(t, a.get(kitPath), http.StatusOK, "Next: Intermediate", stock.FormatKm(12000), stock.FormatKm(14000)+" or 10 Jan 2027")
+	expect(t, a.get(kitPath), http.StatusOK, "Next: Intermediate", stock.FormatDistance(12000), stock.FormatDistance(14000)+" or 10 Jan 2027")
 
 	// New service from kit now pre-selects Intermediate and pre-fills Intermediate parts & title.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
@@ -745,5 +745,5 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	expect(t, a.get(interSvcPath), http.StatusOK, "Oil service · Intermediate")
 
 	// Kit page now switches back to Next: Full, due at 14,000 km or 10 Jan 2027 (warranty date preserved!).
-	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", stock.FormatKm(14000), "10 Jan 2027", "(intermediate)")
+	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", stock.FormatDistance(14000), "10 Jan 2027", "(intermediate)")
 }

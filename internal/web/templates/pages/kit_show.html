@@ -83,15 +83,15 @@
         <div><dt>Full every</dt><dd>{{template "kit-interval" (dict "Km" $k.IntervalKm "Months" $k.IntervalMonths)}}</dd></div>
         <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Km" $k.InterIntervalKm "Months" $k.InterIntervalMonths)}}</dd></div>
         <div><dt>Next up</dt><dd>{{if $d.View.NextInter}}Intermediate{{else}}Full{{end}}</dd></div>
-        <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
+        <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .OdometerKm}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{else}}
         <div><dt>Every</dt><dd>{{template "kit-interval" (dict "Km" $k.IntervalKm "Months" $k.IntervalMonths)}}</dd></div>
         {{end}}
-        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.HasIntermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{end}}{{with .OdometerKm}} <span class="muted small">({{km .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
-        {{if $due.DueKm}}<div><dt>Due at</dt><dd>{{km $due.DueKm}}</dd></div>{{end}}
+        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.HasIntermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{end}}{{with .OdometerKm}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
+        {{if $due.DueKm}}<div><dt>Due at</dt><dd>{{distance $due.DueKm}}</dd></div>{{end}}
         {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}
-        {{if and $k.HasIntermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueKm .DueDate}}<div><dt>Full due</dt><dd>{{with .DueKm}}{{km .}}{{end}}{{if and .DueKm .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
-        <div><dt>Odometer now</dt><dd>{{km $d.Vehicle.OdometerKm}}</dd></div>
+        {{if and $k.HasIntermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueKm .DueDate}}<div><dt>Full due</dt><dd>{{with .DueKm}}{{distance .}}{{end}}{{if and .DueKm .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
+        <div><dt>Odometer now</dt><dd>{{distance $d.Vehicle.OdometerKm}}</dd></div>
         {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}
       </dl>
       {{if and $d.View.MonthsUncounted (not $d.Vehicle.Archived)}}<p class="hint mt" role="note">Nothing to count the {{plural $k.IntervalMonths "month"}} from yet. <a href="/vehicles/{{$k.VehicleID}}/edit">Set the vehicle's purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}

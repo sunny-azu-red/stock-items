@@ -33,6 +33,9 @@ type Config struct {
 	Host     string
 	Port     string
 	Currency string
+	// Distance is the label of odometer readings and service intervals,
+	// e.g. "km" or "mi", shown as typed. Nothing is converted.
+	Distance string
 	// SKUSearchURL is the search engine URL of part number links: the
 	// number goes in place of {q}, e.g. "https://www.google.com/search?q={q}".
 	SKUSearchURL string
@@ -92,6 +95,7 @@ func load() (Config, error) {
 		Host:            env("HOST", "0.0.0.0"),
 		Port:            env("PORT", "8080"),
 		Currency:        env("APP_CURRENCY", "EUR"),
+		Distance:        env("APP_DISTANCE", "km"),
 		SKUSearchURL:    env("APP_SKU_SEARCH_URL", DefaultSKUSearchURL),
 		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
 		Location:        location(),
@@ -176,6 +180,9 @@ func (c Config) check() error {
 	}
 	if utf8.RuneCountInString(c.Currency) > 10 {
 		return fmt.Errorf("APP_CURRENCY %q is too long (at most 10 characters)", c.Currency)
+	}
+	if utf8.RuneCountInString(c.Distance) > 10 {
+		return fmt.Errorf("APP_DISTANCE %q is too long (at most 10 characters)", c.Distance)
 	}
 	for _, h := range c.AllowedHosts {
 		// A URL would never match a Host header, and every page would be

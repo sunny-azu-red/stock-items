@@ -56,6 +56,7 @@ func run() error {
 		return err
 	}
 	time.Local = cfg.Location
+	stock.DistanceUnit = cfg.Distance
 	if *healthcheck {
 		return checkHealth(cfg)
 	}

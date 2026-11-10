@@ -40,7 +40,7 @@
       {{if $d.Upcoming}}
         {{range $i, $k := $d.Upcoming}}{{if lt $i 6}}{{template "kit-row" $k}}{{end}}{{end}}
       {{else if $d.KitCount}}
-        <div class="card-body muted small">None of your service kits has an interval yet. Set "every X km / months" on a kit to get reminders.</div>
+        <div class="card-body muted small">None of your service kits has an interval yet. Set "every X {{distUnit}} / months" on a kit to get reminders.</div>
       {{else}}
         {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles "/kits/new") "") "Action" "Add kit")}}
       {{end}}
@@ -62,7 +62,7 @@
         <li>
           <span class="grow">
             <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
-            <span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{km .}}{{end}}</span>
+            <span class="meta">{{plural .ItemCount "item"}}{{with .OdometerKm}} · {{distance .}}{{end}}</span>
           </span>
           <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
         </li>

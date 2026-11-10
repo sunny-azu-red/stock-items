@@ -81,7 +81,7 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 			}
 		} else if in.PurchasedKm != nil && currentOdo != nil && *in.PurchasedKm > *currentOdo {
 			return &ConflictError{Field: "purchased_km", Message: fmt.Sprintf(
-				"Higher than the current odometer (%s)", stock.FormatKm(*currentOdo))}
+				"Higher than the current odometer (%s)", stock.FormatDistance(*currentOdo))}
 		}
 		if in.PurchasedKm != nil {
 			if err := checkVehiclePurchasedKm(ctx, tx, id, *in.PurchasedKm); err != nil {
@@ -117,7 +117,7 @@ func (s *Store) SetOdometer(ctx context.Context, id int64, km int) error {
 		}
 		if purchasedKm != nil && km < *purchasedKm {
 			return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
-				"Current odometer cannot be lower than purchase odometer (%s)", stock.FormatKm(*purchasedKm))}
+				"Current odometer cannot be lower than purchase odometer (%s)", stock.FormatDistance(*purchasedKm))}
 		}
 		if err := checkVehicleOdometer(ctx, tx, id, current, &km); err != nil {
 			return err
@@ -162,7 +162,7 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, km 
 	}
 	if *km < top {
 		return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
-			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatKm(top))}
+			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatDistance(top))}
 	}
 	return nil
 }
@@ -183,7 +183,7 @@ func checkVehiclePurchasedKm(ctx context.Context, tx pgx.Tx, id int64, km int) e
 	}
 	if km > lowestKm {
 		return &ConflictError{Field: "purchased_km", Message: fmt.Sprintf(
-			"Higher than the %s logged on %s. Fix or delete that service first.", stock.FormatKm(lowestKm), on.Format("2 Jan 2006"))}
+			"Higher than the %s logged on %s. Fix or delete that service first.", stock.FormatDistance(lowestKm), on.Format("2 Jan 2006"))}
 	}
 	return nil
 }
@@ -231,7 +231,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 	km := *in.OdometerKm
 	if purchasedKm != nil && km < *purchasedKm {
 		return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
-			"Lower than %s, the vehicle's purchase odometer", stock.FormatKm(*purchasedKm))}
+			"Lower than %s, the vehicle's purchase odometer", stock.FormatDistance(*purchasedKm))}
 	}
 	var other int
 	var on time.Time
@@ -241,7 +241,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 		ORDER BY odometer_km DESC LIMIT 1`, in.VehicleID, except, day, km).Scan(&other, &on)
 	if err == nil {
 		return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
-			"Lower than the %s logged on %s, before this service", stock.FormatKm(other), on.Format("2 Jan 2006"))}
+			"Lower than the %s logged on %s, before this service", stock.FormatDistance(other), on.Format("2 Jan 2006"))}
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
@@ -252,7 +252,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 		ORDER BY odometer_km LIMIT 1`, in.VehicleID, except, day, km).Scan(&other, &on)
 	if err == nil {
 		return &ConflictError{Field: "odometer_km", Message: fmt.Sprintf(
-			"Higher than the %s logged on %s, after this service", stock.FormatKm(other), on.Format("2 Jan 2006"))}
+			"Higher than the %s logged on %s, after this service", stock.FormatDistance(other), on.Format("2 Jan 2006"))}
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err

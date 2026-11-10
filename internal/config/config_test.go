@@ -27,7 +27,7 @@ func TestSchema(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	good := Config{Currency: "EUR", SKUSearchURL: DefaultSKUSearchURL}
+	good := Config{Currency: "EUR", Distance: "km", SKUSearchURL: DefaultSKUSearchURL}
 	tests := []struct {
 		name string
 		edit func(*Config)
@@ -46,6 +46,8 @@ func TestCheck(t *testing.T) {
 		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
 		{"placeholder without http", func(c *Config) { c.SKUSearchURL = "example.com/{q}" }, false},
 		{"long currency", func(c *Config) { c.Currency = "Romanian lei" }, false},
+		{"miles", func(c *Config) { c.Distance = "mi" }, true},
+		{"long distance", func(c *Config) { c.Distance = "nautical miles" }, false},
 		{"allowed hosts", func(c *Config) { c.AllowedHosts = []string{"pitbox.lan", "192.168.1.5:8080", "[fe80::1]"} }, true},
 		{"a URL as an allowed host", func(c *Config) { c.AllowedHosts = []string{"http://pitbox.lan"} }, false},
 	}

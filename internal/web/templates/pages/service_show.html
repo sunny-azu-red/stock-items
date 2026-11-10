@@ -29,7 +29,7 @@
   <section class="card card-pad">
     <dl class="facts">
       <div><dt>Date</dt><dd>{{date $s.PerformedOn}}</dd></div>
-      <div><dt>Odometer</dt><dd>{{km $s.OdometerKm}}</dd></div>
+      <div><dt>Odometer</dt><dd>{{distance $s.OdometerKm}}</dd></div>
       <div><dt>Labour</dt><dd>{{money $s.LaborCost}}</dd></div>
       <div><dt>Logged</dt><dd title="{{ago $s.CreatedAt}}">{{date $s.CreatedAt}}</dd></div>
     </dl>

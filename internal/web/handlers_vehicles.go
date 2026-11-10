@@ -343,7 +343,7 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	back := s.back(r, vehiclePath(id))
 	km, err := parseOptInt(formText(r, "odometer_km"))
 	if err != nil || km == nil || *km < 0 || *km > stock.MaxOdometerKm {
-		s.setFlash(w, "error", "Enter the odometer reading in km")
+		s.setFlash(w, "error", "Enter the odometer reading in "+stock.DistanceUnit)
 		s.redirect(w, r, back, "")
 		return nil
 	}
@@ -355,9 +355,9 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	msg := "Set the odometer to " + stock.FormatKm(*km)
+	msg := "Set the odometer to " + stock.FormatDistance(*km)
 	if v, err := s.store.GetVehicle(r.Context(), id); err == nil {
-		msg = "Set " + v.Name + "'s odometer to " + stock.FormatKm(*km)
+		msg = "Set " + v.Name + "'s odometer to " + stock.FormatDistance(*km)
 	}
 	s.redirect(w, r, back, msg)
 	return nil

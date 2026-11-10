@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
 
 func TestVehicleFlow(t *testing.T) {
@@ -103,6 +105,28 @@ func TestVehicleMakeModelSuggestions(t *testing.T) {
 		`<datalist id="makes"><option value="KTM"></datalist>`,
 		`<datalist id="models"><option value="390 Adventure"></datalist>`,
 	)
+}
+
+// APP_DISTANCE relabels every distance and its form labels; the numbers
+// are kept as typed.
+func TestDistanceUnit(t *testing.T) {
+	old := stock.DistanceUnit
+	t.Cleanup(func() { stock.DistanceUnit = old })
+	stock.DistanceUnit = "mi"
+	a := newApp(t)
+	expect(t, a.get("/vehicles/new"), http.StatusOK, "Odometer (mi)", "Purchased at (mi)")
+	rec := a.post("/vehicles", url.Values{
+		"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#2563eb"}, "odometer_km": {"12000"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	vPath := rec.Header().Get("Location")
+	expect(t, a.get(vPath), http.StatusOK, `aria-label="Odometer in mi"`)
+	list := a.get("/vehicles")
+	expect(t, list, http.StatusOK, "12\u202f000 mi")
+	expectNot(t, list, "12\u202f000 km")
+	expect(t, a.get("/kits/new?vehicle="+itoa(mustID(t, vPath))), http.StatusOK,
+		"Distance (mi)", "Intermediate distance (mi)")
+	expect(t, a.get("/services/new"), http.StatusOK, "Odometer (mi)")
 }
 
 func TestVehiclePurchaseBaselineFlow(t *testing.T) {

@@ -97,12 +97,12 @@ func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
 	if _, err := a.pool.Exec(context.Background(), `UPDATE service_records SET created_at = '2026-10-29 12:00Z'`); err != nil {
 		t.Fatal(err)
 	}
-	due := "<dd>" + stock.FormatKm(15000) + "</dd>"
+	due := "<dd>" + stock.FormatDistance(15000) + "</dd>"
 	expect(t, a.get(kit), http.StatusOK, due)
 
 	fields.Set("odometer_km", "10500")
 	expect(t, a.postV(svc, fields), http.StatusSeeOther)
-	expect(t, a.get(kit), http.StatusOK, "<dd>"+stock.FormatKm(15500)+"</dd>")
+	expect(t, a.get(kit), http.StatusOK, "<dd>"+stock.FormatDistance(15500)+"</dd>")
 	fields.Del("odometer_km")
 	expect(t, a.postV(svc, fields), http.StatusSeeOther)
 	rec = a.get(kit)

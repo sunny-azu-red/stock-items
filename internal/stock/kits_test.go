@@ -159,6 +159,23 @@ func TestDueSummaryAtTheDueKm(t *testing.T) {
 	}
 }
 
+// APP_DISTANCE only relabels distances: the numbers stay as they are.
+func TestFormatDistanceUnit(t *testing.T) {
+	old := DistanceUnit
+	t.Cleanup(func() { DistanceUnit = old })
+	DistanceUnit = "mi"
+	if got := FormatDistance(12000); got != "12\u202f000 mi" {
+		t.Errorf("FormatDistance = %q", got)
+	}
+	d := Due{KmLeft: ptr(1200), DaysLeft: ptr(45)}
+	if got := d.Summary(); got != "in 1\u202f200 mi · in 45 days" {
+		t.Errorf("got %q", got)
+	}
+	if got := (Due{KmLeft: ptr(-300)}).Summary(); got != "300 mi overdue" {
+		t.Errorf("got %q", got)
+	}
+}
+
 // The day a service was logged is the app zone's: just after local
 // midnight is the next day, whatever the date is in UTC, and a DST change
 // doesn't stretch or shrink the week.

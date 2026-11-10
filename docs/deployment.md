@@ -88,6 +88,7 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [U
    | `DB_PASSWORD` | | required |
    | `DB_PORT`, `DB_DATABASE`, `DB_SCHEMA`, `DB_USERNAME` | | default `5432`, `stock_items`, `public`, `postgres` |
    | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
+   | `APP_DISTANCE` | `mi` | default `km`; up to 10 characters, shown as typed. Only a label: odometer readings and intervals are kept as entered, not converted |
    | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q={q}` | default `https://www.google.com/search?q={q}`. Part number links put the brand and number (or just the number) in place of `{q}`, wherever it is (`https://example.com/search?q={q}&lang=de`). A full `http(s)://` URL with exactly one `{q}`, or the app won't start (see [Upgrades](#upgrades)) |
    | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
    | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |

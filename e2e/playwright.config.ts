@@ -31,6 +31,7 @@ function server(port: number, schema: string) {
       PORT: String(port),
       DB_SCHEMA: schema,
       APP_CURRENCY: "EUR",
+      APP_DISTANCE: "km",
       // The tests' own, whatever a local .env says (env wins over .env).
       APP_SKU_SEARCH_URL: "https://www.google.com/search?q={q}",
     },

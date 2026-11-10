@@ -372,11 +372,11 @@ func (d Due) Summary() string {
 	if d.KmLeft != nil {
 		switch {
 		case *d.KmLeft < 0:
-			parts = append(parts, FormatKm(-*d.KmLeft)+" overdue")
+			parts = append(parts, FormatDistance(-*d.KmLeft)+" overdue")
 		case *d.KmLeft == 0:
 			parts = append(parts, "due now")
 		default:
-			parts = append(parts, "in "+FormatKm(*d.KmLeft))
+			parts = append(parts, "in "+FormatDistance(*d.KmLeft))
 		}
 	}
 	if d.DaysLeft != nil {
@@ -392,8 +392,15 @@ func (d Due) Summary() string {
 	return strings.Join(parts, " · ")
 }
 
-// FormatKm renders a distance with thousands separators: "12 345 km".
-func FormatKm(km int) string { return FormatInt(km) + " km" }
+// DistanceUnit labels every distance the app shows: odometer readings and
+// service intervals ("km" unless APP_DISTANCE says otherwise; main sets it
+// once at startup). It is only a label: distances are stored and compared as
+// typed, and the Km in field and column names means this unit.
+var DistanceUnit = "km"
+
+// FormatDistance renders a distance with thousands separators and the unit:
+// "12 345 km".
+func FormatDistance(n int) string { return FormatInt(n) + " " + DistanceUnit }
 
 // thousandsSep is a narrow no-break space. Unlike a comma or point it reads
 // the same with decimal points and decimal commas: "1 500" is never 1.5.

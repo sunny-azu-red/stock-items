@@ -12,7 +12,7 @@ import (
 
 // settings are the variables load reads.
 var settings = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_USERNAME", "DB_PASSWORD",
-	"HOST", "PORT", "APP_CURRENCY", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "TZ", "APP_ALLOWED_HOSTS"}
+	"HOST", "PORT", "APP_CURRENCY", "APP_DISTANCE", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "TZ", "APP_ALLOWED_HOSTS"}
 
 // cleanEnv unsets every setting until the test ends, and runs it in a new
 // directory holding the given files.
@@ -47,6 +47,7 @@ DB_PORT=" 5433 "
 DB_SCHEMA=" public "
 DB_PASSWORD=" p@ss w0rd "
 APP_CURRENCY=RON
+APP_DISTANCE=" mi "
 APP_SKU_SEARCH_PREFIX=" site:de "
 APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 `})
@@ -65,6 +66,9 @@ APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 	}
 	if cfg.Currency != "lei" || cfg.SKUSearchPrefix != "site:de" || cfg.SKUSearchURL != DefaultSKUSearchURL {
 		t.Errorf("Currency, SKUSearchPrefix, SKUSearchURL = %q, %q, %q", cfg.Currency, cfg.SKUSearchPrefix, cfg.SKUSearchURL)
+	}
+	if cfg.Distance != "mi" {
+		t.Errorf("Distance = %q, want mi (trimmed, case kept)", cfg.Distance)
 	}
 	if cfg.Location == nil {
 		t.Error("no Location")
@@ -92,7 +96,7 @@ func TestLoadWithoutDotenv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" || cfg.Currency != "EUR" || cfg.AllowedHosts != nil {
+	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" || cfg.Currency != "EUR" || cfg.Distance != "km" || cfg.AllowedHosts != nil {
 		t.Errorf("cfg = %+v", cfg)
 	}
 	if got := cfg.Addr(); got != "[::1]:8080" {

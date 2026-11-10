@@ -13,7 +13,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 | Package | Responsibility | Depends on |
 |---|---|---|
 | `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown, `-healthcheck` probe for Docker, the guard that keeps development builds (no version, or `-dirty`) off the `public` schema, and the pinned clock of a screenshot build (`-X main.date`, `simdate.go`: only on an `e2e_*` schema, as it rewrites that schema's timestamp defaults) | everything |
-| `internal/config` | Reads env vars and the `.env` file in the working directory (in a source checkout, the module's), and refuses a search URL or currency that can't work | `godotenv` |
+| `internal/config` | Reads env vars and the `.env` file in the working directory (in a source checkout, the module's), and refuses a search URL, currency or distance unit that can't work | `godotenv` |
 | `internal/db` | Opens the pgx pool (sessions in UTC, with optional `search_path`), runs goose migrations embedded from `migrations/`, guarded `DropSchema` for tests | `pgx`, `goose` |
 | `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export (stock and history), kit readiness, service due dates, purchase suggestions, stock levels (out, short, low) for the stock badge, starting stock (bought vs starting), editing recorded stock changes, item usage (archive vs delete), date sanity checks | stdlib only |
 | `internal/store` | All SQL. Each method is one use case. Multi-row writes run in a single transaction (`inTx`) | `pgx`, `stock` |

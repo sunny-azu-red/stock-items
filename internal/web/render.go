@@ -120,7 +120,8 @@ func (s *Server) funcs() template.FuncMap {
 		"qty":        stock.FormatQuantity,
 		"delta":      stock.FormatDelta,
 		"num":        stock.FormatNumber,
-		"km":         formatKm,
+		"distance":   formatDistance,
+		"distUnit":   func() string { return stock.DistanceUnit },
 		"money":      s.formatMoney,
 		"date":       formatDate,
 		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
@@ -407,9 +408,9 @@ func formatDecimal(f float64) string {
 	return sign + stock.FormatInt(n) + "." + frac
 }
 
-func formatKm(v any) string {
+func formatDistance(v any) string {
 	if n, ok := derefIntOK(v); ok {
-		return stock.FormatKm(n)
+		return stock.FormatDistance(n)
 	}
 	return "—"
 }

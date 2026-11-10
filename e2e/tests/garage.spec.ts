@@ -198,7 +198,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.getByRole("link", { name: "Add kit" }).click();
 
   await page.getByLabel("Name").fill("Oil Service");
-  await page.getByLabel("Kilometres", { exact: true }).fill("7500");
+  await page.getByLabel("Distance (km)", { exact: true }).fill("7500");
   await page.getByLabel("Months", { exact: true }).fill("12");
   const items = page.locator('select[name="line_item"]');
   const qtys = page.locator('input[name="line_qty"]');
@@ -1268,7 +1268,7 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await page.getByRole("link", { name: "Edit", exact: true }).click();
 
   await page.getByRole("button", { name: "Add intermediate schedule" }).click();
-  await page.getByLabel("Intermediate kilometres").fill("3500");
+  await page.getByLabel("Intermediate distance (km)").fill("3500");
   await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
   await expect(page.locator("#inter-months-tip")).toBeVisible();
   const interItems = page.locator('select[name="inter_line_item"]');

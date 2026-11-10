@@ -800,6 +800,7 @@ test("screenshots", async ({ page }, testInfo) => {
     ["vehicle-new", "/vehicles/new"],
     ["vehicle-edit", vehicle + "/edit"],
     ["services", "/services"],
+    ["services-archived", "/services?archived=1"],
     ["service", service],
     ["service-new", "/services/new"],
     ["service-edit", service + "/edit"],
@@ -985,7 +986,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   }
   const bought = await link("/shopping", 'a[href$="/bought"]');
   const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", "/stock?sort=expiry&dir=desc", item, "/items/new", item + "/edit",
-    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
+    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
     kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", bought, "/activity", "/activity?sort=price", "/activity?kind=bought&year=2026",
     movement, "/trash", "/no-such-page"];
   for (const p of paths) {
@@ -1034,7 +1035,7 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   const purchase = await maybe("/activity?kind=bought", 'a[href^="/movements/"]');
   const archivedVehicle = await maybe("/vehicles?archived=1", "a.vehicle-card");
   const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
-    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
+    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
     kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
   const want = desktop ? { top: 3, gap: 9 } : { top: 0, gap: 6 };
   const problems: string[] = [];

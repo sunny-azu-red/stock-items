@@ -6,7 +6,7 @@ This document defines the interface standards, component rules, link styles, and
 
 ## 1. Interactive Links & Affordance
 
-Links must communicate their interactive nature clearly without relying on unstyled browser defaults. We use four distinct link tiers:
+Links must communicate their interactive nature clearly without relying on unstyled browser defaults. We use six link tiers:
 
 | Link Tier | Default Styling | Hover Styling | When to Use |
 |---|---|---|---|
@@ -15,7 +15,7 @@ Links must communicate their interactive nature clearly without relying on unsty
 | **Inline Paragraph Links** | `text-decoration: underline; text-underline-offset: 3px;` | `color: var(--accent);` | Links inside body text, empty states, or hints (e.g. *"No vehicles yet. Add one..."*). |
 | **Contextual & Content Links** | `color: inherit; text-decoration: none; font-weight: 600;` | `color: var(--accent);` | Titles in lists (`.list .title`), table items (`.table a`), card links (`.more`). Row or container context already signals clickability. |
 | **Reset & Filter Actions** | `color: var(--muted); text-decoration: none; font-weight: 600;` | `color: var(--accent);` | Secondary reset links like `✕ Reset order` (icon on left when right-aligned) or `Clear filters ✕` (icon on right when left-aligned) (`.reset-link`, `.sort-reset`). Never hardcode static accent color on these. |
-| **Metadata Actions** | `color: var(--muted); text-decoration: none; font-weight: 700;` | `color: var(--accent);` | `+N more` SKUs (`.sku-more`). |
+| **Metadata Actions** | `color: var(--muted); text-decoration: none; font-weight: 600;` | `color: var(--accent);` | `+N more` SKUs (`.sku-more`). |
 
 > [!NOTE]
 > Global link rule in `app.css`: `a { color: inherit; text-decoration: none; }` without a global `a:hover { color: var(--accent); }`. Specific content links (`.table a`, `.item-name`, `.title`, `.facts a`, `.more`) and inline paragraph links (`p a`, `.hint a`, `.card-body > a:not(.btn)`) define their styling, while component links (`.btn`, `.chip`, `.badge`, `.tile`, `.vehicle-card`, `.kit-row`) strictly control their own states. Buttons, chips, and badges must never inherit text underlines or container hover colors.
@@ -39,7 +39,7 @@ Chips and badges serve two completely different purposes and have distinct visua
 * **Vehicle Entity Titles**: When a vehicle itself is the primary record of a card or list row (e.g. on `/vehicles` cards and the dashboard "Vehicles" card), it is represented as a title link with its vehicle kind icon (`{{icon .Kind.Icon}}`) colored with `var(--chip)` (`.vehicle-title`, `.vehicle-card .name`), distinguishing primary record titles from secondary reference chips.
 
 ### Status & State Badges (`.badge`, `a.badge`)
-* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `MY KIT`, `FILTERS`).
+* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`).
 * **Category Badge**: Item categories are standard badges (`.badge.badge-muted` with the tag icon). On an item page they sit right after the vehicle chips in the header's `.sub.flex` row, as a plain label; on a stock row they link to the stock filtered by that category (see "When a chip or badge is a link").
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
@@ -71,7 +71,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 
 * **Flex alignment**: All heading containers (`.card-head h2`, `.results-head h2`, `.section-head h2`) must use `display: flex; align-items: center; gap: 8px;` so icons, heading text, delimiters, and count badges center on the exact same vertical line.
 * **Delimiters**: Separate a title from its item counter or secondary info using the middle dot ` · ` (e.g. `Stock for KillJoy · 0 items`).
-* **Card Head Meta (`.card-head .meta`) & Results Count (`.results-head .count`)**: Sort-reset links, bullet delimiters, and count texts must be wrapped in an inline-flex container (`display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted);`).
+* **Card Head Meta (`.card-head .meta`) & Results Count (`.results-head .count`)**: Sort-reset links, bullet delimiters, and count texts must be wrapped in an inline-flex container (`display: inline-flex; align-items: center; gap: 6px; color: var(--muted);`, at `.85rem` in a card head and `.9rem` in a results head).
 
 ---
 

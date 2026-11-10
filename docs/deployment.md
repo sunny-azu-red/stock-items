@@ -70,7 +70,7 @@ journalctl -u pitbox -f
 
 ## Run with Docker
 
-The image is Debian 13 slim (`debian:trixie-slim`) with `libvips-tools` (and libheif's HEVC decoder for HEIC photos), `ca-certificates` and `tzdata`, and runs as a non-root user (uid 65532). It is about 360 MB unpacked (92 MB to download), almost all of it libvips and its libraries; the earlier distroless image without photo tools was 29 MB. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
+The image is Debian 13 slim (`debian:trixie-slim`) upgraded to Debian's current packages at build time, with `libvips-tools` (and libheif's HEVC decoder for HEIC photos), `ca-certificates` and `tzdata`, and runs as a non-root user (uid 65532). It is about 360 MB unpacked (92 MB to download), almost all of it libvips and its libraries; the earlier distroless image without photo tools was 29 MB. It has a `HEALTHCHECK` (the binary runs `/pitbox -healthcheck`), so `docker ps` and Portainer show it as *healthy* once it has reached the database.
 
 CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [Updates and versions](#updates-and-versions)): `latest` for the newest `master` that passed CI, `sha-<commit>` for every push, and `1.2.3` and `1.2` for an optional `v1.2.3` tag. Each image carries an SBOM and provenance attestation and is scanned for known vulnerabilities. [`compose.yaml`](../compose.yaml) runs it with a read-only root filesystem (photos are processed in a `tmpfs` at `/tmp`) and `no-new-privileges`.
 
@@ -119,13 +119,13 @@ docker compose up -d                       # or: docker compose pull && docker c
 To build the image yourself instead of pulling it:
 
 ```bash
-docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) .
+docker build -t pitbox --build-arg VERSION=$(git describe --tags --always --dirty) --build-arg APT_REFRESH=$(date +%s) .
 docker run -d --name pitbox --restart unless-stopped -p 3002:8080 --env-file .env \
   --read-only --tmpfs /tmp --security-opt no-new-privileges \
   -v /etc/localtime:/etc/localtime:ro pitbox
 ```
 
-The image builds for the machine's own platform; building for another (`--platform`) needs QEMU, since the runtime stage installs packages.
+`APT_REFRESH` (any new value) makes the `apt-get upgrade` layer run again instead of coming from the build cache, so the image gets Debian's current security fixes, as CI does on every build. The image builds for the machine's own platform; building for another (`--platform`) needs QEMU, since the runtime stage installs packages.
 
 Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=secret`, not `DB_PASSWORD="secret"`. Compose's `.env` handles quotes normally.
 

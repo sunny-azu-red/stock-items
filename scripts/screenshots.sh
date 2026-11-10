@@ -9,6 +9,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The screenshots must show committed code.
+if [ -n "$(git status --porcelain -- . ':!docs/screenshots')" ]; then
+  echo "Commit your changes first: the screenshots must show committed code."
+  git status --short -- . ':!docs/screenshots'
+  exit 1
+fi
 command -v vips >/dev/null || { echo "vips not found: sudo apt install libvips-tools"; exit 1; }
 [ -d e2e/node_modules ] || (cd e2e && npm ci && npx playwright install chromium)
 

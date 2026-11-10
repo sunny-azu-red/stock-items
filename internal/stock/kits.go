@@ -241,21 +241,53 @@ func (k Kit) FullDue(currentKm *int, today time.Time) Due {
 	}
 	lastWasInter := k.LastService != nil && k.LastService.Intermediate
 	if lastWasInter {
-		stepKm := cmp.Or(k.InterIntervalKm, k.IntervalKm)
 		if k.InterIntervalMonths != nil {
 			// Services alternate: the full one comes one intermediate step
 			// after the intermediate, in km and in months alike.
-			return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, stepKm, k.InterIntervalMonths, currentKm, today)
+			if k.InterIntervalKm == nil && k.IntervalKm != nil {
+				// No intermediate step in km: the km still count from the
+				// last full service, so the intermediate can't push them back.
+				byDate := dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, nil, k.InterIntervalMonths, currentKm, today)
+				byKm := dueFrom(lastFull, lastFullOdo, k.VehiclePurchasedOn, k.VehiclePurchasedKm, k.IntervalKm, nil, currentKm, today)
+				return mergeDue(byKm, byDate)
+			}
+			return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, cmp.Or(k.InterIntervalKm, k.IntervalKm), k.InterIntervalMonths, currentKm, today)
 		}
 		if lastFull == nil && k.VehiclePurchasedKm == nil {
-			interKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
-			if interKm == nil && k.IntervalMonths == nil {
+			// Nothing to count the full km from but the intermediate
+			// service: one intermediate step after its reading. Without an
+			// intermediate step in km, the km can't be counted.
+			var fromKm *int
+			if k.InterIntervalKm != nil {
+				fromKm = cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
+			}
+			if fromKm == nil && k.IntervalMonths == nil {
 				return Due{State: DueUnknown}
 			}
-			return dueFrom(nil, nil, k.VehiclePurchasedOn, interKm, stepKm, k.IntervalMonths, currentKm, today)
+			return dueFrom(nil, nil, k.VehiclePurchasedOn, fromKm, cmp.Or(k.InterIntervalKm, k.IntervalKm), k.IntervalMonths, currentKm, today)
 		}
 	}
 	return dueFrom(lastFull, lastFullOdo, k.VehiclePurchasedOn, k.VehiclePurchasedKm, k.IntervalKm, k.IntervalMonths, currentKm, today)
+}
+
+// mergeDue joins a reminder counted in km with one counted in months: the
+// km of one, the date of the other, and the more urgent state (one that
+// is known beats one that isn't, as dueFrom does for its two halves).
+func mergeDue(byKm, byDate Due) Due {
+	d := Due{DueKm: byKm.DueKm, KmLeft: byKm.KmLeft, DueDate: byDate.DueDate, DaysLeft: byDate.DaysLeft}
+	switch {
+	case byKm.State == DueOverdue || byDate.State == DueOverdue:
+		d.State = DueOverdue
+	case byKm.State == DueSoon || byDate.State == DueSoon:
+		d.State = DueSoon
+	case byKm.State == DueOK || byDate.State == DueOK:
+		d.State = DueOK
+	case byKm.State.Rank() <= byDate.State.Rank():
+		d.State = byKm.State
+	default:
+		d.State = byDate.State
+	}
+	return d
 }
 
 // NextIsIntermediate reports whether the intermediate schedule is the next
@@ -265,7 +297,20 @@ func (k Kit) NextIsIntermediate(currentKm *int, today time.Time) bool {
 		return false
 	}
 	if k.LastService != nil && k.LastService.Intermediate {
-		return false
+		// Alternating: a full service follows an intermediate one.
+		if k.InterIntervalMonths != nil {
+			return false
+		}
+		// Warranty mode: the full service keeps its own deadline, and
+		// another intermediate service comes first while it falls due
+		// strictly before the full one (full every 15 000 km, intermediate
+		// every 5 000: the one at 10 000). A tie, or a full service due
+		// soon or overdue, goes to the full one.
+		interDue, fullDue := k.InterDue(currentKm, today), k.FullDue(currentKm, today)
+		if fullDue.State == DueSoon || fullDue.State == DueOverdue || interDue.State == DueNone || interDue.State == DueNever {
+			return false
+		}
+		return dueBefore(interDue, fullDue)
 	}
 	interDue := k.InterDue(currentKm, today)
 	if interDue.State == DueNone || interDue.State == DueNever {
@@ -289,6 +334,18 @@ func (k Kit) NextIsIntermediate(currentKm *int, today time.Time) bool {
 		return false
 	}
 	return true
+}
+
+// dueBefore reports whether a falls due strictly before b: by km when both
+// have a km target, else by date when both have one.
+func dueBefore(a, b Due) bool {
+	if a.DueKm != nil && b.DueKm != nil {
+		return *a.DueKm < *b.DueKm
+	}
+	if a.DueDate != nil && b.DueDate != nil {
+		return a.DueDate.Before(*b.DueDate)
+	}
+	return false
 }
 
 // Due computes when the kit's next active service (Intermediate or Full) is

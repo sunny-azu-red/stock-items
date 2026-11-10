@@ -473,3 +473,43 @@ func TestWarrantyAndAlternatingSchedules(t *testing.T) {
 		})
 	}
 }
+
+// Two cases the warranty table doesn't reach. Warranty mode with an
+// intermediate under half the full one (15 000 / 5 000): the second
+// intermediate service, at 10 000 km, is reminded too, while the full one
+// keeps its own deadline. Alternating mode whose intermediate has months
+// but no km: an intermediate service resets the months, but the full
+// service's km still count from the last full one.
+func TestIntermediateScheduleEdges(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	svc := func(on time.Time, km int, inter bool) *ServiceRef {
+		return &ServiceRef{ID: 1, PerformedOn: on, OdometerKm: &km, Intermediate: inter}
+	}
+	km := func(n int) *int { return &n }
+
+	full := svc(d(2026, 1, 1), 0, false)
+	w := Kit{IntervalKm: ptr(15000), IntervalMonths: ptr(12), InterIntervalKm: ptr(5000), LastService: svc(d(2026, 4, 1), 5000, true), LastFullService: full}
+	if !w.NextIsIntermediate(km(6000), d(2026, 5, 1)) {
+		t.Error("15 000 / 5 000 after the intermediate at 5 000: want the next intermediate (10 000) first")
+	}
+	if due := w.Due(km(6000), d(2026, 5, 1)); due.DueKm == nil || *due.DueKm != 10000 {
+		t.Errorf("15 000 / 5 000 due = %+v, want 10 000 km", due)
+	}
+	if f := w.FullDue(km(6000), d(2026, 5, 1)); f.DueKm == nil || *f.DueKm != 15000 || f.DueDate == nil || !f.DueDate.Equal(d(2027, 1, 1)) {
+		t.Errorf("15 000 / 5 000 full due = %+v, want 15 000 km / 2027-01-01", f)
+	}
+	w.LastService = svc(d(2026, 7, 1), 10000, true)
+	if w.NextIsIntermediate(km(11000), d(2026, 8, 1)) {
+		t.Error("after the intermediate at 10 000: want the full service (15 000) next")
+	}
+	// The full one's year comes first: it wins even with an intermediate due sooner by km.
+	w.LastService = svc(d(2026, 12, 1), 5000, true)
+	if w.NextIsIntermediate(km(5500), d(2026, 12, 15)) {
+		t.Error("full service due soon by date: want it next")
+	}
+
+	a := Kit{IntervalKm: ptr(10000), IntervalMonths: ptr(12), InterIntervalMonths: ptr(6), LastService: svc(d(2026, 7, 1), 6000, true), LastFullService: full}
+	if due := a.FullDue(km(10500), d(2026, 10, 1)); due.State != DueOverdue || due.DueKm == nil || *due.DueKm != 10000 || due.DueDate == nil || !due.DueDate.Equal(d(2027, 1, 1)) {
+		t.Errorf("alternating, intermediate by months only: full due = %+v, want overdue at 10 000 km / 2027-01-01", due)
+	}
+}

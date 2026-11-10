@@ -4,7 +4,7 @@
     <h1>Edit {{$d.Name}}</h1>
     <div class="sub flex">
       {{if $m.ItemID}}<span class="badge badge-muted">{{icon "package"}} {{$m.ItemName}}</span>{{end}}
-      {{with $d.Item}}{{if .ID}}<span class="badge {{if .IsOut}}badge-danger{{else if .IsLow}}badge-warn{{else}}badge-muted{{end}}">{{qty .Quantity .Unit}} in stock</span>{{end}}{{end}}
+      {{with $d.Item}}{{if .ID}}{{template "stock-badge" (stockBadge . true)}}{{end}}{{end}}
       {{if not $d.Gone}}<span>Saving adjusts the stock by the difference.</span>{{end}}
     </div>
   </div>

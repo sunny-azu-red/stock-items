@@ -88,7 +88,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			}
 		}
 	}
-	describeRows(f.Parts, items)
+	describeRows(f.Parts, items, true)
 	p := serviceFormPage{Vehicles: activeVehicles(vehicles, f.VehicleID), ServiceTitles: titles}
 	if f.KitID != 0 {
 		k, err := s.store.GetKit(ctx, f.KitID)
@@ -110,10 +110,10 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			p.KitHasInter = k.HasIntermediate() || f.KitIntermediate
 			if f.ID == 0 && p.KitHasInter {
 				p.KitFullParts = kitPartRows(k.Lines)
-				describeRows(p.KitFullParts, items)
+				describeRows(p.KitFullParts, items, true)
 				p.KitFullParts = padPartRows(p.KitFullParts)
 				p.KitInterParts = kitPartRows(k.InterLines)
-				describeRows(p.KitInterParts, items)
+				describeRows(p.KitInterParts, items, true)
 				p.KitInterParts = padPartRows(p.KitInterParts)
 			}
 		}
@@ -224,14 +224,14 @@ type shortPart struct {
 }
 
 // serviceConflict maps a store error onto the service form, marking every
-// part that is short on its row.
+// part that is short on its row (its stock badge says how much there is).
 func serviceConflict(f *serviceForm, err error) bool {
 	var shorts *store.ShortPartsError
 	if errors.As(err, &shorts) {
 		for _, short := range shorts.Parts {
 			for i := range f.Parts {
 				if f.Parts[i].ItemID == short.ItemID {
-					f.Parts[i].Error = "Only " + stock.FormatQuantity(short.Have, short.Unit) + " in stock"
+					f.Parts[i].Short = true
 				}
 			}
 			needed := stock.RoundQty(short.Need - short.Have)

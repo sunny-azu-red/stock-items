@@ -87,7 +87,7 @@
       {{end}}
     </div>
     {{template "err" (index $e "lines")}}
-    <div class="rows" id="part-lines">
+    <div class="rows" id="part-lines" data-stock-need>
       {{template "part-line-head"}}
       {{range $f.Parts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
     </div>
@@ -101,6 +101,7 @@
       {{range $d.KitInterParts}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "part")}}{{end}}
     </template>
     {{end}}
+    {{template "stock-badge-templates"}}
     <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "part")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
     <p class="hint mt">Remove rows for parts you did not use, or that did not come from your stock.</p>

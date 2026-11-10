@@ -393,8 +393,8 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	expectNot(t, kitPage, "Add missing to shopping list")
 	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
 	ring := itoa(itemID(t, a.store, "O-Ring"))
-	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6 pcs" data-placeholder="e.g. 2" data-unit="piece" selected>`)
-	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1 pcs" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6 pcs" data-have-base="6" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1 pcs" data-have-base="1" data-placeholder="e.g. 2" data-unit="piece" selected>`)
 }
 
 func TestQuickAdjustRowKeepsChipsHidden(t *testing.T) {

@@ -129,8 +129,14 @@
   </div>
 </div>{{end}}
 
-{{/* Out of stock, or low with its minimum. Data: stock.Item. */}}
-{{define "stock-badge"}}{{if .IsOut}}<span class="badge badge-danger">Out of stock</span>{{else if .IsLow}}<span class="badge badge-warn">{{icon "triangle-alert"}} Low · min {{qty (deref .MinQuantity) .Unit}}</span>{{end}}{{end}}
+{{/* An item's stock badge: out of stock, short (a service row asks for
+     more), low, or what is in stock. Data: stockBadge, from
+     (stockBadge item withQty) or a part row's .Badge. See docs/design.md. */}}
+{{define "stock-badge"}}{{if .Text}}<span class="badge {{.Class}}" data-stock-level="{{.Level}}"{{with .Title}} title="{{.}}"{{end}}>{{with .Icon}}{{icon .}} {{end}}{{.Text}}</span>{{end}}{{end}}
+
+{{/* The stock badges app.js copies into part rows, once per page: their
+     text has {have}, {need} and {min} for it to fill in. */}}
+{{define "stock-badge-templates"}}<template id="stock-badges" data-units="{{stockUnits}}">{{range stockBadgeLevels}}{{template "stock-badge" .}}{{end}}</template>{{end}}
 
 {{/* The best-before date, coloured and worded by how soon it is (nothing
      left in stock can expire). Data: stock.Item. */}}
@@ -144,7 +150,7 @@
     <a class="item-name" href="/items/{{$it.ID}}">{{if $it.HasPhoto}}<img class="thumb" src="/items/{{$it.ID}}/photo?size=thumb" alt="" loading="lazy" width="36" height="36">{{end}}<span>{{if $it.Brand}}<span class="brand">{{$it.Brand}}</span> {{end}}{{$it.Name}}</span></a>
     <div class="item-meta">
       {{if $it.Archived}}{{template "archived-badge" $it.ArchivedAt}}{{end}}
-      {{template "stock-badge" $it}}
+      {{template "stock-badge" (stockBadge $it false)}}
       {{template "expiry-badge" $it}}
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
       {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $skus) -2) "more part number"}}">+{{add (len $skus) -2}} more</a>{{end}}
@@ -210,14 +216,16 @@
 </div>
 {{end}}
 
-{{/* Item + quantity row for kit / service forms:
+{{/* Item + quantity row for kit / service forms, with the chosen item's
+     stock badge (app.js keeps it up to date; the page renders
+     "stock-badge-templates" once):
      dict "Row" lineRow "Groups" []itemGroup "Prefix" "line"|"part" */}}
 {{define "line-row"}}{{$row := .Row}}
-<div class="row-line part-line{{if $row.Error}} has-error{{end}}">
+<div class="row-line part-line{{if or $row.Error $row.Short}} has-error{{end}}"{{if $row.Short}} data-short{{end}}>
   <div class="field">
     <select class="input" name="{{.Prefix}}_item" data-part-item aria-label="Item">
       <option value="">Choose an item…</option>
-      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-placeholder="{{placeholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
+      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}} data-placeholder="{{placeholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
     </select>
     {{template "err" $row.Error}}
   </div>
@@ -228,7 +236,7 @@
       {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $row.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </div>
-  <span class="stock-note">{{with $row.Have}}in stock: {{.}}{{end}}</span>
+  <span class="part-stock" data-stock-badge>{{template "stock-badge" $row.Badge}}</span>
   <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove row">{{icon "x"}}</button>
 </div>
 {{end}}
@@ -270,7 +278,7 @@
   <ul class="list">
     {{range .Matches}}
     <li>
-      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}} in stock{{if .Archived}} · archived{{end}}</span></span>
+      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="stock-line">{{template "stock-badge" (stockBadge . true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
       <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}

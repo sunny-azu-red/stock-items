@@ -54,6 +54,7 @@
       {{template "part-line-head"}}
       {{range $f.Lines}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "line")}}{{end}}
     </div>
+    {{template "stock-badge-templates"}}
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
     <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>

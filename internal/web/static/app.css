@@ -396,17 +396,18 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }
 .rows { display: grid; gap: 8px; }
 .row-line { display: grid; gap: 8px; align-items: start; }
 .sku-line { grid-template-columns: minmax(120px, 1.3fr) minmax(110px, .9fr) minmax(100px, 1fr) minmax(80px, .7fr) 34px; }
-.part-line { grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr) 120px 34px; }
+.part-line { grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr) 168px 34px; }
 .row-head { font-size: .85rem; font-weight: 600; margin-bottom: -2px; }
 .row-line .icon-btn { margin-top: 4px; }
-.row-line .stock-note { font-size: .8rem; color: var(--muted); align-self: center; }
+/* The stock badge (26px), centred against the 42px inputs. */
+.part-stock { display: flex; min-width: 0; margin-top: 8px; }
 @media (max-width: 640px) {
   .sku-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .sku-line .row-remove { justify-self: end; }
   .part-line { grid-template-columns: minmax(0, 1fr) 34px; }
   .part-line .qty-input { grid-column: 1; grid-row: 2; }
   .part-line .row-remove { grid-column: 2; grid-row: 1; }
-  .part-line .stock-note { grid-column: 1 / -1; grid-row: 3; }
+  .part-line .part-stock { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
   .row-head { display: none; }
 }
 
@@ -538,6 +539,8 @@ a.title:hover { color: var(--accent); }
 .list .title.vehicle-title:hover { color: var(--chip, var(--accent)); }
 .list .title.vehicle-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list .meta { color: var(--muted); font-size: .8rem; }
+/* A list row's stock badge, on its own line under the title. */
+.list .stock-line { display: flex; margin-block: 4px; }
 .list .end { text-align: right; white-space: nowrap; }
 
 /* ---------- Vehicles ---------- */

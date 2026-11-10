@@ -117,14 +117,15 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.231"}, "part_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "use at most two decimals of g")
-	expectNot(t, rec, "Only 0.23 g in stock")
+	noShortRow(t, rec)
 	rec = a.post(itemPath(grease)+"/movements", url.Values{"kind": {"used"}, "amount": {"0.231"}, "amount_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
 	expectNot(t, rec, "Only 0.23 g in stock")
 	// One hundredth more than there is says so plainly.
 	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.24"}, "part_unit": {"g"}})
-	expect(t, rec, http.StatusUnprocessableEntity, "Only 0.23 g in stock")
+	expect(t, rec, http.StatusUnprocessableEntity,
+		`<span class="badge badge-danger" data-stock-level="short" title="Need 0.24 g"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 0.23 g in stock</span>`)
 	if got := a.quantity(t, grease); got != 0.23 {
 		t.Errorf("grease = %v, want 0.23", got)
 	}

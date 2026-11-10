@@ -19,6 +19,7 @@ func TestVocabulary(t *testing.T) {
 		allowIn string // a file where it is right
 	}{
 		{re: `\b[Oo]n stock\b`, use: `"in stock"`},
+		{re: `in stock: \{\{|"in stock: "`, use: `the stock badge ({{template "stock-badge"}}): "3 pcs in stock"`},
 		{re: `\b(Correction|Counted)\b`, use: `"Adjusted" (the kind's label; "adjustment" in a sentence)`},
 		{re: `Initial stock`, use: `"Starting stock"`},
 		{re: `\b[1-9][0-9]*x\b`, use: `"N pcs" (FormatQuantity)`},

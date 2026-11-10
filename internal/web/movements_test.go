@@ -306,7 +306,7 @@ func TestMovementEditHeader(t *testing.T) {
 	const itemBadge = `<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Silkolene`
 	expect(t, page, http.StatusOK, "<h1>Edit purchase</h1>",
 		itemBadge,
-		"<span class=\"badge badge-muted\">1\u202f525 ml in stock</span>", "<span>Saving adjusts the stock by the difference.</span>")
+		"<span class=\"badge badge-muted\" data-stock-level=\"ok\">1\u202f525 ml in stock</span>", "<span>Saving adjusts the stock by the difference.</span>")
 	expectNot(t, page, `target="_blank"`)
 	body := page.Body.String()
 	if i, j := strings.Index(body, itemBadge), strings.Index(body, "in stock</span>"); i < 0 || j < i {

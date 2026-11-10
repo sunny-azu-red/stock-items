@@ -17,8 +17,9 @@ import (
 type lineRow struct {
 	ItemID int64
 	Qty    string
-	Unit   string // sub-unit chosen next to Qty; "" means the item's base unit
-	Have   string // what is in stock of the chosen item, shown next to the row
+	Unit   string     // sub-unit chosen next to Qty; "" means the item's base unit
+	Badge  stockBadge // the chosen item's stock badge (describeRows)
+	Short  bool       // a save was refused because there wasn't enough
 	Error  string
 }
 
@@ -29,12 +30,25 @@ func partRow(itemID int64, qty float64, u stock.Unit) lineRow {
 	return row
 }
 
-// describeRows fills in what is in stock for each row's item.
-func describeRows(rows []lineRow, items []stock.Item) {
+// describeRows fills in each row's stock badge. withNeed (a service's
+// parts, which saving takes from stock) compares what the rows ask for
+// with what is in stock: the rows of one item together, as saving takes
+// them all. An amount that can't be read asks for nothing; saving says why.
+func describeRows(rows []lineRow, items []stock.Item, withNeed bool) {
 	byID := itemsByID(items)
+	need := map[int64]float64{}
+	if withNeed {
+		for _, r := range rows {
+			if it, ok := byID[r.ItemID]; ok {
+				if q, err := stock.ParseAmount(r.Qty, it.Unit, r.Unit); err == nil {
+					need[r.ItemID] = stock.RoundQty(need[r.ItemID] + q)
+				}
+			}
+		}
+	}
 	for i := range rows {
 		if it, ok := byID[rows[i].ItemID]; ok {
-			rows[i].Have = stock.FormatQuantity(it.Quantity, it.Unit)
+			rows[i].Badge = newStockBadge(it, need[rows[i].ItemID], true)
 		}
 	}
 }
@@ -196,8 +210,8 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	}
 	f.ShowInter = f.ShowInter || f.InterIntervalKm != "" || f.InterIntervalMonths != "" || hasRowInput(f.InterLines) ||
 		f.Errors["inter_interval_km"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
-	describeRows(f.Lines, items)
-	describeRows(f.InterLines, items)
+	describeRows(f.Lines, items, false)
+	describeRows(f.InterLines, items, false)
 	var vehicle *stock.Vehicle
 	for i := range vehicles {
 		if vehicles[i].ID == f.VehicleID {

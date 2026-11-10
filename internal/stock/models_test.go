@@ -30,6 +30,33 @@ func TestExpiryState(t *testing.T) {
 	}
 }
 
+func TestLevelFor(t *testing.T) {
+	tests := []struct {
+		name string
+		it   Item
+		need float64
+		want StockLevel
+	}{
+		{"nothing left", Item{Quantity: 0}, 0, LevelOut},
+		{"nothing left, asked for", Item{Quantity: 0, MinQuantity: ptr(2.0)}, 1, LevelOut},
+		{"below nothing", Item{Quantity: -1}, 0, LevelOut},
+		{"no minimum", Item{Quantity: 6}, 0, LevelOK},
+		{"at the minimum", Item{Quantity: 2, MinQuantity: ptr(2.0)}, 0, LevelOK},
+		{"below the minimum", Item{Quantity: 1, MinQuantity: ptr(2.0)}, 0, LevelLow},
+		{"asks for all of it", Item{Quantity: 525}, 525, LevelOK},
+		{"asks for more", Item{Quantity: 525}, 1700, LevelShort},
+		{"short beats low", Item{Quantity: 525, MinQuantity: ptr(1000.0)}, 1700, LevelShort},
+		{"low when enough", Item{Quantity: 525, MinQuantity: ptr(1000.0)}, 500, LevelLow},
+		{"float noise is not short", Item{Quantity: 0.3}, 0.1 + 0.2, LevelOK},
+		{"a hundredth more is short", Item{Quantity: 0.3}, 0.31, LevelShort},
+	}
+	for _, tt := range tests {
+		if got := tt.it.LevelFor(tt.need); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestItemUsage(t *testing.T) {
 	tests := []struct {
 		u     ItemUsage

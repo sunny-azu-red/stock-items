@@ -126,6 +126,7 @@
   var dirty = false;
   document.addEventListener("input", function (e) {
     if (e.target.form && e.target.form.method === "post") dirty = true;
+    if (e.target.matches("input[data-part-qty]")) updateStockBadges(e.target);
   });
   // A form sent back with errors still holds what was typed, unsaved.
   document.querySelectorAll('form[method="post"]').forEach(function (f) {
@@ -162,13 +163,15 @@
         row.classList.remove("has-error");
         row.querySelectorAll("input").forEach(function (i) { i.value = ""; });
         row.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
-        row.querySelectorAll(".stock-note").forEach(function (n) { n.textContent = ""; });
+        row.querySelectorAll("[data-stock-badge]").forEach(function (n) { n.textContent = ""; });
         row.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
         row.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
         row.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
         syncUnits(row.closest("form"));
       } else {
         row.remove();
+        // The rows left may share the removed row's item.
+        if (container) updateStockBadges(container);
       }
       return;
     }
@@ -199,7 +202,7 @@
         for (var k = 1; k < interRows.length; k++) interRows[k].remove();
         sec2.querySelectorAll("input").forEach(function (i) { i.value = ""; });
         sec2.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
-        sec2.querySelectorAll(".stock-note").forEach(function (n) { n.textContent = ""; });
+        sec2.querySelectorAll("[data-stock-badge]").forEach(function (n) { n.textContent = ""; });
         sec2.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
         sec2.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
         sec2.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
@@ -240,6 +243,7 @@
   document.addEventListener("change", function (e) {
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
+    if (e.target.matches("select[data-part-unit]")) updateStockBadges(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
@@ -353,14 +357,113 @@
       .then(function (small) { done(small || file); }, function () { done(file); });
   }
 
-  // In kit / service part rows, show what is in stock for the chosen item.
+  // In kit / service part rows, the units and stock badge follow the
+  // chosen item.
   function updatePartNote(sel) {
     var row = sel.closest(".row-line");
     if (!row) return;
-    var note = row.querySelector(".stock-note");
-    var opt = sel.options[sel.selectedIndex];
-    if (note) note.textContent = opt && opt.getAttribute("data-have") ? "in stock: " + opt.getAttribute("data-have") : "";
     followItemUnits(sel, row);
+    updateStockBadges(row);
+  }
+
+  // ---- Stock badges -------------------------------------------------------
+  // A part row shows its item's stock badge, copied from the page's
+  // <template id="stock-badges"> (the "stock-badge" partial). In a service
+  // form (data-stock-need) saving takes the parts from stock, so the rows of
+  // one item are compared, together, with what is in stock. This reads
+  // amounts like stock.ParseAmount but never says why one can't be read:
+  // such a row asks for nothing here, and saving explains.
+  var stockUnits = null;
+  function stockConfig() {
+    if (stockUnits) return stockUnits;
+    var tpl = document.getElementById("stock-badges");
+    try {
+      stockUnits = JSON.parse(tpl.getAttribute("data-units"));
+    } catch (err) {
+      stockUnits = { suffixes: {}, units: {}, sep: " " };
+    }
+    return stockUnits;
+  }
+  // readAmount is the amount in the base unit, or null.
+  function readAmount(text, subUnit, base) {
+    var cfg = stockConfig();
+    var m = /^([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*([a-z]*)\.?$/.exec(text.trim().toLowerCase().replace(/,/g, "."));
+    if (!m || !Object.prototype.hasOwnProperty.call(cfg.suffixes, m[2])) return null;
+    var sub = cfg.suffixes[m[2]] || subUnit;
+    var factor = 1;
+    if (sub) {
+      var su = cfg.units[sub];
+      if (!su || su.base !== base) return null;
+      factor = su.factor;
+    }
+    // "1.500" could mean 1500 or 1.5 (stock.CheckAmbiguous).
+    if (factor === 1 && /^[1-9][0-9]{0,2}\.[0-9]{3}$/.test(m[1])) return null;
+    return Math.round(parseFloat(m[1]) * factor * 100) / 100;
+  }
+  // formatQty is stock.FormatQuantity: "1.7 L", "1 525 ml", "3 pcs".
+  function formatQty(q, base) {
+    var cfg = stockConfig();
+    var small = base, large = "";
+    Object.keys(cfg.units).forEach(function (k) {
+      var u = cfg.units[k];
+      if (u.base !== base) return;
+      if (u.factor === 1) small = u.label;
+      else large = u.label;
+    });
+    var r = Math.round(q * 100) / 100;
+    if (large && r >= 1000 && r % 10 === 0) return String(Math.round(r) / 1000) + " " + large;
+    var parts = String(r).split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, cfg.sep);
+    return parts.join(".") + " " + small;
+  }
+  function updateStockBadges(el) {
+    var tpl = document.getElementById("stock-badges");
+    if (!tpl) return;
+    var group = el.closest("[data-stock-need]");
+    var row = el.closest(".part-line");
+    var rows = group ? group.querySelectorAll(".part-line") : row ? [row] : [];
+    var picked = [];
+    var need = {};
+    Array.prototype.forEach.call(rows, function (r) {
+      var sel = r.querySelector("select[data-part-item]");
+      var opt = sel && sel.value ? sel.options[sel.selectedIndex] : null;
+      var qty = r.querySelector("input[data-part-qty]");
+      var unit = r.querySelector("select[data-part-unit]");
+      var base = opt ? opt.getAttribute("data-unit") : "";
+      var q = opt && group && qty ? readAmount(qty.value, unit ? unit.value : "", base) : null;
+      if (q) need[sel.value] = Math.round(((need[sel.value] || 0) + q) * 100) / 100;
+      picked.push({ row: r, opt: opt, id: sel ? sel.value : "", base: base });
+    });
+    picked.forEach(function (p) {
+      var slot = p.row.querySelector("[data-stock-badge]");
+      if (!slot) return;
+      slot.textContent = "";
+      var short = false;
+      if (p.opt) {
+        var have = parseFloat(p.opt.getAttribute("data-have-base")) || 0;
+        var n = need[p.id] || 0;
+        var level = have <= 0 ? "out" : n > have ? "short" : p.opt.hasAttribute("data-low") ? "low" : "ok";
+        short = level === "short" || (level === "out" && n > 0);
+        var badge = tpl.content.querySelector('[data-stock-level="' + level + '"]');
+        if (badge) {
+          badge = badge.cloneNode(true);
+          var fill = function (s) {
+            return s.replace("{have}", p.opt.getAttribute("data-have"))
+              .replace("{need}", formatQty(n, p.base))
+              .replace("{min}", p.opt.getAttribute("data-min") || "");
+          };
+          var last = badge.lastChild;
+          if (last && last.nodeType === 3) last.nodeValue = fill(last.nodeValue);
+          if (badge.title) badge.title = fill(badge.title);
+          slot.appendChild(badge);
+        }
+      }
+      // A row a save marked short stays marked until it isn't.
+      if (p.row.hasAttribute("data-short") && !short && !p.row.querySelector(".field-error")) {
+        p.row.classList.remove("has-error");
+        p.row.removeAttribute("data-short");
+      }
+    });
   }
 
   // Next to an item select, the quantity's hint and unit select follow the

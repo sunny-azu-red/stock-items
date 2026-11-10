@@ -38,7 +38,7 @@
 
 A **kit** is the parts list of a recurring job on one vehicle, e.g. *KTM 390 – Oil service*: 1 pcs oil filter, 1.7 L oil, 2 pcs O-ring. The **Name** field suggests common maintenance jobs (*Oil Service*, *Air Filter*, *Brake Pads (Front)*, *Brake Fluid*, *Clutch Fluid*, *Coolant*, *Spark Plugs*, *Valve Check*, ...) and learns any custom kit names or service titles you enter.
 
-On kit and service part rows, pick the unit next to the quantity: choosing an item offers its units and selects L or kg for liquids and weights, so `1.7` means 1.7 L. A unit typed into the quantity (`1700 ml`) wins. Each row shows what is in stock.
+On kit and service part rows, pick the unit next to the quantity: choosing an item offers its units and selects L or kg for liquids and weights, so `1.7` means 1.7 L. A unit typed into the quantity (`1700 ml`) wins. Each row shows what is in stock as a badge: red **Out of stock**, or, on a service, red when the rows ask for more than there is (rows of the same item count together), so you see what saving would refuse before you save; amber when the item is below its minimum.
 
 - The kit page shows, per part, what you need, what you have and what is missing. Archived kit lines are marked so you can replace or remove them; they don't make the kit "short" and aren't taken when you log the service.
 - **Add missing to shopping list** puts exactly the shortfall on the list: for the schedule that is up next, or the other one when nothing is missing for it (each schedule's parts list has its own button too).

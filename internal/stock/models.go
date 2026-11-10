@@ -321,6 +321,33 @@ func (it Item) IsLow() bool {
 // IsOut reports whether there is nothing left.
 func (it Item) IsOut() bool { return it.Quantity <= 0 }
 
+// StockLevel is how an item's stock stands, for its stock badge.
+type StockLevel string
+
+// The stock levels, in the order LevelFor checks them.
+const (
+	LevelOut   StockLevel = "out"   // nothing left
+	LevelShort StockLevel = "short" // less than a service's parts ask for
+	LevelLow   StockLevel = "low"   // below its minimum
+	LevelOK    StockLevel = "ok"
+)
+
+// LevelFor is the item's stock level when need (base units; 0 when
+// nothing is asked of it) is to be taken from it. An item with nothing
+// left is out, whatever is asked.
+func (it Item) LevelFor(need float64) StockLevel {
+	switch {
+	case it.IsOut():
+		return LevelOut
+	case RoundQty(need) > RoundQty(it.Quantity):
+		return LevelShort
+	case it.IsLow():
+		return LevelLow
+	default:
+		return LevelOK
+	}
+}
+
 // ExpiryState returns "expired", "soon" (within days), or "" for an item.
 // An item with nothing left has nothing to expire.
 func (it Item) ExpiryState(today time.Time, days int) string {

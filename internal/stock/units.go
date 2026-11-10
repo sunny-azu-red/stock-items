@@ -3,6 +3,7 @@ package stock
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
 	"strconv"
@@ -62,6 +63,11 @@ var suffixes = map[string]string{
 	"ml": "ml", "l": "l", "lt": "l", "ltr": "l", "litre": "l", "liter": "l", "liters": "l", "litres": "l",
 	"g": "g", "gr": "g", "kg": "kg",
 }
+
+// Suffixes returns a copy of the unit suffixes ParseAmount reads after a
+// number ("l", "litre", …), each mapped to its SubUnit value, so a page
+// script can read amounts the same way.
+func Suffixes() map[string]string { return maps.Clone(suffixes) }
 
 // SubUnitsFor returns the sub units valid for base unit u.
 func SubUnitsFor(u Unit) []SubUnit {

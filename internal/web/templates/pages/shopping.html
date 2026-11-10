@@ -87,7 +87,8 @@
       <li>
         <span class="grow">
           <a class="title" href="/items/{{.Item.ID}}">{{.Item.DisplayName}}</a>
-          <span class="meta">{{join .Reasons " · "}} · have {{qty .Item.Quantity .Item.Unit}}{{if .Listed}} · {{qty .Listed .Item.Unit}} already listed{{end}}</span>
+          <span class="stock-line">{{template "stock-badge" (stockBadge .Item true)}}</span>
+          <span class="meta">{{join .Reasons " · "}}{{if .Listed}} · {{qty .Listed .Item.Unit}} already listed{{end}}</span>
         </span>
         <span class="end qty">{{qty .Quantity .Item.Unit}}</span>
         <form class="inline-form" method="post" action="/shopping/suggestions">

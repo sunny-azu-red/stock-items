@@ -373,7 +373,40 @@ test("part rows offer the chosen item's units", async ({ page }) => {
   await expect(unit).toHaveValue("pcs");
   await row.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await expect(unit).toHaveValue("l");
-  await expect(row.locator(".stock-note")).toContainText("in stock:");
+  await expect(row.locator("[data-stock-badge] .badge")).toContainText("in stock");
+});
+
+test("part rows show the item's stock badge, red when the rows ask for more", async ({ page }) => {
+  await page.goto("/services/new");
+  const rows = page.locator("#part-lines .part-line:not(.row-head)");
+  const badge = (i: number) => rows.nth(i).locator("[data-stock-badge] .badge");
+  const first = rows.nth(0);
+  await first.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  const have = Number(await first.locator('select[name="part_item"] option:checked').getAttribute("data-have-base"));
+  expect(have).toBeGreaterThan(2);
+  await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
+
+  // Half of it in ml is there; the same number in L isn't.
+  const half = Math.floor(have / 2);
+  await first.locator('select[name="part_unit"]').selectOption("ml");
+  await first.locator('input[name="part_qty"]').fill(String(half));
+  await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
+  await first.locator('select[name="part_unit"]').selectOption("l");
+  await expect(badge(0)).toHaveAttribute("data-stock-level", "short");
+  await expect(badge(0)).toHaveAttribute("title", /^Need \d/);
+  await first.locator('select[name="part_unit"]').selectOption("ml");
+  await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
+
+  // Two rows of the same item count together, and removing one frees it.
+  const second = rows.nth(1);
+  await second.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await second.locator('select[name="part_unit"]').selectOption("ml");
+  await second.locator('input[name="part_qty"]').fill(String(have - half + 1));
+  await expect(badge(0)).toHaveAttribute("data-stock-level", "short");
+  await expect(badge(1)).toHaveAttribute("data-stock-level", "short");
+  await second.locator("[data-remove-row]").click();
+  await expect(rows).toHaveCount(1);
+  await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
 });
 
 test("form hints open from the question mark", async ({ page }) => {

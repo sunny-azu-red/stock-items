@@ -166,7 +166,12 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },
-		"newFormKey":     newFormKey,
+		// stockBadge is an item's badge for the "stock-badge" partial;
+		// withQty puts what is in stock in it (see newStockBadge).
+		"stockBadge":       func(it stock.Item, withQty bool) stockBadge { return newStockBadge(it, 0, withQty) },
+		"stockBadgeLevels": stockBadgeLevels,
+		"stockUnits":       stockUnitsJSON,
+		"newFormKey":       newFormKey,
 		// photoLimit is checked by app.js before a photo is uploaded: the
 		// server's refusal of a larger one can arrive while the browser is
 		// still sending, and show as a connection error instead. Side is

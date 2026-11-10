@@ -39,12 +39,28 @@ Chips and badges serve two completely different purposes and have distinct visua
 * **Vehicle Entity Titles**: When a vehicle itself is the primary record of a card or list row (e.g. on `/vehicles` cards and the dashboard "Vehicles" card), it is represented as a title link with its vehicle kind icon (`{{icon .Kind.Icon}}`) colored with `var(--chip)` (`.vehicle-title`, `.vehicle-card .name`), distinguishing primary record titles from secondary reference chips.
 
 ### Status & State Badges (`.badge`, `a.badge`)
-* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`).
+* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).
 * **Category Badge**: Item categories are standard badges (`.badge.badge-muted` with the tag icon). On an item page they sit right after the vehicle chips in the header's `.sub.flex` row, as a plain label; on a stock row they link to the stock filtered by that category (see "When a chip or badge is a link").
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
 * **Dimensions**: Height **26px** (`padding: 4px 8px`, line-height `18px`).
 * **Hover (as link)**: Container background color transition (e.g. `.badge-muted:hover { background: var(--surface-3); }`, `.badge-accent:hover { background: var(--accent); color: var(--on-accent); }`). **Never use a text underline on badges.**
+
+### The stock badge
+
+How much of an item there is, wherever it shows, is one badge: `{{template "stock-badge" (stockBadge item withQty)}}` (`internal/web/stockbadge.go`). It is never written by hand. Its level comes from `stock.Item.LevelFor(need)`, checked in this order:
+
+| Level | When | State only (`withQty` false) | With quantity (`withQty` true) |
+|---|---|---|---|
+| `out` | nothing left, whatever is asked | `badge-danger` **Out of stock** | the same |
+| `short` | a service's parts ask for more than there is (Log/Edit service only) | not used | `badge-danger`, x icon, **525 ml in stock**, title "Need 1.7 L" |
+| `low` | below the item's minimum | `badge-warn`, triangle icon, **Low · min 2 pcs** | `badge-warn`, triangle icon, **1 pcs in stock**, title "Below the minimum of 2 pcs" |
+| `ok` | everything else | no badge | `badge-muted` **6 pcs in stock** |
+
+* **State only** where the page shows the quantity already: stock rows (`item-row`) and the item page header.
+* **With quantity** where the badge is the only place it shows: an edit of a stock change, the kit and service part rows, the shopping list's suggestions and its "Already have it?" matches.
+* **Part rows** (`line-row`): on the service form (`#part-lines[data-stock-need]`) the rows of one item are compared, together, with what is in stock, so a row that saving would refuse is red before Save. The kit form shows out, low or ok only: saving a kit takes nothing from stock. A refused save marks the short rows (`has-error`) without repeating the badge as an error. `app.js` keeps each row's badge up to date as the item, amount or unit changes, copying it from the page's `{{template "stock-badge-templates"}}` (one `<template id="stock-badges">`, whose text has `{have}`, `{need}`, `{min}`), so the markup and icons live only in the Go template.
+* Every stock badge carries `data-stock-level`, for tests and scripts. It is a plain label, never a link.
 
 ### When a chip or badge is a link
 
@@ -60,7 +76,7 @@ Everything else is a plain label (`{{template "chip" …}}`, `<span class="badge
 
 * Tags that only describe the record in its own header: an item's vehicles and category. The page already is that record.
 * Chips and badges in list rows other than stock rows: kit rows, service lists, an item's "Service kits" card. A row that is a link itself (`.kit-row`, `.vehicle-card`) can't hold another link; the others match it.
-* Status and state badges (due, parts ready/short, low, expiry, archived). The one exception is the item page's **On shopping list** badge, which links to `/shopping`: it says where the item is, and nothing else on the page goes there.
+* Status and state badges (due, parts ready/short, stock, expiry, archived). The one exception is the item page's **On shopping list** badge, which links to `/shopping`: it says where the item is, and nothing else on the page goes there.
 * Anything on a form (Log/Edit service, an edit of a stock change). A link there would leave what was typed; Cancel goes back.
 
 Only links that leave the app open a new tab (`target="_blank" rel="noopener noreferrer"`): SKU searches and the full-size photo. A form's hint may open a new tab when its point is to keep the form (the kit form's "add the item"). A chip or badge never does.

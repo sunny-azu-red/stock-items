@@ -1,6 +1,8 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
-  <h1>{{if $d.IsNew}}Add item{{else}}Edit {{$f.Stored}}{{end}}</h1>
+  <div class="page-title">
+    <h1>{{if $d.IsNew}}Add item{{else}}Edit {{$f.Stored}}{{end}}</h1>
+  </div>
 </div>
 
 {{if $d.Matches}}<div class="mb">{{template "shopping-matches" (dict "EntryID" $f.ShoppingID "Version" $d.ShoppingVersion "Matches" $d.Matches)}}</div>{{end}}

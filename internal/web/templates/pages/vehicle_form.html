@@ -1,5 +1,9 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<div class="page-head"><h1>{{if $d.IsNew}}Add vehicle{{else}}Edit {{$f.Stored}}{{end}}</h1></div>
+<div class="page-head">
+  <div class="page-title">
+    <h1>{{if $d.IsNew}}Add vehicle{{else}}Edit {{$f.Stored}}{{end}}</h1>
+  </div>
+</div>
 
 <form class="card" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}

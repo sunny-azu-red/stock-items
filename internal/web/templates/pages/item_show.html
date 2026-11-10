@@ -1,6 +1,16 @@
 {{define "content"}}{{$d := .Data}}{{$it := $d.Item}}{{$m := $d.Move}}{{$e := $m.Errors}}
-<div class="page-head item-head">
-  <h1>{{$it.DisplayName}}</h1>
+<div class="page-head">
+  <div class="page-title">
+    <h1>{{$it.DisplayName}}</h1>
+    <div class="sub flex">
+      {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
+      {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
+      {{template "stock-badge" $it}}
+      {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
+      {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
+    </div>
+    {{if $it.Archived}}<p class="sub">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
+  </div>
   <div class="actions">
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
     <a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
@@ -13,14 +23,6 @@
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
     {{end}}
   </div>
-  <div class="item-head-meta">
-    {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
-    {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
-    {{template "stock-badge" $it}}
-    {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
-    {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
-  </div>
-  {{if $it.Archived}}<p class="sub">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
 </div>
 
 <div class="split">

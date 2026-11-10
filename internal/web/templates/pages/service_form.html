@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
     <div class="sub flex">
       {{if $f.KitID}}<a class="badge badge-muted" href="/kits/{{$f.KitID}}" target="_blank" title="View kit in new tab">{{icon "list-checks"}} {{$f.KitName}}</a>{{end}}

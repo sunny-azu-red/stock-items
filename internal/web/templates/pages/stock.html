@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Filter}}
 <div class="page-head" id="stock-head">
-  <div>
+  <div class="page-title">
     <h1>{{if eq (len $d.Selected) 1}}{{(index $d.Selected 0).Name}} stock{{else}}Stock{{end}}</h1>
     <p class="sub">Everything on the shelf, grouped by the vehicles it fits.</p>
   </div>

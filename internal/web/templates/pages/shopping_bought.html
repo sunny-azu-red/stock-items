@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$m := $d.Move}}{{$e := $m.Errors}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>Bought {{$d.Entry.Title}}</h1>
     {{if $d.Entry.ItemID}}<p class="sub">This adds the amount to stock and takes it off the list. If you bought less than listed, the rest stays on the list.</p>
     {{else}}<p class="sub">This isn't an item in stock yet.</p>{{end}}

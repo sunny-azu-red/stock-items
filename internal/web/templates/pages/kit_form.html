@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>{{if $d.IsNew}}Add kit{{else}}Edit {{$f.Stored}}{{end}}</h1>
     <p class="sub">The parts a recurring job needs. You will see at a glance what is on the shelf and what to buy.</p>
   </div>

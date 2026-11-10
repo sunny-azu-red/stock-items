@@ -1000,6 +1000,49 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   expect(problems).toEqual([]);
 });
 
+test("every page header has the same spacing", async ({ page }) => {
+  // The heading sits in .page-title at the top of the content on every page,
+  // and the line under it (text, or chips and badges) is 6px below, whatever
+  // the page's buttons are. The item page once centred its heading against
+  // them, 3px lower than the rest, with its badges 15px below.
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const movement = await link("/activity", 'a[href^="/movements/"]');
+  const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
+    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash"];
+  const problems: string[] = [];
+  for (const p of paths) {
+    await page.goto(p);
+    const m = await page.evaluate(() => {
+      const main = document.querySelector(".main") as HTMLElement;
+      const contentTop = main.getBoundingClientRect().top + parseFloat(getComputedStyle(main).paddingTop);
+      const h1 = document.querySelector(".page-head h1");
+      if (!h1) return null;
+      const r = h1.getBoundingClientRect();
+      const next = h1.nextElementSibling;
+      return {
+        inTitle: h1.parentElement?.classList.contains("page-title") ?? false,
+        top: Math.round(r.top - contentTop),
+        gap: next ? Math.round(next.getBoundingClientRect().top - r.bottom) : null,
+      };
+    });
+    if (!m) problems.push(`${p}: no .page-head h1`);
+    else {
+      if (!m.inTitle) problems.push(`${p}: the h1 is not in .page-title`);
+      if (m.top !== 0) problems.push(`${p}: the heading is ${m.top}px below the top of the content, not 0`);
+      if (m.gap !== null && m.gap !== 6) problems.push(`${p}: the line under the heading is ${m.gap}px below it, not 6`);
+    }
+  }
+  expect(problems).toEqual([]);
+});
+
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock");

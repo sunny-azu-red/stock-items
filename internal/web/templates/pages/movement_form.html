@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}{{$m := $d.Movement}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>Edit {{$d.Name}}</h1>
     {{if $d.Gone}}<p class="sub">{{$m.ItemName}}</p>{{else}}<p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>{{end}}
   </div>

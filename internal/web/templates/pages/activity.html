@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}Activity{{end}}</h1>
     <div class="sub flex"><span>{{if $d.Item}}Every change to this item's stock{{else}}Every change to your stock{{end}}{{with $d.Year}} in {{.}}{{end}}, {{$d.SortNote}}{{if not $d.Heads.Custom}}.{{end}}</span>{{if $d.Heads.Custom}}<span>·</span><a class="reset-link" href="{{$d.Heads.ResetHref}}" title="Show the newest changes first">Reset order {{icon "x"}}</a>{{end}}</div>
   </div>

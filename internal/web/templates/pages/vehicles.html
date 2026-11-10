@@ -1,6 +1,6 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
-  <div>
+  <div class="page-title">
     <h1>{{if $d.ShowArchived}}Archived vehicles{{else}}Vehicles{{end}}</h1>
     <p class="sub">{{if $d.ShowArchived}}Their services and kits are kept. Open one to restore it.{{else}}Items are tagged with the vehicles they fit.{{end}}</p>
   </div>

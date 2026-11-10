@@ -134,11 +134,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .tabbar { display: none; }
 
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-.page-head .sub { color: var(--muted); margin: 4px 0 0; }
+/* Every page: the heading and the lines under it (text, or chips and
+   badges) in one column, 6px apart; the record's buttons to the right. */
+.page-title { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.page-head .sub { color: var(--muted); margin: 0; }
 .page-head .sub.flex { gap: 6px; }
-.item-head { align-items: center; row-gap: 12px; }
-.item-head > .item-head-meta, .item-head > .sub { flex-basis: 100%; margin: 0; }
-.item-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .page-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 
@@ -536,7 +536,7 @@ a.vehicle-card:hover { --rim-fade: color-mix(in srgb, var(--chip) 45%, var(--bor
 .vehicle-hero { --chip: var(--accent); display: flex; gap: 16px; align-items: center; }
 .vehicle-hero .avatar { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--chip) 18%, var(--surface)); color: var(--chip); }
 .vehicle-hero .avatar .icon { width: 30px; height: 30px; }
-.vehicle-hero .sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.vehicle-hero .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 16px; margin: 0; }
 .facts dt { color: var(--muted); font-size: .78rem; }
 .facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }

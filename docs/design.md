@@ -40,7 +40,7 @@ Chips and badges serve two completely different purposes and have distinct visua
 
 ### Status & State Badges (`.badge`, `a.badge`)
 * **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `MY KIT`, `FILTERS`).
-* **Category Badge**: Item categories on item detail pages are standard badges (`a.badge.badge-muted`), positioned immediately next to the vehicle chips in `.item-head-meta`, with 26px height and badge hover transitions.
+* **Category Badge**: Item categories on item detail pages are standard badges (`a.badge.badge-muted`), positioned immediately next to the vehicle chips in the header's `.sub.flex` row, with 26px height and badge hover transitions.
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
 * **Dimensions**: Height **26px** (`padding: 4px 8px`, line-height `18px`).
@@ -56,17 +56,32 @@ Chips and badges serve two completely different purposes and have distinct visua
 
 ---
 
-## 4. Vehicle & Record Hero Headers
+## 4. Page Headers
 
-* **Hero subtitles**: Do not place badges inline within plain `<p class="sub">` text with floating text bullets.
-* **Use flex containers**: Wrap the subtitle text and the status badge inside `.sub` (`display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px;`):
+Every page starts with the same header, so the heading sits in the same place and the lines under it are spaced the same everywhere:
+
+```html
+<div class="page-head">
+  <div class="page-title">
+    <h1>…</h1>
+    <p class="sub">A line of text.</p>                     <!-- optional -->
+    <div class="sub flex">{{template "chip-link" …}} …</div> <!-- optional: chips and badges -->
+  </div>
+  <div class="actions">…</div>                            <!-- optional: the record's buttons -->
+</div>
+```
+
+* **One column for the title**: the `<h1>` and every line under it go in `.page-title` (`flex-direction: column; gap: 6px`). Lines under the heading get no margins of their own; the gap spaces them. A page with no subtitle still wraps its `<h1>` in `.page-title`.
+* **Buttons to the right**: `.actions` sits beside the title, top-aligned (`.page-head` is `align-items: flex-start`), and wraps below it on a narrow screen. Never centre the heading against the buttons: they are taller, so it would drop off the line every other page uses.
+* **Chips and badges**: put them in `<div class="sub flex">` (6px apart), never inline in a `<p class="sub">` with text bullets. Text and a badge on one line go in the same flex row:
   ```html
   <div class="sub">
     <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
     {{if $v.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $v.ArchivedAt}}</span>{{end}}
   </div>
   ```
-  This ensures the badge and text align cleanly on whole pixels without baseline drift.
+* **Vehicle hero**: the vehicle page puts its coloured kind avatar (`.vehicle-hero .avatar`) left of the `.page-title` column; the column itself follows the rules above.
+* The e2e test "every page header has the same spacing" checks the heading's position and the gap under it on every page, on desktop and phone.
 
 ---
 

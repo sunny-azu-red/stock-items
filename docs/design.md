@@ -40,11 +40,30 @@ Chips and badges serve two completely different purposes and have distinct visua
 
 ### Status & State Badges (`.badge`, `a.badge`)
 * **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `MY KIT`, `FILTERS`).
-* **Category Badge**: Item categories on item detail pages are standard badges (`a.badge.badge-muted`), positioned immediately next to the vehicle chips in the header's `.sub.flex` row, with 26px height and badge hover transitions.
+* **Category Badge**: Item categories are standard badges (`.badge.badge-muted` with the tag icon). On an item page they sit right after the vehicle chips in the header's `.sub.flex` row, as a plain label; on a stock row they link to the stock filtered by that category (see "When a chip or badge is a link").
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
 * **Dimensions**: Height **26px** (`padding: 4px 8px`, line-height `18px`).
 * **Hover (as link)**: Container background color transition (e.g. `.badge-muted:hover { background: var(--surface-3); }`, `.badge-accent:hover { background: var(--accent); color: var(--on-accent); }`). **Never use a text underline on badges.**
+
+### When a chip or badge is a link
+
+A chip or badge is a link only when it takes you somewhere you would go next from it, so the same thing does the same everywhere:
+
+| It | Links to | Where |
+|---|---|---|
+| **Goes up** to the record the page belongs to | that record | A service's header: its vehicle (`chip-link`) and its kit. A kit's header: its vehicle. |
+| **Filters the stock** from a stock row (`item-row`) | `/stock?v=ID` (General: `/stock?general=1`), `/stock?cat=…` | The row's vehicle chips (`vehicle-chips` with `"Link" true`) and its category badge. |
+| **Is a filter** | the filtered list | The sidebar's "Stock by vehicle" chips and the filter bars (`chip-toggle`). |
+
+Everything else is a plain label (`{{template "chip" …}}`, `<span class="badge">`):
+
+* Tags that only describe the record in its own header: an item's vehicles and category. The page already is that record.
+* Chips and badges in list rows other than stock rows: kit rows, service lists, an item's "Service kits" card. A row that is a link itself (`.kit-row`, `.vehicle-card`) can't hold another link; the others match it.
+* Status and state badges (due, parts ready/short, low, expiry, archived). The one exception is the item page's **On shopping list** badge, which links to `/shopping`: it says where the item is, and nothing else on the page goes there.
+* Anything on a form (Log/Edit service, an edit of a stock change). A link there would leave what was typed; Cancel goes back.
+
+Only links that leave the app open a new tab (`target="_blank" rel="noopener noreferrer"`): SKU searches and the full-size photo. A form's hint may open a new tab when its point is to keep the form (the kit form's "add the item"). A chip or badge never does.
 
 ---
 
@@ -77,7 +96,7 @@ Every page starts with the same header: the heading and the record's buttons on 
 
 * **Heading row**: `.page-head` is a grid. Its first row is at least 38px (a button's height) with the heading centred in it, so the heading sits in the same place with or without buttons, level with them. Buttons keep their normal size. `.page-title` (and `.vehicle-hero`) are `display: contents`: they group the markup, and their children are the grid's items.
 * **The line**: at most one line under the heading, 6px below the heading row, spanning the full width. In order: the **Archived** badge first when the record is archived (it changes what the page lets you do), then **chips**, then the other **badges** (the kit, item or category the record belongs to, then its states), then **text** in a `<span>`, if any. Text never comes before a chip or badge. A sentence on its own is a `<p class="sub">`.
-* **The heading names the record or the action** and nothing else: no vehicle names after a ` · `. A vehicle that can't change on the page (a kit's service, an edit) is a chip on the line; when a field on the page still chooses it, it isn't shown. Links on a form's line open a new tab (`target="_blank"`), so what was typed stays.
+* **The heading names the record or the action** and nothing else: no vehicle names after a ` · `. A vehicle that can't change on the page (a kit's service, an edit) is a chip on the line; when a field on the page still chooses it, it isn't shown. On a form's line, chips and badges are plain labels: nothing there is a link, and nothing opens a new tab (Cancel goes back).
 * **Narrow screens** (under 1060px wide with the sidebar, and phones): the heading at the top, the line 6px below, then the buttons on their own row.
 * **Vehicle page**: the coloured kind avatar sits left of the heading and the line and spans both, top to bottom: 70px (38 + 6 + 26) with a 38px icon, and the line is at least 26px so a text-only line lines it up too. On narrow screens it is 56px with a 30px icon, centred.
 * The e2e test "every page header has the same spacing" checks the heading's place, the gap under it and the order of the line on every page, on desktop and phone.

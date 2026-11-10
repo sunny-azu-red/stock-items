@@ -147,6 +147,13 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   await silk.getByRole("link", { name: "Oil & Fluids" }).click();
   await expect(page).toHaveURL(/cat=Oil(\+|%20)%26(\+|%20)Fluids/);
   await expect(page.locator(".item-row")).toHaveCount(1);
+
+  // So do the row's vehicle chips (shown in the list view), like the sidebar's.
+  await page.goto("/stock?view=list");
+  await silk.getByRole("link", { name: "KTM 390", exact: true }).click();
+  await expect(page).toHaveURL(/\/stock\?v=\d+$/);
+  await expect(page.locator("h1")).toHaveText("KTM 390 stock");
+  await expect(silk).toBeVisible();
 });
 
 test("quick adjust and record a purchase", async ({ page }) => {

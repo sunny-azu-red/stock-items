@@ -302,11 +302,14 @@ func TestMovementEditHeader(t *testing.T) {
 		t.Fatalf("purchases = %v, %v", moves, err)
 	}
 	page := a.get("/movements/" + itoa(moves[0].ID) + "/edit")
+	// A plain label: on a form, nothing in the header is a link.
+	const itemBadge = `<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Silkolene`
 	expect(t, page, http.StatusOK, "<h1>Edit purchase</h1>",
-		`<a class="badge badge-muted" href="/items/`+itoa(oil)+`" target="_blank" title="View item in new tab">`,
+		itemBadge,
 		"<span class=\"badge badge-muted\">1\u202f525 ml in stock</span>", "<span>Saving adjusts the stock by the difference.</span>")
+	expectNot(t, page, `target="_blank"`)
 	body := page.Body.String()
-	if i, j := strings.Index(body, "View item in new tab"), strings.Index(body, "in stock</span>"); i < 0 || j < i {
+	if i, j := strings.Index(body, itemBadge), strings.Index(body, "in stock</span>"); i < 0 || j < i {
 		t.Error("the item badge should come before the stock badge")
 	}
 }

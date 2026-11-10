@@ -698,7 +698,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
-		`<a class="badge badge-muted" href="/kits/`+kitID+`" target="_blank" title="View kit in new tab"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</a>`,
+		`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</span>`,
 		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
 		`name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="Oil service" checked`,
 		`id="title" name="title" value="Oil service"`,

@@ -3,9 +3,9 @@
 {{define "chip"}}<span class="chip" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</span>{{end}}
 
 {{define "chip-link"}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
-
+{{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle, and "Link" true on a stock row: each chip then shows that vehicle's stock */}}
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle */}}
-{{define "vehicle-chips"}}{{$vs := .Vehicles}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{template "chip" .}}{{end}}{{else}}<span class="chip">General</span>{{end}}</span>{{end}}
+{{define "vehicle-chips"}}{{$vs := .Vehicles}}{{$link := .Link}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{if $link}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}" title="Show {{.Name}} stock"><span class="dot"></span>{{.Name}}</a>{{else}}{{template "chip" .}}{{end}}{{end}}{{else}}{{if $link}}<a class="chip" href="/stock?general=1" title="Show General stock">General</a>{{else}}<span class="chip">General</span>{{end}}{{end}}</span>{{end}}
 
 {{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string.
    Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
@@ -150,7 +150,7 @@
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
       {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $skus) -2) "more part number"}}">+{{add (len $skus) -2}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
-      {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles)}}{{end}}
+      {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles "Link" true)}}{{end}}
     </div>
   </div>
   {{if not $it.Archived}}

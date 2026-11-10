@@ -596,15 +596,18 @@ func TestServiceFormHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := a.get("/services/new?kit=" + itoa(kit))
-	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `title="View vehicle in new tab"`, `title="View kit in new tab"`,
+	// Plain labels: on a form, nothing in the header is a link.
+	const chipText, kitBadge = `<span class="dot"></span>KTM 390</span>`, `<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</span>`
+	expect(t, page, http.StatusOK, "<h1>Log service</h1>", chipText, kitBadge,
 		"<span>The parts below are taken from stock when you save.</span>")
+	expectNot(t, page, `target="_blank"`)
 	body := page.Body.String()
-	chip, badge, text := strings.Index(body, "View vehicle in new tab"), strings.Index(body, "View kit in new tab"), strings.Index(body, "The parts below")
+	chip, badge, text := strings.Index(body, chipText), strings.Index(body, kitBadge), strings.Index(body, "The parts below")
 	if chip > badge || badge > text {
 		t.Errorf("want chip, kit badge, sentence in that order: %d, %d, %d", chip, badge, text)
 	}
 	// From the vehicle, the form's Vehicle field still chooses it: no chip.
 	page = a.get("/services/new?vehicle=" + itoa(k390))
 	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `<p class="sub">The parts below are taken from stock when you save.</p>`)
-	expectNot(t, page, "View vehicle in new tab", "<h1>Log service · ", "<title>Log service · KTM 390")
+	expectNot(t, page, `<div class="sub flex">`, "<h1>Log service · ", "<title>Log service · KTM 390")
 }

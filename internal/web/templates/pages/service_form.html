@@ -3,13 +3,13 @@
   <div class="page-title">
     <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}</h1>
     {{/* The vehicle shows as a chip only when it is fixed (a kit's service, or
-         an edit); otherwise the Vehicle field below still chooses it. Links
-         open a new tab, so what was typed here stays. */}}
+         an edit); otherwise the Vehicle field below still chooses it. On a
+         form, chips and badges are plain labels: Cancel goes back. */}}
     {{$fixed := and $d.Vehicle (or $f.KitID $f.ID)}}
     {{$text := "The parts below are taken from stock when you save."}}{{if $f.ID}}{{$text = "Saving puts the old parts back in stock and takes the ones below."}}{{end}}
     {{if or $fixed $f.KitID}}<div class="sub flex">
-      {{if $fixed}}{{with $d.Vehicle}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}" target="_blank" title="View vehicle in new tab"><span class="dot"></span>{{.Name}}</a>{{end}}{{end}}
-      {{if $f.KitID}}<a class="badge badge-muted" href="/kits/{{$f.KitID}}" target="_blank" title="View kit in new tab">{{icon "list-checks"}} {{$f.KitName}}</a>{{end}}
+      {{if $fixed}}{{with $d.Vehicle}}{{template "chip" .}}{{end}}{{end}}
+      {{if $f.KitID}}<span class="badge badge-muted">{{icon "list-checks"}} {{$f.KitName}}</span>{{end}}
       <span>{{$text}}</span>
     </div>{{else}}<p class="sub">{{$text}}</p>{{end}}
   </div>

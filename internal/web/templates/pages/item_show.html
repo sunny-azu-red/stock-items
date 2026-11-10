@@ -5,7 +5,7 @@
     <div class="sub flex">
       {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
       {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
-      {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
+      {{with $it.Category}}<span class="badge badge-muted">{{icon "tag"}} {{.}}</span>{{end}}
       {{template "stock-badge" $it}}
       {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
       {{if $it.Archived}}<span>Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
@@ -117,7 +117,7 @@
             <span class="title-row"><a class="title" href="/kits/{{.Kit.ID}}">{{.Kit.Name}}</a>{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{end}}</span>
             {{template "kit-meta" .}}
           </span>
-          {{template "chip-link" .Kit.VehicleChip}}
+          {{template "chip" .Kit.VehicleChip}}
         </li>{{end}}
       </ul>
     </section>

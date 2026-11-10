@@ -3,7 +3,7 @@
   <div class="page-title">
     <h1>Edit {{$d.Name}}</h1>
     <div class="sub flex">
-      {{if $m.ItemID}}<a class="badge badge-muted" href="/items/{{$m.ItemID}}" target="_blank" title="View item in new tab">{{icon "package"}} {{$m.ItemName}}</a>{{end}}
+      {{if $m.ItemID}}<span class="badge badge-muted">{{icon "package"}} {{$m.ItemName}}</span>{{end}}
       {{with $d.Item}}{{if .ID}}<span class="badge {{if .IsOut}}badge-danger{{else if .IsLow}}badge-warn{{else}}badge-muted{{end}}">{{qty .Quantity .Unit}} in stock</span>{{end}}{{end}}
       {{if not $d.Gone}}<span>Saving adjusts the stock by the difference.</span>{{end}}
     </div>

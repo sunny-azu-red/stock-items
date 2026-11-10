@@ -4,7 +4,6 @@
 
 {{define "chip-link"}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle, and "Link" true on a stock row: each chip then shows that vehicle's stock */}}
-{{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle */}}
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}{{$link := .Link}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{if $link}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}" title="Show {{.Name}} stock"><span class="dot"></span>{{.Name}}</a>{{else}}{{template "chip" .}}{{end}}{{end}}{{else}}{{if $link}}<a class="chip" href="/stock?general=1" title="Show General stock">General</a>{{else}}<span class="chip">General</span>{{end}}{{end}}</span>{{end}}
 
 {{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string.

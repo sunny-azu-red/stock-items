@@ -86,7 +86,10 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
-	suppliers, _ := s.store.Suppliers(r.Context())
+	suppliers, err := s.store.Suppliers(r.Context())
+	if err != nil {
+		return err
+	}
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
 			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
@@ -121,7 +124,10 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 	if !m.ItemUnit.Valid() {
 		units = stock.SubUnits
 	}
-	suppliers, _ := s.store.Suppliers(r.Context())
+	suppliers, err := s.store.Suppliers(r.Context())
+	if err != nil {
+		return err
+	}
 	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true, Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
 	return nil

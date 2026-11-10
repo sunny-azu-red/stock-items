@@ -587,7 +587,7 @@ func (in ServiceInput) Validate() Errors {
 		errs.Add("vehicle_id", "Choose a vehicle")
 	}
 	if in.Title == "" {
-		errs.Add("title", "Title is required")
+		errs.Add("title", "Work performed is required")
 	}
 	if in.PerformedOn.IsZero() {
 		errs.Add("performed_on", "Date is required")

@@ -633,6 +633,43 @@ func TestKitPerTierShortfall(t *testing.T) {
 	}
 }
 
+// The kit page's "Add missing" adds the parts of the schedule due next. When
+// those are missing but already on the list, it says so, rather than
+// quietly adding the other schedule's parts.
+func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	oil := itemID(t, a.store, "Silkolene") // 525 ml in stock
+	rec := a.post("/items", url.Values{"name": {"Spark Plug LMAR9AI-8"}, "unit": {"piece"}})
+	expect(t, rec, http.StatusSeeOther)
+	plugID := mustID(t, rec.Header().Get("Location"))
+	rec = a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_km": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_km": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"},
+		"inter_line_item": {itoa(plugID)}, "inter_line_qty": {"2"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+
+	// The full schedule is due next; its oil goes on the list.
+	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Message != "Added 1 missing part to the shopping list" {
+		t.Fatalf("first Add missing: flash = %+v", f)
+	}
+	// Again: the oil is listed already, and the plugs stay off the list.
+	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Message != "Everything missing is already on the shopping list" {
+		t.Errorf("second Add missing: flash = %+v", f)
+	}
+	list, err := a.store.ListShopping(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].ItemID == nil || *list[0].ItemID != oil {
+		t.Errorf("shopping list = %+v, want only the oil", list)
+	}
+}
+
 // The service form names the vehicle as a chip, before the kit badge and
 // the sentence, only when it can't change on the form; the title names
 // the action alone.

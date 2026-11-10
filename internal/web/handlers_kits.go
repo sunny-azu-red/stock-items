@@ -540,7 +540,9 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 		if err := addShort(k.ActiveLines(k.VehicleOdometerKm, s.now())); err != nil {
 			return err
 		}
-		if n == 0 && k.HasIntermediate() {
+		// Nothing missing for the schedule due next: offer the other one's.
+		// Parts that are missing but already listed don't count as nothing.
+		if missing == 0 && k.HasIntermediate() {
 			other := k.InterLines
 			if k.NextIsIntermediate(k.VehicleOdometerKm, s.now()) {
 				other = k.Lines

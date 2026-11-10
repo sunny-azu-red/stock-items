@@ -76,12 +76,14 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	}
 	checkFormKey(f.Errors, f.FormKey)
 	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note, FormKey: f.FormKey}
+	title := in.FreeText // for the message
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		it, err := s.store.GetItem(r.Context(), *id)
 		if err != nil {
 			f.Errors.Add("item_id", "That item no longer exists")
 		} else {
 			f.ItemID, in.ItemID, in.Unit = *id, id, it.Unit
+			title = it.DisplayName()
 			if in.FreeText != "" {
 				// Both filled in: keep the text as a note rather than drop it.
 				if in.Note == "" {
@@ -115,7 +117,7 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		_, err := s.store.AddShopping(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, "/shopping", "Added to the shopping list")
+			s.redirect(w, r, "/shopping", "Added "+title+" to the shopping list")
 			return nil
 		}
 		if s.savedAlready(w, r, err, nil, "/shopping") {
@@ -179,7 +181,7 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 	}
 	msg := "Added " + plural(n, "item") + " to the shopping list"
 	if n == 0 {
-		msg = "Nothing to add: the shopping list already has it"
+		msg = "Everything suggested is already on the shopping list"
 	}
 	// The service form's short parts button posts with htmx: the form stays,
 	// with what was typed, and the message comes as a toast.
@@ -362,7 +364,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	}
 	if !f.Errors.Any() {
 		if left, trashID, err := s.store.MarkBought(r.Context(), id, f.Version, &in); err == nil {
-			msg := "Added " + stock.FormatQuantity(in.Delta, e.ItemUnit) + " of " + e.Title() + " to stock"
+			msg := "Bought " + stock.FormatQuantity(in.Delta, e.ItemUnit) + " of " + e.Title()
 			if left > 0 {
 				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
 			}
@@ -394,6 +396,13 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
+	e, err := s.store.GetShopping(r.Context(), id) // for the message
+	if errors.Is(err, store.ErrNotFound) {
+		s.shoppingGone(w, r)
+		return nil
+	} else if err != nil {
+		return err
+	}
 	trashID, err := s.store.DeleteShopping(r.Context(), id, parseVersion(r))
 	if errors.Is(err, store.ErrNotFound) {
 		s.shoppingGone(w, r)
@@ -403,7 +412,7 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, "/shopping", "Removed from the shopping list", trashID)
+	s.redirectUndo(w, r, "/shopping", "Removed "+e.Title()+" from the shopping list", trashID)
 	return nil
 }
 

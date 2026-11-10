@@ -102,7 +102,7 @@ func trashKinds() []struct {
 			needVips(t)
 			item := itemPath(itemID(t, a.store, "Silkolene"))
 			rec := a.do(photoUpload(t, ctx, item, smallPNG(t, color.Black)))
-			if f := flashOf(t, rec); f.Message != "Saved the photo" {
+			if f := flashOf(t, rec); f.Message != "Saved the photo of Silkolene 15W50 PRO 4 XP" {
 				t.Fatalf("upload: %+v", f)
 			}
 			return trashRecord{page: item, button: item + "/photo/delete",
@@ -257,7 +257,7 @@ func expectStale(t *testing.T, rec *httptest.ResponseRecorder) {
 	t.Helper()
 	switch rec.Code {
 	case http.StatusUnprocessableEntity: // an edit form, with what was typed
-		expect(t, rec, http.StatusUnprocessableEntity, "was changed since you opened this")
+		expect(t, rec, http.StatusUnprocessableEntity, "was changed since you opened it")
 	case http.StatusSeeOther: // a button
 		if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "was changed since you opened it") {
 			t.Errorf("stale button: flash = %+v", f)

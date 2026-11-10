@@ -42,7 +42,7 @@ func TestVehicleUndoMakesItemFormsStale(t *testing.T) {
 			}
 
 			expect(t, submit(a, action, mine, fields), http.StatusUnprocessableEntity,
-				"This item was changed since you opened this", "Typed meanwhile")
+				"This item was changed since you opened it", "Typed meanwhile")
 			it, err := a.store.GetItem(context.Background(), oil)
 			if err != nil {
 				t.Fatal(err)

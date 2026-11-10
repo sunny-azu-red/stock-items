@@ -525,7 +525,7 @@ func TestFlashesCountRealChanges(t *testing.T) {
 	if f := flashOf(t, a.post("/shopping/suggestions", add)); f.Message != "Added 1 item to the shopping list" {
 		t.Errorf("first add: %+v", f)
 	}
-	if f := flashOf(t, a.post("/shopping/suggestions", add)); !strings.Contains(f.Message, "already has it") {
+	if f := flashOf(t, a.post("/shopping/suggestions", add)); !strings.Contains(f.Message, "already on the shopping list") {
 		t.Errorf("second add: %+v", f)
 	}
 }
@@ -551,7 +551,7 @@ func TestPolish(t *testing.T) {
 		t.Errorf("photo delete of a gone item: flash = %+v", f)
 	}
 
-	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1 pcs of OEM Rear Brake Pads"`)
+	expect(t, a.get("/stock"), http.StatusOK, `aria-label="Use 100 ml of Silkolene 15W50 PRO 4 XP"`, `aria-label="Add 1 pcs of OEM Rear Brake Pads (Adjusted)"`)
 
 	// A bad date typed in one tab doesn't show up in the others.
 	page := a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})
@@ -622,7 +622,7 @@ func TestEmptyStatesFollowFilters(t *testing.T) {
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"}}),
 		http.StatusSeeOther)
 	expect(t, a.get("/services?page=9"), http.StatusOK, "Nothing on this page", `href="/services"`)
-	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "Nothing logged for this vehicle yet",
+	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "No services for this vehicle yet",
 		`href="/services/new?vehicle=`+itoa(k1290)+`"`)
 	expect(t, a.get("/activity?page=9"), http.StatusOK, "Nothing on this page", `href="/activity"`)
 	expect(t, a.get("/activity?kind=adjusted"), http.StatusOK, "Nothing matches these filters", "Clear filters")

@@ -193,13 +193,13 @@ func TestStaleEditFormsAreRefused(t *testing.T) {
 
 			saveFresh(t, a, page, action, r.fields(a, "Theirs"))
 			rec := submit(a, action, mine, r.fields(a, "Typed in the first tab"))
-			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was changed since you opened this",
+			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was changed since you opened it",
 				`href="`+page+`">Reload</a>`, "Typed in the first tab")
 			if got := r.note(a, action); got != "Theirs" {
 				t.Errorf("saved = %q, want the other tab's", got)
 			}
 			for _, bad := range []string{"", "abc", "0"} {
-				expect(t, submit(a, action, bad, r.fields(a, "No version")), http.StatusUnprocessableEntity, "was changed since you opened this")
+				expect(t, submit(a, action, bad, r.fields(a, "No version")), http.StatusUnprocessableEntity, "was changed since you opened it")
 			}
 			if got := r.note(a, action); got != "Theirs" {
 				t.Errorf("saved = %q after forms without a version", got)
@@ -230,7 +230,7 @@ func TestEditFormsOfDeletedRecordsKeepWhatWasTyped(t *testing.T) {
 				t.Fatalf("delete offered no Undo: %+v", flashOf(t, rec))
 			}
 			rec = submit(a, action, mine, r.fields(a, "Typed in the first tab"))
-			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was deleted since you opened this; it&#39;s in the trash.",
+			expect(t, rec, http.StatusUnprocessableEntity, "This "+r.name+" was deleted since you opened it; it&#39;s in the trash.",
 				`href="/trash">Trash</a>`, "Typed in the first tab")
 			if got := r.note(a, action); got != "" {
 				t.Errorf("the deleted %s came back with %q", r.name, got)
@@ -257,7 +257,7 @@ func TestUndoMakesOlderFormsStale(t *testing.T) {
 			expect(t, a.get(page), http.StatusOK)
 
 			expect(t, submit(a, action, mine, r.fields(a, "Typed before the delete")), http.StatusUnprocessableEntity,
-				"This "+r.name+" was changed since you opened this", "Typed before the delete")
+				"This "+r.name+" was changed since you opened it", "Typed before the delete")
 			rec := submit(a, action+"/delete", oldDelete, url.Values{"back": {"/activity"}})
 			expect(t, rec, http.StatusSeeOther)
 			if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "was changed since you opened it") {
@@ -415,7 +415,7 @@ func TestButtonsOfDeletedRecordsPointToTheTrash(t *testing.T) {
 			if l := rec.Header().Get("Location"); l != "/trash" {
 				t.Errorf("went to %q, want /trash", l)
 			}
-			if f := flashOf(t, rec); f.Kind != "error" || f.Message != "This "+r.name+" was deleted since you opened this; it's in the trash." {
+			if f := flashOf(t, rec); f.Kind != "error" || f.Message != "This "+r.name+" was deleted since you opened it; it's in the trash." {
 				t.Errorf("flash = %+v", f)
 			}
 		})
@@ -433,7 +433,7 @@ func TestABestBeforeDateMakesTheItemFormStale(t *testing.T) {
 	mine := openForm(t, a, action+"/edit", action)
 	expect(t, a.post(action+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"},
 		"expires_on": {"2030-01-31"}}), http.StatusSeeOther)
-	expect(t, submit(a, action, mine, records()[0].fields(a, "Mine")), http.StatusUnprocessableEntity, "was changed since you opened this")
+	expect(t, submit(a, action, mine, records()[0].fields(a, "Mine")), http.StatusUnprocessableEntity, "was changed since you opened it")
 	if it, _ := a.store.GetItem(context.Background(), oil); it.ExpiresOn == nil || it.ExpiresOn.Format("2006-01-02") != "2030-01-31" {
 		t.Errorf("expires = %v, want the new batch's date", it.ExpiresOn)
 	}
@@ -454,7 +454,7 @@ func TestStaleBoughtFormBuysNothing(t *testing.T) {
 	mine := openForm(t, a, page, page)
 	expect(t, a.post(itemPath(oil)+"/shopping", url.Values{"quantity": {"1"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
 	rec := submit(a, page, mine, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"23.45"}})
-	expect(t, rec, http.StatusUnprocessableEntity, "This shopping list entry was changed since you opened this",
+	expect(t, rec, http.StatusUnprocessableEntity, "This shopping list entry was changed since you opened it",
 		`href="`+page+`">Reload</a>`, `value="23.45"`)
 	if it, _ := a.store.GetItem(ctx, oil); it.Quantity != 525 {
 		t.Errorf("oil = %v, want 525: nothing bought", it.Quantity)

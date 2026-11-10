@@ -250,8 +250,8 @@ func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) 
 	w.WriteHeader(http.StatusInternalServerError)
 	// Avoid templates here: they may be what failed.
 	_, _ = fmt.Fprint(w, `<!doctype html><meta charset="utf-8"><title>Error</title>`+
-		`<body style="font-family:system-ui;padding:2rem"><h1>Something went wrong</h1>`+
-		`<p>The error was logged. <a href="/">Back to the dashboard</a></p></body>`)
+		`<body style="font-family:system-ui;padding:2rem"><h1>Pitbox hit an error</h1>`+
+		`<p>The error was logged. Go back and try again, or go to <a href="/">the dashboard</a>.</p></body>`)
 }
 
 type errorPage struct {

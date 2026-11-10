@@ -302,7 +302,7 @@ func (s *Server) staleButton(w http.ResponseWriter, r *http.Request, err error, 
 		to = list
 	default:
 		msg = "This " + stale.What + " was changed since you opened it (another tab or person), so nothing was done. " +
-			"This is how it is now; try again if you still want to."
+			"Here it is as it is now; try again if you still want to."
 	}
 	s.setFlash(w, "error", msg)
 	s.redirect(w, r, to, "")

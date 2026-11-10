@@ -277,7 +277,7 @@ func (s *Server) vehicleDelete(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, "/vehicles", "Deleted "+v.Name+". Its parts are still in stock.", trashID)
+	s.redirectUndo(w, r, "/vehicles", "Deleted "+v.Name+". Its items stay in stock.", trashID)
 	return nil
 }
 
@@ -355,7 +355,11 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	s.redirect(w, r, back, "Odometer set to "+stock.FormatKm(*km))
+	msg := "Set the odometer to " + stock.FormatKm(*km)
+	if v, err := s.store.GetVehicle(r.Context(), id); err == nil {
+		msg = "Set " + v.Name + "'s odometer to " + stock.FormatKm(*km)
+	}
+	s.redirect(w, r, back, msg)
 	return nil
 }
 

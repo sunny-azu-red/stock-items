@@ -100,10 +100,10 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	services, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})
 	page := a.get(item)
 	svcLink := `href="/services/` + itoa(*services[0].ServiceRecordID) + `"`
-	expect(t, page, http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Consumed by service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
+	expect(t, page, http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Used in this service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
 	expectNot(t, page, `href="/movements/`+itoa(services[0].ID)+`/edit"`)
 	expect(t, a.get("/movements/"+itoa(services[0].ID)+"/edit"), http.StatusNotFound)
-	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Consumed by service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
+	expect(t, a.get("/activity"), http.StatusOK, `href="`+edit+`/edit"`, svcLink, "Used in this service", `title="View service"`, `Bought <span class="muted small">· Moto shop</span>`)
 
 	expect(t, a.get(edit+"/edit"), http.StatusOK, "Edit purchase", `value="199.00"`, `value="Moto shop"`, `name="amount" value="1"`)
 	expect(t, a.postV(edit, url.Values{"amount": {"1"}, "amount_unit": {"l"}, "total_price": {"19.90"}, "occurred_on": {"2027-01-01"}}),
@@ -130,7 +130,7 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	// Taking away more than is left is refused with a hint.
 	expect(t, a.post(item+"/movements", url.Values{"kind": {"used"}, "amount": {"2.4"}, "amount_unit": {"l"}}), http.StatusSeeOther)
 	rec = a.postV(edit+"/delete", nil)
-	expect(t, rec, http.StatusUnprocessableEntity, "Only 100 ml is left in stock")
+	expect(t, rec, http.StatusUnprocessableEntity, "Only 100 ml left in stock")
 	// The form shown with the refusal carries the change's version, so it
 	// still saves.
 	expect(t, a.post(edit, url.Values{"amount": {"2"}, "amount_unit": {"l"}, "total_price": {"39.80"},

@@ -175,7 +175,10 @@ func needRow(ctx context.Context, tx pgx.Tx, table string, id int64) (gone bool,
 	if err != nil {
 		return false, err
 	}
-	return false, &ConflictError{Field: "form", Message: "Restore " + label + " first."}
+	// "Item: Brake Pads" reads "Its item Brake Pads …", like the other
+	// reasons a restore gives ("Its item is archived; restore it first.").
+	what, name, _ := strings.Cut(label, ": ")
+	return false, &ConflictError{Field: "form", Message: "Its " + strings.ToLower(what) + " " + name + " is in the trash; restore it first."}
 }
 
 // needRows is needRow for a row everything else depends on: gone for good
@@ -381,6 +384,13 @@ var hardLinks = map[string][][2]string{
 	"vehicles": {{"service_records", "vehicle_id"}, {"service_kits", "vehicle_id"}},
 }
 
+// TrashLabel is a trash entry's label ("Item: Brake Pads"), for messages.
+func (s *Store) TrashLabel(ctx context.Context, id int64) (string, error) {
+	var label string
+	err := s.pool.QueryRow(ctx, `SELECT label FROM trash WHERE id = $1`, id).Scan(&label)
+	return label, notFound(err)
+}
+
 // PurgeTrash deletes one entry for good, together with the entries that
 // could only be restored with it: purging an item takes its deleted stock
 // changes and list entries along, a vehicle its deleted services and
@@ -506,7 +516,7 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 			err = fmt.Errorf("unknown trash kind %q", out.Kind)
 		}
 		if err != nil {
-			return restoreConflict(out.Label, err)
+			return restoreConflict(err)
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM trash WHERE id = $1`, id)
 		return err
@@ -596,12 +606,12 @@ func checkSnapshotAmounts(ctx context.Context, tx pgx.Tx, p trashPayload) error 
 }
 
 // restoreConflict turns database errors of a restore into messages.
-func restoreConflict(label string, err error) error {
+func restoreConflict(err error) error {
 	switch {
 	case isForeignKeyViolation(err):
-		return &ConflictError{Field: "form", Message: label + ": something it belonged to is gone."}
+		return &ConflictError{Field: "form", Message: "Something it belonged to was permanently deleted."}
 	case isUniqueViolation(err):
-		return &ConflictError{Field: "form", Message: label + ": something with the same name or place exists now."}
+		return &ConflictError{Field: "form", Message: "Something with the same name or place exists now."}
 	}
 	return err
 }

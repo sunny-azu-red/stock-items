@@ -98,10 +98,10 @@ func TestDueSummary(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 	d = Due{KmLeft: ptr(-300), DaysLeft: ptr(-1)}
-	if got := d.Summary(); got != "300 km over · 1 day late" {
+	if got := d.Summary(); got != "300 km overdue · 1 day overdue" {
 		t.Errorf("got %q", got)
 	}
-	if got := (Due{DaysLeft: ptr(0)}).Summary(); got != "today" {
+	if got := (Due{DaysLeft: ptr(0)}).Summary(); got != "due today" {
 		t.Errorf("got %q", got)
 	}
 }
@@ -152,7 +152,7 @@ func TestReadinessIgnoresArchivedLines(t *testing.T) {
 }
 
 func TestDueSummaryAtTheDueKm(t *testing.T) {
-	for left, want := range map[int]string{-300: "300 km over", 0: "due now", 1200: "in 1 200 km"} {
+	for left, want := range map[int]string{-300: "300 km overdue", 0: "due now", 1200: "in 1 200 km"} {
 		if got := (Due{KmLeft: &left}).Summary(); got != want {
 			t.Errorf("%d km left: %q, want %q", left, got, want)
 		}

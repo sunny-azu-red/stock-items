@@ -10,7 +10,7 @@
   </div>
 </div>
 <div class="filters-row mb">
-  <div class="chips" role="group" aria-label="Kind">
+  <div class="chips" role="group" aria-label="Type">
     <a class="chip chip-toggle{{if not $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery "")}}">All types</a>
     {{range $d.Kinds}}<a class="chip chip-toggle{{if eq (print .) $d.Kind}} active{{end}}" href="{{withQuery "/activity" ($d.KindQuery (print .))}}">{{.Label}}</a>{{end}}
   </div>

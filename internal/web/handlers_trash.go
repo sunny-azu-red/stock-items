@@ -69,28 +69,35 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 			s.setFlash(w, "error", "Can't restore: "+conflict.Message)
 		case errors.As(err, &short):
 			s.setFlash(w, "error", "Can't restore: only "+stock.FormatQuantity(short.Have, short.Unit)+" of "+short.ItemName+
-				" is in stock, and it would take "+stock.FormatQuantity(short.Need, short.Unit)+".")
+				" in stock, and it needs "+stock.FormatQuantity(short.Need, short.Unit))
 		default:
 			return err
 		}
 		s.redirect(w, r, s.back(r, "/trash"), "")
 		return nil
 	}
-	msg := "Restored " + strings.TrimSuffix(res.Label, ".") + "."
+	// The record's name, not its trash label ("Item: Brake Pads"); a stock
+	// change keeps its label, which says what kind it was.
+	_, name, _ := strings.Cut(res.Label, ": ")
+	msg := "Restored " + name
 	switch res.Kind {
+	case store.TrashMovement:
+		msg = "Restored " + res.Label
+	case store.TrashShopping:
+		msg = "Restored " + name + " to the shopping list"
 	case store.TrashBought:
-		msg = "Took back buying " + strings.TrimPrefix(res.Label, "Bought: ") + ". It's back on the shopping list."
+		msg = "Undid buying " + name + ". It's back on the shopping list."
 	case store.TrashPhoto:
 		// Not "Restored Photo: X (replaced)": the label says why it went to
 		// the trash, which is no longer news.
-		msg = "Restored the photo of " + res.Name + "."
+		msg = "Restored the photo of " + res.Name
 	}
 	if res.Dropped > 0 {
-		msg += " Left out " + plural(res.Dropped, "link") + " to things permanently deleted."
+		msg = strings.TrimSuffix(msg, ".") + ". Left out " + plural(res.Dropped, "link") + " to what was permanently deleted."
 	}
 	if res.Replaced != 0 {
 		// The photo it took the place of went to the trash in turn.
-		s.redirectUndo(w, r, restoredPath(res), msg+" The newer photo is in the trash.", res.Replaced)
+		s.redirectUndo(w, r, restoredPath(res), strings.TrimSuffix(msg, ".")+". The newer photo is in the trash.", res.Replaced)
 		return nil
 	}
 	s.redirect(w, r, restoredPath(res), msg)
@@ -102,6 +109,11 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	label, err := s.store.TrashLabel(r.Context(), id) // for the message
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	_, name, _ := strings.Cut(label, ": ")
 	others, err := s.store.PurgeTrash(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", "That was restored or permanently deleted already")
@@ -110,9 +122,9 @@ func (s *Server) trashPurge(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	msg := "Permanently deleted"
+	msg := "Permanently deleted " + name
 	if others > 0 {
-		msg += fmt.Sprintf(", with %d more %s that needed it", others, pluralOnly(others, "entry"))
+		msg += fmt.Sprintf(", and %d more %s in the trash that needed it", others, pluralOnly(others, "thing"))
 	}
 	s.redirect(w, r, "/trash", msg)
 	return nil
@@ -122,6 +134,6 @@ func (s *Server) trashEmpty(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.EmptyTrash(r.Context()); err != nil {
 		return err
 	}
-	s.redirect(w, r, "/trash", "Emptied. Nothing can be restored now.")
+	s.redirect(w, r, "/trash", "Emptied the trash")
 	return nil
 }

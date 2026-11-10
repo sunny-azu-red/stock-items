@@ -177,7 +177,7 @@ func TestStockBadgeAcrossPages(t *testing.T) {
 
 	// Shopping suggestions, and the matches of a free-text entry.
 	page := a.get("/shopping")
-	expect(t, page, http.StatusOK, lowBadge("1 pcs", "2 pcs"), "Below minimum of 2 pcs</span>")
+	expect(t, page, http.StatusOK, lowBadge("1 pcs", "2 pcs"), "Below the minimum of 2 pcs</span>")
 	expectNot(t, page, "· have ")
 	free, err := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "bajaj brake pads", Quantity: ptr(2.0), Unit: stock.UnitPiece})
 	if err != nil {

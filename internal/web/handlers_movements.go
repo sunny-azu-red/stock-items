@@ -202,7 +202,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		err := s.store.UpdateMovement(r.Context(), m.ID, e)
 		if err == nil {
-			s.redirect(w, r, f.Back, "Saved the "+changeName(m.Kind))
+			s.redirect(w, r, f.Back, "Saved the "+changeName(m.Kind)+" of "+m.ItemName)
 			return nil
 		}
 		if s.savedAlready(w, r, err, func(int64) string { return f.Back }, f.Back) {
@@ -242,7 +242,7 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		s.redirectUndo(w, r, back,
-			"Deleted the "+changeName(m.Kind)+". Stock is now "+stock.FormatQuantity(it.Quantity, it.Unit)+".", trashID)
+			"Deleted the "+changeName(m.Kind)+" of "+it.DisplayName()+": "+stock.FormatQuantity(it.Quantity, it.Unit)+" in stock", trashID)
 		return nil
 	}
 	f := movementEditForm{Supplier: m.Supplier, Note: m.Note, OccurredOn: m.OccurredOn.Format("2006-01-02"),
@@ -289,7 +289,7 @@ func movementConflict(errs stock.Errors, err error) bool {
 	var short *store.InsufficientStockError
 	if errors.As(err, &short) {
 		errs.Add("amount", "Only "+stock.FormatQuantity(short.Have, short.Unit)+
-			" is left in stock, so this change can't take away "+stock.FormatQuantity(short.Need, short.Unit)+
+			" left in stock, so this change can't take away "+stock.FormatQuantity(short.Need, short.Unit)+
 			". Record what was used first, or adjust the stock.")
 		return true
 	}

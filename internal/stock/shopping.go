@@ -41,7 +41,7 @@ func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64, today
 	}
 	for _, it := range items {
 		if it.IsLow() {
-			add(it, *it.MinQuantity-it.Quantity, "Below minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
+			add(it, *it.MinQuantity-it.Quantity, "Below the minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
 		}
 	}
 	for _, k := range kits {
@@ -95,7 +95,7 @@ func SuggestForItem(it Item, kits []Kit, today time.Time) (Suggestion, bool) {
 		out.Reasons = append(out.Reasons, reason)
 	}
 	if it.IsLow() {
-		add(*it.MinQuantity-it.Quantity, "Below minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
+		add(*it.MinQuantity-it.Quantity, "Below the minimum of "+FormatQuantity(*it.MinQuantity, it.Unit))
 	}
 	for _, k := range kits {
 		if k.Archived() {

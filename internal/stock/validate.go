@@ -348,7 +348,7 @@ func (in MovementInput) Validate() Errors {
 		}
 	case MoveAdjusted:
 	default:
-		errs.Add("kind", "Unknown movement type")
+		errs.Add("kind", "Unknown type of stock change")
 	}
 	// A service's parts always belong to it, and nothing else does (a
 	// CHECK constraint in the database too).
@@ -607,7 +607,7 @@ func (in ServiceInput) Validate() Errors {
 		}
 	}
 	if utf8.RuneCountInString(in.Title) > maxShortText {
-		errs.Add("title", "Title is too long (max 200 characters)")
+		errs.Add("title", "Work performed is too long (max 200 characters)")
 	}
 	if in.OdometerKm != nil && *in.OdometerKm > MaxOdometerKm {
 		errs.Add("odometer_km", "That is more than "+FormatKm(MaxOdometerKm))

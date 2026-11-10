@@ -707,7 +707,7 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		// Only these three have a form; starting stock and service parts
 		// are recorded by the app itself.
 		in.Kind, f.Kind = stock.MoveBought, string(stock.MoveBought)
-		f.Errors.Add("kind", "Unknown kind of stock change")
+		f.Errors.Add("kind", "Unknown type of stock change")
 	}
 	amount, err := stock.ParseAmount(f.Amount, it.Unit, f.AmountUnit)
 	if err != nil {
@@ -758,9 +758,9 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err == nil {
 			msg := map[stock.MovementKind]string{
-				stock.MoveBought:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit),
-				stock.MoveUsed:     "Used " + stock.FormatQuantity(-in.Delta, it.Unit),
-				stock.MoveAdjusted: "Adjusted: " + stock.FormatQuantity(amount, it.Unit) + " in stock",
+				stock.MoveBought:   "Bought " + stock.FormatQuantity(in.Delta, it.Unit) + " of " + it.DisplayName(),
+				stock.MoveUsed:     "Used " + stock.FormatQuantity(-in.Delta, it.Unit) + " of " + it.DisplayName(),
+				stock.MoveAdjusted: "Adjusted " + it.DisplayName() + ": " + stock.FormatQuantity(amount, it.Unit) + " in stock",
 			}[in.Kind]
 			s.redirect(w, r, itemPath(id), msg)
 			return nil
@@ -851,7 +851,12 @@ func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	if it, err = s.store.GetItem(ctx, id); err != nil {
 		return s.gone(r, err, store.WhatItem, id)
 	}
-	return s.adjustDone(w, r, it, "success", it.DisplayName()+": "+stock.FormatQuantity(it.Quantity, it.Unit))
+	have := stock.FormatQuantity(it.Quantity, it.Unit) + " in stock"
+	msg := "Adjusted " + it.DisplayName() + ": " + have
+	if in.Kind == stock.MoveUsed {
+		msg = "Used " + stock.FormatQuantity(-in.Delta, it.Unit) + " of " + it.DisplayName() + ": " + have
+	}
+	return s.adjustDone(w, r, it, "success", msg)
 }
 
 func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Item, kind, msg string) error {
@@ -920,9 +925,9 @@ func (s *Server) itemToShopping(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	msg := it.DisplayName() + " is on the shopping list"
+	msg := "Added " + it.DisplayName() + " to the shopping list"
 	if in.Quantity != nil {
-		msg = it.DisplayName() + " (" + stock.FormatQuantity(*in.Quantity, it.Unit) + ") is on the shopping list"
+		msg = "Added " + it.DisplayName() + " (" + stock.FormatQuantity(*in.Quantity, it.Unit) + ") to the shopping list"
 	}
 	s.redirect(w, r, back, msg)
 	return nil

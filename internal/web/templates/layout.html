@@ -74,8 +74,8 @@
 {{/* Both buttons are rendered; CSS shows the one that switches away from the
      current theme, so it also works without JavaScript. Data: extra class. */}}
 {{define "theme-toggle"}}<form class="theme-toggle {{.}}" method="post" action="/theme">
-  <button class="icon-btn theme-to-dark" type="submit" name="theme" value="dark" title="Dark theme" aria-label="Switch to the dark theme">{{icon "moon"}}</button>
-  <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Light theme" aria-label="Switch to the light theme">{{icon "sun"}}</button>
+  <button class="icon-btn theme-to-dark" type="submit" name="theme" value="dark" title="Switch to dark theme" aria-label="Switch to dark theme">{{icon "moon"}}</button>
+  <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Switch to light theme" aria-label="Switch to light theme">{{icon "sun"}}</button>
 </form>{{end}}
 
 {{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="{{if eq .Kind "error"}}alert{{else}}status{{end}}">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span>{{with .Undo}}<form class="inline-form flash-undo" method="post" action="/trash/{{.}}/restore"><button class="btn btn-sm" type="submit">{{icon "undo-2"}} Undo</button></form>{{end}}</div>{{end}}{{end}}

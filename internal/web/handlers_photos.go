@@ -95,10 +95,10 @@ func (s *Server) itemPhotoUpload(w http.ResponseWriter, r *http.Request) error {
 		return s.gone(r, err, store.WhatItem, id) // deleted while the photo was processed
 	}
 	if replaced != 0 {
-		s.redirectUndo(w, r, itemPath(id), "Replaced the photo", replaced)
+		s.redirectUndo(w, r, itemPath(id), "Replaced the photo of "+it.DisplayName(), replaced)
 		return nil
 	}
-	s.redirect(w, r, itemPath(id), "Saved the photo")
+	s.redirect(w, r, itemPath(id), "Saved the photo of "+it.DisplayName())
 	return nil
 }
 
@@ -142,7 +142,11 @@ func (s *Server) itemPhotoDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, itemPath(id), "Removed the photo", trashID)
+	msg := "Removed the photo"
+	if it, err := s.store.GetItem(r.Context(), id); err == nil {
+		msg += " of " + it.DisplayName()
+	}
+	s.redirectUndo(w, r, itemPath(id), msg, trashID)
 	return nil
 }
 

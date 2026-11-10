@@ -256,7 +256,7 @@ func TestServicePartsGoWithTheirService(t *testing.T) {
 	if f.Undo == 0 {
 		t.Fatalf("vehicle delete flash = %+v", f)
 	}
-	if msg := flashOf(t, a.post("/trash/"+itoa(f.Undo)+"/purge", nil)).Message; msg != "Permanently deleted, with 1 more entry that needed it" {
+	if msg := flashOf(t, a.post("/trash/"+itoa(f.Undo)+"/purge", nil)).Message; msg != "Permanently deleted Spare bike, and 1 more thing in the trash that needed it" {
 		t.Errorf("purge flash = %q", msg)
 	}
 	if got := a.quantity(t, oil); got != had {

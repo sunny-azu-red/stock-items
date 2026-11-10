@@ -372,7 +372,7 @@ func (d Due) Summary() string {
 	if d.KmLeft != nil {
 		switch {
 		case *d.KmLeft < 0:
-			parts = append(parts, FormatKm(-*d.KmLeft)+" over")
+			parts = append(parts, FormatKm(-*d.KmLeft)+" overdue")
 		case *d.KmLeft == 0:
 			parts = append(parts, "due now")
 		default:
@@ -382,9 +382,9 @@ func (d Due) Summary() string {
 	if d.DaysLeft != nil {
 		switch n := *d.DaysLeft; {
 		case n < 0:
-			parts = append(parts, plural(-n, "day")+" late")
+			parts = append(parts, plural(-n, "day")+" overdue")
 		case n == 0:
-			parts = append(parts, "today")
+			parts = append(parts, "due today")
 		default:
 			parts = append(parts, "in "+plural(n, "day"))
 		}

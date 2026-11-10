@@ -47,7 +47,7 @@ async function addItem(page: Page, it: ItemSpec) {
     if (sku.pack) await page.locator('input[name="sku_pack"]').nth(i).fill(sku.pack);
     if (sku.packUnit) await page.locator('select[name="sku_pack_unit"]').nth(i).selectOption(sku.packUnit);
   }
-  await page.getByRole("button", { name: "Save item" }).click();
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Added");
 }
 
@@ -138,7 +138,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   const silk = page.locator(".item-row").filter({ hasText: "Silkolene" });
   await page.goto("/stock");
   await expect(silk.locator(".sku:visible")).toHaveCount(2);
-  await silk.getByRole("link", { name: "Show 2 more part numbers" }).click();
+  await silk.getByRole("link", { name: "Show 2 more SKUs" }).click();
   await expect(page).toHaveURL(/\/stock$/);
   await expect(silk.locator(".sku:visible")).toHaveCount(4);
   await expect(silk.getByRole("link", { name: "SK-80087" })).toBeFocused();
@@ -224,7 +224,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.getByLabel("Amount bought").fill("4");
   await page.locator('select[name="amount_unit"]').selectOption("l");
   await page.getByRole("button", { name: "Add to stock" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Added 4 L");
+  await expect(page.locator(".flash-success")).toContainText("Bought 4 L of Silkolene");
 
   await page.goto("/services");
   await page.getByRole("link", { name: /Oil Service/ }).first().click();
@@ -258,7 +258,7 @@ test("buy something new from the shopping list", async ({ page }) => {
   await expect(page.getByLabel("In stock")).toHaveValue("2");
   await page.getByLabel("Total price").fill("59,80");
   await page.getByLabel("Shop").fill("Moto shop");
-  await page.getByRole("button", { name: "Save item" }).click();
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Added Chain lube to stock");
   await expect(page.locator(".list li").filter({ hasText: "Chain lube" })).toHaveCount(0);
 
@@ -275,7 +275,7 @@ test("edit and delete items", async ({ page }) => {
   await page.locator(".item-row a.item-name").first().click();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await page.getByLabel("Location").fill("Garage shelf 2");
-  await page.getByRole("button", { name: "Save item" }).click();
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved");
   await expect(page.locator("main")).toContainText("Garage shelf 2");
 
@@ -333,7 +333,7 @@ test("undo a deleted service", async ({ page }) => {
   await page.getByRole("button", { name: /Delete/ }).click();
   await expect(page.locator(".flash-success")).toContainText("Deleted Oil Service");
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Restored Service: Oil Service");
+  await expect(page.locator(".flash-success")).toContainText("Restored Oil Service");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await page.goto("/stock");
   await expect(row(page, "15W50 PRO 4 XP").locator(".qty")).toHaveText(before as string);
@@ -349,7 +349,7 @@ test("restore a shopping entry from the trash", async ({ page }) => {
   await page.locator("main").getByRole("link", { name: /^Trash/ }).click();
   const entry = page.locator(".list li").filter({ hasText: "Shopping list: Zip ties" });
   await entry.getByRole("button", { name: "Restore" }).click();
-  await expect(page.locator(".flash-success")).toContainText("Restored Shopping list: Zip ties");
+  await expect(page.locator(".flash-success")).toContainText("Restored Zip ties to the shopping list");
   await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(1);
   await page.getByRole("button", { name: "Remove Zip ties" }).click();
 });
@@ -469,19 +469,19 @@ test("switch between light and dark theme", async ({ page }) => {
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const light = await bg();
 
-  await page.getByRole("button", { name: "Switch to the dark theme" }).click();
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
   await expect(html).toHaveAttribute("data-theme", "dark");
   expect(await bg()).not.toBe(light);
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
 
   // Back to what the system shows: the choice is forgotten.
-  await page.getByRole("button", { name: "Switch to the light theme" }).click();
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(html).not.toHaveAttribute("data-theme");
   expect(await bg()).toBe(light);
   await page.reload();
   await expect(html).not.toHaveAttribute("data-theme");
-  await expect(page.getByRole("button", { name: "Switch to the dark theme" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
 });
 
 test("Back shows the theme chosen on the next page", async ({ page, browserName }, testInfo) => {
@@ -494,7 +494,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
       window.addEventListener("pageshow", (e) => { (window as any).fromCache = e.persisted; });
     });
     await p.goto("/");
-    await p.getByRole("button", { name: "Switch to the dark theme" }).click();
+    await p.getByRole("button", { name: "Switch to dark theme" }).click();
     await expect(p.locator("html")).toHaveAttribute("data-theme", "dark");
     await p.goBack({ waitUntil: "commit" });
     await expect(p).toHaveURL(/\/stock$/);
@@ -504,7 +504,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
 
     // And back to following the system.
     await p.goForward({ waitUntil: "commit" });
-    await p.getByRole("button", { name: "Switch to the light theme" }).click();
+    await p.getByRole("button", { name: "Switch to light theme" }).click();
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
     await p.goBack({ waitUntil: "commit" });
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
@@ -1032,7 +1032,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.goto("/items/new");
   await page.locator(".label-row").filter({ hasText: "Keep at least" }).getByRole("button", { name: "Help" }).click();
   await check("/items/new with a hint open");
-  await page.getByRole("button", { name: "Save item" }).click();
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   await check("/items/new with errors");
   // The kit form with its intermediate schedule expanded and its hint open.
@@ -1128,13 +1128,13 @@ test("an edit saved in another tab first is not overwritten", async ({ page, con
   other.on("dialog", (d) => d.accept());
   await other.goto(edit);
   await other.getByLabel("Notes").fill("From the other tab");
-  await other.getByRole("button", { name: "Save item" }).click();
+  await other.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(other.locator(".flash-success")).toContainText("Saved");
 
   // The first tab is refused, keeps what was typed, and offers a reload.
   await page.getByLabel("Notes").fill("From this tab");
-  await page.getByRole("button", { name: "Save item" }).click();
-  await expect(page.locator(".error-summary")).toContainText("This item was changed since you opened this");
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
+  await expect(page.locator(".error-summary")).toContainText("This item was changed since you opened it");
   await expect(page.getByLabel("Notes")).toHaveValue("From this tab");
   await page.getByRole("link", { name: "Reload" }).click();
   await expect(page.getByLabel("Notes")).toHaveValue("From the other tab");
@@ -1151,11 +1151,11 @@ test("an edit saved in another tab first is not overwritten", async ({ page, con
   }
   await expect(other.locator(".flash-success")).toContainText("Restored");
   await page.getByLabel("Notes").fill("");
-  await page.getByRole("button", { name: "Save item" }).click();
-  await expect(page.locator(".error-summary")).toContainText("was changed since you opened this");
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
+  await expect(page.locator(".error-summary")).toContainText("was changed since you opened it");
   await page.getByRole("link", { name: "Reload" }).click();
   await page.getByLabel("Notes").fill("");
-  await page.getByRole("button", { name: "Save item" }).click();
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved");
   await other.close();
 });

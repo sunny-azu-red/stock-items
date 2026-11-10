@@ -8,7 +8,7 @@
       {{with $it.Category}}<span class="badge badge-muted">{{icon "tag"}} {{.}}</span>{{end}}
       {{template "stock-badge" (stockBadge $it false)}}
       {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
-      {{if $it.Archived}}<span>Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
+      {{if $it.Archived}}<span>Left out of stock, part lists and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
     </div>
   </div>
   <div class="actions">

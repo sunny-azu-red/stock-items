@@ -492,7 +492,7 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 		}
 		rec = a.post(page+"/movements", with(url.Values{"kind": {"used"}, "amount": {"500"}, "amount_unit": {"ml"}}, key, ""))
 		expect(t, rec, http.StatusSeeOther)
-		if f := flashOf(t, rec); f.Message != "Used 500 ml" {
+		if f := flashOf(t, rec); f.Message != "Used 500 ml of Silkolene 15W50 PRO 4 XP" {
 			t.Errorf("flash = %+v", f)
 		}
 		if got := a.quantity(t, oil); got != 25 {
@@ -537,7 +537,7 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 
 // An edit saved, then posted again (Back and Save, a retry): its own first
 // save moved the version on, but the answer is "saved already", not
-// "changed since you opened this", and the second post changes nothing.
+// "changed since you opened it", and the second post changes nothing.
 func TestEditRetriedAfterItsSaveIsNotStale(t *testing.T) {
 	for _, r := range records() {
 		t.Run(r.name, func(t *testing.T) {
@@ -655,7 +655,7 @@ func TestRepeatsAfterUndo(t *testing.T) {
 		expect(t, a.post("/trash/"+itoa(flashOf(t, rec).Undo)+"/restore", nil), http.StatusSeeOther)
 
 		rec = a.post(page, form)
-		expect(t, rec, http.StatusUnprocessableEntity, "This shopping list entry was changed since you opened this", `value="23.45"`)
+		expect(t, rec, http.StatusUnprocessableEntity, "This shopping list entry was changed since you opened it", `value="23.45"`)
 		if got := a.quantity(t, oil); got != 525 {
 			t.Errorf("oil = %v, want 525: the purchase undone, not made again", got)
 		}

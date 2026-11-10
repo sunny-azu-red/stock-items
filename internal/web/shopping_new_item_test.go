@@ -39,7 +39,7 @@ func TestNewItemFromShoppingEntry(t *testing.T) {
 			t.Fatal(err)
 		}
 		expect(t, a.post("/items", with(fields, key, version)), http.StatusUnprocessableEntity,
-			"This shopping list entry was changed since you opened this", `href="/items/new?shopping=`+itoa(free)+`"`, `value="Chain lube"`)
+			"This shopping list entry was changed since you opened it", `href="/items/new?shopping=`+itoa(free)+`"`, `value="Chain lube"`)
 		if items, _ := a.store.ListItems(ctx, store.ItemFilter{Query: "Chain lube"}); len(items) != 0 {
 			t.Errorf("a stale form added %d items", len(items))
 		}

@@ -609,7 +609,7 @@ func TestRestoringWhileTheItemIsDeleted(t *testing.T) {
 			h.commit(t)
 			c.wait()
 			noDeadlock(t, "restore", restored)
-			wantConflict(t, "restore", restored, "Restore Item: Pads first")
+			wantConflict(t, "restore", restored, "Its item Pads is in the trash; restore it first")
 			if errors.Is(restored, store.ErrNotFound) {
 				t.Error("the trash entry looks gone")
 			}
@@ -636,14 +636,14 @@ func TestRestoringWhileWhatItBelongsToIsDeleted(t *testing.T) {
 		{"service, vehicle into the trash", store.TrashService, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
 			holderExec(t, h, `DELETE FROM vehicles WHERE id = $1`, vehicle)
 			holderExec(t, h, trashed, vehicle)
-		}, "Restore Vehicle: KTM 390 first", 0},
+		}, "Its vehicle KTM 390 is in the trash; restore it first", 0},
 		{"service, kit for good", store.TrashService, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
 			holderExec(t, h, `DELETE FROM service_kits WHERE id = $1`, kit)
 		}, "", 1},
 		{"kit, vehicle into the trash", store.TrashKit, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
 			holderExec(t, h, `DELETE FROM vehicles WHERE id = $1`, vehicle)
 			holderExec(t, h, trashed, vehicle)
-		}, "Restore Vehicle: KTM 390 first", 0},
+		}, "Its vehicle KTM 390 is in the trash; restore it first", 0},
 		{"kit, line item for good", store.TrashKit, func(t *testing.T, h *holder, vehicle, kit, oil int64) {
 			holderExec(t, h, `DELETE FROM items WHERE id = $1`, oil)
 		}, "", 1},

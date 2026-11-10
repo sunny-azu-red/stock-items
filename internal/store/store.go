@@ -67,11 +67,11 @@ func versioned(table string) bool {
 func (e *StaleError) Error() string {
 	switch {
 	case e.Gone && e.InTrash:
-		return "This " + e.What + " was deleted since you opened this; it's in the trash."
+		return "This " + e.What + " was deleted since you opened it; it's in the trash."
 	case e.Gone:
-		return "This " + e.What + " was deleted since you opened this."
+		return "This " + e.What + " was deleted since you opened it."
 	}
-	return "This " + e.What + " was changed since you opened this (another tab or person). Reload to see the latest, then make your change again."
+	return "This " + e.What + " was changed since you opened it (another tab or person). Reload to see the latest, then make your change again."
 }
 
 // Is lets errors.Is(err, ErrNotFound) match a gone record.
@@ -150,7 +150,7 @@ type InsufficientStockError struct {
 }
 
 func (e *InsufficientStockError) Error() string {
-	return fmt.Sprintf("not enough %s in stock: have %s, need %s", e.ItemName,
+	return fmt.Sprintf("Not enough %s in stock: %s left, %s needed", e.ItemName,
 		stock.FormatQuantity(e.Have, e.Unit), stock.FormatQuantity(e.Need, e.Unit))
 }
 

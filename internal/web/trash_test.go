@@ -81,7 +81,7 @@ func TestPurgeSaysWhatWentAlong(t *testing.T) {
 	}
 	expect(t, a.get("/trash"), http.StatusOK, "Its deleted services and kits go too.")
 	rec = a.post("/trash/"+itoa(f.Undo)+"/purge", nil)
-	if msg := flashOf(t, rec).Message; msg != "Permanently deleted, with 1 more entry that needed it" {
+	if msg := flashOf(t, rec).Message; msg != "Permanently deleted Old bike, and 1 more thing in the trash that needed it" {
 		t.Errorf("flash = %q", msg)
 	}
 	if n, _ := a.store.CountTrash(context.Background()); n != 0 {
@@ -105,7 +105,7 @@ func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 	}
 	expect(t, a.post("/trash/"+itoa(ringTrash)+"/purge", nil), http.StatusSeeOther)
 	msg := flashOf(t, a.post("/trash/"+itoa(kitTrash)+"/restore", nil)).Message
-	if msg != "Restored Kit: Brakes (KTM 390). Left out 1 link to things permanently deleted." {
+	if msg != "Restored Brakes (KTM 390). Left out 1 link to what was permanently deleted." {
 		t.Errorf("flash = %q", msg)
 	}
 }

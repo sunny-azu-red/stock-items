@@ -153,7 +153,7 @@
       {{template "stock-badge" (stockBadge $it false)}}
       {{template "expiry-badge" $it}}
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
-      {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{plural (add (len $skus) -2) "more part number"}}">+{{add (len $skus) -2}} more</a>{{end}}
+      {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{add (len $skus) -2}} more {{pluralOnly (add (len $skus) -2) "SKU"}}">+{{add (len $skus) -2}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
       {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles "Link" true)}}{{end}}
     </div>
@@ -162,11 +162,11 @@
   <div class="item-actions">
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
       <input type="hidden" name="dir" value="down">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
-      <button class="icon-btn" type="submit" title="Use some" aria-label="Use {{step $it.Unit}} of {{$it.DisplayName}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
+      <button class="icon-btn" type="submit" title="Use {{step $it.Unit}}" aria-label="Use {{step $it.Unit}} of {{$it.DisplayName}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
     </form>
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
       <input type="hidden" name="dir" value="up">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
-      <button class="icon-btn" type="submit" title="Add some" aria-label="Add {{step $it.Unit}} of {{$it.DisplayName}}">{{icon "plus"}}</button>
+      <button class="icon-btn" type="submit" title="Add {{step $it.Unit}} (Adjusted)" aria-label="Add {{step $it.Unit}} of {{$it.DisplayName}} (Adjusted)">{{icon "plus"}}</button>
     </form>
   </div>
   {{end}}
@@ -207,7 +207,7 @@
       <td class="nowrap">{{if .ServiceRecordID}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{.Kind.Label}}{{with .Supplier}} <span class="muted small">· {{.}}</span>{{end}}{{end}}</td>
       <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
       <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
-      <td class="muted small">{{if .ServiceRecordID}}Consumed by service{{else}}{{.Note}}{{end}}</td>
+      <td class="muted small">{{if .ServiceRecordID}}Used in this service{{else}}{{.Note}}{{end}}</td>
       <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if .ServiceRecordID}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
     </tr>
   {{end}}

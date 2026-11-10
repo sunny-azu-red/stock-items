@@ -21,10 +21,10 @@
     toast(d.message, d.kind);
   });
   document.addEventListener("htmx:responseError", function () {
-    toast("Something went wrong. Please try again.", "error");
+    toast("Pitbox hit an error. Try again.", "error");
   });
   document.addEventListener("htmx:sendError", function () {
-    toast("Cannot reach the server.", "error");
+    toast("Can't reach the server.", "error");
   });
 
   // Preserve keyboard focus across htmx out-of-band swap of sort direction.
@@ -776,7 +776,7 @@
       method: "POST",
       headers: { "HX-Request": "true", "Content-Type": "application/x-www-form-urlencoded" },
       body: "theme=" + theme
-    }).catch(function () { toast("Could not save the theme.", "error"); });
+    }).catch(function () { toast("The theme changed here but couldn't be saved.", "error"); });
   });
   // A page that Back restores from the browser's page cache (pageshow with
   // persisted) or reloads from its HTTP cache shows the theme it had when
@@ -800,7 +800,7 @@
       e.preventDefault();
       if (!focusSearch()) window.location.href = "/stock#search";
     } else if (e.key === "a" || e.key === "l") {
-      if (dirty && !window.confirm("Leave this page? Your changes are not saved.")) return;
+      if (dirty && !window.confirm("Leave this page? What you typed isn't saved yet.")) return;
       window.location.href = e.key === "a" ? "/items/new" : "/services/new";
     }
   });

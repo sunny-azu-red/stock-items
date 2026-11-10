@@ -603,7 +603,7 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RestoreTrash(ctx, kitTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Restore Item: O-ring first") {
+	if _, err := s.RestoreTrash(ctx, kitTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Its item O-ring is in the trash; restore it first") {
 		t.Fatalf("kit before its item: want conflict naming the item, got %v", err)
 	}
 	mustRestore(t, s, itemTrash)
@@ -648,7 +648,7 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RestoreTrash(ctx, svcTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Kit: Oil service") {
+	if _, err := s.RestoreTrash(ctx, svcTrash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "Its kit Oil service") {
 		t.Fatalf("service before its kit: want conflict, got %v", err)
 	}
 	mustRestore(t, s, kitTrash)

@@ -225,7 +225,7 @@ func TestFormsOfDeletedRecordsGoToTheTrash(t *testing.T) {
 		if to := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || to != "/trash" {
 			t.Errorf("%s: %d to %q, want 303 to /trash", tt.action, rec.Code, to)
 		}
-		if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "was deleted since you opened this") {
+		if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "was deleted since you opened it") {
 			t.Errorf("%s: flash = %+v", tt.action, f)
 		}
 	}

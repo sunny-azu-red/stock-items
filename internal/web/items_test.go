@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -574,4 +575,37 @@ func TestStockRowCategoryAndSKUThreshold(t *testing.T) {
 		`hidden>TA-004</a>`,
 		`+2 more</a>`,
 	)
+}
+
+// A form refused with 422 keeps what was typed in the fields added since
+// 81a2fc6: an SKU's brand and the starting stock's note on the item form,
+// the purchase date and odometer on the vehicle form, and the intermediate
+// schedule and its parts on the kit form.
+func TestRefusedFormsKeepNewFields(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	oil := itemID(t, a.store, "Silkolene")
+
+	// No name: refused.
+	expect(t, a.post("/items", url.Values{
+		"unit": {"ml"}, "quantity": {"1"}, "quantity_unit": {"l"}, "total_price": {"20"}, "bought_note": {"Spring sale"},
+		"sku_code": {"308100"}, "sku_kind": {"manufacturer"}, "sku_brand": {"Motorex"}, "sku_pack": {"1"}, "sku_pack_unit": {"l"},
+	}), http.StatusUnprocessableEntity, `name="sku_brand" value="Motorex"`, "Spring sale")
+
+	// A purchase odometer above the odometer: refused.
+	expect(t, a.post("/vehicles", url.Values{
+		"name": {"Duke"}, "kind": {"motorcycle"}, "odometer_km": {"100"}, "purchased_on": {"2026-06-01"}, "purchased_km": {"500"},
+	}), http.StatusUnprocessableEntity, `name="purchased_on" value="2026-06-01"`, `name="purchased_km" value="500"`)
+
+	// No name: refused.
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)}, "interval_km": {"4000"},
+		"has_inter": {"1"}, "inter_interval_km": {"2000"}, "inter_interval_months": {"6"},
+		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
+	})
+	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_km" value="2000"`, `name="inter_interval_months" value="6"`)
+	if !regexp.MustCompile(`(?s)id="inter-lines".*?value="` + itoa(oil) + `"[^>]* selected.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
+		t.Error("the kit form lost the intermediate part")
+	}
 }

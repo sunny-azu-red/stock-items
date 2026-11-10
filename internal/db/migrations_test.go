@@ -906,9 +906,43 @@ func TestKitIntermediateMigration(t *testing.T) {
 	if strings.Contains(payload, "inter_interval") || strings.Contains(payload, `"intermediate"`) {
 		t.Errorf("after Down: trash payload still holds intermediate fields: %s", payload)
 	}
+	// The snapshot keeps its full line (10) and loses the intermediate one (11).
+	if !strings.Contains(payload, `"id": 10`) || strings.Contains(payload, `"id": 11`) {
+		t.Errorf("after Down: trash payload lines = %s", payload)
+	}
+	// The kit keeps its full line; the intermediate one is gone.
+	var lines int
+	var qty float64
+	if err := pool.QueryRow(ctx, `SELECT count(*), sum(quantity) FROM service_kit_lines WHERE kit_id = 1`).Scan(&lines, &qty); err != nil {
+		t.Fatal(err)
+	}
+	if lines != 1 || qty != 1700 {
+		t.Errorf("after Down: kit 1 has %d lines of %v, want the full line of 1700", lines, qty)
+	}
+	var col bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'service_records' AND column_name = 'kit_intermediate')`).Scan(&col); err != nil {
+		t.Fatal(err)
+	}
+	if col {
+		t.Error("after Down: service_records.kit_intermediate is still there")
+	}
 
+	// Up again: existing lines and services default to the full schedule,
+	// and the same item can again go in both lists.
 	if _, err := provider.UpTo(ctx, 17); err != nil {
 		t.Fatal(err)
+	}
+	var inter, kitInter bool
+	if err := pool.QueryRow(ctx, `SELECT l.intermediate, r.kit_intermediate FROM service_kit_lines l, service_records r
+		WHERE l.kit_id = 1 AND r.id = 1`).Scan(&inter, &kitInter); err != nil {
+		t.Fatal(err)
+	}
+	if inter || kitInter {
+		t.Errorf("after second Up: intermediate = %v, kit_intermediate = %v, want false", inter, kitInter)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO service_kit_lines (kit_id, item_id, quantity, intermediate) VALUES (1, 2, 1000, true)`); err != nil {
+		t.Errorf("after second Up: the same item in the intermediate list: %v", err)
 	}
 }
 

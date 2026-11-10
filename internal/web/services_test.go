@@ -700,3 +700,70 @@ func TestServiceFormHeader(t *testing.T) {
 	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `<p class="sub">The parts below are taken from stock when you save.</p>`)
 	expectNot(t, page, `<div class="sub flex">`, "<h1>Log service · ", "<title>Log service · KTM 390")
 }
+
+// A kit with an intermediate schedule, the same item in both parts lists,
+// comes back whole from the trash: both lists and the intermediate interval.
+func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	oil := itemID(t, a.store, "Silkolene")
+	ring := itemID(t, a.store, "O-Ring")
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_km": {"4000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_km": {"2000"}, "inter_interval_months": {"6"},
+		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"},
+		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+	id := mustID(t, kitURL)
+	check := func(when string) {
+		t.Helper()
+		k, err := a.store.GetKit(context.Background(), id)
+		if err != nil {
+			t.Fatalf("%s: %v", when, err)
+		}
+		if len(k.Lines) != 2 || len(k.InterLines) != 1 || k.InterLines[0].ItemID != oil || k.InterLines[0].Need != 1000 ||
+			k.InterIntervalKm == nil || *k.InterIntervalKm != 2000 || k.InterIntervalMonths == nil || *k.InterIntervalMonths != 6 {
+			t.Errorf("%s: kit = lines %+v, intermediate %+v, every %v km / %v months", when, k.Lines, k.InterLines, k.InterIntervalKm, k.InterIntervalMonths)
+		}
+	}
+	check("made")
+	f := flashOf(t, a.postV(kitURL+"/delete", nil))
+	if f.Undo == 0 {
+		t.Fatalf("delete: %+v", f)
+	}
+	expect(t, a.get(kitURL), http.StatusNotFound)
+	if f := flashOf(t, a.post("/trash/"+itoa(f.Undo)+"/restore", nil)); f.Kind == "error" {
+		t.Fatalf("Undo: %+v", f)
+	}
+	check("restored")
+}
+
+// A deleted service dated before the vehicle's purchase date, set after the
+// delete, can't come back: its reading must still fit, like one between
+// services logged since. The restore says why and changes nothing.
+func TestRestoreServiceBeforePurchaseDateIsRefused(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	vPath := vehiclePath(k390)
+	rec := a.post("/services", url.Values{
+		"vehicle_id": {itoa(k390)}, "title": {"Oil Service"}, "performed_on": {"2026-05-01"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	undo := flashOf(t, a.postV(svc+"/delete", nil)).Undo
+	if undo == 0 {
+		t.Fatal("deleting the service offered no Undo")
+	}
+	expect(t, a.postV(vPath, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "purchased_on": {"2026-06-01"}}), http.StatusSeeOther)
+
+	rec = a.post("/trash/"+itoa(undo)+"/restore", nil)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "Earlier than 1 Jun 2026") {
+		t.Errorf("restore: flash = %+v", f)
+	}
+	expect(t, a.get(svc), http.StatusNotFound)
+	expect(t, a.get("/trash"), http.StatusOK, `action="/trash/`+itoa(undo)+`/restore"`)
+}

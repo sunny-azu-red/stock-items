@@ -208,8 +208,9 @@ func (k Kit) InterDue(currentKm *int, today time.Time) Due {
 
 // FullDue computes when the kit's main (full) schedule is next due.
 // When the last service was intermediate:
-//   - If InterIntervalMonths is set (alternating reset mode), the intermediate
-//     service resets the time clock and advances the km target by InterIntervalKm.
+//   - If InterIntervalMonths is set (alternating reset mode), the full service
+//     is due one intermediate interval (InterIntervalKm, InterIntervalMonths)
+//     after the intermediate one.
 //   - If InterIntervalMonths is nil (strict warranty mode), the full schedule
 //     counts strictly from LastFullService (or the vehicle's purchase baseline)
 //     so intermediate changes never push back the full service's deadline.
@@ -228,7 +229,9 @@ func (k Kit) FullDue(currentKm *int, today time.Time) Due {
 	if lastWasInter {
 		stepKm := cmp.Or(k.InterIntervalKm, k.IntervalKm)
 		if k.InterIntervalMonths != nil {
-			return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, stepKm, k.IntervalMonths, currentKm, today)
+			// Services alternate: the full one comes one intermediate step
+			// after the intermediate, in km and in months alike.
+			return dueFrom(k.LastService, k.LastOdometerKm, k.VehiclePurchasedOn, k.VehiclePurchasedKm, stepKm, k.InterIntervalMonths, currentKm, today)
 		}
 		if lastFull == nil && k.VehiclePurchasedKm == nil {
 			interKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)

@@ -326,6 +326,25 @@ func TestKitIntermediateSchedules(t *testing.T) {
 		}
 	})
 
+	// Intermediate months shorter than full months: after an intermediate
+	// service the full one is due one intermediate step later, in months as
+	// in km, not a whole full interval later.
+	t.Run("alternating mode with a shorter intermediate month interval", func(t *testing.T) {
+		k := Kit{
+			IntervalKm:          ptr(4000),
+			IntervalMonths:      ptr(12),
+			InterIntervalKm:     ptr(2000),
+			InterIntervalMonths: ptr(6),
+		}
+		full1 := svc(1, day(2026, 1, 1), 0, false)
+		k.LastService, k.LastFullService = full1, full1
+		k.LastService = svc(2, day(2026, 7, 1), 2000, true)
+		due := k.Due(ptr(2500), day(2026, 8, 1))
+		if due.DueKm == nil || *due.DueKm != 4000 || due.DueDate == nil || !due.DueDate.Equal(day(2027, 1, 1)) {
+			t.Errorf("full due after intermediate = %+v, want 4000 km / 2027-01-01", due)
+		}
+	})
+
 	t.Run("new vehicle baseline with intermediate schedule", func(t *testing.T) {
 		k := Kit{
 			IntervalKm:         ptr(4000),

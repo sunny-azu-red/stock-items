@@ -51,8 +51,8 @@
       <fieldset class="field">
         <legend>Schedule</legend>
         <span class="segmented">
-          <label><input type="radio" name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="{{$f.KitName}}" {{if not $f.KitIntermediate}}checked{{end}}>Full</label>
-          <label><input type="radio" name="kit_intermediate" value="1" data-kit-tier="inter" data-kit-name="{{$f.KitName}}" {{if $f.KitIntermediate}}checked{{end}}>Intermediate</label>
+          <label><input type="radio" name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="{{$f.KitName}}" {{if not $f.KitIntermediate}}checked{{end}}>Full</label>
+          <label><input type="radio" name="kit_intermediate" value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="{{$f.KitName}}" {{if $f.KitIntermediate}}checked{{end}}>Intermediate</label>
         </span>
       </fieldset>
       {{end}}

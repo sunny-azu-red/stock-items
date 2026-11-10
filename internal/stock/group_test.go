@@ -193,3 +193,19 @@ func TestWriteMovementsCSV(t *testing.T) {
 		}
 	}
 }
+
+// The CSV lists an item's SKUs in the order the pages show them
+// (DisplaySKUs: the item's own brand first), not in the order added.
+func TestWriteCSVSKUOrder(t *testing.T) {
+	it := Item{ID: 1, Brand: "Motorex", Name: "Coolant", Unit: UnitML, SKUs: []SKU{
+		{Code: "U6920035", Kind: SKUOEM, Brand: "KTM"},
+		{Code: "308100", Kind: SKUManufacturer, Brand: "Motorex"},
+	}}
+	var buf strings.Builder
+	if err := WriteCSV(&buf, []Item{it}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, `Manufacturer:308100 (Motorex); OEM:U6920035 (KTM)`) {
+		t.Errorf("CSV SKUs not in page order:\n%s", out)
+	}
+}

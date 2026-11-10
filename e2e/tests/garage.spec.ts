@@ -1216,9 +1216,25 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
   await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
 
-  // Toggling to Full in the browser switches the title and parts to Full.
+  // The header names the vehicle (a chip) and the kit (a badge), as plain labels.
+  await expect(page.locator(".page-head .chip")).toHaveCount(1);
+  await expect(page.locator(".page-head .badge")).toHaveText("Oil Service");
+  await expect(page.locator(".page-head a")).toHaveCount(0);
+  await expect(page.locator("#vehicle_id")).toHaveCount(0);
+
+  // The intermediate parts are filled in; change one.
+  const partItem = page.locator('#part-lines select[name="part_item"]').first();
+  const partQty = page.locator('#part-lines input[name="part_qty"]').first();
+  await expect(partItem.locator("option:checked")).toHaveText("Silkolene 15W50 PRO 4 XP");
+  await partQty.fill("1.5 L");
+
+  // Toggling to Full in the browser switches the title and parts to Full;
+  // back to Intermediate brings the rows back as they were typed.
   await page.locator(".segmented label").filter({ hasText: "Full" }).click();
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service");
+  await expect(partQty).not.toHaveValue("1.5 L");
   await page.locator(".segmented label").filter({ hasText: "Intermediate" }).click();
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
+  await expect(partItem.locator("option:checked")).toHaveText("Silkolene 15W50 PRO 4 XP");
+  await expect(partQty).toHaveValue("1.5 L");
 });

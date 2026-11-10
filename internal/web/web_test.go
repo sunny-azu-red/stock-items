@@ -700,7 +700,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
 		`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</span>`,
 		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
-		`name="kit_intermediate" value="0" data-kit-tier="full" data-kit-name="Oil service" checked`,
+		`name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="Oil service" checked`,
 		`id="title" name="title" value="Oil service"`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`)
 
@@ -723,7 +723,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// New service from kit now pre-selects Intermediate and pre-fills Intermediate parts & title.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
-		`name="kit_intermediate" value="1" data-kit-tier="inter" data-kit-name="Oil service" checked`,
+		`name="kit_intermediate" value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil service" checked`,
 		`id="title" name="title" value="Oil service (Intermediate)"`)
 
 	// Log the Intermediate service at 12,000 km on 2026-06-10.

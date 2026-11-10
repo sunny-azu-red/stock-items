@@ -253,6 +253,15 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	byID := itemsByID(items)
 	f.Lines, in.Lines = parseLines(r, "line", byID, f.Errors)
 	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, f.Errors)
+	if !f.ShowInter {
+		// The intermediate schedule was removed (or never added): its
+		// fields are dropped here, not only blanked by the page's script.
+		f.InterIntervalKm, f.InterIntervalMonths, f.InterLines = "", "", nil
+		in.InterIntervalKm, in.InterIntervalMonths, in.InterLines = nil, nil, nil
+		for _, k := range []string{"inter_interval_km", "inter_interval_months", "inter_lines"} {
+			delete(f.Errors, k)
+		}
+	}
 	in.Normalize()
 	for k, v := range in.Validate() {
 		f.Errors.Add(k, v)
@@ -506,6 +515,12 @@ func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	k, err := s.store.GetKit(ctx, id)
 	if err != nil {
 		return s.gone(r, err, store.WhatKit, id) // deleted in another tab: not a 404
+	}
+	if k.Archived() {
+		// Archived in another tab: no new work for it, its parts included.
+		s.setFlash(w, "error", "This kit is archived; restore it first.")
+		s.redirect(w, r, kitPath(id), "")
+		return nil
 	}
 	n, missing := 0, 0
 	addShort := func(lines []stock.KitLine) error {

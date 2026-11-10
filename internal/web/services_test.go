@@ -805,3 +805,142 @@ func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
 	expectNot(t, page, hint)
 	expectNot(t, a.get(vPath), hint)
 }
+
+// "Log service" from a kit, and the edit of such a service: the vehicle
+// chip and the kit badge sit in the page header, and the vehicle and kit
+// travel as hidden fields. A refused save (422) keeps all of it, the
+// chosen schedule and the typed parts, and the badge names the kit as it
+// is, not as the form posted it. The edit shows the same header and keeps
+// the service's schedule.
+func TestServiceFormFromAKit(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k1290 := a.vehicle(t, "KTM 1290")
+	oil := itemID(t, a.store, "10W50")
+	filter := itemID(t, a.store, "Hiflofiltro")
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_km": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_km": {"7500"},
+		"line_item": {itoa(oil)}, "line_qty": {"1 L"},
+		"inter_line_item": {itoa(filter)}, "inter_line_qty": {"1"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitID := mustID(t, rec.Header().Get("Location"))
+	chip := `<span class="dot"></span>KTM 1290</span>`
+	badge := `<use href="#i-list-checks"></use></svg> Oil Service</span>`
+	header := func(t *testing.T, body string) string {
+		t.Helper()
+		i, j := strings.Index(body, `class="page-head"`), strings.Index(body, `<form class="card"`)
+		if i < 0 || j < i {
+			t.Fatal("no page header before the form")
+		}
+		return body[i:j]
+	}
+
+	page := a.get("/services/new?kit=" + itoa(kitID)).Body.String()
+	if h := header(t, page); !strings.Contains(h, chip) || !strings.Contains(h, badge) || !strings.Contains(h, "Log service") {
+		t.Errorf("header of Log service from a kit: %s", h)
+	}
+	if strings.Contains(page, `id="vehicle_id"`) {
+		t.Error("the Vehicle field shows though the kit fixes the vehicle")
+	}
+
+	// Refused: no title. The kit name posted is stale.
+	rec = a.post("/services", url.Values{
+		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Old Name"}, "kit_intermediate": {"1"},
+		"title": {""}, "performed_on": {"2026-10-20"}, "odometer_km": {"7600"},
+		"part_item": {itoa(filter), itoa(oil)}, "part_qty": {"1", "750 ml"},
+	})
+	expect(t, rec, http.StatusUnprocessableEntity,
+		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
+		`<input type="hidden" name="kit_id" value="`+itoa(kitID)+`">`,
+		`value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil Service" checked`,
+		`id="kit-full-parts"`, `id="kit-inter-parts"`, `value="750 ml"`, "Work performed is required")
+	body := rec.Body.String()
+	if h := header(t, body); !strings.Contains(h, chip) || !strings.Contains(h, badge) {
+		t.Errorf("header of the refused form: %s", h)
+	}
+	if strings.Contains(body, "Old Name") {
+		t.Error("the badge shows the posted kit name, not the kit's")
+	}
+
+	// Saved as Intermediate; the edit shows the same header and the tier.
+	rec = a.post("/services", url.Values{
+		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
+		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer_km": {"7600"},
+		"part_item": {itoa(filter)}, "part_qty": {"1"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	expect(t, a.get(kitPath(kitID)), http.StatusOK, "(intermediate)", "Next up")
+	edit := a.get(svc + "/edit")
+	expect(t, edit, http.StatusOK, `value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil Service" checked`,
+		`<input type="hidden" name="kit_id" value="`+itoa(kitID)+`">`)
+	if h := header(t, edit.Body.String()); !strings.Contains(h, chip) || !strings.Contains(h, badge) || !strings.Contains(h, "Edit service") {
+		t.Errorf("header of the edit: %s", h)
+	}
+}
+
+// A kit deleted while "Log service" was open for it: the refused save says
+// so and comes back without the kit (its Vehicle field again), so the next
+// save logs the service instead of failing on the kit every time.
+func TestServiceFormWhenItsKitIsDeleted(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k1290 := a.vehicle(t, "KTM 1290")
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain Kit"}})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+	kitID := mustID(t, kitURL)
+	expect(t, a.get("/services/new?kit="+itoa(kitID)), http.StatusOK)
+	expect(t, a.postV(kitURL+"/delete", nil), http.StatusSeeOther)
+
+	svc := url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Chain Kit"},
+		"title": {"Chain Kit"}, "performed_on": {"2026-10-20"}}
+	rec = a.post("/services", svc)
+	expect(t, rec, http.StatusUnprocessableEntity, "Its kit Chain Kit was deleted meanwhile", `id="vehicle_id"`)
+	expectNot(t, rec, `name="kit_id"`, `href="`+kitURL+`"`)
+
+	svc.Del("kit_id")
+	svc.Del("kit_name")
+	expect(t, a.post("/services", svc), http.StatusSeeOther)
+}
+
+// Smaller holes: the kit form drops an intermediate schedule the page
+// removed even if its fields still come (has_inter=0); "Add missing" from
+// a tab opened before the kit was archived does nothing; a vehicle bought
+// before 1990 can say so, but not one bought in the future.
+func TestKitAndVehicleFormEdges(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k1290 := a.vehicle(t, "KTM 1290")
+	oil := itemID(t, a.store, "10W50")
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_km": {"15000"},
+		"has_inter": {"0"}, "inter_interval_km": {"7500"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
+		"line_item": {itoa(oil)}, "line_qty": {"4 L"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+	k, err := a.store.GetKit(context.Background(), mustID(t, kitURL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.HasIntermediate() || len(k.InterLines) != 0 {
+		t.Errorf("has_inter=0 saved an intermediate schedule: every %v km, lines %+v", k.InterIntervalKm, k.InterLines)
+	}
+
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(k.ID)}, "title": {"Oil Service"},
+		"performed_on": {"2026-10-20"}}), http.StatusSeeOther)
+	expect(t, a.postV(kitURL+"/archive", nil), http.StatusSeeOther)
+	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Kind != "error" || !strings.Contains(f.Message, "archived") {
+		t.Errorf("Add missing on an archived kit: flash = %+v", f)
+	}
+	if list, err := a.store.ListShopping(context.Background()); err != nil || len(list) != 0 {
+		t.Errorf("Add missing on an archived kit listed %+v (%v)", list, err)
+	}
+
+	expect(t, a.post("/vehicles", url.Values{"name": {"Old Car"}, "kind": {"car"}, "purchased_on": {"1987-05-01"}}), http.StatusSeeOther)
+	expect(t, a.post("/vehicles", url.Values{"name": {"New Car"}, "kind": {"car"}, "purchased_on": {"2026-12-01"}}),
+		http.StatusUnprocessableEntity, "Date cannot be in the future")
+}

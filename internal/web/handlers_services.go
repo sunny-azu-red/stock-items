@@ -95,7 +95,18 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
+		if errors.Is(err, store.ErrNotFound) {
+			// Deleted while the form was open: the form goes on without it
+			// (its Vehicle field comes back), so a save logs the service
+			// rather than failing on the kit every time.
+			if f.Errors != nil {
+				f.Errors["form"] = "Its kit " + f.KitName + " was deleted meanwhile. Save to log the service without it."
+			}
+			f.KitID, f.KitName, f.KitIntermediate = 0, "", false
+		}
 		if err == nil {
+			// The kit's own name, not what the form posted.
+			f.KitName = k.Name
 			p.KitHasInter = k.HasIntermediate() || f.KitIntermediate
 			if f.ID == 0 && p.KitHasInter {
 				p.KitFullParts = kitPartRows(k.Lines)

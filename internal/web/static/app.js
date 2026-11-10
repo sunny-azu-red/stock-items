@@ -249,13 +249,21 @@
 
   // On a new service form for a kit with an intermediate schedule, switching
   // between Full and Intermediate swaps the pre-filled part rows and title.
+  // The rows of the schedule left are kept, as typed, and come back when it
+  // is chosen again. An edit has no kit templates: its parts and title stay.
+  var keptTierRows = {};
   function switchKitTier(radio) {
     var form = radio.form;
-    if (!form) return;
     var tpl = document.getElementById(radio.value === "1" ? "kit-inter-parts" : "kit-full-parts");
     var rows = document.getElementById("part-lines");
-    if (tpl && rows) {
-      rows.textContent = "";
+    if (!form || !tpl || !rows) return;
+    var left = document.createDocumentFragment();
+    while (rows.firstChild) left.appendChild(rows.firstChild);
+    keptTierRows[radio.value === "1" ? "0" : "1"] = left;
+    if (keptTierRows[radio.value]) {
+      rows.appendChild(keptTierRows[radio.value]);
+      delete keptTierRows[radio.value];
+    } else {
       rows.appendChild(tpl.content.cloneNode(true));
       rows.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
     }

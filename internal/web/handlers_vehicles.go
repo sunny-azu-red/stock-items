@@ -75,8 +75,12 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 	if in.PurchasedKm, err = parseOptInt(f.PurchasedKm); err != nil {
 		f.Errors.Add("purchased_km", err.Error())
 	}
-	if in.PurchasedOn, err = parseEventDate(f.PurchasedOn, now); err != nil {
+	// Not parseEventDate: a vehicle may have been bought before 1990 (its
+	// Validate allows 1900 on), but not in the future.
+	if in.PurchasedOn, err = parseOptDate(f.PurchasedOn); err != nil {
 		f.Errors.Add("purchased_on", err.Error())
+	} else if in.PurchasedOn != nil && in.PurchasedOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
+		f.Errors.Add("purchased_on", "Date cannot be in the future")
 	}
 	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
 		in.KeepOdometer = optIntString(was) == optIntString(in.OdometerKm)

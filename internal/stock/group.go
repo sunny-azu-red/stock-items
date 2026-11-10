@@ -177,7 +177,7 @@ func PricePer(p float64, u Unit) (float64, string) {
 // files read by other programs.
 func FormatMoney(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) }
 
-// skuCell describes one SKU for the CSV: "Manufacturer:80085 (1 L can, pack 1 L)".
+// skuCell describes one SKU for the CSV: "Manufacturer:308100 (Motorex, pack 1 L)".
 func skuCell(s SKU, u Unit) string {
 	var extra []string
 	if s.Brand != "" {
@@ -216,7 +216,7 @@ func WriteCSV(w io.Writer, items []Item, vehicles []Vehicle, last map[int64]Last
 			}
 		}
 		var skus []string
-		for _, s := range it.SKUs {
+		for _, s := range it.DisplaySKUs() { // in the order the pages show
 			skus = append(skus, skuCell(s, it.Unit))
 		}
 		minQ, exp := "", ""

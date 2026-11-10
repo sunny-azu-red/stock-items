@@ -200,7 +200,7 @@ func TestArchiveKitFlow(t *testing.T) {
 	expect(t, a.postV(kit+"/archive", nil), http.StatusSeeOther)
 	page = a.get(kit)
 	expect(t, page, http.StatusOK, "Archived", `action="`+kit+`/restore"`)
-	expectNot(t, page, "Do this service")
+	expectNot(t, page, `href="/services/new?kit=`)
 	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "Oil service", "badge badge-muted", "status-muted")
 	expect(t, a.get("/services"), http.StatusOK, "1 archived kit →")
 	expect(t, a.get("/services?archived=1"), http.StatusOK, "Oil service", "← Active kits")
@@ -515,7 +515,7 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 	expect(t, rec, http.StatusUnprocessableEntity,
 		shortBadge("525 ml", "1.7 L"),
 		`form="service-short-form"`,
-		"Add short parts to shopping list",
+		"Add missing to shopping list",
 		`id="service-short-form"`,
 		`value="`+itoa(oil)+`"`,
 		`value="1175"`,
@@ -945,4 +945,31 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 	expect(t, a.post("/vehicles", url.Values{"name": {"Old Car"}, "kind": {"car"}, "purchased_on": {"1987-05-01"}}), http.StatusSeeOther)
 	expect(t, a.post("/vehicles", url.Values{"name": {"New Car"}, "kind": {"car"}, "purchased_on": {"2026-12-01"}}),
 		http.StatusUnprocessableEntity, "Date cannot be in the future")
+}
+
+// A service's buttons are plain (Save service, Delete); what happens to its
+// parts is said in the message after logging and in Delete's tooltip, and
+// only when it has parts.
+func TestServiceButtonsSayWhatHappensToParts(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	expect(t, a.get("/services/new"), http.StatusOK, "</svg> Save service</button>")
+
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+		"part_item": {itoa(oil)}, "part_qty": {"100"}})
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Message != "Logged Oil top-up and took its parts from stock" {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK,
+		`title="Its parts go back in stock. You can undo it."><svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg> Delete</button>`)
+
+	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain check"}, "performed_on": {"2026-10-29"},
+		"part_item": {""}, "part_qty": {""}})
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Message != "Logged Chain check" {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, `title="You can undo it."><svg`)
 }

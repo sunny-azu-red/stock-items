@@ -83,7 +83,7 @@
     <div class="flex between">
       <h2>Parts used</h2>
       {{if $f.ShortParts}}
-      <button class="btn btn-sm" type="submit" form="service-short-form">{{icon "shopping-cart"}} Add short parts to shopping list</button>
+      <button class="btn btn-sm" type="submit" form="service-short-form">{{icon "shopping-cart"}} Add missing to shopping list</button>
       {{end}}
     </div>
     {{template "err" (index $e "lines")}}
@@ -112,7 +112,7 @@
   <div class="form-section form-actions">
     {{template "req-note"}}
     <a class="btn btn-ghost spacer" href="{{if $f.ID}}/services/{{$f.ID}}{{else if $f.KitID}}/kits/{{$f.KitID}}{{else if $f.VehicleID}}/vehicles/{{$f.VehicleID}}{{else}}/services{{end}}">Cancel</a>
-    <button class="btn btn-primary" type="submit">{{icon "check"}} {{if $f.ID}}Save service{{else}}Save &amp; take parts from stock{{end}}</button>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save service</button>
   </div>
 </form>
 {{end}}

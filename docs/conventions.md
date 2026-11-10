@@ -75,9 +75,10 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | in stock | on stock |
 | 3 pcs (`stock.FormatQuantity`) | 3x |
 | Type (Activity's column and chips: All types) | What, Everything, kind |
-| Add item · Add vehicle · Add kit · Log service (button, page title and empty state alike) | New item, New service kit, Create a kit |
+| Add item · Add vehicle · Add kit · Log service (button, page title and empty state alike; also the kit page's button) | New item, New service kit, Create a kit, Do this service |
+| Save service · Delete (a service's buttons, like every Save and Delete; what happens to its parts is said in the header line, the Delete tooltip and the message after) | Save & take parts from stock, Delete & return parts |
 | Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing) | Save, Save changes |
-| Added X · Saved X · Deleted X · Archived X · Restored X (messages lead with the verb) | Created kit X, Photo saved |
+| Added X · Saved X · Deleted X · Archived X · Restored X · Logged X (a service) (messages lead with the verb and name the thing) | Created kit X, Photo saved, Added to the shopping list |
 | Shopping list (the list, and its dashboard tile) · N suggested (what the list could take) | To buy |
 | All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
 | All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |

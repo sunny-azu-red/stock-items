@@ -267,7 +267,11 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		id, err := s.store.CreateService(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, servicePath(id), "Logged "+in.Title)
+			msg := "Logged " + in.Title
+			if len(in.Parts) > 0 {
+				msg += " and took its parts from stock"
+			}
+			s.redirect(w, r, servicePath(id), msg)
 			return nil
 		}
 		// Saved by a click before this one: its parts were taken once.

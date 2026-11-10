@@ -11,7 +11,7 @@
     <a class="btn" href="/services/{{$s.ID}}/edit">{{icon "pencil"}} Edit</a>
     <form class="inline-form" method="post" action="/services/{{$s.ID}}/delete">
       <input type="hidden" name="version" value="{{$s.Version}}">
-      <button class="btn btn-danger" type="submit" title="Its parts go back in stock; you can undo it">{{icon "trash-2"}} Delete &amp; return parts</button>
+      <button class="btn btn-danger" type="submit" title="{{if $s.Parts}}Its parts go back in stock. {{end}}You can undo it.">{{icon "trash-2"}} Delete</button>
     </form>
   </div>
 </div>

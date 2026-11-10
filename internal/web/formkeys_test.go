@@ -191,7 +191,7 @@ func TestConcurrentSavesWithOneKeyMakeOneRecord(t *testing.T) {
 	if got := recs[0].Header().Get("Location"); got != page {
 		t.Errorf("first went to %s, want %s", got, page)
 	}
-	if f := flashOf(t, recs[0]); f.Message != "Logged Oil change" {
+	if f := flashOf(t, recs[0]); f.Message != "Logged Oil change and took its parts from stock" {
 		t.Errorf("first flash = %+v", f)
 	}
 	expectSavedAlready(t, recs[1], page)

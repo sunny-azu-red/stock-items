@@ -229,9 +229,9 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.goto("/services");
   await page.getByRole("link", { name: /Oil Service/ }).first().click();
   await expect(page.locator(".page-head")).toContainText("Parts ready");
-  await page.getByRole("link", { name: "Do this service" }).click();
+  await page.locator(".page-head").getByRole("link", { name: "Log service" }).click();
   await page.getByLabel("Odometer (km)").fill("12000");
-  await page.getByRole("button", { name: /Save & take parts/ }).click();
+  await page.getByRole("button", { name: "Save service" }).click();
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await expect(page.locator("main")).toContainText("1.7 L");
@@ -1244,8 +1244,8 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(page.locator("main")).toContainText("Intermediate parts");
   await expect(page.locator('dt:text-is("Due at") + dd')).toHaveText("15\u202f500 km");
 
-  // Clicking "Do this service" pre-selects Intermediate and pre-fills the intermediate parts and title.
-  await page.getByRole("link", { name: "Do this service" }).click();
+  // Clicking "Log service" on the kit pre-selects Intermediate and pre-fills the intermediate parts and title.
+  await page.locator(".page-head").getByRole("link", { name: "Log service" }).click();
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
   await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
 

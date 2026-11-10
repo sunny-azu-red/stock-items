@@ -54,10 +54,10 @@
     {{if $k.Archived}}
     <form class="inline-form" method="post" action="/kits/{{$k.ID}}/restore"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
     {{else if $d.Vehicle.Archived}}
-    <span class="muted small">Restore {{$d.Vehicle.Name}} to do this service.</span>
+    <span class="muted small">Restore {{$d.Vehicle.Name}} to log this service.</span>
     {{else}}
     {{if or (and (not $fr.Ready) $fr.Lines) (and (not $ir.Ready) $ir.Lines)}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}
-    <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Do this service</a>
+    <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Log service</a>
     {{end}}
     {{if $k.Archived}}{{else if $d.ServiceCount}}
     <form class="inline-form" method="post" action="/kits/{{$k.ID}}/archive"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn" type="submit" title="Its {{plural $d.ServiceCount "logged service"}} keep it, so it is archived, not deleted: it leaves the lists and reminders, and you can restore it">{{icon "archive"}} Archive</button></form>

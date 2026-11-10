@@ -19,7 +19,7 @@
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "Add a vehicle first" "Href" "/vehicles/new" "Action" "Add vehicle")}}</div>
 {{else}}
 {{if $f.ShortParts}}
-<form id="service-short-form" method="post" action="/shopping/suggestions">
+<form id="service-short-form" method="post" action="/shopping/suggestions" hx-post="/shopping/suggestions" hx-swap="none">
   {{range $f.ShortParts}}
   <input type="hidden" name="item_id" value="{{.ItemID}}">
   <input type="hidden" name="qty" value="{{.Qty}}">
@@ -31,6 +31,7 @@
   {{if $f.ID}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}
+  {{if or $f.KitID $f.ID}}{{with index $e "kit_id"}}<div class="form-section">{{template "err" .}}</div>{{end}}{{end}}
   {{if or $f.KitID $f.ID}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   <div class="form-section">

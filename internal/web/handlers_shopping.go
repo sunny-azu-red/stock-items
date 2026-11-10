@@ -181,6 +181,13 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 	if n == 0 {
 		msg = "Nothing to add: the shopping list already has it"
 	}
+	// The service form's short parts button posts with htmx: the form stays,
+	// with what was typed, and the message comes as a toast.
+	if isHTMX(r) {
+		toast(w, "success", msg)
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
 	s.redirect(w, r, "/shopping", msg)
 	return nil
 }

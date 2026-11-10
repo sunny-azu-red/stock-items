@@ -528,6 +528,58 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 	})
 	expect(t, rec, http.StatusSeeOther)
 	expect(t, a.get("/shopping"), http.StatusOK, "Silkolene", "1\u202f175 ml", "Short for Oil service")
+
+	// The button posts with htmx, so the service form and what was typed
+	// stay: no redirect, the message comes as a toast.
+	expect(t, a.post("/services", svc), http.StatusUnprocessableEntity, `hx-post="/shopping/suggestions"`)
+	rec = a.post("/shopping/suggestions", url.Values{
+		"item_id": {itoa(oil)}, "qty": {"1500"}, "note": {"Short for Oil service"},
+	}, "HX-Request", "true")
+	expect(t, rec, http.StatusNoContent)
+	if loc := rec.Header().Get("HX-Redirect") + rec.Header().Get("Location"); loc != "" {
+		t.Errorf("htmx short parts post redirected to %q", loc)
+	}
+	if trig := rec.Header().Get("HX-Trigger"); !strings.Contains(trig, "Added 1 item to the shopping list") {
+		t.Errorf("HX-Trigger = %q", trig)
+	}
+	list, err := a.store.ListShopping(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Quantity == nil || *list[0].Quantity != 1500 {
+		t.Errorf("shopping list after the htmx post = %+v", list)
+	}
+}
+
+// A kit error shows on the service form even when the vehicle is fixed
+// (logged from a kit, or an edit), where the Vehicle field that used to
+// hold it isn't shown: the intermediate schedule removed in another tab.
+func TestServiceFormShowsKitError(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	oil := itemID(t, a.store, "Silkolene")
+	kit := url.Values{
+		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_km": {"4000"},
+		"has_inter": {"1"}, "inter_interval_km": {"2000"},
+		"line_item": {itoa(oil)}, "line_qty": {"100 ml"},
+	}
+	rec := a.post("/kits", kit)
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+	kitID := mustID(t, kitURL)
+
+	// Another tab removes the intermediate schedule.
+	kit.Del("has_inter")
+	kit.Del("inter_interval_km")
+	expect(t, a.postV(kitURL, kit), http.StatusSeeOther)
+
+	rec = a.post("/services", url.Values{
+		"vehicle_id": {itoa(k390)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
+		"title": {"Oil Service"}, "performed_on": {"2026-10-20"},
+		"part_item": {itoa(oil)}, "part_qty": {"100 ml"},
+	})
+	expect(t, rec, http.StatusUnprocessableEntity, "This kit has no intermediate schedule")
 }
 
 func TestKitPerTierShortfall(t *testing.T) {

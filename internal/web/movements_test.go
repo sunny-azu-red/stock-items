@@ -288,3 +288,25 @@ func TestSupplierSuggestions(t *testing.T) {
 	expect(t, a.get("/shopping/"+itoa(entryID)+"/bought"), http.StatusOK,
 		`<datalist id="suppliers"><option value="Louis"></datalist>`)
 }
+
+// The edit page of a stock change names its item as a badge (opening in a
+// new tab, so what was typed stays) and shows the item's stock now, which
+// saving changes by the difference.
+func TestMovementEditHeader(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	expect(t, a.post("/items/"+itoa(oil)+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}}), http.StatusSeeOther)
+	moves, err := a.store.ListMovements(context.Background(), store.MovementFilter{ItemID: oil, Kind: stock.MoveBought})
+	if err != nil || len(moves) != 1 {
+		t.Fatalf("purchases = %v, %v", moves, err)
+	}
+	page := a.get("/movements/" + itoa(moves[0].ID) + "/edit")
+	expect(t, page, http.StatusOK, "<h1>Edit purchase</h1>",
+		`<a class="badge badge-muted" href="/items/`+itoa(oil)+`" target="_blank" title="View item in new tab">`,
+		"<span class=\"badge badge-muted\">1\u202f525 ml in stock</span>", "<span>Saving adjusts the stock by the difference.</span>")
+	body := page.Body.String()
+	if i, j := strings.Index(body, "View item in new tab"), strings.Index(body, "in stock</span>"); i < 0 || j < i {
+		t.Error("the item badge should come before the stock badge")
+	}
+}

@@ -4,9 +4,9 @@
     <span class="avatar">{{icon $v.Kind.Icon}}</span>
     <div class="page-title">
       <h1>{{$v.Name}}</h1>
-      <div class="sub">
-        <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
+      <div class="sub flex">
         {{if $v.Archived}}{{template "archived-date-badge" $v.ArchivedAt}}{{end}}
+        <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
       </div>
     </div>
   </div>

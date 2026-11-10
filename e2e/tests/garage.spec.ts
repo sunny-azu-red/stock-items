@@ -1000,23 +1000,36 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   expect(problems).toEqual([]);
 });
 
-test("every page header has the same spacing", async ({ page }) => {
-  // The heading sits in .page-title at the top of the content on every page,
-  // and the line under it (text, or chips and badges) is 6px below, whatever
-  // the page's buttons are. The item page once centred its heading against
-  // them, 3px lower than the rest, with its badges 15px below.
+test("every page header has the same spacing", async ({ page }, testInfo) => {
+  // Every page header is the same grid: the heading and the buttons share a
+  // row at least a button (38px) tall, the heading centred in it, and the
+  // line under it (Archived, chips, badges, then text) runs the full width,
+  // under the buttons too. On a phone the heading is at the top, the line
+  // 6px below, then the buttons. The item page once centred its heading
+  // against its buttons, 3px lower than the rest, with its badges 15px below.
+  const desktop = testInfo.project.name === "desktop";
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
   };
+  const maybe = async (url: string, selector: string) => {
+    await page.goto(url);
+    const l = page.locator(selector).first();
+    return (await l.count()) ? ((await l.getAttribute("href")) as string) : null;
+  };
   const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  // Archived records only when earlier tests left some (the Go tests cover Archived leading the line).
+  const archivedItem = await maybe("/stock?archived=1", ".item-row a.item-name");
   const vehicle = await link("/vehicles", "a.vehicle-card");
   const kit = await link("/services", "a.kit-row");
   const service = await link("/services", 'a.title[href^="/services/"]');
   const movement = await link("/activity", 'a[href^="/movements/"]');
+  const purchase = await maybe("/activity?kind=bought", 'a[href^="/movements/"]');
+  const archivedVehicle = await maybe("/vehicles?archived=1", "a.vehicle-card");
   const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", service, "/services/new", service + "/edit",
-    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash"];
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
+  const want = desktop ? { top: 3, gap: 9 } : { top: 0, gap: 6 };
   const problems: string[] = [];
   for (const p of paths) {
     await page.goto(p);
@@ -1026,23 +1039,41 @@ test("every page header has the same spacing", async ({ page }) => {
       const h1 = document.querySelector(".page-head h1");
       if (!h1) return null;
       const r = h1.getBoundingClientRect();
-      const next = h1.nextElementSibling;
+      const sub = h1.parentElement?.querySelector(":scope > .sub") ?? null;
+      const actions = document.querySelector(".page-head .actions");
+      // The line's order: Archived 0, chips 1, other badges 2, text 3.
+      const rank = (el: Element) => {
+        if (el.classList.contains("badge") && /^\s*Archived/.test(el.textContent ?? "")) return 0;
+        if (el.matches(".chip, .chips")) return 1;
+        if (el.matches(".badge")) return 2;
+        return 3;
+      };
+      const ranks = sub && sub.matches(".flex") ? [...sub.children].map(rank) : [];
       return {
         inTitle: h1.parentElement?.classList.contains("page-title") ?? false,
         top: Math.round(r.top - contentTop),
-        gap: next ? Math.round(next.getBoundingClientRect().top - r.bottom) : null,
+        gap: sub ? Math.round(sub.getBoundingClientRect().top - r.bottom) : null,
+        ordered: ranks.every((x, i) => i === 0 || ranks[i - 1] <= x),
+        ranks: ranks.join(""),
+        badgeInText: [...document.querySelectorAll(".page-head p.sub")].some((p) => p.querySelector(".chip, .badge")),
+        underButtons: sub && actions ? Math.round(sub.getBoundingClientRect().right) >= Math.round(actions.getBoundingClientRect().right) : null,
+        buttonsAfter: sub && actions ? actions.getBoundingClientRect().top >= sub.getBoundingClientRect().bottom : null,
       };
     });
-    if (!m) problems.push(`${p}: no .page-head h1`);
-    else {
-      if (!m.inTitle) problems.push(`${p}: the h1 is not in .page-title`);
-      if (m.top !== 0) problems.push(`${p}: the heading is ${m.top}px below the top of the content, not 0`);
-      if (m.gap !== null && m.gap !== 6) problems.push(`${p}: the line under the heading is ${m.gap}px below it, not 6`);
+    if (!m) {
+      problems.push(`${p}: no .page-head h1`);
+      continue;
     }
+    if (!m.inTitle) problems.push(`${p}: the h1 is not in .page-title`);
+    if (m.top !== want.top) problems.push(`${p}: the heading is ${m.top}px below the top of the content, not ${want.top}`);
+    if (m.gap !== null && m.gap !== want.gap) problems.push(`${p}: the line under the heading is ${m.gap}px below it, not ${want.gap}`);
+    if (!m.ordered) problems.push(`${p}: the line is out of order (${m.ranks}; want Archived 0, chips 1, badges 2, text 3)`);
+    if (m.badgeInText) problems.push(`${p}: a chip or badge inside a <p class="sub"> sentence`);
+    if (desktop && m.underButtons === false) problems.push(`${p}: the line stops short of the buttons instead of running under them`);
+    if (!desktop && m.buttonsAfter === false) problems.push(`${p}: on a phone the buttons come before the line`);
   }
   expect(problems).toEqual([]);
 });
-
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock");

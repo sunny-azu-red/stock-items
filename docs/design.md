@@ -58,30 +58,29 @@ Chips and badges serve two completely different purposes and have distinct visua
 
 ## 4. Page Headers
 
-Every page starts with the same header, so the heading sits in the same place and the lines under it are spaced the same everywhere:
+Every page starts with the same header: the heading and the record's buttons on one row, and one line under it that runs the full width, under the buttons too (the layout of GitHub's Primer PageHeader, Shopify Polaris and Atlassian's page header).
 
 ```html
 <div class="page-head">
   <div class="page-title">
     <h1>…</h1>
-    <p class="sub">A line of text.</p>                     <!-- optional -->
-    <div class="sub flex">{{template "chip-link" …}} …</div> <!-- optional: chips and badges -->
+    <div class="sub flex">                                   <!-- or <p class="sub"> for text alone -->
+      {{template "archived-date-badge" …}}                    <!-- 1. Archived, when it is -->
+      {{template "chip-link" …}}                              <!-- 2. vehicle chips -->
+      <a class="badge badge-muted" …>…</a>                    <!-- 3. kit, item or category, then states -->
+      <span>One sentence.</span>                              <!-- 4. text, if any -->
+    </div>
   </div>
-  <div class="actions">…</div>                            <!-- optional: the record's buttons -->
+  <div class="actions">…</div>                               <!-- optional: the record's buttons -->
 </div>
 ```
 
-* **One column for the title**: the `<h1>` and every line under it go in `.page-title` (`flex-direction: column; gap: 6px`). Lines under the heading get no margins of their own; the gap spaces them. A page with no subtitle still wraps its `<h1>` in `.page-title`.
-* **Buttons to the right**: `.actions` sits beside the title, top-aligned (`.page-head` is `align-items: flex-start`), and wraps below it on a narrow screen. Never centre the heading against the buttons: they are taller, so it would drop off the line every other page uses.
-* **Chips and badges**: put them in `<div class="sub flex">` (6px apart), never inline in a `<p class="sub">` with text bullets. Text and a badge on one line go in the same flex row:
-  ```html
-  <div class="sub">
-    <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
-    {{if $v.Archived}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date $v.ArchivedAt}}</span>{{end}}
-  </div>
-  ```
-* **Vehicle hero**: the vehicle page puts its coloured kind avatar (`.vehicle-hero .avatar`) left of the `.page-title` column; the column itself follows the rules above.
-* The e2e test "every page header has the same spacing" checks the heading's position and the gap under it on every page, on desktop and phone.
+* **Heading row**: `.page-head` is a grid. Its first row is at least 38px (a button's height) with the heading centred in it, so the heading sits in the same place with or without buttons, level with them. Buttons keep their normal size. `.page-title` (and `.vehicle-hero`) are `display: contents`: they group the markup, and their children are the grid's items.
+* **The line**: at most one line under the heading, 6px below the heading row, spanning the full width. In order: the **Archived** badge first when the record is archived (it changes what the page lets you do), then **chips**, then the other **badges** (the kit, item or category the record belongs to, then its states), then **text** in a `<span>`, if any. Text never comes before a chip or badge. A sentence on its own is a `<p class="sub">`.
+* **The heading names the record or the action** and nothing else: no vehicle names after a ` · `. A vehicle that can't change on the page (a kit's service, an edit) is a chip on the line; when a field on the page still chooses it, it isn't shown. Links on a form's line open a new tab (`target="_blank"`), so what was typed stays.
+* **Narrow screens** (under 1060px wide with the sidebar, and phones): the heading at the top, the line 6px below, then the buttons on their own row.
+* **Vehicle page**: the coloured kind avatar sits left of the heading and the line and spans both, top to bottom: 70px (38 + 6 + 26) with a 38px icon, and the line is at least 26px so a text-only line lines it up too. On narrow screens it is 56px with a 30px icon, centred.
+* The e2e test "every page header has the same spacing" checks the heading's place, the gap under it and the order of the line on every page, on desktop and phone.
 
 ---
 

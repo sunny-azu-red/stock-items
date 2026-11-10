@@ -580,3 +580,31 @@ func TestKitPerTierShortfall(t *testing.T) {
 		t.Fatalf("expected both plug and oil in shopping list, got %+v", list)
 	}
 }
+
+// The service form names the vehicle as a chip, before the kit badge and
+// the sentence, only when it can't change on the form; the title names
+// the action alone.
+func TestServiceFormHeader(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	oil := itemID(t, a.store, "Silkolene")
+	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalKm: ptr(5000),
+		Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 500, Unit: stock.UnitML}}}
+	in.Normalize()
+	kit, err := a.store.CreateKit(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := a.get("/services/new?kit=" + itoa(kit))
+	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `title="View vehicle in new tab"`, `title="View kit in new tab"`,
+		"<span>The parts below are taken from stock when you save.</span>")
+	body := page.Body.String()
+	chip, badge, text := strings.Index(body, "View vehicle in new tab"), strings.Index(body, "View kit in new tab"), strings.Index(body, "The parts below")
+	if chip > badge || badge > text {
+		t.Errorf("want chip, kit badge, sentence in that order: %d, %d, %d", chip, badge, text)
+	}
+	// From the vehicle, the form's Vehicle field still chooses it: no chip.
+	page = a.get("/services/new?vehicle=" + itoa(k390))
+	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `<p class="sub">The parts below are taken from stock when you save.</p>`)
+	expectNot(t, page, "View vehicle in new tab", "<h1>Log service · ", "<title>Log service · KTM 390")
+}

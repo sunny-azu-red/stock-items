@@ -47,7 +47,7 @@
 <div class="page-head">
   <div class="page-title">
     <h1>{{$k.Name}}</h1>
-    <div class="sub flex">{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{if and $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} short</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} short</span>{{end}}{{end}}{{end}}</div>
+    <div class="sub flex">{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{if and $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} short</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} short</span>{{end}}{{end}}{{end}}</div>
   </div>
   <div class="actions">
     <a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>

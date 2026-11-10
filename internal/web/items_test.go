@@ -482,16 +482,66 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
-	for _, tt := range []struct{ path, want string }{
-		{"/items/" + itoa(pads), "Edit OEM Rear Brake Pads"},
-		{"/vehicles/" + itoa(k390), "Edit KTM 390"},
-		{kit, "Edit Brakes"},
-		{svc, "Edit service · KTM 390"}, // like its heading
+	for _, tt := range []struct{ path, want, heading string }{
+		{"/items/" + itoa(pads), "Edit OEM Rear Brake Pads", ""},
+		{"/vehicles/" + itoa(k390), "Edit KTM 390", ""},
+		{kit, "Edit Brakes", ""},
+		// The heading names the action; the vehicle is a chip on its line.
+		{svc, "Edit service · KTM 390", "Edit service"},
 	} {
+		if tt.heading == "" {
+			tt.heading = tt.want
+		}
 		expect(t, a.get(tt.path+"/edit"), http.StatusOK, "<title>"+tt.want)
 		page := a.post(tt.path, url.Values{"vehicle_id": {itoa(k390)}, "unit": {"piece"}, "quantity": {"1"}, "performed_on": {"2026-10-29"}})
 		expect(t, page, http.StatusUnprocessableEntity, "<title>"+tt.want)
-		expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.want+"</h1>")
+		expect(t, page, http.StatusUnprocessableEntity, "<h1>"+tt.heading+"</h1>")
+	}
+}
+
+// An archived item, kit or vehicle says so first on the line under its
+// heading, before its vehicle chips and other badges.
+func TestArchivedLeadsTheLine(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene")
+	in := stock.KitInput{VehicleID: k390, Name: "Oil service", IntervalKm: ptr(5000),
+		Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 500, Unit: stock.UnitML}}}
+	in.Normalize()
+	kit, err := a.store.CreateKit(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := a.store.GetKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.ArchiveKit(ctx, kit, k.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.store.ArchiveItem(ctx, oil, cur(t, a.store, store.WhatItem, oil)); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.ArchiveVehicle(ctx, k390, cur(t, a.store, store.WhatVehicle, k390)); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/items/" + itoa(oil), "/kits/" + itoa(kit), "/vehicles/" + itoa(k390)} {
+		rec := a.get(path)
+		expect(t, rec, http.StatusOK)
+		body := rec.Body.String()
+		head := body[strings.Index(body, `<div class="page-head">`):]
+		head = head[:strings.Index(head, `<div class="actions">`)]
+		archived := strings.Index(head, "Archived ")
+		if archived < 0 {
+			t.Errorf("%s: no Archived badge in the header", path)
+			continue
+		}
+		for _, later := range []string{`class="chip"`, `class="badge badge-muted" href`, "<span>"} {
+			if i := strings.Index(head, later); i >= 0 && i < archived {
+				t.Errorf("%s: %s comes before the Archived badge", path, later)
+			}
+		}
 	}
 }
 

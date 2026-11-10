@@ -32,6 +32,7 @@ type movementPage struct {
 	Units     []stock.SubUnit
 	Gone      bool // deleted since the form was opened: Movement is what the form said
 	Suppliers []string
+	Item      stock.Item // the item now, for its stock; zero when it is gone
 }
 
 // errItemArchived means the stock change belongs to an archived item, whose
@@ -80,11 +81,16 @@ func (s *Server) movementRefused(w http.ResponseWriter, r *http.Request, m stock
 	return true
 }
 
-func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) {
+func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, status int, m stock.Movement, f movementEditForm) error {
+	it, err := s.store.GetItem(r.Context(), m.ItemID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
 	suppliers, _ := s.store.Suppliers(r.Context())
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
-			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers}}) //nolint:gosec // Back is a checked local path
+			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
+	return nil
 }
 
 // goneMovementForm shows the edit form of a stock change deleted since it
@@ -117,7 +123,7 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 	}
 	suppliers, _ := s.store.Suppliers(r.Context())
 	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
-		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true, Suppliers: suppliers}}) //nolint:gosec // Back is a checked local path
+		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true, Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
 	return nil
 }
 
@@ -135,8 +141,7 @@ func (s *Server) movementEdit(w http.ResponseWriter, r *http.Request) error {
 	if m.TotalPrice != nil {
 		f.TotalPrice = stock.FormatMoney(*m.TotalPrice)
 	}
-	s.renderMovementForm(w, r, http.StatusOK, m, f)
-	return nil
+	return s.renderMovementForm(w, r, http.StatusOK, m, f)
 }
 
 func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
@@ -201,8 +206,7 @@ func (s *Server) movementUpdate(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	s.renderMovementForm(w, r, http.StatusUnprocessableEntity, m, f)
-	return nil
+	return s.renderMovementForm(w, r, http.StatusUnprocessableEntity, m, f)
 }
 
 func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
@@ -244,8 +248,7 @@ func (s *Server) movementDelete(w http.ResponseWriter, r *http.Request) error {
 	if !movementConflict(f.Errors, err) {
 		return err
 	}
-	s.renderMovementForm(w, r, http.StatusUnprocessableEntity, m, f)
-	return nil
+	return s.renderMovementForm(w, r, http.StatusUnprocessableEntity, m, f)
 }
 
 func itemPath(id int64) string { return fmt.Sprintf("/items/%d", id) }

@@ -1,11 +1,17 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
   <div class="page-title">
-    <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}{{with $d.Vehicle}} · {{.Name}}{{end}}</h1>
-    <div class="sub flex">
+    <h1>{{if $f.ID}}Edit service{{else}}Log service{{end}}</h1>
+    {{/* The vehicle shows as a chip only when it is fixed (a kit's service, or
+         an edit); otherwise the Vehicle field below still chooses it. Links
+         open a new tab, so what was typed here stays. */}}
+    {{$fixed := and $d.Vehicle (or $f.KitID $f.ID)}}
+    {{$text := "The parts below are taken from stock when you save."}}{{if $f.ID}}{{$text = "Saving puts the old parts back in stock and takes the ones below."}}{{end}}
+    {{if or $fixed $f.KitID}}<div class="sub flex">
+      {{if $fixed}}{{with $d.Vehicle}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}" target="_blank" title="View vehicle in new tab"><span class="dot"></span>{{.Name}}</a>{{end}}{{end}}
       {{if $f.KitID}}<a class="badge badge-muted" href="/kits/{{$f.KitID}}" target="_blank" title="View kit in new tab">{{icon "list-checks"}} {{$f.KitName}}</a>{{end}}
-      <span>{{if $f.ID}}Saving puts the old parts back in stock and takes the ones below.{{else}}The parts below are taken from stock when you save.{{end}}</span>
-    </div>
+      <span>{{$text}}</span>
+    </div>{{else}}<p class="sub">{{$text}}</p>{{end}}
   </div>
 </div>
 

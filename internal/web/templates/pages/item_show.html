@@ -3,13 +3,13 @@
   <div class="page-title">
     <h1>{{$it.DisplayName}}</h1>
     <div class="sub flex">
+      {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
       {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
       {{template "stock-badge" $it}}
       {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
-      {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
+      {{if $it.Archived}}<span>Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
     </div>
-    {{if $it.Archived}}<p class="sub">Hidden from stock, pickers and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</p>{{end}}
   </div>
   <div class="actions">
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>

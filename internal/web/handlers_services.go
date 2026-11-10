@@ -119,7 +119,9 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	if f.ID != 0 {
 		title = "Edit service"
 	}
-	if p.Vehicle != nil {
+	// The vehicle only when it can't change here, as on the page's line:
+	// otherwise the form's Vehicle field still chooses it.
+	if p.Vehicle != nil && (f.KitID != 0 || f.ID != 0) {
 		title += " · " + p.Vehicle.Name
 	}
 	s.render(w, r, status, "service_form", View{Title: title, Nav: "services", Data: p})

@@ -133,13 +133,37 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .main { padding: 24px clamp(16px, 3vw, 40px) 48px; max-width: 1180px; width: 100%; }
 .tabbar { display: none; }
 
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-/* Every page: the heading and the lines under it (text, or chips and
-   badges) in one column, 6px apart; the record's buttons to the right. */
-.page-title { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.page-head .sub { color: var(--muted); margin: 0; }
+/* Page header, on every page: the heading and the record's buttons share
+   the first row, at least a button tall (38px) with the heading centred in
+   it, so a heading sits in the same place with or without buttons. The
+   line under it (Archived, chips, badges, then text) runs the full width,
+   under the buttons too. .page-title and .vehicle-hero only group the
+   markup: their children are the grid's items. */
+.page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(38px, auto); column-gap: 16px; row-gap: 6px; align-items: center; margin-bottom: 20px; }
+.page-title, .vehicle-hero { display: contents; }
+.page-head h1 { grid-row: 1; grid-column: 1; }
+.page-head .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.page-head .sub { grid-column: 1 / -1; color: var(--muted); margin: 0; }
 .page-head .sub.flex { gap: 6px; }
-.page-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* The vehicle page: the avatar spans the heading row and the line, top to
+   bottom (38 + 6 + 26); a text-only line is as tall as a badge line. */
+.page-head:has(.vehicle-hero) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.page-head .vehicle-hero .avatar { grid-row: 1 / span 2; grid-column: 1; align-self: start; }
+.page-head:has(.vehicle-hero) h1 { grid-column: 2; }
+.page-head:has(.vehicle-hero) .actions { grid-column: 3; }
+.page-head:has(.vehicle-hero) .sub { grid-column: 2 / -1; min-height: 26px; }
+/* Narrow content (under about 760px: phones, and windows up to 1060px wide
+   with the sidebar): the heading at the top, the line 6px below, then the
+   buttons on their own row. */
+@media (max-width: 1060px) {
+  .page-head { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .page-head .actions { grid-row: auto; grid-column: 1 / -1; order: 1; justify-content: flex-start; margin-top: 6px; }
+  .page-head:has(.vehicle-hero) { grid-template-columns: auto minmax(0, 1fr); }
+  .page-head:has(.vehicle-hero) .actions { grid-column: 1 / -1; }
+  .page-head:has(.vehicle-hero) .sub { min-height: 0; }
+  .page-head .vehicle-hero .avatar { width: 56px; height: 56px; align-self: center; }
+  .page-head .vehicle-hero .avatar .icon { width: 30px; height: 30px; }
+}
 
 
 /* ---------- Mobile ---------- */
@@ -533,10 +557,9 @@ a.title:hover { color: var(--accent); }
 .vehicle-card .stats { display: flex; gap: 20px; color: var(--muted); font-size: .85rem; flex-wrap: wrap; }
 .vehicle-card .stats strong { color: var(--text); }
 a.vehicle-card:hover { --rim-fade: color-mix(in srgb, var(--chip) 45%, var(--border)); color: inherit; }
-.vehicle-hero { --chip: var(--accent); display: flex; gap: 16px; align-items: center; }
-.vehicle-hero .avatar { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--chip) 18%, var(--surface)); color: var(--chip); }
-.vehicle-hero .avatar .icon { width: 30px; height: 30px; }
-.vehicle-hero .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vehicle-hero { --chip: var(--accent); } /* laid out by .page-head */
+.vehicle-hero .avatar { width: 70px; height: 70px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--chip) 18%, var(--surface)); color: var(--chip); }
+.vehicle-hero .avatar .icon { width: 38px; height: 38px; } /* 30 in 56, scaled; even, so it centres on whole pixels */
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 16px; margin: 0; }
 .facts dt { color: var(--muted); font-size: .78rem; }
 .facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }

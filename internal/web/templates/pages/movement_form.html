@@ -2,7 +2,11 @@
 <div class="page-head">
   <div class="page-title">
     <h1>Edit {{$d.Name}}</h1>
-    {{if $d.Gone}}<p class="sub">{{$m.ItemName}}</p>{{else}}<p class="sub">{{$m.ItemName}} · {{delta $m.Delta $m.ItemUnit}} on {{date $m.OccurredOn}}. Saving adjusts the stock by the difference.</p>{{end}}
+    <div class="sub flex">
+      {{if $m.ItemID}}<a class="badge badge-muted" href="/items/{{$m.ItemID}}" target="_blank" title="View item in new tab">{{icon "package"}} {{$m.ItemName}}</a>{{end}}
+      {{with $d.Item}}{{if .ID}}<span class="badge {{if .IsOut}}badge-danger{{else if .IsLow}}badge-warn{{else}}badge-muted{{end}}">{{qty .Quantity .Unit}} in stock</span>{{end}}{{end}}
+      {{if not $d.Gone}}<span>Saving adjusts the stock by the difference.</span>{{end}}
+    </div>
   </div>
   {{if not $d.Gone}}<div class="actions">
     <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete"><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit" title="The stock changes by {{$d.Undo}}; you can undo it">{{icon "trash-2"}} Delete</button></form>

@@ -366,6 +366,9 @@ type vehiclePage struct {
 	// What refers to the vehicle: with any, it is archived, not deleted.
 	ServiceCount, KitCount int
 	Labor                  float64 // labour cost of all its services
+	// MonthsUncounted names the active kits whose month deadline has no
+	// day to count from until the vehicle has a purchase date.
+	MonthsUncounted []string
 }
 
 func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
@@ -408,6 +411,11 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 		VehicleMap: vehicleMap(vehicles), Services: services, ItemCount: len(items),
 		StockQuery: "v=" + strconv.FormatInt(id, 10),
 	}
+	for _, kv := range p.Kits {
+		if kv.MonthsUncounted && !v.Archived() {
+			p.MonthsUncounted = append(p.MonthsUncounted, kv.Kit.Name)
+		}
+	}
 	s.render(w, r, http.StatusOK, "vehicle_show", View{Title: v.Name, Nav: "vehicles", Data: p})
 	return nil
 }
@@ -436,6 +444,10 @@ type kitView struct {
 	InterDue        stock.Due
 	NextInter       bool
 	VehicleArchived bool
+	// MonthsUncounted: the full schedule repeats by months with no day to
+	// count from (stock.Kit.MonthsUncounted); the page asks for the
+	// vehicle's purchase date.
+	MonthsUncounted bool
 }
 
 // kitViews computes readiness and due state, most urgent first.
@@ -465,6 +477,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			InterDue:        k.InterDue(km, today),
 			NextInter:       k.NextIsIntermediate(km, today),
 			VehicleArchived: v.Archived(),
+			MonthsUncounted: k.MonthsUncounted(km, today),
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })

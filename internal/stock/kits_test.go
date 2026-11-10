@@ -390,3 +390,86 @@ func TestKitIntermediateSchedules(t *testing.T) {
 		}
 	})
 }
+
+// The schedules of an expensive bike under warranty, and of one whose
+// services simply alternate. Full every 15 000 km or 12 months, intermediate
+// every 7 500 km: with no intermediate months (warranty), an intermediate
+// service never moves the full service's deadline, which counts from the
+// last full service or the purchase; with intermediate months (alternating),
+// each service comes one intermediate step after the other, in km and in
+// months. A month deadline with no day to count from is never "On track".
+func TestWarrantyAndAlternatingSchedules(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	svc := func(on time.Time, km int, inter bool) *ServiceRef {
+		return &ServiceRef{ID: 1, PerformedOn: on, OdometerKm: &km, Intermediate: inter}
+	}
+	type want struct {
+		next    string // "full" or "inter"
+		state   DueState
+		dueKm   int
+		dueDate string // "" for none
+	}
+	tests := []struct {
+		name          string
+		interMonths   *int
+		boughtOn      *time.Time
+		boughtKm      *int
+		last, lastFul *ServiceRef
+		km            int
+		today         time.Time
+		fullWant      want // FullDue, and which schedule is next
+		uncounted     bool // MonthsUncounted
+	}{
+		{name: "warranty, new bike: intermediate next, full by the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			km: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueOK, 15000, "2027-01-01"}},
+		{name: "warranty, low miles: the full service's year comes first", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			km: 5000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
+		{name: "warranty, low miles, past the year: overdue", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			km: 5000, today: d(2027, 1, 2), fullWant: want{"full", DueOverdue, 15000, "2027-01-01"}},
+		{name: "warranty, after an intermediate: the full deadline doesn't move", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2026, 7, 1), 7500, true), km: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
+		{name: "warranty, a late intermediate doesn't push the full one back", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), km: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
+		{name: "warranty, after a full service: counts from it", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), km: 16000, today: d(2027, 2, 1),
+			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
+		{name: "warranty, full then intermediate: still from the full one", boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2027, 7, 1), 22500, true), lastFul: svc(d(2027, 1, 1), 15000, false), km: 23000, today: d(2027, 12, 15),
+			fullWant: want{"full", DueSoon, 30000, "2028-01-01"}},
+		{name: "warranty, purchase date only", boughtOn: ptr(d(2026, 1, 1)),
+			last: svc(d(2026, 7, 1), 7500, true), km: 9000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
+		{name: "warranty, no purchase date, only an intermediate: not done yet", last: svc(d(2026, 7, 1), 7500, true),
+			km: 9000, today: d(2027, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
+		{name: "warranty, purchase km only, only an intermediate: not done yet", boughtKm: ptr(0), last: svc(d(2026, 7, 1), 7500, true),
+			km: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
+		{name: "warranty, purchase km only, no service: intermediate still next by km", boughtKm: ptr(0),
+			km: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueNever, 15000, ""}, uncounted: true},
+		{name: "alternating, after an intermediate: full one step later", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2026, 7, 1), 7500, true), km: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
+		{name: "alternating, after a full: intermediate next", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtKm: ptr(0),
+			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), km: 16000, today: d(2027, 2, 1),
+			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := Kit{IntervalKm: ptr(15000), IntervalMonths: ptr(12), InterIntervalKm: ptr(7500), InterIntervalMonths: tt.interMonths,
+				VehiclePurchasedOn: tt.boughtOn, VehiclePurchasedKm: tt.boughtKm, LastService: tt.last, LastFullService: tt.lastFul}
+			km := tt.km
+			got := k.FullDue(&km, tt.today)
+			next := "full"
+			if k.NextIsIntermediate(&km, tt.today) {
+				next = "inter"
+			}
+			date := ""
+			if got.DueDate != nil {
+				date = got.DueDate.Format(time.DateOnly)
+			}
+			if next != tt.fullWant.next || got.State != tt.fullWant.state || got.DueKm == nil || *got.DueKm != tt.fullWant.dueKm || date != tt.fullWant.dueDate {
+				t.Errorf("next %s, full %s at %v km by %q; want next %s, full %+v", next, got.State, got.DueKm, date, tt.fullWant.next, tt.fullWant)
+			}
+			if u := k.MonthsUncounted(&km, tt.today); u != tt.uncounted {
+				t.Errorf("MonthsUncounted = %v, want %v", u, tt.uncounted)
+			}
+		})
+	}
+}

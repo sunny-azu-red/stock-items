@@ -185,10 +185,29 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseKm *int
 		d.State = DueOverdue
 	case soon:
 		d.State = DueSoon
+	case intervalMonths != nil && fromDate == nil:
+		// The km are fine, but there are months to count and no day to
+		// count them from: only a purchase odometer, or (under a warranty
+		// schedule) only intermediate services. The deadline is unknown,
+		// so never "On track": a warranty's yearly service must not be
+		// missed (MonthsUncounted).
+		d.State = DueNever
 	default:
 		d.State = DueOK
 	}
 	return d
+}
+
+// MonthsUncounted reports whether the kit's full schedule repeats by months
+// but has no day to count them from: no full service logged (nor, without
+// an intermediate schedule, any service) and no purchase date on the
+// vehicle. Its month deadline, often a warranty's, is then unknown: the
+// kit says "Not done yet", and the pages ask for the purchase date.
+func (k Kit) MonthsUncounted(currentKm *int, today time.Time) bool {
+	if k.IntervalMonths == nil || k.Archived() {
+		return false
+	}
+	return k.FullDue(currentKm, today).DueDate == nil
 }
 
 // InterDue computes when the kit's intermediate schedule is next due,
@@ -230,7 +249,7 @@ func (k Kit) FullDue(currentKm *int, today time.Time) Due {
 		}
 		if lastFull == nil && k.VehiclePurchasedKm == nil {
 			interKm := cmp.Or(k.LastService.OdometerKm, k.LastService.OdometerAtLog, k.LastOdometerKm)
-			if interKm == nil && (k.IntervalMonths == nil || k.VehiclePurchasedOn == nil) {
+			if interKm == nil && k.IntervalMonths == nil {
 				return Due{State: DueUnknown}
 			}
 			return dueFrom(nil, nil, k.VehiclePurchasedOn, interKm, stepKm, k.IntervalMonths, currentKm, today)
@@ -256,7 +275,14 @@ func (k Kit) NextIsIntermediate(currentKm *int, today time.Time) bool {
 	if k.InterIntervalMonths == nil && (fullDue.State == DueSoon || fullDue.State == DueOverdue) {
 		return false
 	}
-	if fullDue.State.Rank() < interDue.State.Rank() {
+	// A full schedule that only lacks a day to count its months from
+	// (MonthsUncounted) isn't more urgent for that: the parts offered
+	// follow the km as before.
+	fullRank := fullDue.State.Rank()
+	if fullDue.State == DueNever {
+		fullRank = DueOK.Rank()
+	}
+	if fullRank < interDue.State.Rank() {
 		return false
 	}
 	if (fullDue.State == DueSoon || fullDue.State == DueOverdue) && fullDue.KmLeft != nil && k.IntervalKm != nil && *fullDue.KmLeft <= dueSoonKm(*k.IntervalKm) {

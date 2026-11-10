@@ -30,6 +30,7 @@
   <div class="stack">
     <section class="card">
       <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not $v.Archived}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} Add kit</a>{{end}}</div>
+      {{with $d.MonthsUncounted}}<p class="card-body hint" role="note">{{join . ", "}} {{if eq (len .) 1}}repeats{{else}}repeat{{end}} by months, with nothing to count them from yet. <a href="/vehicles/{{$v.ID}}/edit">Set the purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}
       {{if $d.Kits}}{{range $d.Kits}}{{if not .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}{{range $d.Kits}}{{if .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}
       {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
     </section>

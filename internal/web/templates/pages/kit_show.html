@@ -94,6 +94,7 @@
         <div><dt>Odometer now</dt><dd>{{km $d.Vehicle.OdometerKm}}</dd></div>
         {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}
       </dl>
+      {{if and $d.View.MonthsUncounted (not $d.Vehicle.Archived)}}<p class="hint mt" role="note">Nothing to count the {{plural $k.IntervalMonths "month"}} from yet. <a href="/vehicles/{{$k.VehicleID}}/edit">Set the vehicle's purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}
       {{with $k.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>
 

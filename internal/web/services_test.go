@@ -767,3 +767,41 @@ func TestRestoreServiceBeforePurchaseDateIsRefused(t *testing.T) {
 	expect(t, a.get(svc), http.StatusNotFound)
 	expect(t, a.get("/trash"), http.StatusOK, `action="/trash/`+itoa(undo)+`/restore"`)
 }
+
+// A warranty schedule (full every 15 000 km or 12 months, intermediate every
+// 7 500 km with no months) on a vehicle with no purchase date: after an
+// intermediate service the full service's yearly deadline has no day to
+// count from. The kit says "Not done yet", never "On track", and the kit
+// and vehicle pages ask for the purchase date; once it is set, the deadline
+// counts from it.
+func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k1290 := a.vehicle(t, "KTM 1290")
+	vPath := vehiclePath(k1290)
+	rec := a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k1290)}, "name": {"Major Service"}, "interval_km": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_km": {"7500"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+	kitID := mustID(t, kitURL)
+	today := "2026-10-29" // newApp's day
+	expect(t, a.post("/services", url.Values{
+		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_intermediate": {"1"},
+		"title": {"Major Service"}, "performed_on": {today}, "odometer_km": {"7500"},
+	}), http.StatusSeeOther)
+
+	hint := "so a warranty's yearly service isn't missed"
+	page := a.get(kitURL)
+	expect(t, page, http.StatusOK, "Not done yet", hint, `href="`+vPath+`/edit"`)
+	expectNot(t, page, "On track")
+	expect(t, a.get(vPath), http.StatusOK, "Major Service repeats by months", hint)
+
+	expect(t, a.postV(vPath, url.Values{"name": {"KTM 1290"}, "kind": {"motorcycle"}, "odometer_km": {"7500"}, "odometer_was": {"7500"},
+		"purchased_on": {today}}), http.StatusSeeOther)
+	page = a.get(kitURL)
+	expect(t, page, http.StatusOK, "On track")
+	expectNot(t, page, hint)
+	expectNot(t, a.get(vPath), hint)
+}

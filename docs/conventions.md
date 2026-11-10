@@ -6,7 +6,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 
 - `.env` holds real credentials and is git-ignored. Never commit it, paste it into issues, or print it in logs. `.env.example` contains placeholders only.
 - Tests and experiments never use the `public` schema. Use `internal/testdb` or `DB_SCHEMA=e2e_*` / `test_*`. `db.DropSchema` refuses other names on purpose.
-- Deletes don't ask (items, vehicles, kits, services, stock changes, photos, shopping-list entries, archiving): they go to the trash and offer Undo. Only deleting permanently from the *Trash* (Delete permanently, Empty) asks first.
+- Deletes don't ask (items, vehicles, kits, services, stock changes, photos, shopping-list entries, archiving): they go to the trash and offer Undo. Only deleting permanently from the *Trash* (Delete permanently, Empty trash) asks first.
 
 ## Database
 
@@ -41,7 +41,7 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 
 - Every page is server-rendered and every form is a plain HTML form (POST, then a 303 redirect with a flash message). JavaScript is assumed: htmx and `static/app.js` may carry a page's behaviour (pickers that send themselves, tabs, adding form rows), and nothing gets a `<noscript>` fallback. The server still never relies on what the browser did (the photo pipeline takes an original as it is).
 - Invalid forms re-render with status **422**, keeping exactly what the user typed, with messages next to the fields.
-- Every edit form and every button that acts on a record (delete, archive, restore, Bought, link, remove) carries the record's version in a hidden `version` field. A stale edit form (`store.StaleError`) re-renders with 422, keeping what was typed, with the banner "This … was changed since you opened this (another tab or person). Reload to see the latest, then make your change again." and a Reload link (`staleForm`, the `stale` partial). When the record was deleted, it says so and links to the trash. A stale button changes nothing: it flashes the reason and redirects to the record as it is now, or to the trash (`staleButton`). A form whose record was deleted meanwhile never 404s.
+- Every edit form and every button that acts on a record (delete, archive, restore, Bought, link, remove) carries the record's version in a hidden `version` field. A stale edit form (`store.StaleError`) re-renders with 422, keeping what was typed, with the banner "This … was changed since you opened it (another tab or person). Reload to see the latest, then make your change again." and a Reload link (`staleForm`, the `stale` partial). When the record was deleted, it says so and links to the trash. A stale button changes nothing: it flashes the reason and redirects to the record as it is now, or to the trash (`staleButton`). A form whose record was deleted meanwhile never 404s.
 - Test forms and buttons over HTTP in `internal/web` (open the page, read the version from the rendered form, change the record in another request, submit), including Undo and Restore paths.
 - Every form that creates or changes something carries a one-time key (`{{template "form-key" .FormKey}}`, a hidden `form_key`; the item page's three stock forms each have their own). A 422 re-render keeps the posted key; a fresh page gets a new one. The handler reads it with `parseFormKey`, calls `savedBefore` before it looks at anything the first save may have changed (the version, a ticked-off entry), and maps the store's `AlreadySavedError` with `savedAlready`: nothing is saved again, and it redirects where the first save did with "This was saved already (the first Save went through), so it wasn't saved again. Changes made in the form since weren't applied; check it here." When that record was deleted since, it says so and goes to the trash. A form without a key is not saved: 422 with "This form was opened before Pitbox was updated, so it was not saved. Check it and save again." and a fresh key, since it can't be told from a repeat of itself, and saving it blindly could take a service's parts twice.
 - The submit guard in `app.js` locks a POST form once it is sent (htmx forms and the quick +/- excepted). A form with a key says "Saving…" on the button it was sent with; still on the page after 15 seconds, it unlocks and says "Still saving… try again", which is safe because of the key. Coming back with Back (`pageshow`) unlocks and restores the label. Without JavaScript there's no guard, and the key alone keeps a double click from saving twice.
@@ -77,15 +77,21 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | Type (Activity's column and chips: All types) | What, Everything, kind |
 | Add item · Add vehicle · Add kit · Log service (button, page title and empty state alike; also the kit page's button) | New item, New service kit, Create a kit, Do this service |
 | Save service · Delete (a service's buttons, like every Save and Delete; what happens to its parts is said in the header line, the Delete tooltip and the message after) | Save & take parts from stock, Delete & return parts |
-| Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing) | Save, Save changes |
+| Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing, on the add form and the edit form alike: the page title, *Add vehicle* or *Edit KTM 390*, and the message after, *Added X* or *Saved X*, say which) | Save, Save changes, Update vehicle, Add vehicle (as the submit button: the sidebar's Add vehicle opens the form, and the two would look the same) |
 | Added X · Saved X · Deleted X · Archived X · Restored X · Logged X (a service) (messages lead with the verb and name the thing) | Created kit X, Photo saved, Added to the shopping list |
 | Shopping list (the list, and its dashboard tile) · N suggested (what the list could take) | To buy |
+| Low stock (the tile, the filter and the dashboard card) · Below the minimum of 2 pcs | Running low, Below minimum of |
+| Service history (a vehicle's or all services) · No services yet | Service log, Nothing logged yet |
+| 300 km overdue · 3 days overdue | over, late |
+| Empty trash · Delete permanently · Save odometer | Empty, Update |
 | All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
 | All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |
 | Work performed (the service form field) | What was done |
 
 - Record actions sit in the page header: Edit first, Archive (plain style, it can be undone), Delete (red, the trash icon), Restore (primary).
-- Nothing that can be undone asks first; only the trash's Delete permanently and Empty do (`data-confirm`).
+- Nothing that can be undone asks first; only the trash's Delete permanently and Empty trash do (`data-confirm`).
+- Form errors start with a capital: `stock.Errors.Add` does it (`stock.Sentence`), so a Go error (lowercase, as Go's are) can go to a form as it is. Don't start an error with a unit ("kg …" would read "Kg …"): "can't use kg for an item counted in ml". Name units in messages as amounts do (`Unit.Short`: pcs, ml, g), never by their code (`piece`).
+- An error says what went wrong and what to do, without "Something went wrong" or "Please".
 - Required fields carry a red star beside the label (`{{template "req"}}` in a `.label-row`, `aria-required` on the input), and the form a "* required" note at the start of its buttons (`{{template "req-note"}}`). Optional fields aren't marked; like every field, they show an example as their placeholder ("e.g. 24.90"), never "optional".
 - A best-before date shows through `{{template "expiry-badge"}}` and how much is in stock through `{{template "stock-badge" (stockBadge …)}}` (out of stock, short, low or what there is; [design.md](design.md#the-stock-badge)), never written by hand; a purchase is entered through `{{template "bought-fields"}}`.
 
@@ -99,5 +105,5 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 
 ## Commits
 
-- Small, focused commits with imperative subject lines ("Add shopping list suggestions").
+- Small, focused commits. The subject has a type prefix (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `style:`, `ci:`, `chore:`) and says in plain words what changed ("fix: plain Save service and Delete buttons"); the body says why.
 - Run `scripts/check.sh` (and the e2e tests for UI changes) before committing.

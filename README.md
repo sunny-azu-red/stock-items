@@ -24,7 +24,7 @@ It is built for one household on a home network: no login, one binary, one Postg
   CSV export is available too, with last prices and stock value, plus a CSV of the whole history.
 - **Quick −/+** on every row, and a full **history** of every stock change (Bought, Used, Adjusted, Service, Starting stock) with prices and shops, filtered by type and year. Mistakes can be edited or deleted, and the stock follows.
 - **Service kits.** For example, "KTM 390 – Oil Service" lists the filter, 1.7 L oil and 2 pcs O-ring. You see at once what is on the shelf and what is missing, and one click puts the shortfall on the shopping list.
-- **Service history.** **Log service** takes the parts from stock, records the date, odometer and labour cost, and updates the vehicle's odometer. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
+- **Service history.** **Log service** takes the parts from stock, records the date, odometer and labour cost, and updates the vehicle's odometer. Each part row shows what's in stock, and turns red before you save when there isn't enough. A logged service can be edited (parts, labour, odometer…) or deleted; its parts and odometer change follow.
 - **Reminders:** kits can repeat every X km and/or Y months, with an optional intermediate schedule and parts list for mid-interval jobs (e.g. a DIY oil and filter change halfway between full dealer services). Until a kit's first service, reminders count from the vehicle's purchase date and odometer. The dashboard shows what is overdue or due soon.
 - **Shopping list** with automatic suggestions: items below their minimum, and parts missing for kits. **Bought** on an entry records the purchase (partial buys stay on the list), and something new you bought becomes a stock item in one step.
 - **Spending at a glance:** the dashboard shows the stock value and what you spent on items this year, each opening the list behind it.
@@ -68,8 +68,8 @@ All settings come from environment variables or a `.env` file (real environment 
 | `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
 | `APP_CURRENCY` | `EUR` | Label shown next to prices (up to 10 characters) |
-| `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q={q}` | Search engine for part number links: the brand and number go in place of `{q}`. Must be a full `http(s)://` URL with exactly one `{q}`, or the app won't start |
-| `APP_SKU_SEARCH_PREFIX` | none | Added to every part number search, e.g. `site:de` |
+| `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q={q}` | Search engine for SKU links: the brand and number go in place of `{q}`. Must be a full `http(s)://` URL with exactly one `{q}`, or the app won't start |
+| `APP_SKU_SEARCH_PREFIX` | none | Added to every SKU search, e.g. `site:de` |
 | `APP_ALLOWED_HOSTS` | any | Host names and IPs the app answers to, comma-separated (ports ignored), e.g. `pitbox.lan,192.168.1.5`. Other names get 421, which keeps a web page whose name was pointed at your server (DNS rebinding) from using the app; `localhost` and loopback IPs always work |
 | `TZ` | machine's zone | The app's zone, e.g. `Europe/Berlin`: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today") and the times pages show. Empty or unknown also means the machine's zone (an unknown name logs a warning). Timestamps are stored in UTC and the database's own zone doesn't matter |
 

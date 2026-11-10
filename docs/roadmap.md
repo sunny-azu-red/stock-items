@@ -4,7 +4,7 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 ## Spending: items, labour and the total
 
-**Now:** the dashboard's "Spent in YEAR" tile counts only what was paid for items (priced purchases, `store.GetStats`), and opens that year's purchases in Activity, so the tile and its list add up. Labour costs are shown on the Services page (the service log's "labour in total", each vehicle's service history), not on the dashboard. Decided on 2 November 2026: the dashboard's tiles are about the items.
+**Now:** the dashboard's "Spent in YEAR" tile counts only what was paid for items (priced purchases, `store.GetStats`), and opens that year's purchases in Activity, so the tile and its list add up. Labour costs are shown on the Services page (Service history's "labour in total", and each vehicle's service history), not on the dashboard. Decided on 2 November 2026: the dashboard's tiles are about the items.
 
 **Planned design & details:** one place that shows what the vehicles cost, all together:
 

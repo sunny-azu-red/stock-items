@@ -15,7 +15,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 | `cmd/pitbox` | Flags, logging, config, DB, migrations, HTTP server with graceful shutdown, `-healthcheck` probe for Docker, the guard that keeps development builds (no version, or `-dirty`) off the `public` schema, and the pinned clock of a screenshot build (`-X main.date`, `simdate.go`: only on an `e2e_*` schema, as it rewrites that schema's timestamp defaults) | everything |
 | `internal/config` | Reads env vars and the `.env` file in the working directory (in a source checkout, the module's), and refuses a search URL or currency that can't work | `godotenv` |
 | `internal/db` | Opens the pgx pool (sessions in UTC, with optional `search_path`), runs goose migrations embedded from `migrations/`, guarded `DropSchema` for tests | `pgx`, `goose` |
-| `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export (stock and history), kit readiness, service due dates, purchase suggestions, starting stock (bought vs starting), editing recorded stock changes, item usage (archive vs delete), date sanity checks | stdlib only |
+| `internal/stock` | Domain types and **pure** business rules: unit parsing and formatting, validation, grouping items by vehicle set, text and CSV export (stock and history), kit readiness, service due dates, purchase suggestions, stock levels (out, short, low) for the stock badge, starting stock (bought vs starting), editing recorded stock changes, item usage (archive vs delete), date sanity checks | stdlib only |
 | `internal/store` | All SQL. Each method is one use case. Multi-row writes run in a single transaction (`inTx`) | `pgx`, `stock` |
 | `internal/web` | Routes, middleware, handlers, form parsing, template rendering, photo processing (runs the libvips tools) | `store`, `stock` |
 | `internal/testdb` | Creates a migrated throwaway schema per test | `db`, `config` |
@@ -31,7 +31,8 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 ## Templates
 
 - `templates/layout.html` is the page shell: sidebar on desktop, tab bar on phones.
-- `templates/partials/*.html` are shared blocks such as the stock row (`item-row`), stock sections, kit rows, chips, and the movement table.
+- `templates/partials/*.html` are shared blocks such as the stock row (`item-row`), stock sections, kit rows, chips, badges (among them the stock badge, `stock-badge`), and the movement table.
+- The part rows of the kit and service forms keep their stock badges up to date in `app.js` as the item, amount or unit changes, copying them from a `<template id="stock-badges">` the page renders once, so their markup and wording stay in the Go template.
 - `templates/pages/*.html` define `content` for each page. Each page is parsed together with the layout and partials into its own template set at startup, so a broken template fails fast.
 - Template helper functions live in `render.go` (`qty`, `money`, `km`, `date`, `icon`, `withQuery`, …).
 

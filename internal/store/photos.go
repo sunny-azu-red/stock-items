@@ -18,6 +18,9 @@ type Photo struct {
 // trash; replacedTrashID is that entry (0 when there was none).
 func (s *Store) SetPhoto(ctx context.Context, itemID int64, contentType string, image, thumb []byte) (replacedTrashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := refuseArchivedPhoto(ctx, tx, itemID); err != nil {
+			return err
+		}
 		var err error
 		if replacedTrashID, err = trashPhoto(ctx, tx, itemID, "replaced"); err != nil {
 			return err
@@ -44,6 +47,9 @@ func (s *Store) GetPhoto(ctx context.Context, itemID int64, thumb bool) (Photo, 
 // DeletePhoto removes an item's photo, keeping it in the trash.
 func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := refuseArchivedPhoto(ctx, tx, itemID); err != nil {
+			return err
+		}
 		trashID, err = trashPhoto(ctx, tx, itemID, "")
 		if err == nil && trashID == 0 {
 			return ErrNotFound
@@ -53,6 +59,22 @@ func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, e
 	return trashID, err
 }
 
+// refuseArchivedPhoto refuses a new or removed photo for an archived item
+// (archived means no new work). It locks the item as trashPhoto does, so
+// the item can't be archived before the change commits. Restoring a photo
+// from the trash doesn't call it: Undo keeps working on an archived item.
+func refuseArchivedPhoto(ctx context.Context, tx pgx.Tx, itemID int64) error {
+	var name, brand string
+	var archived bool
+	if err := tx.QueryRow(ctx, `SELECT name, brand, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand, &archived); err != nil {
+		return notFound(err)
+	}
+	if archived {
+		return &ConflictError{Field: "form", Message: "Restore " + displayName(brand, name) + " to change its photo"}
+	}
+	return nil
+}
+
 // trashPhoto moves an item's photo to the trash, returning 0 when it has
 // none (ErrNotFound when the item is gone). A detail ("replaced") goes in
 // the label, telling it apart from the photo that took its place. It
@@ -60,12 +82,8 @@ func (s *Store) DeletePhoto(ctx context.Context, itemID int64) (trashID int64, e
 // photo, so the two can't deadlock, and two uploads at once take turns.
 func trashPhoto(ctx context.Context, tx pgx.Tx, itemID int64, detail string) (int64, error) {
 	var name, brand string
-	var archived bool
-	if err := tx.QueryRow(ctx, `SELECT name, brand, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand, &archived); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT name, brand FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).Scan(&name, &brand); err != nil {
 		return 0, notFound(err)
-	}
-	if archived {
-		return 0, &ConflictError{Field: "form", Message: "Restore " + displayName(brand, name) + " to change its photo"}
 	}
 	var has bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM item_photos WHERE item_id = $1)`, itemID).Scan(&has); err != nil || !has {

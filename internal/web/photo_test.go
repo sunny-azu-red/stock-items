@@ -928,3 +928,37 @@ func TestArchivedItemRefusesPhotoChanges(t *testing.T) {
 		t.Errorf("upload photo on archived item: flash = %+v", f)
 	}
 }
+
+// Undo still works on an archived item: a photo deleted, or replaced,
+// before the item was archived comes back from the trash.
+func TestArchivedItemPhotoUndo(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	id := itemID(t, a.store, "Silkolene")
+	item := itemPath(id)
+	photo := item + "/photo"
+	ctx := context.Background()
+	if _, err := a.store.SetPhoto(ctx, id, "image/jpeg", []byte("old"), []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := a.store.SetPhoto(ctx, id, "image/jpeg", []byte("new"), []byte("new"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted := flashOf(t, a.post(item+"/photo/delete", nil)).Undo
+	if deleted == 0 {
+		t.Fatal("deleting the photo offered no Undo")
+	}
+	expect(t, a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "amount_unit": {"l"}, "total_price": {"20"}}), http.StatusSeeOther)
+	expect(t, a.postV(item+"/archive", nil), http.StatusSeeOther)
+
+	if f := flashOf(t, a.post("/trash/"+itoa(deleted)+"/restore", nil)); f.Kind == "error" {
+		t.Fatalf("restoring the deleted photo of an archived item: flash = %+v", f)
+	}
+	expect(t, a.get(photo), http.StatusOK, "new")
+	// The replaced one trades places with it, like undoing a replace.
+	if f := flashOf(t, a.post("/trash/"+itoa(replaced)+"/restore", nil)); f.Kind == "error" {
+		t.Fatalf("restoring the replaced photo of an archived item: flash = %+v", f)
+	}
+	expect(t, a.get(photo), http.StatusOK, "old")
+}

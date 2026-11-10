@@ -631,7 +631,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
 		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
-		History: sortHeads{Order: order, Path: itemPath(id)},
+		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]

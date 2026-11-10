@@ -214,7 +214,9 @@ var (
 	}}
 	// An item's history has no item column.
 	historySorts = &sortSpec{Default: store.MoveSortDate, Keys: slices.DeleteFunc(slices.Clone(activitySorts.Keys), func(k sortKey) bool { return k.Key == store.MoveSortItem })}
-	kitSorts     = &sortSpec{Default: stock.KitSortItem, Keys: []sortKey{
+	// A kit's lines default to the kit's own order (the order they were
+	// added in), which Reset order goes back to.
+	kitSorts = &sortSpec{Keys: []sortKey{
 		{Key: stock.KitSortItem},
 		{Key: stock.KitSortNeed, Desc: true},
 		{Key: stock.KitSortHave, Desc: true},

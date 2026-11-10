@@ -136,6 +136,8 @@ New migrations are applied automatically on start; to apply them separately, run
 
 **`APP_SKU_SEARCH_URL` now needs `{q}`.** Older versions appended the part number to a URL ending in `=`; this one puts it in place of `{q}` and refuses to start without one. If you set it (in `.env` or the stack's variables), add `{q}` at the end, e.g. `APP_SKU_SEARCH_URL=https://www.google.com/search?q={q}`. The start-up error says the same. Left unset, the new default already has it.
 
+**Distance unit and names (migrations 00020 and 00021).** `APP_DISTANCE` sets the unit shown for odometer readings and intervals (default `km`; only a label, nothing is converted). Migration 00021 renames the distance columns (`odometer`, `odometer_at_purchase`, `interval_distance`, `inter_interval_distance`) and the same names inside the trash, so Restore keeps working for what was deleted before. Reload any Pitbox tab that was open during the update: an edit form opened before it says it was changed since (Reload, then save again), but an add form (Add kit, Log service) would save without its distance. Take a [backup](#backups) first: going back to an older image needs it.
+
 ## Health check
 
 `GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.

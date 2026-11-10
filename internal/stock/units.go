@@ -40,6 +40,16 @@ func (u Unit) Label() string {
 	}
 }
 
+// Short is the unit's own label in amounts: "pcs", "ml" or "g".
+func (u Unit) Short() string {
+	for _, s := range SubUnits {
+		if s.Base == u && s.Factor == 1 {
+			return s.Label
+		}
+	}
+	return string(u)
+}
+
 // SubUnit is an input unit that can be converted to a base unit.
 type SubUnit struct {
 	Value  string // form value, e.g. "l"
@@ -123,7 +133,7 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	}
 	sub, ok := suffixes[m[2]]
 	if !ok {
-		return 0, fmt.Errorf("unknown unit %q", m[2])
+		return 0, fmt.Errorf("unknown unit %q: use pcs, ml, L, g or kg", m[2])
 	}
 	if sub == "" {
 		sub = strings.ToLower(strings.TrimSpace(subUnit))
@@ -132,10 +142,10 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	if sub != "" {
 		su, ok := findSubUnit(sub)
 		if !ok {
-			return 0, fmt.Errorf("unknown unit %q", sub)
+			return 0, fmt.Errorf("unknown unit %q: use pcs, ml, L, g or kg", sub)
 		}
 		if su.Base != u {
-			return 0, fmt.Errorf("%s cannot be used for %s", su.Label, strings.ToLower(u.Label()))
+			return 0, fmt.Errorf("can't use %s for an item counted in %s", su.Label, u.Short())
 		}
 		factor = su.Factor
 	}
@@ -146,7 +156,7 @@ func ParseAmount(s string, u Unit, subUnit string) (float64, error) {
 	}
 	v := n * factor
 	if v > MaxQuantity {
-		return 0, errors.New("that amount is too large")
+		return 0, fmt.Errorf("that amount is more than %s", FormatInt(MaxQuantity))
 	}
 	// Checked before rounding, so "1.0004" pieces is refused, not read as 1.
 	if err := CheckQuantity(v, u); err != nil {

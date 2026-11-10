@@ -40,8 +40,20 @@ type Errors map[string]string
 // Add records msg for field unless the field already has an error.
 func (e Errors) Add(field, msg string) {
 	if _, ok := e[field]; !ok {
-		e[field] = msg
+		e[field] = Sentence(msg)
 	}
+}
+
+// Sentence starts msg with a capital, for an error string (lowercase, as
+// Go's are) shown on its own: "pieces must be a whole number" reads
+// "Pieces must be a whole number". A message that starts with a quote, a
+// digit or a unit ("ml …") isn't changed; write those so they don't start
+// with a unit.
+func Sentence(msg string) string {
+	if msg == "" || msg[0] < 'a' || msg[0] > 'z' {
+		return msg
+	}
+	return strings.ToUpper(msg[:1]) + msg[1:]
 }
 
 // Any reports whether there are errors.

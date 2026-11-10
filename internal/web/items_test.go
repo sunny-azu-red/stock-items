@@ -51,7 +51,7 @@ func TestItemFormFlow(t *testing.T) {
 
 	// Validation errors re-render the form with the typed values.
 	rec := a.post("/items", url.Values{"name": {""}, "unit": {"ml"}, "quantity": {"2 kg"}, "brand": {"Motul"}})
-	expect(t, rec, http.StatusUnprocessableEntity, "Name is required", "kg cannot be used", `value="Motul"`)
+	expect(t, rec, http.StatusUnprocessableEntity, "Name is required", "Can&#39;t use kg for an item counted in ml", `value="Motul"`)
 
 	form := url.Values{
 		"name": {"7100 10W50"}, "brand": {"Motul"}, "unit": {"ml"}, "quantity": {"4"}, "quantity_unit": {"l"},

@@ -107,7 +107,7 @@ func TestSuggestionKeepsItsReason(t *testing.T) {
 func TestFreeTextShoppingUnits(t *testing.T) {
 	a := newApp(t)
 	expect(t, a.post("/shopping", url.Values{"free_text": {"Coolant"}, "quantity": {"4 L"}}), http.StatusSeeOther)
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Grease"}, "quantity": {"2 bananas"}}), http.StatusUnprocessableEntity, "unknown unit")
+	expect(t, a.post("/shopping", url.Values{"free_text": {"Grease"}, "quantity": {"2 bananas"}}), http.StatusUnprocessableEntity, "Unknown unit &#34;bananas&#34;: use pcs, ml, L, g or kg")
 	list, _ := a.store.ListShopping(context.Background())
 	if len(list) != 1 {
 		t.Fatalf("shopping = %+v", list)

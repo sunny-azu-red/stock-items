@@ -143,7 +143,7 @@ func TestPartRowsHaveUnits(t *testing.T) {
 	}
 	// A unit that doesn't fit the item is explained on its row.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
-		"line_item": {itoa(pads)}, "line_qty": {"1"}, "line_unit": {"l"}}), http.StatusUnprocessableEntity, "L cannot be used for pieces")
+		"line_item": {itoa(pads)}, "line_qty": {"1"}, "line_unit": {"l"}}), http.StatusUnprocessableEntity, "Can&#39;t use L for an item counted in pcs")
 
 	// Prefilled rows come with their unit and what is in stock.
 	edit := a.get(kit + "/edit")

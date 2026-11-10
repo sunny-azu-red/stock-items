@@ -31,9 +31,9 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 	pads := itemID(t, a.store, "Rear Brake")
 	oil := itemID(t, a.store, "Silkolene")
 	grease := a.grease(100)
-	twoG := "use at most two decimals of g"
+	twoG := "Use at most two decimals of g"
 	kg := "1.234567 kg is 1234.567 g: use at most two decimals of g"
-	whole := "pieces must be a whole number"
+	whole := "Pieces must be a whole number"
 	newItem := func(unit, qty, sub string) url.Values {
 		return url.Values{"name": {"Assembly paste"}, "unit": {unit}, "quantity": {qty}, "quantity_unit": {sub}}
 	}
@@ -57,7 +57,7 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 		{"item: 1.234567 kg", "/items", newItem("g", "1.234567", "kg"), kg},
 		{"item: 1.0004 pieces", "/items", newItem("piece", "1.0004", "pcs"), whole},
 		{"item: minimum 0.001 ml", "/items", url.Values{"name": {"X"}, "unit": {"ml"}, "min_quantity": {"0.001"}, "min_unit": {"ml"}},
-			"use at most two decimals of ml"},
+			"Use at most two decimals of ml"},
 		{"item: pack size 0.000001 L", "/items", url.Values{"name": {"X"}, "unit": {"ml"}, "sku_code": {"SK-1"}, "sku_kind": {"oem"},
 			"sku_pack": {"0.000001"}, "sku_pack_unit": {"l"}}, "0.000001 L is 0.001 ml"},
 		{"use: 0.234 g", itemPath(grease) + "/movements", use("0.234", "g"), "Use at most two decimals of g"},
@@ -116,7 +116,7 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	grease := a.grease(0.23)
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.231"}, "part_unit": {"g"}})
-	expect(t, rec, http.StatusUnprocessableEntity, "use at most two decimals of g")
+	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
 	noShortRow(t, rec)
 	rec = a.post(itemPath(grease)+"/movements", url.Values{"kind": {"used"}, "amount": {"0.231"}, "amount_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")

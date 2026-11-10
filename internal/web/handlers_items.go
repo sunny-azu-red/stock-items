@@ -790,8 +790,7 @@ func amountError(err error, u stock.Unit, prompt string) string {
 	if err == nil || errors.Is(err, stock.ErrEmpty) {
 		return prompt + ", e.g. " + examplesFor(u)
 	}
-	msg := err.Error()
-	return strings.ToUpper(msg[:1]) + msg[1:]
+	return stock.Sentence(err.Error())
 }
 
 func examplesFor(u stock.Unit) string {

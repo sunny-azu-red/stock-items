@@ -132,7 +132,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			case errors.Is(err, stock.ErrEmpty):
 				row.Error = "Enter a quantity, e.g. " + examplesFor(it.Unit)
 			case err != nil:
-				row.Error = err.Error()
+				row.Error = stock.Sentence(err.Error())
 			case q <= 0:
 				row.Error = "Quantity must be greater than zero"
 			default:

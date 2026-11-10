@@ -276,7 +276,7 @@ func replaceKitLines(ctx context.Context, tx pgx.Tx, kitID int64, lines, interLi
 				return ErrNotFound
 			}
 			if l.Unit != "" && l.Unit != u.unit {
-				return &ConflictError{Field: field, Message: u.name + " is counted in " + string(u.unit) +
+				return &ConflictError{Field: field, Message: u.name + " is counted in " + u.unit.Short() +
 					" now (its unit was changed meanwhile). Check its amount and save again."}
 			}
 		}

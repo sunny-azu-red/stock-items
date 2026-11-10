@@ -339,7 +339,7 @@ func checkPartUnits(ctx context.Context, tx pgx.Tx, parts []stock.KitLineInput) 
 			continue
 		}
 		if info, ok := byID[p.ItemID]; ok && info.unit != p.Unit {
-			return &ConflictError{Field: "parts", Message: displayName(info.brand, info.name) + " is counted in " + string(info.unit) +
+			return &ConflictError{Field: "parts", Message: displayName(info.brand, info.name) + " is counted in " + info.unit.Short() +
 				" now (its unit was changed meanwhile). Check its amount and save again."}
 		}
 	}

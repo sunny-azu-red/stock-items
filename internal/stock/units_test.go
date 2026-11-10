@@ -312,3 +312,22 @@ func TestParseAmountAnyUnit(t *testing.T) {
 		}
 	}
 }
+
+func TestSentenceAndShort(t *testing.T) {
+	for in, want := range map[string]string{
+		"pieces must be a whole number": "Pieces must be a whole number",
+		`"12a" is not a valid amount`:   `"12a" is not a valid amount`,
+		"1.5 L is 1500 ml":              "1.5 L is 1500 ml",
+		"Already capital":               "Already capital",
+		"":                              "",
+	} {
+		if got := Sentence(in); got != want {
+			t.Errorf("Sentence(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for u, want := range map[Unit]string{UnitPiece: "pcs", UnitML: "ml", UnitGram: "g"} {
+		if got := u.Short(); got != want {
+			t.Errorf("%s.Short() = %q, want %q", u, got, want)
+		}
+	}
+}

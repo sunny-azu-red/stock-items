@@ -417,21 +417,35 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
 test("Log service offers the chosen vehicle's kits and keeps what was typed", async ({ page }) => {
   await page.goto("/services/new");
   const starts = page.locator("#kit-starts");
+  const odometer = page.getByLabel("Odometer (km)");
   await expect(starts).toBeHidden();
+  await expect(odometer).toHaveAttribute("placeholder", "e.g. 15000");
   await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
   await expect(starts).toBeVisible();
+  // The odometer stays empty; the vehicle's last reading is its placeholder.
+  await expect(odometer).toHaveValue("");
+  await expect(odometer).toHaveAttribute("placeholder", /^Last reading \d/);
   const kit = starts.getByRole("link", { name: "Oil Service" });
   await expect(kit).toBeVisible();
   expect([...(await offGrid(page)), ...(await misaligned(page))]).toEqual([]);
 
-  await page.getByLabel("Date", { exact: true }).fill("2026-10-05");
-  await page.getByLabel("Odometer (km)").fill("12345");
+  // Untouched, the kit's own link.
   await kit.click();
-  await expect(page).toHaveURL(/\/services\/new\?kit=\d+/);
+  await expect(page).toHaveURL(/\/services\/new\?kit=\d+$/);
+  await expect(page.locator("#kit-starts")).toHaveCount(0);
+
+  // What was changed comes along: the date, odometer and labour.
+  await page.goto("/services/new");
+  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await page.getByLabel("Date", { exact: true }).fill("2026-10-05");
+  await odometer.fill("12345");
+  await page.getByLabel(/^Labour cost/).fill("80");
+  await kit.click();
+  await expect(page).toHaveURL(/\/services\/new\?kit=\d+&performed_on=2026-10-05&odometer_km=12345&labor_cost=80$/);
   await expect(page.getByLabel("Work performed")).toHaveValue(/^Oil Service/);
   await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-10-05");
-  await expect(page.getByLabel("Odometer (km)")).toHaveValue("12345");
-  await expect(page.locator("#kit-starts")).toHaveCount(0);
+  await expect(odometer).toHaveValue("12345");
+  await expect(page.getByLabel(/^Labour cost/)).toHaveValue("80");
 });
 
 test("form hints open from the question mark", async ({ page }) => {

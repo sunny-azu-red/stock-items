@@ -253,9 +253,17 @@
   });
 
   // On a new service form without a kit, "Start from a kit" lists the
-  // chosen vehicle's kits. Picking one opens its form, keeping the date and
-  // odometer typed so far.
+  // chosen vehicle's kits, and the odometer's placeholder shows the
+  // vehicle's last reading. Picking a kit opens its form, keeping the date,
+  // odometer and labour changed so far (only those: an untouched form
+  // gives the kit's plain link).
   function showKitStarts(select) {
+    var odo = select.form && select.form.elements.odometer_km;
+    if (odo) {
+      var opt = select.options[select.selectedIndex];
+      var last = opt && opt.getAttribute("data-odometer");
+      odo.placeholder = last ? "Last reading " + last : "e.g. 15000";
+    }
     var sec = document.getElementById("kit-starts");
     if (!sec) return;
     var any = false;
@@ -269,10 +277,12 @@
     var start = e.target.closest("a[data-kit-start]");
     var form = start && start.closest("form");
     if (!form) return;
-    var url = new URL(start.href, location.href);
-    ["performed_on", "odometer_km"].forEach(function (name) {
+    if (!start.hasAttribute("data-href")) start.setAttribute("data-href", start.getAttribute("href"));
+    var url = new URL(start.getAttribute("data-href"), location.href);
+    ["performed_on", "odometer_km", "labor_cost"].forEach(function (name) {
       var input = form.elements[name];
-      if (input && input.value.trim()) url.searchParams.set(name, input.value.trim());
+      var v = input ? input.value.trim() : "";
+      if (v && v !== input.defaultValue.trim()) url.searchParams.set(name, v);
     });
     start.href = url.pathname + url.search;
   });

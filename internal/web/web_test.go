@@ -264,7 +264,7 @@ func TestPagesRenderWithData(t *testing.T) {
 	expect(t, a.get("/items/"+itoa(oil)), http.StatusOK, "525 ml", "Starting stock")
 	expect(t, a.get("/items/"+itoa(oil)+"/edit"), http.StatusOK, `value="525"`)
 	expect(t, a.get("/kits/new?vehicle="+itoa(k390)), http.StatusOK, "For KTM 390")
-	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `value="10000"`)
+	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `name="odometer_km" value=""`, "Last reading 10\u202f000 km")
 }
 
 func TestErrorsAndInfrastructure(t *testing.T) {

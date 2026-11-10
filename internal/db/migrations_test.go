@@ -1066,3 +1066,81 @@ func TestMovementKindNamesMigration(t *testing.T) {
 		t.Errorf("after second Up: kinds = %s, want %s", got, want)
 	}
 }
+
+func TestLaborCostNoneNotZeroMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	// Services with labour 0, none and 80, and the trash of a deleted
+	// service and a deleted vehicle holding the same, next to other keys.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name) VALUES ('KTM 390');
+		INSERT INTO service_records (vehicle_id, performed_on, title, labor_cost) VALUES
+			(1, '2026-05-01', 'Zero', 0), (1, '2026-05-02', 'None', NULL), (1, '2026-05-03', 'Paid', 80);
+		INSERT INTO trash (kind, label, payload) VALUES
+			('service', 'Service: Chain',
+			 '{"service_records": [{"id": 50, "vehicle_id": 1, "title": "Chain", "performed_on": "2026-04-01", "labor_cost": 0}], "stock_movements": []}'::jsonb),
+			('vehicle', 'Vehicle: Golf',
+			 '{"vehicles": [{"id": 60, "name": "Golf"}], "service_records": [{"id": 61, "title": "Tyres", "labor_cost": 0.00}, {"id": 62, "title": "Brakes", "labor_cost": 80}]}'::jsonb);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	labour := func() string {
+		t.Helper()
+		var got string
+		if err := pool.QueryRow(ctx, `SELECT string_agg(title || '=' || COALESCE(labor_cost::text, 'none'), ',' ORDER BY id) FROM service_records`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	payload := func(label string) string {
+		t.Helper()
+		var got string
+		if err := pool.QueryRow(ctx, `SELECT payload::text FROM trash WHERE label = $1`, label).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	if _, err := provider.UpTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := labour(), "Zero=none,None=none,Paid=80.00"; got != want {
+		t.Errorf("after Up: labour = %s, want %s", got, want)
+	}
+	if p := payload("Service: Chain"); !strings.Contains(p, `"labor_cost": null`) || !strings.Contains(p, `"stock_movements": []`) {
+		t.Errorf("after Up: service payload = %s", p)
+	}
+	if p := payload("Vehicle: Golf"); strings.Count(p, `"labor_cost": null`) != 1 || !strings.Contains(p, `"labor_cost": 80`) ||
+		!strings.Contains(p, `"vehicles": [{"id": 60, "name": "Golf"}]`) {
+		t.Errorf("after Up: vehicle payload = %s", p)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO service_records (vehicle_id, performed_on, title, labor_cost) VALUES (1, '2026-06-01', 'Free', 0)`); err == nil {
+		t.Error("after Up: inserting labour 0 should have failed the CHECK")
+	}
+	// The rewritten snapshot restores, as restoreRows inserts it.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO service_records (id, vehicle_id, title, performed_on, labor_cost) OVERRIDING SYSTEM VALUE
+		SELECT id, vehicle_id, title, performed_on, labor_cost
+		FROM jsonb_populate_recordset(NULL::service_records, (SELECT payload -> 'service_records' FROM trash WHERE label = 'Service: Chain'))`); err != nil {
+		t.Errorf("after Up: restoring the snapshot: %v", err)
+	}
+
+	if _, err := provider.DownTo(ctx, 19); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO service_records (vehicle_id, performed_on, title, labor_cost) VALUES (1, '2026-06-01', 'Free', 0)`); err != nil {
+		t.Errorf("after Down: inserting labour 0: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM service_records WHERE title = 'Free'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := labour(), "Zero=none,None=none,Paid=80.00,Chain=none"; got != want {
+		t.Errorf("after second Up: labour = %s, want %s", got, want)
+	}
+}

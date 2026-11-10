@@ -589,6 +589,10 @@ func (in *ServiceInput) Normalize() {
 	if in.KitID == nil {
 		in.KitIntermediate = false
 	}
+	// No labour is stored as none, never 0 (the column's CHECK).
+	if in.LaborCost != nil && *in.LaborCost == 0 {
+		in.LaborCost = nil
+	}
 	in.Parts = mergeLines(in.Parts)
 }
 

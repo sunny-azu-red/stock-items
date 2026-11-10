@@ -247,6 +247,25 @@ func TestKitAndServiceMergeDuplicateLines(t *testing.T) {
 	}
 }
 
+func TestServiceLaborCostNormalize(t *testing.T) {
+	zero, paid := 0.0, 80.0
+	for _, tc := range []struct {
+		name string
+		in   *float64
+		want *float64
+	}{
+		{"none", nil, nil},
+		{"zero is none", &zero, nil},
+		{"paid", &paid, &paid},
+	} {
+		in := ServiceInput{LaborCost: tc.in}
+		in.Normalize()
+		if (in.LaborCost == nil) != (tc.want == nil) || (in.LaborCost != nil && *in.LaborCost != *tc.want) {
+			t.Errorf("%s: labour = %v, want %v", tc.name, in.LaborCost, tc.want)
+		}
+	}
+}
+
 func TestShoppingInputValidate(t *testing.T) {
 	in := ShoppingInput{FreeText: "  "}
 	in.Normalize()

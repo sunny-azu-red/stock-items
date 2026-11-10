@@ -172,18 +172,25 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 		f.Parts = kitPartRows(lines)
 	}
 	if f.VehicleID != 0 {
-		v, err := s.store.GetVehicle(ctx, f.VehicleID)
-		if err != nil {
+		// The odometer starts empty: a reading copied from the vehicle would
+		// be saved as if typed, also for a service done weeks ago. Left
+		// empty, the vehicle's reading at logging counts only when the
+		// service was logged within a week (stock.LoggedSoonAfter). The
+		// form shows the last reading as its placeholder.
+		if _, err := s.store.GetVehicle(ctx, f.VehicleID); err != nil {
 			return err
 		}
-		f.OdometerKm = optIntString(v.OdometerKm)
 	}
-	// Picking a kit on the form ("Start from a kit") keeps what was typed.
+	// Picking a kit on the form ("Start from a kit") keeps what was typed
+	// (app.js sends only the fields changed from how the form started).
 	if v := strings.TrimSpace(q.Get("performed_on")); v != "" {
 		f.PerformedOn = v
 	}
 	if v := strings.TrimSpace(q.Get("odometer_km")); v != "" {
 		f.OdometerKm = v
+	}
+	if v := strings.TrimSpace(q.Get("labor_cost")); v != "" {
+		f.LaborCost = v
 	}
 	return s.renderServiceForm(w, r, http.StatusOK, f)
 }

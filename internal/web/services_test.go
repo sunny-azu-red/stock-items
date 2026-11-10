@@ -973,3 +973,30 @@ func TestServiceButtonsSayWhatHappensToParts(t *testing.T) {
 	}
 	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, `title="You can undo it."><svg`)
 }
+
+func TestZeroLabourIsNoLabour(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.post("/services", url.Values{
+		"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"0"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	got, err := a.store.GetService(context.Background(), mustID(t, svc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LaborCost != nil {
+		t.Fatalf("labour 0 stored as %v, want none", *got.LaborCost)
+	}
+	expectNot(t, a.get("/services"), "labour")
+	expect(t, a.get(svc), http.StatusOK, "<dt>Labour</dt><dd>—</dd>")
+	expect(t, a.get(svc+"/edit"), http.StatusOK, `name="labor_cost" value=""`)
+	// Saving the edit keeps none; a real amount shows.
+	expect(t, a.postV(svc, url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {""}}), http.StatusSeeOther)
+	if got, _ = a.store.GetService(context.Background(), got.ID); got.LaborCost != nil {
+		t.Errorf("after editing: labour = %v, want none", *got.LaborCost)
+	}
+	expect(t, a.postV(svc, url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"80"}}), http.StatusSeeOther)
+	expect(t, a.get("/services"), http.StatusOK, "80.00 EUR labour")
+}

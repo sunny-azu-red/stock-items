@@ -259,7 +259,11 @@ func normalizeCode(q string) string {
 }
 
 // AppToday is today in the app's zone, for a store call made without a
-// date. By default it uses time.Now().
+// date: time.Now() in time.Local, which main sets to the app zone. A build
+// with a pinned date (cmd/pitbox simdate.go) replaces it once, before the
+// server starts; nothing else may. SQL never works a day out itself
+// (current_date): the session is in UTC, which isn't the app's day around
+// midnight.
 var AppToday = func() time.Time { return stock.DateOnly(time.Now()) }
 
 func appToday() time.Time { return AppToday() }

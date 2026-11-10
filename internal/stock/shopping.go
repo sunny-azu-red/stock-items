@@ -19,12 +19,9 @@ type Suggestion struct {
 // for a service kit. The suggested quantity covers the largest single need.
 // listed holds the quantity of each item already on the shopping list (nil
 // when the entry has none); an item is only suggested while the list asks
-// for less than it needs.
-func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64, now ...time.Time) []Suggestion {
-	today := DateOnly(time.Now())
-	if len(now) > 0 && !now[0].IsZero() {
-		today = DateOnly(now[0])
-	}
+// for less than it needs. today picks each kit's schedule due next.
+func SuggestPurchases(items []Item, kits []Kit, listed map[int64]*float64, today time.Time) []Suggestion {
+	today = DateOnly(today)
 	byID := make(map[int64]Item, len(items))
 	for _, it := range items {
 		byID[it.ID] = it

@@ -1,6 +1,12 @@
 package stock
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+// suggestDay is the day the suggestion tests run on.
+var suggestDay = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
 func TestSuggestPurchases(t *testing.T) {
 	filter := Item{ID: 1, Brand: "OEM", Name: "Oil Filter", Unit: UnitPiece, Quantity: 0, MinQuantity: ptr(2.0)}
@@ -17,7 +23,7 @@ func TestSuggestPurchases(t *testing.T) {
 			{ItemID: 2, Need: 3500, Have: 500, Unit: UnitML},
 		}},
 	}
-	got := SuggestPurchases([]Item{filter, oil, pads, onList}, kits, map[int64]*float64{4: nil})
+	got := SuggestPurchases([]Item{filter, oil, pads, onList}, kits, map[int64]*float64{4: nil}, suggestDay)
 	if len(got) != 2 {
 		t.Fatalf("got %d suggestions, want 2: %+v", len(got), got)
 	}
@@ -35,7 +41,7 @@ func TestSuggestPurchasesSkipsArchivedKitLines(t *testing.T) {
 		{ItemID: 1, ItemName: "Old filter", Need: 1, Have: 0, Unit: UnitPiece, Archived: true},
 		{ItemID: 2, ItemName: "New filter", Need: 1, Have: 0, Unit: UnitPiece},
 	}}}
-	got := SuggestPurchases(nil, kits, nil)
+	got := SuggestPurchases(nil, kits, nil, suggestDay)
 	if len(got) != 1 || got[0].Item.ID != 2 {
 		t.Errorf("suggestions = %+v, want only the active item", got)
 	}
@@ -56,7 +62,7 @@ func TestSuggestPurchasesCountsWhatIsListed(t *testing.T) {
 		{"listed for everything", map[int64]*float64{2: ptr(3000.0)}, 0, 0},
 	}
 	for _, tt := range tests {
-		got := SuggestPurchases([]Item{oil}, kits, tt.listed)
+		got := SuggestPurchases([]Item{oil}, kits, tt.listed, suggestDay)
 		if len(got) != tt.want || (tt.want == 1 && (got[0].Quantity != 3000 || got[0].Listed != tt.listedQ)) {
 			t.Errorf("%s: %+v", tt.name, got)
 		}

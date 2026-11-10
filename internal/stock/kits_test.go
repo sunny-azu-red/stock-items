@@ -14,14 +14,14 @@ func TestKitReadiness(t *testing.T) {
 		{ItemName: "Oil", Unit: UnitML, Need: 1700, Have: 525},
 		{ItemName: "O-ring", Unit: UnitPiece, Need: 2, Have: 2},
 	}}
-	r := k.Readiness()
+	r := k.ReadinessAt(k.VehicleOdometerKm, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
 	if r.Lines != 3 || r.ShortLines != 1 || r.Ready() {
 		t.Errorf("readiness = %+v ready=%v", r, r.Ready())
 	}
 	if s := k.Lines[1].Short(); s != 1175 {
 		t.Errorf("short = %v, want 1175", s)
 	}
-	if (Kit{}).Readiness().Ready() {
+	if (Kit{}).ReadinessAt(nil, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)).Ready() {
 		t.Error("an empty kit must not be ready")
 	}
 }
@@ -144,7 +144,7 @@ func TestReadinessIgnoresArchivedLines(t *testing.T) {
 		{"active short line", []KitLine{{Need: 2, Have: 1}, {Need: 1, Have: 0, Archived: true}}, 1, true, false},
 	}
 	for _, tt := range tests {
-		r := Kit{Lines: tt.lines}.Readiness()
+		r := Kit{Lines: tt.lines}.ReadinessAt(nil, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
 		if r.Lines != tt.lines2 || (r.ShortLines > 0) != tt.short || r.Ready() != tt.ready {
 			t.Errorf("%s: %+v ready=%v", tt.name, r, r.Ready())
 		}

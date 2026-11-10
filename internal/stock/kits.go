@@ -50,11 +50,6 @@ func (k Kit) ReadinessAt(currentKm *int, today time.Time) Readiness {
 	return ReadinessOf(k.ActiveLines(currentKm, today))
 }
 
-// Readiness checks the kit's active lines against the current stock.
-func (k Kit) Readiness() Readiness {
-	return k.ReadinessAt(k.VehicleOdometerKm, DateOnly(time.Now()))
-}
-
 // DueState is the reminder state of a kit with an interval.
 type DueState string
 

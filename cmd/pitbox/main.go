@@ -26,8 +26,8 @@ import (
 // version is set at build time with -ldflags "-X main.version=v1.2.3".
 var version = ""
 
-// date is set at build time with -ldflags "-X main.date=2006-01-02T15:04:05Z"
-// (used by scripts/screenshots.sh via SCREENSHOT_DATE).
+// date pins the clock for the screenshots: -ldflags "-X main.date=2026-11-02T16:00:00+02:00"
+// (scripts/screenshots.sh). Such a build runs only on an e2e_* schema (simdate.go).
 var date = ""
 
 func main() {
@@ -65,6 +65,10 @@ func run() error {
 	if err := checkSchema(schemaName(cfg.DB), version, os.Getenv("APP_ALLOW_PUBLIC_SCHEMA") == "1"); err != nil {
 		return err
 	}
+	pinned, err := checkSimulatedDate(date, schemaName(cfg.DB))
+	if err != nil {
+		return err
+	}
 	if *reset {
 		if err := resetSchema(ctx, cfg.DB); err != nil {
 			return err
@@ -91,43 +95,14 @@ func run() error {
 	}
 
 	var nowFunc func() time.Time
-	if date != "" {
-		if t, err := time.Parse(time.RFC3339, date); err == nil {
-			start := time.Now()
-			nowFunc = func() time.Time { return t.Add(time.Since(start)) }
-			store.AppToday = func() time.Time { return stock.DateOnly(nowFunc().In(cfg.Location)) }
-			if schemaName(cfg.DB) != "public" {
-				ts := t.UTC().Format("2006-01-02 15:04:05.000000-07")
-				serverStart := start.UTC().Format("2006-01-02 15:04:05.000000-07")
-				simNow := fmt.Sprintf("('%s'::timestamptz + (clock_timestamp() - '%s'::timestamptz))", ts, serverStart)
-				simUpdated := fmt.Sprintf("('%s'::timestamptz + interval '24 hours' + (clock_timestamp() - '%s'::timestamptz))", ts, serverStart)
-				exec := func(sql string) {
-					if _, err := pool.Exec(ctx, sql); err != nil {
-						logger.Error("pin timestamp sql", "err", err, "sql", sql)
-					}
-				}
-				for _, table := range []string{"items", "vehicles", "service_kits", "service_records", "stock_movements", "shopping_entries"} {
-					exec(fmt.Sprintf("ALTER TABLE %s ALTER COLUMN created_at SET DEFAULT %s", table, simNow))
-				}
-				for _, table := range []string{"items", "vehicles", "service_kits"} {
-					exec(fmt.Sprintf("ALTER TABLE %s ALTER COLUMN updated_at SET DEFAULT %s", table, simUpdated))
-					exec(fmt.Sprintf(`
-						CREATE OR REPLACE FUNCTION _pin_%s_timestamps() RETURNS trigger AS $$
-						BEGIN
-							NEW.updated_at := %s;
-							IF NEW.archived_at IS NOT NULL THEN
-								NEW.archived_at := %s;
-							END IF;
-							RETURN NEW;
-						END;
-						$$ LANGUAGE plpgsql;
-						DROP TRIGGER IF EXISTS _pin_%s_timestamps ON %s;
-						CREATE TRIGGER _pin_%s_timestamps BEFORE UPDATE ON %s FOR EACH ROW EXECUTE FUNCTION _pin_%s_timestamps();
-					`, table, simUpdated, simNow, table, table, table, table, table))
-				}
-				exec(fmt.Sprintf("ALTER TABLE trash ALTER COLUMN deleted_at SET DEFAULT %s", simNow))
-			}
+	if !pinned.IsZero() {
+		start := time.Now()
+		nowFunc = simulatedClock(pinned, start)
+		store.AppToday = func() time.Time { return stock.DateOnly(nowFunc().In(cfg.Location)) }
+		if err := pinTimestamps(ctx, pool, schemaName(cfg.DB), pinned, start); err != nil {
+			return err
 		}
+		logger.Info("pinned date for screenshots", "date", pinned)
 	}
 
 	srv, err := web.New(store.New(pool), web.Options{

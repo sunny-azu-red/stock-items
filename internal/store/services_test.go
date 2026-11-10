@@ -31,7 +31,7 @@ func TestKitsAndServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := kit.Readiness(); r.Lines != 2 || r.ShortLines != 1 || kit.VehicleName != "KTM 390" || kit.LastService != nil {
+	if r := kit.ReadinessAt(kit.VehicleOdometerKm, store.AppToday()); r.Lines != 2 || r.ShortLines != 1 || kit.VehicleName != "KTM 390" || kit.LastService != nil {
 		t.Errorf("kit = %+v readiness %+v", kit, r)
 	}
 	if got := kit.Due(nil, time.Now()).State; got != stock.DueNever {

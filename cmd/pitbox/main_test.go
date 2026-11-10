@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"runtime/debug"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/config"
 )
@@ -108,5 +110,34 @@ func TestCheckHealth(t *testing.T) {
 	srv.Close()
 	if err := checkHealth(config.Config{Host: "0.0.0.0", Port: port}); err == nil {
 		t.Error("a server that is down passed the healthcheck")
+	}
+}
+
+// A pinned-date build rewrites timestamp defaults, so it refuses every
+// schema but a throwaway e2e_* one: dev is copied to public.
+func TestCheckSimulatedDate(t *testing.T) {
+	tests := []struct {
+		date, schema string
+		wantErr      bool
+	}{
+		{"", "public", false},
+		{"", "dev", false},
+		{"2026-11-02T16:00:00+02:00", "e2e_shots", false},
+		{"2026-11-02T16:00:00+02:00", "dev", true},
+		{"2026-11-02T16:00:00+02:00", "public", true},
+		{"2026-11-02T16:00:00+02:00", "test_abc", true},
+		{"2026-11-02", "e2e_shots", true},
+	}
+	for _, tt := range tests {
+		got, err := checkSimulatedDate(tt.date, tt.schema)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("checkSimulatedDate(%q, %q) error = %v, want error %v", tt.date, tt.schema, err, tt.wantErr)
+		}
+		if err == nil && (tt.date == "") != got.IsZero() {
+			t.Errorf("checkSimulatedDate(%q, %q) = %v", tt.date, tt.schema, got)
+		}
+	}
+	if err := pinTimestamps(context.Background(), nil, "dev", time.Now(), time.Now()); err == nil {
+		t.Error("pinTimestamps ran on dev")
 	}
 }

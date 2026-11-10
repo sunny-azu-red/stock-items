@@ -937,6 +937,8 @@ async function misaligned(page: Page) {
       for (const k of kids) {
         const t = ownText(k)[0];
         const kcs = getComputedStyle(k);
+        // A kit's part rows are centred on purpose, name and stock meter as one
+        // block, so the name sits above the amounts: those rows aren't compared.
         if (!t || mono(k) || lines(k) !== 1 || (el.tagName === "TR" && (kcs.verticalAlign !== "middle" || el.querySelector(".meter")))) continue;
         const [top, bottom] = extent(k);
         if (bottom - top <= 1.5 * parseFloat(kcs.lineHeight)) ms.push([k, caps(t), top, bottom]);

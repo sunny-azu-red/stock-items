@@ -70,6 +70,9 @@ func (e Errors) Error() string {
 
 // ItemInput is the data needed to create or update an item.
 type ItemInput struct {
+	// Version is the item's version as the edit form was opened (see
+	// Item.Version); unused on create.
+	Version     int
 	Name        string
 	Brand       string
 	Category    string
@@ -90,9 +93,6 @@ type ItemInput struct {
 	Supplier   string
 	BoughtOn   *time.Time
 	BoughtNote string
-	// Version is the item's version as the edit form was opened (see
-	// Item.Version); unused on create.
-	Version int
 	// FormKey is the form's one-time key: a repeat of a save that went
 	// through does nothing (see store.AlreadySavedError). "" for none.
 	FormKey string
@@ -241,6 +241,7 @@ func IsColor(s string) bool { return colorRe.MatchString(s) }
 
 // VehicleInput is the data needed to create or update a vehicle.
 type VehicleInput struct {
+	Version            int // as the edit form was opened; unused on create
 	Name               string
 	Kind               VehicleKind
 	Make               string
@@ -256,7 +257,6 @@ type VehicleInput struct {
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
-	Version      int    // as the edit form was opened; unused on create
 	FormKey      string // see ItemInput.FormKey
 }
 
@@ -464,6 +464,7 @@ func CheckEventDate(d *time.Time, today time.Time) string {
 
 // KitInput is the data needed to create or update a service kit.
 type KitInput struct {
+	Version               int // as the edit form was opened; unused on create
 	VehicleID             int64
 	Name                  string
 	IntervalDistance      *int
@@ -473,7 +474,6 @@ type KitInput struct {
 	Notes                 string
 	Lines                 []KitLineInput
 	InterLines            []KitLineInput
-	Version               int    // as the edit form was opened; unused on create
 	FormKey               string // see ItemInput.FormKey
 }
 
@@ -569,16 +569,16 @@ func (in KitInput) Validate() Errors {
 
 // ServiceInput is the data needed to log a performed service.
 type ServiceInput struct {
+	Version         int // as the edit form was opened; unused on create
 	VehicleID       int64
 	KitID           *int64
 	KitIntermediate bool
 	PerformedOn     time.Time
 	Odometer        *int
 	Title           string
-	Notes           string
 	LaborCost       *float64
+	Notes           string
 	Parts           []KitLineInput
-	Version         int    // as the edit form was opened; unused on create
 	FormKey         string // see ItemInput.FormKey
 }
 

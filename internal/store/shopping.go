@@ -12,15 +12,15 @@ import (
 )
 
 const shoppingSelect = `
-SELECT e.id, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit), e.free_text,
-       e.quantity, e.note, e.created_at, e.version
+SELECT e.id, e.version, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit), e.free_text,
+       e.quantity, e.note, e.created_at
 FROM shopping_entries e
 LEFT JOIN items i ON i.id = e.item_id`
 
 func scanShopping(row pgx.Row) (stock.ShoppingEntry, error) {
 	var e stock.ShoppingEntry
 	var brand, name string
-	err := row.Scan(&e.ID, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt, &e.Version)
+	err := row.Scan(&e.ID, &e.Version, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt)
 	if name != "" {
 		e.ItemName = displayName(brand, name)
 	}
@@ -85,17 +85,17 @@ func (s *Store) AddShopping(ctx context.Context, in stock.ShoppingInput) (int64,
 		}
 		// Adding to an entry changes what its Bought form shows: a new version.
 		return tx.QueryRow(ctx, `
-			INSERT INTO shopping_entries (item_id, free_text, quantity, note, unit) VALUES ($1, $2, $3, $4, $6)
+			INSERT INTO shopping_entries (item_id, free_text, quantity, unit, note) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (item_id) WHERE item_id IS NOT NULL DO UPDATE
 			SET version = shopping_entries.version + 1,
 			    quantity = CASE WHEN shopping_entries.quantity IS NULL OR excluded.quantity IS NULL
 			                    THEN COALESCE(excluded.quantity, shopping_entries.quantity)
-			                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $5) END,
+			                    ELSE LEAST(shopping_entries.quantity + excluded.quantity, $6) END,
 			    note = CASE WHEN excluded.note = '' OR strpos(shopping_entries.note, excluded.note) > 0 THEN shopping_entries.note
 			                WHEN shopping_entries.note = '' THEN excluded.note
 			                ELSE shopping_entries.note || '; ' || excluded.note END
 			RETURNING id`,
-			in.ItemID, in.FreeText, in.Quantity, in.Note, stock.MaxQuantity, in.Unit).Scan(&id)
+			in.ItemID, in.FreeText, in.Quantity, in.Unit, in.Note, stock.MaxQuantity).Scan(&id)
 	})
 	return id, err
 }
@@ -193,7 +193,7 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 		var itemID *int64
 		var qty *float64
 		var have int
-		err := tx.QueryRow(ctx, `SELECT item_id, quantity, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&itemID, &qty, &have)
+		err := tx.QueryRow(ctx, `SELECT version, item_id, quantity FROM shopping_entries WHERE id = $1 FOR UPDATE`, id).Scan(&have, &itemID, &qty)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, id); err != nil {
 			return err
 		}
@@ -227,7 +227,7 @@ func (s *Store) MarkBought(ctx context.Context, id int64, version int, purchase 
 		}
 		if left > 0 {
 			// What is left to buy is new: a new version.
-			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET quantity = $2, version = version + 1 WHERE id = $1`, id, left)
+			_, err := tx.Exec(ctx, `UPDATE shopping_entries SET version = version + 1, quantity = $2 WHERE id = $1`, id, left)
 			return err
 		}
 		left = 0
@@ -298,8 +298,8 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		var qty *float64
 		var text, note string
 		var have int
-		err := tx.QueryRow(ctx, `SELECT item_id, unit, quantity, free_text, note, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
-			Scan(&linked, &unit, &qty, &text, &note, &have)
+		err := tx.QueryRow(ctx, `SELECT version, item_id, free_text, quantity, unit, note FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).
+			Scan(&have, &linked, &text, &qty, &unit, &note)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatShopping, entryID); err != nil {
 			return err
 		}
@@ -342,7 +342,7 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 			}
 		}
 		// Un-archiving changes the item's page: a new version, only then.
-		if _, err := tx.Exec(ctx, `UPDATE items SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND archived_at IS NOT NULL`,
+		if _, err := tx.Exec(ctx, `UPDATE items SET version = version + 1, updated_at = now(), archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL`,
 			itemID); err != nil {
 			return err
 		}
@@ -352,7 +352,7 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		if !merge {
 			id = entryID
 			// It is another entry now: a new version.
-			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET item_id = $2, free_text = '', quantity = $3, unit = $4, note = $5, version = version + 1
+			_, err = tx.Exec(ctx, `UPDATE shopping_entries SET version = version + 1, item_id = $2, free_text = '', quantity = $3, unit = $4, note = $5
 				WHERE id = $1`, entryID, itemID, qty, itemUnit, note)
 			return err
 		}

@@ -32,8 +32,8 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 	var name, brand string
 	var unit stock.Unit
 	var archived bool
-	err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
-		Scan(&qty, &name, &brand, &unit, &archived)
+	err := tx.QueryRow(ctx, `SELECT name, brand, unit, quantity, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, in.ItemID).
+		Scan(&name, &brand, &unit, &qty, &archived)
 	if err != nil {
 		return 0, notFound(err)
 	}
@@ -94,7 +94,7 @@ func applyStockChange(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (i
 	}
 	// The edit form shows the best-before date: a new version, so a form
 	// opened before can't save the old date back.
-	_, err = tx.Exec(ctx, `UPDATE items SET expires_on = $2, updated_at = now(), version = version + 1 WHERE id = $1`,
+	_, err = tx.Exec(ctx, `UPDATE items SET version = version + 1, expires_on = $2, updated_at = now() WHERE id = $1`,
 		in.ItemID, *in.ExpiresOn)
 	return id, err
 }
@@ -197,8 +197,8 @@ func movementOrder(args *sqlArgs, key string, desc bool) string {
 func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Movement, error) {
 	var args sqlArgs
 	sql := `
-		SELECT m.id, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
-		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at, m.version
+		SELECT m.id, m.version, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
+		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at
 		FROM stock_movements m
 		JOIN items i ON i.id = m.item_id
 		LEFT JOIN service_records sr ON sr.id = m.service_record_id
@@ -230,8 +230,8 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Movement, error) {
 		var m stock.Movement
 		var brand, name string
-		err := r.Scan(&m.ID, &m.ItemID, &brand, &name, &m.ItemUnit, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
-			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.CreatedAt, &m.Version)
+		err := r.Scan(&m.ID, &m.Version, &m.ItemID, &brand, &name, &m.ItemUnit, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
+			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.CreatedAt)
 		m.ItemName = displayName(brand, name)
 		return m, err
 	})
@@ -278,9 +278,9 @@ func lockMovement(ctx context.Context, tx pgx.Tx, id int64) (lockedMovement, err
 		return m, notFound(err)
 	}
 	err = tx.QueryRow(ctx, `
-		SELECT id, item_id, kind, delta, total_price, supplier, note, occurred_on, service_record_id, version
+		SELECT id, version, item_id, kind, delta, total_price, supplier, note, occurred_on, service_record_id
 		FROM stock_movements WHERE id = $1 AND item_id = $2 FOR NO KEY UPDATE`, id, itemID).
-		Scan(&m.ID, &m.ItemID, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.Version)
+		Scan(&m.ID, &m.Version, &m.ItemID, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier, &m.Note, &m.OccurredOn, &m.ServiceRecordID)
 	if err != nil {
 		return m, notFound(err)
 	}
@@ -349,8 +349,8 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 		}
 		// A new version: an edit form opened before this one is stale now.
 		_, err = tx.Exec(ctx, `
-			UPDATE stock_movements SET kind = $2, delta = $3, total_price = $4, supplier = $5, note = $6, occurred_on = $7,
-			       version = version + 1
+			UPDATE stock_movements SET version = version + 1, kind = $2, delta = $3, total_price = $4, supplier = $5,
+			       note = $6, occurred_on = $7
 			WHERE id = $1`, id, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, *in.OccurredOn)
 		return err
 	})

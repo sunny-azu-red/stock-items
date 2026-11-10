@@ -58,19 +58,20 @@ const (
 )
 
 const itemSelect = `
-SELECT i.id, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.expires_on, i.location,
-       i.notes, i.created_at, i.updated_at, i.archived_at, i.version,
-       COALESCE((SELECT array_agg(iv.vehicle_id ORDER BY iv.vehicle_id) FROM item_vehicles iv WHERE iv.item_id = i.id), '{}'),
+SELECT i.id, i.version, i.name, i.brand, i.category, i.unit, i.quantity, i.min_quantity, i.expires_on, i.location,
+       i.notes,
        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'code', s.code, 'kind', s.kind, 'brand', s.brand,
                                                    'pack_size', s.pack_size) ORDER BY s.id)
                  FROM item_skus s WHERE s.item_id = i.id), '[]'),
-       EXISTS (SELECT 1 FROM item_photos p WHERE p.item_id = i.id)
+       COALESCE((SELECT array_agg(iv.vehicle_id ORDER BY iv.vehicle_id) FROM item_vehicles iv WHERE iv.item_id = i.id), '{}'),
+       EXISTS (SELECT 1 FROM item_photos p WHERE p.item_id = i.id),
+       i.created_at, i.updated_at, i.archived_at
 FROM items i`
 
 func scanItem(row pgx.CollectableRow) (stock.Item, error) {
 	var it stock.Item
-	err := row.Scan(&it.ID, &it.Name, &it.Brand, &it.Category, &it.Unit, &it.Quantity, &it.MinQuantity,
-		&it.ExpiresOn, &it.Location, &it.Notes, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt, &it.Version, &it.VehicleIDs, &it.SKUs, &it.HasPhoto)
+	err := row.Scan(&it.ID, &it.Version, &it.Name, &it.Brand, &it.Category, &it.Unit, &it.Quantity, &it.MinQuantity,
+		&it.ExpiresOn, &it.Location, &it.Notes, &it.SKUs, &it.VehicleIDs, &it.HasPhoto, &it.CreatedAt, &it.UpdatedAt, &it.ArchivedAt)
 	return it, err
 }
 
@@ -210,7 +211,7 @@ func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, versi
 	err = s.inFormTx(ctx, in.FormKey, WhatItem, &id, func(tx pgx.Tx) error {
 		var itemID *int64
 		var have int
-		err := tx.QueryRow(ctx, `SELECT item_id, version FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&itemID, &have)
+		err := tx.QueryRow(ctx, `SELECT version, item_id FROM shopping_entries WHERE id = $1 FOR UPDATE`, entryID).Scan(&have, &itemID)
 		if err == nil && itemID != nil {
 			return ErrNotFound
 		}
@@ -263,8 +264,8 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 		var unit stock.Unit
 		var archived bool
 		var version int
-		err := tx.QueryRow(ctx, `SELECT quantity, unit, archived_at IS NOT NULL, version FROM items WHERE id = $1 FOR NO KEY UPDATE`, id).
-			Scan(&qty, &unit, &archived, &version)
+		err := tx.QueryRow(ctx, `SELECT version, unit, quantity, archived_at IS NOT NULL FROM items WHERE id = $1 FOR NO KEY UPDATE`, id).
+			Scan(&version, &unit, &qty, &archived)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatItem, id); err != nil {
 			return err
 		}
@@ -293,8 +294,8 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 		}
 		// A new version: a form opened before this save is stale now.
 		_, err = tx.Exec(ctx, `
-			UPDATE items SET name = $2, brand = $3, category = $4, unit = $5, min_quantity = $6, expires_on = $7,
-			       location = $8, notes = $9, updated_at = now(), version = version + 1
+			UPDATE items SET version = version + 1, name = $2, brand = $3, category = $4, unit = $5, min_quantity = $6,
+			       expires_on = $7, location = $8, notes = $9, updated_at = now()
 			WHERE id = $1`,
 			id, in.Name, in.Brand, in.Category, in.Unit, in.MinQuantity, in.ExpiresOn, in.Location, in.Notes)
 		if err != nil {
@@ -377,7 +378,7 @@ func (s *Store) DeleteItem(ctx context.Context, id int64, version int) (trashID 
 		var have int
 		// The item before the stock changes the delete cascades to, as
 		// editing or deleting one of them locks (lockMovement).
-		err := tx.QueryRow(ctx, `SELECT name, brand, version FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&name, &brand, &have)
+		err := tx.QueryRow(ctx, `SELECT version, name, brand FROM items WHERE id = $1 FOR UPDATE`, id).Scan(&have, &name, &brand)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatItem, id); err != nil {
 			return err
 		}
@@ -447,7 +448,7 @@ func archiveItem(ctx context.Context, tx pgx.Tx, id int64, version int) (int64, 
 		return 0, err
 	}
 	// Archiving changes the item's page: a new version.
-	tag, err := tx.Exec(ctx, `UPDATE items SET archived_at = COALESCE(archived_at, now()), updated_at = now(), version = version + 1
+	tag, err := tx.Exec(ctx, `UPDATE items SET version = version + 1, updated_at = now(), archived_at = COALESCE(archived_at, now())
 		WHERE id = $1 AND version = $2`, id, version)
 	if err := versionedUpdate(ctx, tx, tag, err, WhatItem, id); err != nil {
 		return 0, err
@@ -478,7 +479,7 @@ func archiveItem(ctx context.Context, tx pgx.Tx, id int64, version int) (int64, 
 // version fails with a *StaleError.
 func (s *Store) RestoreItem(ctx context.Context, id int64, version int) error {
 	// Restoring changes the item's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE items SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	tag, err := s.pool.Exec(ctx, `UPDATE items SET version = version + 1, updated_at = now(), archived_at = NULL WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatItem, id)
 }
 

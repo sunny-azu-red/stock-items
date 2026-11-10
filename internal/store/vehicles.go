@@ -12,17 +12,17 @@ import (
 )
 
 const vehicleSelect = `
-SELECT v.id, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer,
+SELECT v.id, v.version, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer,
        v.purchased_on, v.odometer_at_purchase, v.notes,
-       v.created_at, v.updated_at, v.archived_at, v.version,
        (SELECT count(*) FROM item_vehicles iv JOIN items i ON i.id = iv.item_id
-        WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL)
+        WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL),
+       v.created_at, v.updated_at, v.archived_at
 FROM vehicles v`
 
 func scanVehicle(row pgx.Row) (stock.Vehicle, error) {
 	var v stock.Vehicle
-	err := row.Scan(&v.ID, &v.Name, &v.Kind, &v.Make, &v.Model, &v.Year, &v.Plate, &v.VIN, &v.Color,
-		&v.Odometer, &v.PurchasedOn, &v.OdometerAtPurchase, &v.Notes, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt, &v.Version, &v.ItemCount)
+	err := row.Scan(&v.ID, &v.Version, &v.Name, &v.Kind, &v.Make, &v.Model, &v.Year, &v.Plate, &v.VIN, &v.Color,
+		&v.Odometer, &v.PurchasedOn, &v.OdometerAtPurchase, &v.Notes, &v.ItemCount, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt)
 	return v, err
 }
 
@@ -95,14 +95,14 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 		}
 		// A new version: a form opened before this save is stale now.
 		tag, err := tx.Exec(ctx, `
-			UPDATE vehicles SET name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
-			       color = $9, odometer = CASE WHEN $12 THEN odometer ELSE $10 END,
-			       purchased_on = $13, odometer_at_purchase = $14,
-			       notes = $11, updated_at = now(),
-			       version = version + 1
+			UPDATE vehicles SET version = version + 1,
+			       name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
+			       color = $9, odometer = CASE WHEN $10 THEN odometer ELSE $11 END,
+			       purchased_on = $12, odometer_at_purchase = $13,
+			       notes = $14, updated_at = now()
 			WHERE id = $1`,
-			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.Odometer, in.Notes, in.KeepOdometer,
-			in.PurchasedOn, in.OdometerAtPurchase)
+			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.KeepOdometer, in.Odometer,
+			in.PurchasedOn, in.OdometerAtPurchase, in.Notes)
 		return checkAffected(tag, vehicleConflict(err))
 	})
 }
@@ -287,7 +287,7 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64, version int) (trash
 		}
 		var name string
 		var have int
-		err := tx.QueryRow(ctx, `SELECT name, version FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&name, &have)
+		err := tx.QueryRow(ctx, `SELECT version, name FROM vehicles WHERE id = $1 FOR UPDATE`, id).Scan(&have, &name)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatVehicle, id); err != nil {
 			return err
 		}
@@ -315,7 +315,7 @@ func (s *Store) DeleteVehicle(ctx context.Context, id int64, version int) (trash
 // version fails with a *StaleError.
 func (s *Store) ArchiveVehicle(ctx context.Context, id int64, version int) error {
 	// Archiving changes the vehicle's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = COALESCE(archived_at, now()), updated_at = now(), version = version + 1
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET version = version + 1, updated_at = now(), archived_at = COALESCE(archived_at, now())
 		WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }
@@ -323,7 +323,7 @@ func (s *Store) ArchiveVehicle(ctx context.Context, id int64, version int) error
 // RestoreVehicle brings an archived vehicle back. A vehicle changed since
 // version fails with a *StaleError.
 func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET archived_at = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND version = $2`, id, version)
+	tag, err := s.pool.Exec(ctx, `UPDATE vehicles SET version = version + 1, updated_at = now(), archived_at = NULL WHERE id = $1 AND version = $2`, id, version)
 	return versionedUpdate(ctx, s.pool, tag, err, WhatVehicle, id)
 }
 

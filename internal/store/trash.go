@@ -222,8 +222,8 @@ func adjustStock(ctx context.Context, tx pgx.Tx, itemID int64, delta float64) er
 	var qty float64
 	var name, brand string
 	var unit stock.Unit
-	if err := tx.QueryRow(ctx, `SELECT quantity, name, brand, unit FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).
-		Scan(&qty, &name, &brand, &unit); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT name, brand, unit, quantity FROM items WHERE id = $1 FOR NO KEY UPDATE`, itemID).
+		Scan(&name, &brand, &unit, &qty); err != nil {
 		return notFound(err)
 	}
 	next := stock.RoundQty(qty + delta)

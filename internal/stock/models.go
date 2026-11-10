@@ -50,6 +50,7 @@ func (k VehicleKind) Icon() string {
 // Vehicle is something items are kept in stock for.
 type Vehicle struct {
 	ID                 int64
+	Version            int // see Item.Version; odometer readings don't count
 	Name               string
 	Kind               VehicleKind
 	Make               string
@@ -65,7 +66,6 @@ type Vehicle struct {
 	ItemCount          int
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
-	Version            int // see Item.Version; odometer readings don't count
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -241,7 +241,11 @@ func SortSKUs(skus []SKU, itemBrand string) []SKU {
 
 // Item is a part or consumable in stock.
 type Item struct {
-	ID          int64
+	ID int64
+	// Version counts the changes to what the item's edit form and page
+	// show; forms carry it, so one opened before a change is refused
+	// (store.StaleError). Stock changes don't count: they are deltas.
+	Version     int
 	Name        string
 	Brand       string
 	Category    string
@@ -256,10 +260,6 @@ type Item struct {
 	HasPhoto    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	// Version counts the changes to what the item's edit form and page
-	// show; forms carry it, so one opened before a change is refused
-	// (store.StaleError). Stock changes don't count: they are deltas.
-	Version int
 	// ArchivedAt is set for items no longer kept: they are hidden from
 	// stock, pickers and suggestions, but their history stays.
 	ArchivedAt *time.Time
@@ -429,6 +429,7 @@ func (k MovementKind) Label() string {
 // Movement is one entry of the stock ledger.
 type Movement struct {
 	ID              int64
+	Version         int // see Item.Version
 	ItemID          int64
 	ItemName        string
 	ItemUnit        Unit
@@ -441,7 +442,6 @@ type Movement struct {
 	ServiceRecordID *int64
 	ServiceTitle    string
 	CreatedAt       time.Time
-	Version         int // see Item.Version
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an
@@ -449,6 +449,7 @@ type Movement struct {
 // half-interval schedule and parts list).
 type Kit struct {
 	ID                        int64
+	Version                   int // see Item.Version
 	VehicleID                 int64
 	VehicleName               string
 	VehicleColor              string
@@ -472,7 +473,6 @@ type Kit struct {
 	// with this kit, and LastFullOdometer is the latest full reading.
 	LastFullService  *ServiceRef
 	LastFullOdometer *int
-	Version          int // see Item.Version
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -525,6 +525,7 @@ func (l KitLine) Short() float64 {
 // ServiceRecord is a performed service job.
 type ServiceRecord struct {
 	ID              int64
+	Version         int // see Item.Version
 	VehicleID       int64
 	VehicleName     string
 	VehicleColor    string
@@ -534,12 +535,11 @@ type ServiceRecord struct {
 	PerformedOn     time.Time
 	Odometer        *int
 	Title           string
-	Notes           string
 	LaborCost       *float64
+	Notes           string
 	Parts           []ServicePart
 	PartCount       int
 	CreatedAt       time.Time
-	Version         int // see Item.Version
 }
 
 // VehicleChip returns a Vehicle value with the service's vehicle chip fields.
@@ -559,6 +559,7 @@ type ServicePart struct {
 // free text.
 type ShoppingEntry struct {
 	ID        int64
+	Version   int // see Item.Version
 	ItemID    *int64
 	ItemName  string
 	ItemUnit  Unit
@@ -566,7 +567,6 @@ type ShoppingEntry struct {
 	Quantity  *float64
 	Note      string
 	CreatedAt time.Time
-	Version   int // see Item.Version
 }
 
 // Title is the item display name or the free text.

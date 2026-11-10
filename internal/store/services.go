@@ -20,17 +20,18 @@ type ServiceFilter struct {
 }
 
 const serviceSelect = `
-SELECT sr.id, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.kit_intermediate, sr.performed_on, sr.odometer,
-       sr.title, sr.notes, sr.labor_cost::float8, sr.created_at, sr.version,
-       (SELECT count(*) FROM stock_movements m WHERE m.service_record_id = sr.id)
+SELECT sr.id, sr.version, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.kit_intermediate, sr.performed_on,
+       sr.odometer, sr.title, sr.labor_cost::float8, sr.notes,
+       (SELECT count(*) FROM stock_movements m WHERE m.service_record_id = sr.id),
+       sr.created_at
 FROM service_records sr
 JOIN vehicles v ON v.id = sr.vehicle_id
 LEFT JOIN service_kits k ON k.id = sr.kit_id`
 
 func scanService(row pgx.Row) (stock.ServiceRecord, error) {
 	var r stock.ServiceRecord
-	err := row.Scan(&r.ID, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.KitIntermediate, &r.PerformedOn,
-		&r.Odometer, &r.Title, &r.Notes, &r.LaborCost, &r.CreatedAt, &r.Version, &r.PartCount)
+	err := row.Scan(&r.ID, &r.Version, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.KitIntermediate, &r.PerformedOn,
+		&r.Odometer, &r.Title, &r.LaborCost, &r.Notes, &r.PartCount, &r.CreatedAt)
 	return r, err
 }
 
@@ -122,11 +123,12 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, title, notes, labor_cost, odometer_at_log)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer FROM vehicles WHERE id = $1) END)
+			INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, odometer_at_log, title, labor_cost, notes)
+			VALUES ($1, $2, $3, $4, $5,
+			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer FROM vehicles WHERE id = $1) END,
+			        $6, $7, $8)
 			RETURNING id`,
-			in.VehicleID, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.Notes, in.LaborCost).Scan(&id)
+			in.VehicleID, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -162,8 +164,8 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		var kitWas *int64
 		var interWas bool
 		var version int
-		err := tx.QueryRow(ctx, `SELECT vehicle_id, kit_id, kit_intermediate, version FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&in.VehicleID, &kitWas, &interWas, &version)
+		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, kit_intermediate FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&version, &in.VehicleID, &kitWas, &interWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
 			return err
 		}
@@ -215,9 +217,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// odometer_at_log stays as it was logged: a reading added now wins
 		// over it, and removing that reading again falls back to it.
 		_, err = tx.Exec(ctx, `
-			UPDATE service_records SET kit_id = $2, kit_intermediate = $3, performed_on = $4, odometer = $5, title = $6, notes = $7, labor_cost = $8,
-			       version = version + 1
-			WHERE id = $1`, id, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.Notes, in.LaborCost)
+			UPDATE service_records SET version = version + 1, kit_id = $2, kit_intermediate = $3, performed_on = $4, odometer = $5,
+			       title = $6, labor_cost = $7, notes = $8
+			WHERE id = $1`, id, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -464,7 +466,7 @@ func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, re
 	} else {
 		current = nil
 	}
-	_, err := tx.Exec(ctx, `UPDATE service_records SET odometer_moved = $2, odometer_before = $3 WHERE id = $1`, serviceID, moved, current)
+	_, err := tx.Exec(ctx, `UPDATE service_records SET odometer_before = $2, odometer_moved = $3 WHERE id = $1`, serviceID, current, moved)
 	return err
 }
 
@@ -501,8 +503,8 @@ func (s *Store) DeleteService(ctx context.Context, id int64, version int) (trash
 		var have int
 		// Lock the service, its vehicle, then its items, like UpdateService.
 		err := tx.QueryRow(ctx, `
-			SELECT sr.title, sr.performed_on, sr.vehicle_id, v.name, sr.version FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
-			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&title, &on, &vehicleID, &vehicle, &have)
+			SELECT sr.version, sr.vehicle_id, v.name, sr.performed_on, sr.title FROM service_records sr JOIN vehicles v ON v.id = sr.vehicle_id
+			WHERE sr.id = $1 FOR UPDATE OF sr`, id).Scan(&have, &vehicleID, &vehicle, &on, &title)
 		if err := lockedVersion(ctx, tx, err, have, version, WhatService, id); err != nil {
 			return err
 		}

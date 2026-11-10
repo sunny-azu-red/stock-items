@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -39,6 +40,9 @@ type serviceFormPage struct {
 	KitHasInter   bool
 	KitFullParts  []lineRow
 	KitInterParts []lineRow
+	// Kits: for a new service without a kit, the active kits to start
+	// from instead, most urgent first; the form shows the chosen vehicle's.
+	Kits []kitView
 }
 
 func kitPartRows(lines []stock.KitLine) []lineRow {
@@ -48,13 +52,6 @@ func kitPartRows(lines []stock.KitLine) []lineRow {
 			continue // no longer kept; the kit should be edited
 		}
 		rows = append(rows, partRow(l.ItemID, l.Need, l.Unit))
-	}
-	return rows
-}
-
-func padPartRows(rows []lineRow) []lineRow {
-	for n := 0; n < 2 || len(rows) == 0; n++ {
-		rows = append(rows, lineRow{})
 	}
 	return rows
 }
@@ -111,10 +108,10 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			if f.ID == 0 && p.KitHasInter {
 				p.KitFullParts = kitPartRows(k.Lines)
 				describeRows(p.KitFullParts, items, true)
-				p.KitFullParts = padPartRows(p.KitFullParts)
+				p.KitFullParts = withEmptyRow(p.KitFullParts)
 				p.KitInterParts = kitPartRows(k.InterLines)
 				describeRows(p.KitInterParts, items, true)
-				p.KitInterParts = padPartRows(p.KitInterParts)
+				p.KitInterParts = withEmptyRow(p.KitInterParts)
 			}
 		}
 	}
@@ -123,7 +120,14 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			p.Vehicle = &vehicles[i]
 		}
 	}
-	f.Parts = padPartRows(f.Parts)
+	if f.ID == 0 && f.KitID == 0 {
+		kits, err := s.store.ListKits(ctx, store.KitFilter{})
+		if err != nil {
+			return err
+		}
+		p.Kits = s.kitViews(kits, vehicles)
+	}
+	f.Parts = withEmptyRow(f.Parts)
 	p.Form = f
 	p.ItemGroups = itemOptions(items, p.Vehicle)
 	title := "Log service"
@@ -173,6 +177,13 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		f.OdometerKm = optIntString(v.OdometerKm)
+	}
+	// Picking a kit on the form ("Start from a kit") keeps what was typed.
+	if v := strings.TrimSpace(q.Get("performed_on")); v != "" {
+		f.PerformedOn = v
+	}
+	if v := strings.TrimSpace(q.Get("odometer_km")); v != "" {
+		f.OdometerKm = v
 	}
 	return s.renderServiceForm(w, r, http.StatusOK, f)
 }

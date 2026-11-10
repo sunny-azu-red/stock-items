@@ -215,7 +215,7 @@ func (s *Server) itemFormPage(r *http.Request, f itemForm, isNew bool) (itemForm
 	if err != nil {
 		return itemFormPage{}, err
 	}
-	// Always offer an empty SKU row to type into.
+	// One empty SKU row to type into, as in every repeating list (withEmptyRow).
 	f.SKUs = append(f.SKUs, skuRow{Kind: string(stock.SKUOEM)})
 	return itemFormPage{
 		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), Brands: brands, Categories: cats, Locations: locs,

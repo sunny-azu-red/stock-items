@@ -34,6 +34,18 @@
   {{if or $f.KitID $f.ID}}{{with index $e "kit_id"}}<div class="form-section">{{template "err" .}}</div>{{end}}{{end}}
   {{if or $f.KitID $f.ID}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
+  {{if $d.Kits}}
+  {{/* A new service without a kit: the chosen vehicle's kits to start from
+       instead (app.js shows the right ones when the vehicle changes). */}}
+  {{$any := false}}{{range $d.Kits}}{{if eq .Kit.VehicleID $f.VehicleID}}{{$any = true}}{{end}}{{end}}
+  <div class="form-section" id="kit-starts"{{if not $any}} hidden{{end}}>
+    <h2>Start from a kit</h2>
+    <p class="hint">A kit fills in its parts and counts the service towards its schedule.</p>
+    <div class="flex mt">
+      {{range $d.Kits}}<span class="flex" data-kit-vehicle="{{.Kit.VehicleID}}"{{if ne .Kit.VehicleID $f.VehicleID}} hidden{{end}}><a class="btn btn-sm" href="/services/new?kit={{.Kit.ID}}" data-kit-start>{{icon "list-checks"}} {{.Kit.Name}}</a>{{template "due-badge" .Due}}</span>{{end}}
+    </div>
+  </div>
+  {{end}}
   <div class="form-section">
     <div class="form-grid">
       {{if not (or $f.KitID $f.ID)}}

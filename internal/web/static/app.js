@@ -246,9 +246,35 @@
     if (e.target.matches("select[data-part-unit]")) updateStockBadges(e.target);
     if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
+    if (e.target.matches("#vehicle_id")) showKitStarts(e.target);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
     // A picker that filters the page (Activity's year).
     if (e.target.matches("select[data-submit-on-change]")) e.target.form.requestSubmit();
+  });
+
+  // On a new service form without a kit, "Start from a kit" lists the
+  // chosen vehicle's kits. Picking one opens its form, keeping the date and
+  // odometer typed so far.
+  function showKitStarts(select) {
+    var sec = document.getElementById("kit-starts");
+    if (!sec) return;
+    var any = false;
+    sec.querySelectorAll("[data-kit-vehicle]").forEach(function (k) {
+      k.hidden = k.getAttribute("data-kit-vehicle") !== select.value;
+      if (!k.hidden) any = true;
+    });
+    sec.hidden = !any;
+  }
+  document.addEventListener("click", function (e) {
+    var start = e.target.closest("a[data-kit-start]");
+    var form = start && start.closest("form");
+    if (!form) return;
+    var url = new URL(start.href, location.href);
+    ["performed_on", "odometer_km"].forEach(function (name) {
+      var input = form.elements[name];
+      if (input && input.value.trim()) url.searchParams.set(name, input.value.trim());
+    });
+    start.href = url.pathname + url.search;
   });
 
   // On a new service form for a kit with an intermediate schedule, switching

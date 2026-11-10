@@ -23,6 +23,12 @@ type lineRow struct {
 	Error  string
 }
 
+// withEmptyRow ends a repeating list of rows with one empty row to type
+// into, on add and edit forms alike; the Add button adds more.
+func withEmptyRow(rows []lineRow) []lineRow {
+	return append(rows, lineRow{})
+}
+
 // partRow is a prefilled row for qty (base units) of an item.
 func partRow(itemID int64, qty float64, u stock.Unit) lineRow {
 	row := lineRow{ItemID: itemID}
@@ -218,13 +224,8 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 			vehicle = &vehicles[i]
 		}
 	}
-	// Offer a few empty rows to fill in (more can be added with JS).
-	for n := 0; n < 3 || len(f.Lines) == 0; n++ {
-		f.Lines = append(f.Lines, lineRow{})
-	}
-	for n := 0; n < 3 || len(f.InterLines) == 0; n++ {
-		f.InterLines = append(f.InterLines, lineRow{})
-	}
+	f.Lines = withEmptyRow(f.Lines)
+	f.InterLines = withEmptyRow(f.InterLines)
 	title := "Add kit"
 	if !isNew {
 		title = "Edit " + f.Stored

@@ -204,8 +204,11 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   const qtys = page.locator('input[name="line_qty"]');
   await items.nth(0).selectOption({ label: "KTM Oil Filter" });
   await qtys.nth(0).fill("1");
+  // One empty row to start with; Add part adds the next.
+  await page.getByRole("button", { name: "Add part" }).first().click();
   await items.nth(1).selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await qtys.nth(1).fill("1.7 L");
+  await page.getByRole("button", { name: "Add part" }).first().click();
   await items.nth(2).selectOption({ label: "KTM Oil Screen 1 O-Ring" });
   await qtys.nth(2).fill("1");
   await page.getByRole("button", { name: "Save kit" }).click();
@@ -398,6 +401,8 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
   await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
 
   // Two rows of the same item count together, and removing one frees it.
+  await expect(rows).toHaveCount(1);
+  await page.getByRole("button", { name: "Add part" }).click();
   const second = rows.nth(1);
   await second.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
   await second.locator('select[name="part_unit"]').selectOption("ml");
@@ -407,6 +412,26 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
   await second.locator("[data-remove-row]").click();
   await expect(rows).toHaveCount(1);
   await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
+});
+
+test("Log service offers the chosen vehicle's kits and keeps what was typed", async ({ page }) => {
+  await page.goto("/services/new");
+  const starts = page.locator("#kit-starts");
+  await expect(starts).toBeHidden();
+  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await expect(starts).toBeVisible();
+  const kit = starts.getByRole("link", { name: "Oil Service" });
+  await expect(kit).toBeVisible();
+  expect([...(await offGrid(page)), ...(await misaligned(page))]).toEqual([]);
+
+  await page.getByLabel("Date", { exact: true }).fill("2026-10-05");
+  await page.getByLabel("Odometer (km)").fill("12345");
+  await kit.click();
+  await expect(page).toHaveURL(/\/services\/new\?kit=\d+/);
+  await expect(page.getByLabel("Work performed")).toHaveValue(/^Oil Service/);
+  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-10-05");
+  await expect(page.getByLabel("Odometer (km)")).toHaveValue("12345");
+  await expect(page.locator("#kit-starts")).toHaveCount(0);
 });
 
 test("form hints open from the question mark", async ({ page }) => {

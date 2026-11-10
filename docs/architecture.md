@@ -34,7 +34,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 - `templates/partials/*.html` are shared blocks such as the stock row (`item-row`), stock sections, kit rows, chips, badges (among them the stock badge, `stock-badge`), and the movement table.
 - The part rows of the kit and service forms keep their stock badges up to date in `app.js` as the item, amount or unit changes, copying them from a `<template id="stock-badges">` the page renders once, so their markup and wording stay in the Go template.
 - `templates/pages/*.html` define `content` for each page. Each page is parsed together with the layout and partials into its own template set at startup, so a broken template fails fast.
-- Template helper functions live in `render.go` (`qty`, `money`, `km`, `date`, `icon`, `withQuery`, …).
+- Template helper functions live in `render.go` (`qty`, `money`, `distance`, `distUnit`, `date`, `icon`, `withQuery`, …).
 
 ## Static files
 

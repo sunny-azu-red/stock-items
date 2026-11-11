@@ -44,7 +44,10 @@
 #     script), two runs can't overlap, and the end reports from the
 #     transaction's own status whether it committed.
 #
-# Settings (environment; the defaults are the server's, tests change them):
+#   Backups, logs and work files go to ~/backups/stock-items/sync.
+#
+# Settings (environment, only for scripts/test-db-server.sh; the defaults
+# are the server's and need nothing set):
 #   SYNC_DB, SYNC_PG_HOST, SYNC_PG_PORT, SYNC_PG_USER, SYNC_APP_USER,
 #   SYNC_BACKUP_DIR, SYNC_LOCK_TIMEOUT, SYNC_SKIP_DATA_DIR_CHECK (tests only:
 #   the data directory isn't on this machine)
@@ -57,7 +60,9 @@ PG_HOST="${SYNC_PG_HOST:-localhost}"
 PG_PORT="${SYNC_PG_PORT:-5432}"
 PG_USER="${SYNC_PG_USER:-postgres}"
 APP_USER="${SYNC_APP_USER:-stock}"
-BACKUP_DIR="${SYNC_BACKUP_DIR:-${HOME}/pitbox-sync-backups}"
+# Next to the nightly dumps in ~/backups/stock-items, whose cron job also
+# prunes stock_items-*.dump files older than 14 days in this folder.
+BACKUP_DIR="${SYNC_BACKUP_DIR:-${HOME}/backups/stock-items/sync}"
 LOCK_TIMEOUT="${SYNC_LOCK_TIMEOUT:-10s}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 STAGING_DB="pitbox_sync_staging_$$"

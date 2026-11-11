@@ -149,6 +149,12 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	f := serviceForm{PerformedOn: s.now().Format("2006-01-02")}
 	if id := parseOptID(q.Get("vehicle")); id != nil {
 		f.VehicleID = *id
+	} else if !q.Has("kit") {
+		wid, err := s.working(r)
+		if err != nil {
+			return err
+		}
+		f.VehicleID = wid
 	}
 	if id := parseOptID(q.Get("kit")); id != nil {
 		k, err := s.store.GetKit(ctx, *id)
@@ -421,6 +427,7 @@ type servicesPage struct {
 	VehicleID         int64
 	VehicleName       string // the filtered vehicle's, for the title
 	Sole              int64  // soleVehicle
+	Working           int64  // the vehicle being worked on, see working.go
 	Archived          bool   // the filtered vehicle is archived: no new services
 	ShowArchivedKits  bool
 	ArchivedKitsCount int
@@ -436,9 +443,7 @@ const servicesPageSize = 100
 // PageQuery is the query string for page n of the log.
 func (p servicesPage) PageQuery(n int) string {
 	q := url.Values{}
-	if p.VehicleID != 0 {
-		q.Set("v", strconv.FormatInt(p.VehicleID, 10))
-	}
+	setVehicleParam(q, p.VehicleID, p.Working)
 	if p.ShowArchivedKits {
 		q.Set("archived", "1")
 	}
@@ -460,9 +465,7 @@ func (p servicesPage) Scope() int64 {
 // ArchivedKitsQuery toggles viewing archived kits.
 func (p servicesPage) ArchivedKitsQuery(show bool) string {
 	q := url.Values{}
-	if p.VehicleID != 0 {
-		q.Set("v", strconv.FormatInt(p.VehicleID, 10))
-	}
+	setVehicleParam(q, p.VehicleID, p.Working)
 	if show {
 		q.Set("archived", "1")
 	}
@@ -472,9 +475,7 @@ func (p servicesPage) ArchivedKitsQuery(show bool) string {
 // VehicleFilterQuery preserves the archived kits view when switching vehicle chips.
 func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
 	q := url.Values{}
-	if vehicleID != 0 {
-		q.Set("v", strconv.FormatInt(vehicleID, 10))
-	}
+	setVehicleParam(q, vehicleID, p.Working)
 	if p.ShowArchivedKits {
 		q.Set("archived", "1")
 	}
@@ -484,9 +485,8 @@ func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
 func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	p := servicesPage{Page: parsePage(r)}
-	if id := parseOptID(r.URL.Query().Get("v")); id != nil {
-		p.VehicleID = *id
-	}
+	vid, chosen := parseVehicleParam(r.URL.Query())
+	p.VehicleID = vid
 	p.ShowArchivedKits = r.URL.Query().Get("archived") == "1"
 	var err error
 	var allVehicles []stock.Vehicle
@@ -505,6 +505,12 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	}
 	p.Vehicles = activeVehicles(allVehicles, p.VehicleID)
 	p.Sole = soleVehicle(allVehicles)
+	p.Working = workingOn(r, allVehicles)
+	if !chosen && p.Working != 0 {
+		p.VehicleID = p.Working
+		http.Redirect(w, r, joinQuery("/services", p.ArchivedKitsQuery(p.ShowArchivedKits)), http.StatusSeeOther)
+		return nil
+	}
 	allKits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID, IncludeArchived: true})
 	if err != nil {
 		return err
@@ -544,6 +550,12 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	if p.VehicleName != "" {
 		title = p.VehicleName + " services"
 	}
-	s.render(w, r, http.StatusOK, "services", View{Title: title, Nav: "services", Data: p})
+	view := View{Title: title, Nav: "services", Data: p}
+	if p.Working != 0 && p.VehicleID != p.Working {
+		away := p
+		away.VehicleID, away.Working = 0, 0
+		view.WorkingAway = joinQuery("/services", away.ArchivedKitsQuery(p.ShowArchivedKits))
+	}
+	s.render(w, r, http.StatusOK, "services", view)
 	return nil
 }

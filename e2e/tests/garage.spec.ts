@@ -562,6 +562,72 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
   }
 });
 
+// Taps a vehicle in the Work on chips: the sidebar's on a desktop, the
+// dashboard's row on a phone (the sidebar is hidden there).
+async function workOn(page: Page, name: string) {
+  await page.goto("/");
+  const chips = page.locator(".sidebar .work-on:visible, .work-on-row .work-on:visible").first();
+  await chips.getByRole("button", { name }).click();
+}
+
+// The vehicle worked on, as the working_on cookie wants it, for tests that
+// look at pages while working on one.
+async function workingCookie(page: Page, baseURL: string, name: string) {
+  await page.goto("/vehicles");
+  const href = (await page.locator("a.vehicle-card").filter({ hasText: name }).first().getAttribute("href")) as string;
+  await page.context().addCookies([{ name: "working_on", value: href.split("/").pop() as string, url: baseURL }]);
+}
+
+test("work on a vehicle", async ({ page }) => {
+  await workOn(page, "KTM 390");
+  const bar = page.locator(".working-on");
+  await expect(bar).toContainText("Working on KTM 390");
+  await expect(page).toHaveURL(/\/\?v=\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 390 dashboard");
+
+  // The stock tab goes to the vehicle's stock, and says so in its address.
+  await page.goto("/stock");
+  await expect(page).toHaveURL(/\/stock\?general=1&v=\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 390 stock");
+  await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
+  // A search says what it finds in other vehicles, one tap away.
+  await page.getByPlaceholder(/Search name/).fill("Oil Filter");
+  const more = page.getByRole("link", { name: /more in other vehicles/ });
+  await expect(more).toHaveText("1 more in other vehicles");
+  await more.click();
+  await expect(page).toHaveURL(/v=all/);
+  await expect(page.locator("#results")).toContainText("Hiflofiltro");
+  await bar.getByRole("link", { name: "Back to KTM 390" }).click();
+  await expect(page).toHaveURL(/q=Oil/);
+  await expect(page).toHaveURL(/v=\d+/);
+  await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
+
+  // Add item starts with the vehicle.
+  await page.locator("main h1").click();
+  await page.keyboard.press("a");
+  await expect(page).toHaveURL(/\/items\/new$/);
+  await expect(page.locator("label.chip-toggle").filter({ hasText: exact("KTM 390") }).locator("input")).toBeChecked();
+  await expect(page.locator("label.chip-toggle").filter({ hasText: exact("KTM 1290") }).locator("input")).not.toBeChecked();
+
+  // Switch, then Back: the page from before the switch shows the bar as
+  // it is now.
+  await page.goto("/stock");
+  await bar.getByText("Switch").click();
+  await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
+  await expect(bar).toContainText("Working on KTM 1290");
+  await expect(page.locator("main h1")).toHaveText("KTM 1290 stock");
+  await page.goBack();
+  await expect(bar).toContainText("Working on KTM 1290");
+  await expect(page.locator("main h1")).toHaveText("KTM 390 stock");
+  await expect(bar.getByRole("link", { name: "Back to KTM 1290" })).toBeVisible();
+
+  // All vehicles stops: no bar, every vehicle.
+  await bar.getByRole("button", { name: "All vehicles" }).click();
+  await expect(page.locator(".working-on")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/stock$/);
+  await expect(page.locator("#results")).toContainText("Hiflofiltro");
+});
+
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
   await page.goto("/stock");
   const copy = page.getByRole("link", { name: "Copy as text" });
@@ -721,11 +787,18 @@ test("no page scrolls sideways", async ({ page }) => {
   paths.push(await page.locator("a.vehicle-card").first().getAttribute("href") as string);
   await page.goto("/activity");
   paths.push(await page.locator('a[href^="/movements/"]').first().getAttribute("href") as string);
-  for (const p of paths) {
+  const overflows = async (p: string) => {
     await page.goto(p);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `horizontal overflow on ${p}`).toBeLessThanOrEqual(0);
-  }
+  };
+  for (const p of paths) await overflows(p);
+  // The bar while working on a vehicle, with its Switch open.
+  await workingCookie(page, test.info().project.use.baseURL as string, "KTM 1290");
+  for (const p of ["/", "/stock", "/services", "/activity", "/shopping"]) await overflows(p);
+  await page.locator(".working-on").getByText("Switch").click();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
 });
 
 // The item names of the table's rows, with repeats next to each other
@@ -896,6 +969,18 @@ test("screenshots", async ({ page }, testInfo) => {
       // over the content: put it at the end of the page, as when scrolled down.
       // The sticky sidebar is one screen high too: stretch it down the page,
       // so its footer is at the bottom and not halfway down.
+      await page.addStyleTag({
+        content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
+      });
+      await page.screenshot({ path: `${dir}/${testInfo.project.name}/${scheme}/${name}.png`, fullPage: true });
+    }
+  }
+  // Working on a vehicle: its dashboard and its stock, with the bar.
+  await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const [name, url] of [["dashboard-working", "/"], ["stock-working", "/stock"]]) {
+      await page.goto(url);
       await page.addStyleTag({
         content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
       });
@@ -1079,6 +1164,14 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.getByRole("button", { name: "Add intermediate schedule" }).click();
   await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
   await check(kit + "/edit with intermediate schedule and hint open");
+  // Working on a vehicle: the bar on every page, and its Switch open.
+  await workingCookie(page, test.info().project.use.baseURL as string, "KTM 390");
+  for (const p of ["/", "/stock", "/stock?v=all", "/services", "/activity", "/shopping", item]) {
+    await page.goto(p);
+    await check(`${p} working on a vehicle`);
+  }
+  await page.locator(".working-on").getByText("Switch").click();
+  await check("the Switch open");
   expect(problems).toEqual([]);
 });
 
@@ -1113,11 +1206,23 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
     kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
   const want = desktop ? { top: 3, gap: 9 } : { top: 0, gap: 6 };
   const problems: string[] = [];
-  for (const p of paths) {
+  // And the pages that show the Working on bar: the header starts below it.
+  const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
+  const pages = [...paths, ...working.map((p) => "working " + p)];
+  let cookie = false;
+  for (const entry of pages) {
+    const p = entry.replace(/^working /, "");
+    if (entry !== p && !cookie) {
+      await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+      cookie = true;
+    }
     await page.goto(p);
     const m = await page.evaluate(() => {
       const main = document.querySelector(".main") as HTMLElement;
-      const contentTop = main.getBoundingClientRect().top + parseFloat(getComputedStyle(main).paddingTop);
+      const bar = document.querySelector(".working-on");
+      const contentTop = bar
+        ? bar.getBoundingClientRect().bottom + parseFloat(getComputedStyle(bar).marginBottom)
+        : main.getBoundingClientRect().top + parseFloat(getComputedStyle(main).paddingTop);
       const h1 = document.querySelector(".page-head h1");
       if (!h1) return null;
       const r = h1.getBoundingClientRect();
@@ -1143,16 +1248,16 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
       };
     });
     if (!m) {
-      problems.push(`${p}: no .page-head h1`);
+      problems.push(`${entry}: no .page-head h1`);
       continue;
     }
-    if (!m.inTitle) problems.push(`${p}: the h1 is not in .page-title`);
-    if (m.top !== want.top) problems.push(`${p}: the heading is ${m.top}px below the top of the content, not ${want.top}`);
-    if (m.gap !== null && m.gap !== want.gap) problems.push(`${p}: the line under the heading is ${m.gap}px below it, not ${want.gap}`);
-    if (!m.ordered) problems.push(`${p}: the line is out of order (${m.ranks}; want Archived 0, chips 1, badges 2, text 3)`);
-    if (m.badgeInText) problems.push(`${p}: a chip or badge inside a <p class="sub"> sentence`);
-    if (desktop && m.underButtons === false) problems.push(`${p}: the line stops short of the buttons instead of running under them`);
-    if (!desktop && m.buttonsAfter === false) problems.push(`${p}: on a phone the buttons come before the line`);
+    if (!m.inTitle) problems.push(`${entry}: the h1 is not in .page-title`);
+    if (m.top !== want.top) problems.push(`${entry}: the heading is ${m.top}px below the top of the content, not ${want.top}`);
+    if (m.gap !== null && m.gap !== want.gap) problems.push(`${entry}: the line under the heading is ${m.gap}px below it, not ${want.gap}`);
+    if (!m.ordered) problems.push(`${entry}: the line is out of order (${m.ranks}; want Archived 0, chips 1, badges 2, text 3)`);
+    if (m.badgeInText) problems.push(`${entry}: a chip or badge inside a <p class="sub"> sentence`);
+    if (desktop && m.underButtons === false) problems.push(`${entry}: the line stops short of the buttons instead of running under them`);
+    if (!desktop && m.buttonsAfter === false) problems.push(`${entry}: on a phone the buttons come before the line`);
   }
   expect(problems).toEqual([]);
 });

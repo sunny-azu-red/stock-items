@@ -47,13 +47,14 @@ A page about one vehicle names it once, at the top. Its rows and headings show a
 | A kit's page | the header `chip-link` | service rows |
 | `/services?v=ID` | the title ("KTM 390 services") and the active filter chip | service rows, kit rows |
 | `/stock?v=ID` (exactly one vehicle) | the title ("KTM 390 stock") and the active filter chip | section headings, and list rows that fit only that vehicle |
+| `/?v=ID` (the dashboard while working on it) | the title ("KTM 390 dashboard") and the Working on bar | Upcoming service's kit rows |
 | An item fitting one vehicle | the header chip | the rows of that vehicle's kits |
 
 A stock row (`item-row`) is the one row with several vehicles: it leaves out its chips only when it fits the scope vehicle alone, and otherwise shows all of them, so a shared item never reads as belonging to one of the others alone.
 
 The partials take the scope as `"Here"` (a vehicle id, 0 for none): `stock-section`, `service-list`, and `item-row` (`rowFor`, kept across a quick +/- by a hidden `here` input). `kit-row` takes `kitView.HideVehicle` (`scopeKits`).
 
-**With one active vehicle**, that vehicle is the scope of every page (`soleVehicle`): rows leave out its chip everywhere (services, the dashboard's kits, an item's kits, and stock list rows that fit only it). Headers, section headings, filters and forms keep it, and a row of an archived vehicle or of General keeps its chip.
+**With one active vehicle**, there is nothing to work on (no Work on chips, no bar), and that vehicle is the scope of every page (`soleVehicle`): rows leave out its chip everywhere (services, the dashboard's kits, an item's kits, and stock list rows that fit only it). Headers, section headings, filters and forms keep it, and a row of an archived vehicle or of General keeps its chip.
 
 Stock section headings (`stock-section`) answer one question, which vehicles the items fit, each with an icon and a word up front: `warehouse` **Only** + chip, `tag` **Shared** + chips, `package` **General** (not tied to a vehicle). Inside a scope they read `warehouse` **Only this vehicle** and `tag` **Shared with** + the other vehicles' chips.
 
@@ -89,7 +90,8 @@ A chip or badge is a link only when it takes you somewhere you would go next fro
 |---|---|---|
 | **Goes up** to the record the page belongs to | that record | A service's header: its vehicle (`chip-link`) and its kit. A kit's header: its vehicle. |
 | **Filters the stock** from a stock row (`item-row`) | `/stock?v=ID` (General: `/stock?general=1`), `/stock?cat=…` | The row's vehicle chips (`vehicle-chips` with `"Link" true`) and its category badge. |
-| **Is a filter** | the filtered list | The sidebar's "Stock by vehicle" chips and the filter bars (`chip-toggle`). |
+| **Is a filter** | the filtered list | The filter bars (`chip-toggle`), and the sidebar's "Stock by vehicle" chips while there is one vehicle. |
+| **Switches what you work on** | `POST /working-on`, then back to the page | The sidebar's Work on chips, the bar's Switch, and the dashboard's Work on row on a phone: `button.chip` with `aria-pressed` (the one worked on is pressed, and tapping it stops), in a form of their own, never on a record's form. |
 
 Everything else is a plain label (`{{template "chip" …}}`, `<span class="badge">`):
 
@@ -167,7 +169,21 @@ Circular 30px indicators (`width: 30px; height: 30px; border-radius: 50%; displa
 
 ---
 
-## 8. Capitalization: Catalog Entities vs. System Labels
+## 8. Working on a vehicle (`web/working.go`)
+
+You pick the vehicle you work on, and the dashboard, Stock, Services and Activity are about it, the way parts shops let you pick your vehicle once and show what fits it. It is a cookie (`working_on`, like the theme), so it belongs to the device: the phone in the garage works on the bike on the stand while the desktop sees every vehicle.
+
+* **The address decides what a page shows.** The cookie only decides where a list page with no vehicle in its address goes: a 303 to the address with the vehicle added (`/stock?general=1&v=ID`, `/services?v=ID`, `/activity?v=ID`, `/?v=ID`). Every narrowed page names the vehicle in its title ("KTM 390 stock"). `v=all` shows every vehicle on purpose; a link to another vehicle (`?v=ID`, a row chip) shows that one. Back, refresh, bookmarks and exports work as before.
+* **The bar** (`working-on` partial) is the first thing in `<main>` on every page, the same rounded box on a phone, where it stays in view 8px below the top as the page scrolls: the vehicle's kind icon in its colour, **Working on KTM 390**, **Back to KTM 390** when the page shows something else, **Switch** (a `<details>` with the Work on chips), and **All vehicles** (stops). Nothing narrows a page without the bar saying so.
+* **Never narrowed:** what you open directly (an item, a kit, a service, a vehicle, their edit forms), Shopping (the one list you buy from, for every vehicle), Vehicles and Trash. They show the bar only. A search on the vehicle's stock says what it finds elsewhere: **N more in other vehicles** (a link to `v=all`).
+* **Add item, Log service, Add kit** start with the vehicle chosen, unless the address chooses one (`?vehicle=`, a kit) or the item comes from the shopping list.
+* **The dashboard** counts what its lists open: the tiles link to the vehicle's stock (with General) and activity, so each number is the rows it opens; Stock value and Spent count those items too. The Shopping list tile and the suggestions stay the whole list's.
+* **Where you choose it:** the sidebar's **Work on** chips (2 or more active vehicles; with one, it is off and the sidebar keeps "Stock by vehicle"), the bar's Switch, and on a phone the dashboard's Work on row.
+* A vehicle archived or deleted stops being worked on (the cookie is cleared on the next page). A page that Back brings from before a switch reloads (`app.js`, on `pageshow`), unless it holds unsaved typing.
+
+---
+
+## 9. Capitalization: Catalog Entities vs. System Labels
 
 Pitbox maintains a strict distinction in text capitalization:
 * **Catalog Entities & Products (Title Case)**: Part names, brands, categories, services, vehicle names, and service kits use Title Case because they represent named catalog entities:

@@ -179,6 +179,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /trash/{id}/purge", h(s.trashPurge))
 	mux.HandleFunc("POST /trash/empty", h(s.trashEmpty))
 	mux.HandleFunc("POST /theme", h(s.setTheme))
+	mux.HandleFunc("POST /working-on", h(s.setWorkingOn))
 
 	mux.HandleFunc("/", h(func(w http.ResponseWriter, r *http.Request) error { return store.ErrNotFound }))
 

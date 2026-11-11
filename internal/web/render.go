@@ -45,6 +45,14 @@ type View struct {
 	TrashCount    int
 	NavVehicles   []stock.Vehicle
 	ShoppingCount int
+	// WorkingOn is the vehicle being worked on (nil for none), for the bar
+	// at the top of every page; WorkingCookie is the cookie as it stands
+	// after this response (see workingFor). WorkingAway, set by a list
+	// page that shows something else, is the address of the same page for
+	// that vehicle: the bar's "Back to".
+	WorkingOn     *stock.Vehicle
+	WorkingCookie string
+	WorkingAway   string
 	// Data is the page specific payload.
 	Data any
 }
@@ -211,6 +219,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	}
 	if vs, err := s.store.ListVehicles(r.Context()); err == nil {
 		v.NavVehicles = activeVehicles(vs)
+		v.WorkingOn, v.WorkingCookie = workingFor(w, r, vs)
+	}
+	if v.WorkingOn == nil {
+		v.WorkingAway = ""
 	}
 	if list, err := s.store.ListShopping(r.Context()); err == nil {
 		v.ShoppingCount = len(list)

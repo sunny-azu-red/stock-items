@@ -236,6 +236,17 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	}
 	f.Category = q.Get("category")
 	f.Location = q.Get("location")
+	if !q.Has("vehicle") && !q.Has("from") && !q.Has("shopping") {
+		// It starts with the vehicle being worked on; something new from the
+		// shopping list starts with none, like its entry.
+		wid, err := s.working(r)
+		if err != nil {
+			return err
+		}
+		if wid != 0 {
+			f.VehicleIDs = []int64{wid}
+		}
+	}
 	var shoppingVersion int
 	if id := parseOptID(q.Get("from")); id != nil {
 		// Duplicate: start from another item's fields; nothing is saved yet.

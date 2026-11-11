@@ -11,7 +11,7 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 - **Formula & no double-counting:**
   - Total Spending = Items bought + Service labour.
   - Parts taken from stock for a service were already paid for when bought (`kind = 'bought'`), so they are *never* counted twice. A service's parts cost is displayed on the service detail page for insight into job cost, but garage-wide and vehicle spending summaries add only `Priced purchases + Service labour`.
-- **Per-vehicle attribution:**
+- **Per-vehicle attribution** (not yet what the dashboard shows while working on a vehicle: there "Stock value" and "Spent" count the items its stock list shows, its own, shared and General, so each tile adds up to the list it opens; revisit that when this is built):
   - Items tagged exclusively to one vehicle attribute their purchase cost to that vehicle.
   - Items tagged with multiple vehicles or untagged (general garage stock such as cleaners, grease, zip ties, bulk fluid) belong to *Shared & General stock*.
   - A vehicle's total cost = *Items bought for this vehicle + Labour on its services*.

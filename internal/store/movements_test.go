@@ -155,7 +155,7 @@ func TestSpentThisYear(t *testing.T) {
 
 func TestMovementsOfAYear(t *testing.T) {
 	s, ctx := newStore(t)
-	if years, err := s.MovementYears(ctx, 0, ""); err != nil || len(years) != 0 {
+	if years, err := s.MovementYears(ctx, store.MovementFilter{}); err != nil || len(years) != 0 {
 		t.Errorf("years with no stock changes = %v, %v", years, err)
 	}
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML})
@@ -194,7 +194,7 @@ func TestMovementsOfAYear(t *testing.T) {
 		{pads, stock.MoveBought, []int{2033}},
 		{oil, stock.MoveUsed, nil},
 	} {
-		if years, err := s.MovementYears(ctx, c.item, c.kind); err != nil || !slices.Equal(years, c.want) {
+		if years, err := s.MovementYears(ctx, store.MovementFilter{ItemID: c.item, Kind: c.kind}); err != nil || !slices.Equal(years, c.want) {
 			t.Errorf("years of item %d, kind %q = %v, %v; want %v", c.item, c.kind, years, err, c.want)
 		}
 	}
@@ -316,5 +316,70 @@ func TestSuppliers(t *testing.T) {
 	want := []string{"Louis", "Moto24"}
 	if !slices.Equal(got, want) {
 		t.Errorf("Suppliers = %v, want %v", got, want)
+	}
+}
+
+// A vehicle's stock changes are those of items that fit it or no vehicle,
+// but of services only its own; its years and money figures follow.
+func TestMovementsOfAVehicle(t *testing.T) {
+	s, ctx := newStore(t)
+	a, b := mustVehicle(t, s, "A"), mustVehicle(t, s, "B")
+	onlyA := mustItem(t, s, stock.ItemInput{Name: "A part", Unit: stock.UnitPiece, VehicleIDs: []int64{a}})
+	onlyB := mustItem(t, s, stock.ItemInput{Name: "B part", Unit: stock.UnitPiece, VehicleIDs: []int64{b}})
+	shared := mustItem(t, s, stock.ItemInput{Name: "Shared", Unit: stock.UnitPiece, VehicleIDs: []int64{a, b}})
+	general := mustItem(t, s, stock.ItemInput{Name: "Grease", Unit: stock.UnitPiece})
+	buy := func(item int64, year int, price float64) {
+		t.Helper()
+		on := time.Date(year, 3, 1, 0, 0, 0, 0, time.UTC)
+		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: item, Kind: stock.MoveBought, Delta: 4, TotalPrice: &price, OccurredOn: &on}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	buy(onlyA, 2030, 10)
+	buy(onlyB, 2028, 20)
+	buy(shared, 2030, 40)
+	buy(general, 2030, 80)
+	// B's service uses the shared part: a change of B's, not of A's.
+	if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: b, Title: "B job", PerformedOn: time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC),
+		Parts: []stock.KitLineInput{{ItemID: shared, Quantity: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	names := func(v int64) []string {
+		t.Helper()
+		moves, err := s.ListMovements(ctx, store.MovementFilter{VehicleID: v, Sort: store.MoveSortItem})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range moves {
+			out = append(out, m.ItemName+"/"+string(m.Kind))
+		}
+		return out
+	}
+	if got, want := names(a), []string{"A part/bought", "Grease/bought", "Shared/bought"}; !slices.Equal(got, want) {
+		t.Errorf("A's stock changes = %v, want %v", got, want)
+	}
+	if got, want := names(b), []string{"B part/bought", "Grease/bought", "Shared/service", "Shared/bought"}; !slices.Equal(got, want) {
+		t.Errorf("B's stock changes = %v, want %v", got, want)
+	}
+	if years, err := s.MovementYears(ctx, store.MovementFilter{VehicleID: a}); err != nil || !slices.Equal(years, []int{2030}) {
+		t.Errorf("A's years = %v, %v", years, err)
+	}
+	if years, _ := s.MovementYears(ctx, store.MovementFilter{VehicleID: b}); !slices.Equal(years, []int{2030, 2029, 2028}) {
+		t.Errorf("B's years = %v", years)
+	}
+	today := time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		v            int64
+		value, spent float64
+	}{
+		{0, 10 + 20 + 30 + 80, 10 + 40 + 80}, // the shared part: 3 of 4 left at 10 each
+		{a, 10 + 30 + 80, 10 + 40 + 80},
+		{b, 20 + 30 + 80, 40 + 80},
+	} {
+		st, err := s.GetVehicleStats(ctx, today, c.v)
+		if err != nil || math.Abs(st.StockValue-c.value) > 0.001 || math.Abs(st.SpentThisYear-c.spent) > 0.001 {
+			t.Errorf("stats of vehicle %d = %+v, %v; want value %v, spent %v", c.v, st, err, c.value, c.spent)
+		}
 	}
 }

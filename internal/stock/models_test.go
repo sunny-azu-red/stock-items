@@ -200,3 +200,20 @@ func TestItemDisplaySKUs(t *testing.T) {
 		t.Errorf("DisplaySKUs() = %v, want BAJAJ1 before KTM1", got)
 	}
 }
+
+func TestItemFits(t *testing.T) {
+	for _, c := range []struct {
+		ids  []int64
+		v    int64
+		want bool
+	}{
+		{nil, 1, true}, // General fits any vehicle
+		{[]int64{1}, 1, true},
+		{[]int64{2, 1}, 1, true},
+		{[]int64{2}, 1, false},
+	} {
+		if got := (Item{VehicleIDs: c.ids}).Fits(c.v); got != c.want {
+			t.Errorf("Item%v.Fits(%d) = %v, want %v", c.ids, c.v, got, c.want)
+		}
+	}
+}

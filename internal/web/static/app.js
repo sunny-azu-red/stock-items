@@ -823,6 +823,14 @@
     var theme = m ? m[1] : "system";
     if (theme !== (document.documentElement.getAttribute("data-theme") || "system")) applyTheme(theme);
   });
+  // The same for the vehicle worked on (working.go): it decides what a list
+  // page with no vehicle in its address shows, and the bar says so. A page
+  // from before a switch reloads, unless it holds unsaved typing.
+  window.addEventListener("pageshow", function () {
+    var m = document.cookie.match(/(?:^|;\s*)working_on=(\d+)(?:;|$)/);
+    var now = m ? m[1] : "";
+    if (now !== (document.documentElement.getAttribute("data-working-on") || "") && !dirty) location.reload();
+  });
 
   // ---- Keyboard shortcuts -------------------------------------------------
   // "/" focuses search (opening the stock page when this page has none),

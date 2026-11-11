@@ -1,5 +1,5 @@
 {{define "layout"}}<!doctype html>
-<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
+<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}{{with .WorkingCookie}} data-working-on="{{.}}"{{end}}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -29,7 +29,12 @@
       {{template "nav-link" (dict "Href" "/activity" "Icon" "history" "Label" "Activity" "Active" (eq .Nav "activity"))}}
       {{if .TrashCount}}{{template "nav-link" (dict "Href" "/trash" "Icon" "trash-2" "Label" "Trash" "Active" (eq .Nav "trash") "Count" .TrashCount "Muted" true)}}{{end}}
     </nav>
-    {{with .NavVehicles}}
+    {{if gt (len .NavVehicles) 1}}
+    <div>
+      <div class="nav-title" id="work-on-title">Work on</div>
+      {{template "work-on" (dict "View" . "Label" "work-on-title")}}
+    </div>
+    {{else}}{{with .NavVehicles}}
     <div>
       <div class="nav-title">Stock by vehicle</div>
       <nav class="chips nav-vehicles" aria-label="Vehicles">
@@ -37,7 +42,7 @@
         <a class="chip" href="/stock?general=1"><span class="dot"></span>General</a>
       </nav>
     </div>
-    {{end}}
+    {{end}}{{end}}
     <div class="sidebar-foot">
       <div class="sidebar-actions">
         <a class="btn btn-primary btn-block" href="/items/new">{{icon "plus"}} Add item</a>
@@ -53,6 +58,7 @@
   </aside>
 
   <main class="main" id="main">
+    {{template "working-on" .}}
     {{template "flash" .Flash}}
     {{template "content" .}}
   </main>
@@ -77,5 +83,27 @@
   <button class="icon-btn theme-to-dark" type="submit" name="theme" value="dark" title="Switch to dark theme" aria-label="Switch to dark theme">{{icon "moon"}}</button>
   <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Switch to light theme" aria-label="Switch to light theme">{{icon "sun"}}</button>
 </form>{{end}}
+
+{{/* The vehicles to work on, as buttons: tapping one works on it, tapping
+     the one worked on stops. dict "View" View "Label" (id of its label). See
+     working.go. */}}
+{{define "work-on"}}{{$on := .View.WorkingOn}}<form class="chips work-on" method="post" action="/working-on" role="group" aria-labelledby="{{.Label}}">
+  {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}
+</form>{{end}}
+
+{{/* The bar at the top of every page while a vehicle is worked on: says
+     so, goes back to it from a page showing something else, switches to
+     another, or stops (All vehicles). */}}
+{{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
+  <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
+  {{with $.WorkingAway}}<a class="reset-link working-back" href="{{.}}">{{icon "arrow-left"}} Back to {{$.WorkingOn.Name}}</a>{{end}}
+  <span class="working-actions">
+    <details class="working-switch">
+      <summary class="btn btn-sm">{{icon "arrow-left-right"}} Switch</summary>
+      <div class="working-pick"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title")}}</div>
+    </details>
+    <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="">{{icon "x"}} All vehicles</button></form>
+  </span>
+</section>{{end}}{{end}}
 
 {{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="{{if eq .Kind "error"}}alert{{else}}status{{end}}">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span>{{with .Undo}}<form class="inline-form flash-undo" method="post" action="/trash/{{.}}/restore"><button class="btn btn-sm" type="submit">{{icon "undo-2"}} Undo</button></form>{{end}}</div>{{end}}{{end}}

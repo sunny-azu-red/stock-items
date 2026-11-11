@@ -62,7 +62,7 @@
 
 <div id="results" class="loading-dim">
   <div class="results-head">
-    <span class="count"><span>{{plural (len $d.Items) "item"}}{{if $f.Active}} match{{end}}</span>{{if $f.Active}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.Cleared}}">Clear filters {{icon "x"}}</a>{{end}}</span>
+    <span class="count"><span>{{plural (len $d.Items) "item"}}{{if $f.Active}} match{{end}}</span>{{if $f.Active}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.Cleared}}">Clear filters {{icon "x"}}</a>{{end}}{{with $d.Others}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.AllVehicles}}" title="Search every vehicle">{{.}} more in other vehicles</a>{{end}}</span>
     <div class="flex">
       <span class="segmented" role="group" aria-label="View">
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>
@@ -77,6 +77,8 @@
     <div class="card">
       {{if $f.Active}}
         {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search, or clear the filters." "Href" (withQuery "/stock" $f.Cleared) "Action" "Clear filters" "ActionIcon" "x")}}
+      {{else if $f.Working}}
+        {{with index $d.Selected 0}}{{template "empty" (dict "Icon" "package" "Title" (print "Nothing in stock for " .Name) "Text" "Add the parts and fluids you keep for it." "Href" (print "/items/new?vehicle=" .ID) "Action" "Add item")}}{{end}}
       {{else}}
         {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep in stock." "Href" "/items/new" "Action" "Add item")}}
       {{end}}

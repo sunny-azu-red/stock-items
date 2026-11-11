@@ -306,6 +306,12 @@ func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 	f := kitForm{}
 	if id := parseOptID(r.URL.Query().Get("vehicle")); id != nil {
 		f.VehicleID = *id
+	} else {
+		wid, err := s.working(r)
+		if err != nil {
+			return err
+		}
+		f.VehicleID = wid
 	}
 	return s.renderKitForm(w, r, http.StatusOK, f, true)
 }

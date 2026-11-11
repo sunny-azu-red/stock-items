@@ -134,9 +134,13 @@ type MovementFilter struct {
 	ItemID int64
 	Kind   stock.MovementKind
 	// Year keeps only stock changes dated in that year (0 for any).
-	Year   int
-	Limit  int
-	Offset int // skip this many, for paging
+	Year int
+	// VehicleID keeps the stock changes of what fits the vehicle: of items
+	// that fit it or no vehicle (General), but of services only its own
+	// (0 for any). The same items as the stock filtered to it with General.
+	VehicleID int64
+	Limit     int
+	Offset    int // skip this many, for paging
 	// Sort is one of the MoveSort* keys (anything else sorts by date), and
 	// Desc reverses it. No Sort is newest first. See movementOrder.
 	Sort string
@@ -192,17 +196,10 @@ func movementOrder(args *sqlArgs, key string, desc bool) string {
 	}
 }
 
-// ListMovements returns ledger entries, newest first unless f says
-// otherwise.
-func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Movement, error) {
-	var args sqlArgs
-	sql := `
-		SELECT m.id, m.version, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
-		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at
-		FROM stock_movements m
-		JOIN items i ON i.id = m.item_id
-		LEFT JOIN service_records sr ON sr.id = m.service_record_id
-		WHERE true`
+// movementWhere is the " AND …" conditions of f, on stock_movements m with
+// service_records sr LEFT JOINed.
+func movementWhere(args *sqlArgs, f MovementFilter) string {
+	var sql string
 	if f.ID != 0 {
 		sql += " AND m.id = " + args.add(f.ID)
 	}
@@ -216,6 +213,32 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
 		sql += " AND m.occurred_on >= " + args.add(from) + "::date AND m.occurred_on < " + args.add(from.AddDate(1, 0, 0)) + "::date"
 	}
+	if f.VehicleID != 0 {
+		p := args.add(f.VehicleID)
+		sql += " AND CASE WHEN m.service_record_id IS NOT NULL THEN sr.vehicle_id = " + p + " ELSE " + fitsSQL("m.item_id", p) + " END"
+	}
+	return sql
+}
+
+// fitsSQL is the condition that the item in column col fits vehicle p (an
+// argument placeholder): tagged with it, or with no vehicle (General). The
+// same rows as the stock filtered to the vehicle with General.
+func fitsSQL(col, p string) string {
+	return "(EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + " AND iv.vehicle_id = " + p + ")" +
+		" OR NOT EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + "))"
+}
+
+// ListMovements returns ledger entries, newest first unless f says
+// otherwise.
+func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Movement, error) {
+	var args sqlArgs
+	sql := `
+		SELECT m.id, m.version, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
+		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at
+		FROM stock_movements m
+		JOIN items i ON i.id = m.item_id
+		LEFT JOIN service_records sr ON sr.id = m.service_record_id
+		WHERE true` + movementWhere(&args, f)
 	sql += " ORDER BY " + movementOrder(&args, f.Sort, f.Desc)
 	if f.Limit > 0 {
 		sql += " LIMIT " + args.add(f.Limit)
@@ -400,34 +423,41 @@ type Stats struct {
 // GetStats computes the dashboard money figures, with this year counted
 // from 1 January up to today (a purchase dated tomorrow is not counted yet).
 func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
+	return s.GetVehicleStats(ctx, today, 0)
+}
+
+// GetVehicleStats is GetStats of what fits the vehicle: items that fit it
+// or no vehicle (General), the stock the dashboard's tiles open while
+// working on it (0 for every item). Bought is never a service's change.
+func (s *Store) GetVehicleStats(ctx context.Context, today time.Time, vehicleID int64) (Stats, error) {
 	var st Stats
 	day := stock.DateOnly(today)
 	yearStart := time.Date(day.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+	fitsItem := "($3::bigint = 0 OR " + fitsSQL("i.id", "$3") + ")"
+	fitsMove := "($3::bigint = 0 OR " + fitsSQL("m.item_id", "$3") + ")"
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 		  COALESCE((SELECT sum(i.quantity * lp.unit_price) FROM items i
 		            JOIN LATERAL (SELECT m.total_price / m.delta AS unit_price FROM stock_movements m
 		                          WHERE m.item_id = i.id AND m.kind = 'bought' AND m.total_price IS NOT NULL AND m.delta > 0
 		                          ORDER BY m.occurred_on DESC, m.id DESC LIMIT 1) lp ON true
-		            WHERE i.archived_at IS NULL), 0)::float8,
-		  COALESCE((SELECT sum(total_price) FROM stock_movements
-		            WHERE kind = 'bought' AND occurred_on >= $1::date AND occurred_on <= $2::date), 0)::float8`, yearStart, day).
+		            WHERE i.archived_at IS NULL AND `+fitsItem+`), 0)::float8,
+		  COALESCE((SELECT sum(m.total_price) FROM stock_movements m
+		            WHERE m.kind = 'bought' AND m.occurred_on >= $1::date AND m.occurred_on <= $2::date AND `+fitsMove+`), 0)::float8`,
+		yearStart, day, vehicleID).
 		Scan(&st.StockValue, &st.SpentThisYear)
 	return st, err
 }
 
 // MovementYears returns the years from the newest stock change back to
-// the oldest, of one item and one kind when they are set (none when there
-// are none): the years the Activity page can show with its other filters.
-func (s *Store) MovementYears(ctx context.Context, itemID int64, kind stock.MovementKind) ([]int, error) {
+// the oldest, of the stock changes f keeps (its item, kind and vehicle;
+// its year, sort and paging are ignored), none when there are none: the
+// years the Activity page can show with its other filters.
+func (s *Store) MovementYears(ctx context.Context, f MovementFilter) ([]int, error) {
 	var args sqlArgs
-	sql := `SELECT min(occurred_on), max(occurred_on) FROM stock_movements WHERE true`
-	if itemID != 0 {
-		sql += " AND item_id = " + args.add(itemID)
-	}
-	if kind != "" {
-		sql += " AND kind = " + args.add(kind)
-	}
+	f = MovementFilter{ItemID: f.ItemID, Kind: f.Kind, VehicleID: f.VehicleID}
+	sql := `SELECT min(m.occurred_on), max(m.occurred_on) FROM stock_movements m
+		LEFT JOIN service_records sr ON sr.id = m.service_record_id WHERE true` + movementWhere(&args, f)
 	var first, last *time.Time
 	if err := s.pool.QueryRow(ctx, sql, args...).Scan(&first, &last); err != nil || first == nil {
 		return nil, err

@@ -1,15 +1,18 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
   <div class="page-title">
-    <h1>Dashboard</h1>
+    <h1>{{with $d.VehicleName}}{{.}} dashboard{{else}}Dashboard{{end}}</h1>
     <p class="sub">{{.Today.Format "Monday, 2 January 2006"}}</p>
   </div>
   <div class="actions">
-    <a class="btn" href="/services/new">{{icon "wrench"}} Log service</a>
-    <a class="btn btn-primary" href="/items/new">{{icon "plus"}} Add item</a>
+    <a class="btn" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
+    <a class="btn btn-primary" href="/items/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "plus"}} Add item</a>
     {{template "theme-toggle" "mobile-only"}}
   </div>
 </div>
+{{if and (not .WorkingOn) (gt (len .NavVehicles) 1)}}
+<div class="mobile-only work-on-row mb"><span class="nav-title" id="work-on-row-title">Work on</span>{{template "work-on" (dict "View" . "Label" "work-on-row-title")}}</div>
+{{end}}
 
 {{if not $d.Vehicles}}
 <div class="card card-pad welcome mb">
@@ -25,29 +28,29 @@
 {{end}}
 
 <div class="tiles">
-  <a class="card tile" href="/stock"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
-  <a class="card tile{{if $d.LowItems}} warn{{end}}" href="/stock?low=1"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
-  <a class="card tile{{if $d.Expiring}} danger{{end}}" href="/stock?exp=1"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
+  <a class="card tile" href="{{$d.Link "/stock" ""}}"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
+  <a class="card tile{{if $d.LowItems}} warn{{end}}" href="{{$d.Link "/stock" "low=1"}}"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
+  <a class="card tile{{if $d.Expiring}} danger{{end}}" href="{{$d.Link "/stock" "exp=1"}}"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
   <a class="card tile" href="/shopping"><span class="label">{{icon "shopping-cart"}} Shopping list</span><span class="value">{{.ShoppingCount}}</span></a>
-  <a class="card tile" href="/stock?instock=1"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></a>
-  <a class="card tile" href="/activity?kind=bought&amp;year={{.Today.Year}}"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
+  <a class="card tile" href="{{$d.Link "/stock" "instock=1"}}"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></a>
+  <a class="card tile" href="{{$d.Link "/activity" (print "kind=bought&year=" .Today.Year)}}"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
 </div>
 
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "wrench"}} Upcoming service</h2><a class="more" href="/services">All services →</a></div>
+      <div class="card-head"><h2>{{icon "wrench"}} Upcoming service</h2><a class="more" href="{{$d.Link "/services" ""}}">All services →</a></div>
       {{if $d.Upcoming}}
         {{range $i, $k := $d.Upcoming}}{{if lt $i 6}}{{template "kit-row" $k}}{{end}}{{end}}
       {{else if $d.KitCount}}
         <div class="card-body muted small">None of your service kits has an interval yet. Set "every X {{distUnit}} / months" on a kit to get reminders.</div>
       {{else}}
-        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles "/kits/new") "") "Action" "Add kit")}}
+        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles (print "/kits/new" (or (and $d.VehicleID (print "?vehicle=" $d.VehicleID)) ""))) "") "Action" "Add kit")}}
       {{end}}
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "history"}} Recent activity</h2><a class="more" href="/activity">All activity →</a></div>
+      <div class="card-head"><h2>{{icon "history"}} Recent activity</h2><a class="more" href="{{$d.Link "/activity" ""}}">All activity →</a></div>
       {{if $d.Recent}}{{template "activity-list" $d.Recent}}
       {{else}}<div class="card-body muted small">What you buy, use and adjust, and the parts of your services, will show up here.</div>{{end}}
     </section>
@@ -84,7 +87,7 @@
 
     {{if $d.Expiring}}
     <section class="card">
-      <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2><a class="more" href="/stock?exp=1">All expiring →</a></div>
+      <div class="card-head"><h2>{{icon "hourglass"}} Expiring</h2><a class="more" href="{{$d.Link "/stock" "exp=1"}}">All expiring →</a></div>
       <ul class="list">
         {{range $d.Expiring}}
         <li><span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="meta">{{qty .Quantity .Unit}}</span></span><span class="end">{{template "expiry-badge" .}}</span></li>

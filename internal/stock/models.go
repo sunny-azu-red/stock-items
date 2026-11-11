@@ -313,6 +313,13 @@ func (it Item) DisplayName() string {
 	return b + " " + n
 }
 
+// Fits reports whether the item fits the vehicle: tagged with it, or with
+// no vehicle at all (General, which fits any). The items the stock shows
+// filtered to the vehicle with General.
+func (it Item) Fits(vehicleID int64) bool {
+	return len(it.VehicleIDs) == 0 || slices.Contains(it.VehicleIDs, vehicleID)
+}
+
 // IsLow reports whether the quantity is below the minimum stock level.
 func (it Item) IsLow() bool {
 	return it.MinQuantity != nil && it.Quantity < *it.MinQuantity

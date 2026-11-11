@@ -578,10 +578,21 @@ async function workingCookie(page: Page, baseURL: string, name: string) {
   await page.context().addCookies([{ name: "working_on", value: href.split("/").pop() as string, url: baseURL }]);
 }
 
-test("work on a vehicle", async ({ page }) => {
+test("work on a vehicle", async ({ page }, testInfo) => {
   await workOn(page, "KTM 390");
   const bar = page.locator(".working-on");
   await expect(bar).toContainText("Working on KTM 390");
+  if (testInfo.project.name === "mobile") {
+    // Edge to edge at the top, a bottom border only (its rules once lost to
+    // the desktop ones that come later in app.css).
+    const box = await bar.boundingBox();
+    const width = await page.evaluate(() => document.documentElement.clientWidth);
+    expect(box && box.x === 0 && box.y === 0 && box.width === width, `bar at ${JSON.stringify(box)} in ${width}px`).toBe(true);
+    await expect(bar).toHaveCSS("border-top-width", "0px");
+    await expect(bar).toHaveCSS("border-bottom-width", "1px");
+    // One row: 28px buttons in 6px padding and the bottom border.
+    expect(box?.height, "the bar wraps onto a second row").toBe(41);
+  }
   await expect(page).toHaveURL(/\/\?v=\d+$/);
   await expect(page.locator("main h1")).toHaveText("KTM 390 dashboard");
 

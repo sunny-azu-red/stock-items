@@ -95,7 +95,7 @@
      so, goes back to it from a page showing something else, switches to
      another, or stops (All vehicles). */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
-  <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
+  <span class="working-name">{{icon .Kind.Icon}}<span><span class="working-label">Working on </span><strong>{{.Name}}</strong></span></span>
   {{with $.WorkingAway}}<a class="reset-link working-back" href="{{.}}">{{icon "arrow-left"}} Back to {{$.WorkingOn.Name}}</a>{{end}}
   <span class="working-actions">
     <details class="working-switch">

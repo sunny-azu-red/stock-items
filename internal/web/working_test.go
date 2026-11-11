@@ -136,7 +136,7 @@ func TestWorkingOnPages(t *testing.T) {
 	})
 	t.Run("they show it", func(t *testing.T) {
 		rec := a.getWorking("/stock?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, "<title>KTM 390 stock", workingBar, "Working on <strong>KTM 390</strong>", "Chain lube", "Only this vehicle")
+		expect(t, rec, http.StatusOK, "<title>KTM 390 stock", workingBar, `<span class="working-label">Working on </span><strong>KTM 390</strong>`, "Chain lube", "Only this vehicle")
 		expectNot(t, rec, "Hiflofiltro", "Back to KTM 390", "Clear filters")
 		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>KTM 390 services</h1>")
 		rec = a.getWorking("/activity?general=1&v="+w, w)

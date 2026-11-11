@@ -65,7 +65,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 			p.Expiring = append(p.Expiring, it)
 		}
 	}
-	for _, kv := range s.kitViews(kits, vehicles) {
+	for _, kv := range scopeKits(s.kitViews(kits, vehicles), soleVehicle(vehicles)) {
 		if kv.Due.State != stock.DueNone {
 			p.Upcoming = append(p.Upcoming, kv)
 		}

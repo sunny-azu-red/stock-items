@@ -633,8 +633,12 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
 		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
 	}
+	// The header names the item's vehicle; with none, the only active one
+	// is the scope.
 	if len(it.VehicleIDs) == 1 {
 		scopeKits(p.Kits, it.VehicleIDs[0])
+	} else if len(it.VehicleIDs) == 0 {
+		scopeKits(p.Kits, soleVehicle(vehicles))
 	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]

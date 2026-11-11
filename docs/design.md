@@ -51,7 +51,9 @@ A page about one vehicle names it once, at the top. Its rows and headings show a
 
 The partials take the scope as `"Here"` (a vehicle id, 0 for none): `stock-section`, `service-list`, and `item-row` (`rowFor`, kept across a quick +/- by a hidden `here` input). `kit-row` takes `kitView.HideVehicle` (`scopeKits`).
 
-Stock section headings (`stock-section`) each lead with an icon and a word: `package` **General** (not tied to a vehicle), `tag` **Shared** + chips, and `warehouse` **Vehicle** + chip (+ "only" when the stock is filtered by vehicle). Inside a scope they read `warehouse` **This vehicle only** and `tag` **Shared with** + the other vehicles' chips.
+**With one active vehicle**, that vehicle is the scope of every page (`soleVehicle`): rows leave out its chip everywhere (the stock list, services, the dashboard's kits, an item's kits). Headers, section headings, filters and forms keep it, and a row of an archived vehicle or of General keeps its chip.
+
+Stock section headings (`stock-section`) answer one question, which vehicles the items fit, each with an icon and a word up front: `warehouse` **Only** + chip, `tag` **Shared** + chips, `package` **General** (not tied to a vehicle). Inside a scope they read `warehouse` **Only this vehicle** and `tag` **Shared with** + the other vehicles' chips.
 
 ### Status & State Badges (`.badge`, `a.badge`)
 * **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).

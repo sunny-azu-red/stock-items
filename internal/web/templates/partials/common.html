@@ -173,11 +173,12 @@
 </li>
 {{end}}
 
-{{/* A group of item rows: dict "Section" Section "Vehicles" map, "Only"
-     true when the stock is filtered by vehicle, and "Here" the one vehicle
-     the page is about (a vehicle's page, the stock filtered to it). The
-     page names that vehicle once at the top, so its headings leave out its
-     chip and show only the others ("Shared with"). */}}
+{{/* A group of item rows: dict "Section" Section "Vehicles" map, and
+     "Here" the one vehicle the page is about (a vehicle's page, the stock
+     filtered to it). Each heading says which vehicles the items fit: Only
+     one, Shared by several, General for none. The page names Here once at
+     the top, so its headings leave out its chip ("Only this vehicle",
+     "Shared with" the others). */}}
 {{define "stock-section"}}{{$vs := .Vehicles}}{{$sec := .Section}}{{$here := or .Here 0}}
 <section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}">
   <div class="section-head">
@@ -185,8 +186,8 @@
       {{if $sec.General}}{{icon "package"}} General <span class="muted small">(not tied to a vehicle)</span>
       {{else if and $sec.Shared $here}}{{icon "tag"}} Shared with {{range $sec.Vehicles}}{{if ne .ID $here}}{{template "chip" .}}{{end}}{{end}}
       {{else if $sec.Shared}}{{icon "tag"}} Shared {{range $sec.Vehicles}}{{template "chip" .}}{{end}}
-      {{else if $here}}{{icon "warehouse"}} This vehicle only
-      {{else}}{{icon "warehouse"}} Vehicle {{with index $sec.Vehicles 0}}{{template "chip" .}}{{end}}{{with $.Only}} only{{end}}{{end}}
+      {{else if $here}}{{icon "warehouse"}} Only this vehicle
+      {{else}}{{icon "warehouse"}} Only {{with index $sec.Vehicles 0}}{{template "chip" .}}{{end}}{{end}}
     </h2>
     <span class="n">{{plural (len $sec.Items) "item"}}</span>
   </div>

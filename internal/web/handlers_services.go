@@ -420,6 +420,7 @@ type servicesPage struct {
 	Vehicles          []stock.Vehicle
 	VehicleID         int64
 	VehicleName       string // the filtered vehicle's, for the title
+	Sole              int64  // soleVehicle
 	Archived          bool   // the filtered vehicle is archived: no new services
 	ShowArchivedKits  bool
 	ArchivedKitsCount int
@@ -445,6 +446,15 @@ func (p servicesPage) PageQuery(n int) string {
 		q.Set("page", strconv.Itoa(n))
 	}
 	return q.Encode()
+}
+
+// Scope is the vehicle whose chip the rows leave out: the filtered one,
+// else the only active vehicle.
+func (p servicesPage) Scope() int64 {
+	if p.VehicleID != 0 {
+		return p.VehicleID
+	}
+	return p.Sole
 }
 
 // ArchivedKitsQuery toggles viewing archived kits.
@@ -494,6 +504,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	p.Vehicles = activeVehicles(allVehicles, p.VehicleID)
+	p.Sole = soleVehicle(allVehicles)
 	allKits, err := s.store.ListKits(ctx, store.KitFilter{VehicleID: p.VehicleID, IncludeArchived: true})
 	if err != nil {
 		return err
@@ -515,7 +526,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		p.Kits = s.kitViews(activeKits, allVehicles)
 	}
-	scopeKits(p.Kits, p.VehicleID)
+	scopeKits(p.Kits, p.Scope())
 	f := store.ServiceFilter{VehicleID: p.VehicleID, Limit: servicesPageSize + 1, Offset: (p.Page - 1) * servicesPageSize}
 	if p.Services, err = s.store.ListServices(ctx, f); err != nil {
 		return err

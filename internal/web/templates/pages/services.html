@@ -22,7 +22,7 @@
 <div class="split">
   <section class="card">
     <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="muted small">{{plural $d.Total "service"}}{{if $d.Labor}} · {{money $d.Labor}} labour in total{{end}}</span></div>
-    {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $d.VehicleID)}}
+    {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $d.Scope)}}
     {{else if gt $d.Total 0}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing on this page" "Text" "There are no older services." "Href" (withQuery "/services" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
     {{else if $d.Archived}}{{template "empty" (dict "Icon" "wrench" "Title" "No services for this vehicle" "Text" "It is archived; restore it to log services.")}}
     {{else if $d.VehicleID}}{{template "empty" (dict "Icon" "wrench" "Title" "No services for this vehicle yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" (print "/services/new?vehicle=" $d.VehicleID) "Action" "Log service")}}

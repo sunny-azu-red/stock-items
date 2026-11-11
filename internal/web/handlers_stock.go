@@ -171,6 +171,7 @@ type stockPage struct {
 	Items       []stock.Item
 	Categories  []string
 	Selected    []stock.Vehicle
+	Sole        int64 // soleVehicle
 }
 
 // Here is the one vehicle the stock is filtered to, or 0: the page names it
@@ -180,6 +181,15 @@ func (p stockPage) Here() int64 {
 		return p.Selected[0].ID
 	}
 	return 0
+}
+
+// RowScope is the vehicle whose chip the list rows leave out: Here, else
+// the only active vehicle.
+func (p stockPage) RowScope() int64 {
+	if h := p.Here(); h != 0 {
+		return h
+	}
+	return p.Sole
 }
 
 func (s *Server) loadStock(r *http.Request) (stockPage, error) {
@@ -195,7 +205,8 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	if err != nil {
 		return stockPage{}, err
 	}
-	p := stockPage{Filter: f, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), AllVehicles: vehicles, VehicleMap: vehicleMap(vehicles), Items: items}
+	p := stockPage{Filter: f, Vehicles: activeVehicles(vehicles, f.VehicleIDs...), AllVehicles: vehicles, VehicleMap: vehicleMap(vehicles), Items: items,
+		Sole: soleVehicle(vehicles)}
 	for _, v := range vehicles {
 		if f.HasVehicle(v.ID) {
 			p.Selected = append(p.Selected, v)

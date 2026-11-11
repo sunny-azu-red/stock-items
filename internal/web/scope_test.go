@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
+	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 // plainChip is the markup of a vehicle's chip as a plain label (kit rows,
@@ -43,8 +44,8 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 
 	t.Run("vehicle page", func(t *testing.T) {
 		rec := a.get("/vehicles/" + itoa(k390))
-		expect(t, rec, http.StatusOK, "Brake service", "Chain clean", "This vehicle only", "Shared with", s1290)
-		expectNot(t, rec, s390, "Vehicle <span")
+		expect(t, rec, http.StatusOK, "Brake service", "Chain clean", "Only this vehicle", "Shared with", s1290)
+		expectNot(t, rec, s390, "Only <span")
 	})
 	t.Run("kit page", func(t *testing.T) {
 		rec := a.get("/kits/" + itoa(kit))
@@ -61,7 +62,7 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 	})
 	t.Run("stock filtered to one vehicle", func(t *testing.T) {
 		rec := a.get("/stock?v=" + itoa(k390))
-		expect(t, rec, http.StatusOK, "This vehicle only", "Shared with", s1290)
+		expect(t, rec, http.StatusOK, "Only this vehicle", "Shared with", s1290)
 		expectNot(t, rec, s390)
 	})
 	t.Run("stock list filtered to one vehicle", func(t *testing.T) {
@@ -80,13 +81,13 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 	})
 	t.Run("stock with two vehicles keeps chips", func(t *testing.T) {
 		rec := a.get("/stock?v=" + itoa(k390) + "&v=" + itoa(k1290))
-		expect(t, rec, http.StatusOK, "Vehicle <span", "KTM 390</span> only", "Shared <span")
-		expectNot(t, rec, "This vehicle only", "Shared with")
+		expect(t, rec, http.StatusOK, "Only <span", "Shared <span")
+		expectNot(t, rec, "Only this vehicle", "Shared with")
 	})
 	t.Run("stock unfiltered", func(t *testing.T) {
 		rec := a.get("/stock")
-		expect(t, rec, http.StatusOK, "Vehicle <span", "Shared <span", s390, s1290)
-		expectNot(t, rec, "</span> only", "This vehicle only", "Shared with")
+		expect(t, rec, http.StatusOK, "Only <span", "Shared <span", s390, s1290)
+		expectNot(t, rec, "Only this vehicle", "Shared with")
 	})
 	t.Run("item of one vehicle", func(t *testing.T) {
 		// The header names its vehicle; that vehicle's kit has no chip, the
@@ -96,5 +97,67 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 		if n := strings.Count(rec.Body.String(), s390); n != 1 {
 			t.Errorf("KTM 390's chip shows %d times, want once (the header)", n)
 		}
+	})
+}
+
+// With one active vehicle, it is the scope of every page: rows leave out its
+// chip everywhere, while General and an archived vehicle keep theirs.
+func TestSoleVehicleIsTheScope(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	ctx := context.Background()
+	pads := itemID(t, a.store, "Rear Brake Pads")
+	kin := stock.KitInput{VehicleID: k390, Name: "Brake service", IntervalMonths: ptr(12),
+		Lines: []stock.KitLineInput{{ItemID: pads, Quantity: 1, Unit: stock.UnitPiece}}}
+	kin.Normalize()
+	if _, err := a.store.CreateKit(ctx, kin); err != nil {
+		t.Fatal(err)
+	}
+	sin := stock.ServiceInput{VehicleID: k390, Title: "Chain clean", PerformedOn: stock.DateOnly(time.Now())}
+	sin.Normalize()
+	if _, err := a.store.CreateService(ctx, sin); err != nil {
+		t.Fatal(err)
+	}
+	gin := stock.ItemInput{Name: "Chain lube", Unit: stock.UnitPiece, Quantity: 2}
+	gin.Normalize()
+	lube, err := a.store.CreateItem(ctx, gin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s390 := plainChip("KTM 390")
+
+	// Two active vehicles: the rows still tell them apart.
+	expect(t, a.get("/services"), http.StatusOK, s390)
+
+	if err := a.store.ArchiveVehicle(ctx, k1290, cur(t, a.store, store.WhatVehicle, k1290)); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("stock list", func(t *testing.T) {
+		rec := a.get("/stock?view=list")
+		expect(t, rec, http.StatusOK, "Rear Brake Pads", "Show General stock", linkChip("KTM 1290"), `name="here" value="`+itoa(k390)+`"`)
+		expectNot(t, rec, linkChip("KTM 390"))
+	})
+	t.Run("stock sections keep their heading chip", func(t *testing.T) {
+		expect(t, a.get("/stock"), http.StatusOK, "Only <span", s390)
+	})
+	t.Run("services", func(t *testing.T) {
+		rec := a.get("/services")
+		expect(t, rec, http.StatusOK, "<h1>Services</h1>", "Chain clean", "Brake service")
+		expectNot(t, rec, s390)
+	})
+	t.Run("dashboard", func(t *testing.T) {
+		rec := a.get("/")
+		expect(t, rec, http.StatusOK, "Brake service")
+		expectNot(t, rec, s390)
+	})
+	t.Run("general item's kits", func(t *testing.T) {
+		kin := stock.KitInput{VehicleID: k390, Name: "Chain service", Lines: []stock.KitLineInput{{ItemID: lube, Quantity: 1, Unit: stock.UnitPiece}}}
+		kin.Normalize()
+		if _, err := a.store.CreateKit(ctx, kin); err != nil {
+			t.Fatal(err)
+		}
+		rec := a.get("/items/" + itoa(lube))
+		expect(t, rec, http.StatusOK, "Chain service")
+		expectNot(t, rec, s390)
 	})
 }

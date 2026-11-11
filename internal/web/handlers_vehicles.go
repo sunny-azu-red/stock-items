@@ -461,6 +461,24 @@ type kitView struct {
 	HideVehicle bool
 }
 
+// soleVehicle is the id of the only active vehicle, or 0 when there are
+// none or several. With just one, every row would show its chip: it is the
+// scope of every page, and rows leave it out (a row of an archived vehicle
+// keeps its chip).
+func soleVehicle(vehicles []stock.Vehicle) int64 {
+	var id int64
+	for _, v := range vehicles {
+		if v.Archived() {
+			continue
+		}
+		if id != 0 {
+			return 0
+		}
+		id = v.ID
+	}
+	return id
+}
+
 // scopeKits hides the vehicle chip of the kits of vehicle here: the page
 // says the vehicle once, its rows show only a different one. 0 is no scope.
 func scopeKits(kvs []kitView, here int64) []kitView {

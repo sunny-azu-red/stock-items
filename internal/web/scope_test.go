@@ -17,6 +17,35 @@ import (
 func plainChip(name string) string { return `<span class="dot"></span>` + name + `</span>` }
 func linkChip(name string) string  { return `title="Show ` + name + ` stock"` }
 
+// rowChips reports which of the vehicles' link chips the stock row of item
+// id shows, in the page body.
+func rowChips(t *testing.T, body string, id int64, names ...string) []string {
+	t.Helper()
+	start := strings.Index(body, `id="item-`+itoa(id)+`"`)
+	if start < 0 {
+		t.Fatalf("no row for item %d", id)
+	}
+	row := body[start:]
+	row = row[:strings.Index(row, "</li>")]
+	var got []string
+	for _, n := range names {
+		if strings.Contains(row, linkChip(n)) {
+			got = append(got, n)
+		}
+	}
+	return got
+}
+
+// expectRowChips checks the chips of item id's row: exactly want, of the
+// two seeded vehicles.
+func expectRowChips(t *testing.T, body string, id int64, want ...string) {
+	t.Helper()
+	got := rowChips(t, body, id, "KTM 390", "KTM 1290")
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("item %d row shows %v, want %v", id, got, want)
+	}
+}
+
 // A page about one vehicle names it once at the top; its rows and headings
 // show only the other vehicles' chips. Lists that mix vehicles keep them.
 func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
@@ -66,15 +95,17 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 		expectNot(t, rec, s390)
 	})
 	t.Run("stock list filtered to one vehicle", func(t *testing.T) {
+		// A row that fits only the filtered vehicle has no chip; a shared
+		// row shows all its vehicles.
 		rec := a.get("/stock?view=list&v=" + itoa(k390))
-		expect(t, rec, http.StatusOK, "Rear Brake Pads", linkChip("KTM 1290"), `name="here" value="`+itoa(k390)+`"`)
-		expectNot(t, rec, linkChip("KTM 390"))
+		expect(t, rec, http.StatusOK, `name="here" value="`+itoa(k390)+`"`)
+		expectRowChips(t, rec.Body.String(), pads)
+		expectRowChips(t, rec.Body.String(), itemID(t, a.store, "Oil Filter O-Ring"), "KTM 390", "KTM 1290")
 	})
 	t.Run("quick adjust keeps the scope", func(t *testing.T) {
 		ring := itemID(t, a.store, "Oil Filter O-Ring")
 		rec := a.post("/items/"+itoa(ring)+"/adjust", url.Values{"dir": {"up"}, "here": {itoa(k390)}}, "HX-Request", "true")
-		expect(t, rec, http.StatusOK, linkChip("KTM 1290"))
-		expectNot(t, rec, linkChip("KTM 390"))
+		expect(t, rec, http.StatusOK, linkChip("KTM 390"), linkChip("KTM 1290"))
 		// Its only vehicle is the scope: no chips at all, not "General".
 		rec = a.post("/items/"+itoa(pads)+"/adjust", url.Values{"dir": {"up"}, "here": {itoa(k390)}}, "HX-Request", "true")
 		expectNot(t, rec, linkChip("KTM 390"), "Show General stock")
@@ -133,9 +164,14 @@ func TestSoleVehicleIsTheScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("stock list", func(t *testing.T) {
+		// Only the rows that fit the sole vehicle alone lose their chip: a
+		// shared row must not read as the archived vehicle's alone.
 		rec := a.get("/stock?view=list")
-		expect(t, rec, http.StatusOK, "Rear Brake Pads", "Show General stock", linkChip("KTM 1290"), `name="here" value="`+itoa(k390)+`"`)
-		expectNot(t, rec, linkChip("KTM 390"))
+		b := rec.Body.String()
+		expect(t, rec, http.StatusOK, "Show General stock", `name="here" value="`+itoa(k390)+`"`)
+		expectRowChips(t, b, pads)
+		expectRowChips(t, b, itemID(t, a.store, "Hiflofiltro"), "KTM 1290")
+		expectRowChips(t, b, itemID(t, a.store, "Oil Filter O-Ring"), "KTM 390", "KTM 1290")
 	})
 	t.Run("stock sections keep their heading chip", func(t *testing.T) {
 		expect(t, a.get("/stock"), http.StatusOK, "Only <span", s390)

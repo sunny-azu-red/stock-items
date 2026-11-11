@@ -46,12 +46,14 @@ A page about one vehicle names it once, at the top. Its rows and headings show a
 | A vehicle's page | its hero | kit rows, service rows, stock section headings |
 | A kit's page | the header `chip-link` | service rows |
 | `/services?v=ID` | the title ("KTM 390 services") and the active filter chip | service rows, kit rows |
-| `/stock?v=ID` (exactly one vehicle) | the title ("KTM 390 stock") and the active filter chip | section headings, list rows (the other vehicles' chips stay) |
+| `/stock?v=ID` (exactly one vehicle) | the title ("KTM 390 stock") and the active filter chip | section headings, and list rows that fit only that vehicle |
 | An item fitting one vehicle | the header chip | the rows of that vehicle's kits |
+
+A stock row (`item-row`) is the one row with several vehicles: it leaves out its chips only when it fits the scope vehicle alone, and otherwise shows all of them, so a shared item never reads as belonging to one of the others alone.
 
 The partials take the scope as `"Here"` (a vehicle id, 0 for none): `stock-section`, `service-list`, and `item-row` (`rowFor`, kept across a quick +/- by a hidden `here` input). `kit-row` takes `kitView.HideVehicle` (`scopeKits`).
 
-**With one active vehicle**, that vehicle is the scope of every page (`soleVehicle`): rows leave out its chip everywhere (the stock list, services, the dashboard's kits, an item's kits). Headers, section headings, filters and forms keep it, and a row of an archived vehicle or of General keeps its chip.
+**With one active vehicle**, that vehicle is the scope of every page (`soleVehicle`): rows leave out its chip everywhere (services, the dashboard's kits, an item's kits, and stock list rows that fit only it). Headers, section headings, filters and forms keep it, and a row of an archived vehicle or of General keeps its chip.
 
 Stock section headings (`stock-section`) answer one question, which vehicles the items fit, each with an icon and a word up front: `warehouse` **Only** + chip, `tag` **Shared** + chips, `package` **General** (not tied to a vehicle). Inside a scope they read `warehouse` **Only this vehicle** and `tag` **Shared with** + the other vehicles' chips.
 

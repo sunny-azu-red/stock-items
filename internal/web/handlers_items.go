@@ -950,31 +950,20 @@ type rowData struct {
 	Item      stock.Item
 	Vehicles  map[int64]stock.Vehicle
 	HideChips bool
-	// Here is the one vehicle the list is filtered to (0 for none): the
-	// row leaves out its chip, the page names it once at the top.
+	// Here is the vehicle the page names once at the top (the one the list
+	// is filtered to, or the only active one); 0 for none.
 	Here  int64
 	Flash bool
 }
 
-// ChipIDs are the vehicles the row's chips show: the item's, but for Here.
-func (d rowData) ChipIDs() []int64 {
-	if d.Here == 0 {
-		return d.Item.VehicleIDs
-	}
-	ids := make([]int64, 0, len(d.Item.VehicleIDs))
-	for _, id := range d.Item.VehicleIDs {
-		if id != d.Here {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
 // ShowChips reports whether the row shows vehicle chips: not in a section
-// (its heading names the vehicles), and not when Here is the only one. An
-// item with no vehicle shows the General chip.
+// (its heading names the vehicles), and not when the item fits Here and
+// nothing else. A row that fits several shows them all, so a shared item
+// never reads as one of the others' alone; an item with no vehicle shows
+// the General chip.
 func (d rowData) ShowChips() bool {
-	return !d.HideChips && (len(d.Item.VehicleIDs) == 0 || len(d.ChipIDs()) > 0)
+	ids := d.Item.VehicleIDs
+	return !d.HideChips && (d.Here == 0 || len(ids) != 1 || ids[0] != d.Here)
 }
 
 func vehicleMap(vs []stock.Vehicle) map[int64]stock.Vehicle {

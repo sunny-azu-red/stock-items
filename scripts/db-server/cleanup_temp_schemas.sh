@@ -16,7 +16,10 @@
 # other session is connected to the database: stop the Pitbox app (and
 # anything else using it) first. It drops in one transaction, which a
 # temp schema that isn't empty fails and rolls back, and checks afterwards
-# that no catalog row was left without its schema.
+# that no catalog row was left without its schema. (A session that
+# connects in the instant between the check and the commit and creates a
+# temporary table could still be caught out; the app only does that in
+# migration 00022, at start-up, so stop it first.)
 #
 # Settings (environment, for tests): SYNC_DB, SYNC_PG_HOST, SYNC_PG_PORT, SYNC_PG_USER
 set -euo pipefail
@@ -61,7 +64,9 @@ END $$;
 SQL
 
 ORPHANS="$(psql -X -At -v ON_ERROR_STOP=1 -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${DB_NAME}" -c "
-  SELECT count(*) FROM pg_class c WHERE NOT EXISTS (SELECT 1 FROM pg_namespace n WHERE n.oid = c.relnamespace)")"
+  SELECT (SELECT count(*) FROM pg_class WHERE relnamespace NOT IN (SELECT oid FROM pg_namespace))
+       + (SELECT count(*) FROM pg_type WHERE typnamespace NOT IN (SELECT oid FROM pg_namespace))
+       + (SELECT count(*) FROM pg_proc WHERE pronamespace NOT IN (SELECT oid FROM pg_namespace))")"
 if [ "${ORPHANS}" != 0 ]; then
   echo "WARNING: ${ORPHANS} catalog rows in ${DB_NAME} have no schema (a session used a temp schema while it was dropped); pg_dump fails until they are gone." >&2
   exit 1

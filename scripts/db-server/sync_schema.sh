@@ -4,41 +4,54 @@
 # (scripts/test-db-server.sh runs it against a throwaway local Postgres).
 #
 # Usage: sync_schema.sh SOURCE TARGET
-#   Replaces schema TARGET of the Pitbox database with a copy of SOURCE.
+#        sync_schema.sh --from-backup FILE TARGET
+#   Replaces schema TARGET of the Pitbox database with a copy of schema
+#   SOURCE, or with a backup this script made of TARGET earlier.
 #   sync_stock_items_public_to_dev.sh and sync_stock_items_dev_to_public.sh
-#   call it. Run it inside tmux or screen: a dropped SSH session stops it.
+#   call it. Run it inside tmux or screen.
+#
+#   Needs the superuser (postgres) and the app user (stock) in ~/.pgpass:
+#     localhost:5432:*:postgres:<password>
+#     localhost:5432:*:stock:<the app's password>
 #
 # How it keeps the data safe:
-#   - SOURCE is only read, never changed or locked beyond pg_dump's own
-#     ACCESS SHARE locks.
-#   - It checks first and changes nothing until you confirm. Every check
-#     that can't be made stops it. It refuses a SOURCE that is missing,
-#     empty or has no migrations; objects in other schemas that depend on
-#     TARGET (DROP ... CASCADE would destroy them); grants, comments or
-#     publications on TARGET's objects that the copy wouldn't keep; and for
-#     TARGET public: a running app (any session of the app user) and any
-#     difference in applied migrations. You type OVERWRITE (OVERWRITE public
-#     for public).
-#   - It backs TARGET up (pg_dump -Fc, read back completely) before
-#     touching it, and fingerprints it (the manifest below).
-#   - Clearing TARGET and restoring the copy run in ONE transaction, from a
-#     file written completely beforehand. It locks TARGET against writes,
-#     checks TARGET still matches the fingerprint taken before the backup
-#     (nothing was written since), repeats the refusal checks, and commits
-#     only if the copy matches SOURCE's staging copy exactly and TARGET's
-#     grants and comments are still there. Any error rolls it all back.
-#   - It never waits longer than SYNC_LOCK_TIMEOUT for a lock, Ctrl-C or a
-#     kill reaches psql (which then rolls back), two runs can't overlap,
-#     and at the end it reports what TARGET actually holds.
+#   - No code from the database runs in a superuser session. The schemas
+#     belong to the app user, whose functions run in CHECK constraints,
+#     index expressions and the like whenever data is restored: everything
+#     that restores data logs in as the app user itself. The superuser only
+#     reads catalogs and data (search_path pinned), runs pg_dump and makes
+#     the staging database.
+#   - SOURCE is only read. It is copied into a staging database first, and
+#     the checks and the summary you confirm describe that copy, which is
+#     exactly what goes into TARGET.
+#   - Before asking, it refuses (changing nothing) when a check can't be
+#     made, the copy is empty or has no migrations, TARGET holds objects not
+#     owned by the app user, objects in other schemas depend on TARGET
+#     (DROP ... CASCADE would destroy them), TARGET's tables are published,
+#     or the disks are too full; for TARGET public also while the app user
+#     is connected, and when the migrations differ (from a backup: when it
+#     has any public lacks). You type OVERWRITE (OVERWRITE public).
+#   - TARGET is backed up (pg_dump -Fc, read back completely) and
+#     fingerprinted (the manifest below) before it is touched.
+#   - Clearing TARGET and restoring the copy run in ONE transaction, written
+#     to a file beforehand. It locks TARGET's tables, repeats the checks,
+#     checks TARGET still matches the fingerprint (nothing was written since
+#     the backup), and commits only if the result matches the staging copy
+#     exactly, the app user owns everything and no grant or comment TARGET
+#     had is lost. Any error rolls it all back.
+#   - A lock held longer than SYNC_LOCK_TIMEOUT stops it. Ctrl-C, a kill or
+#     a hang-up stop psql and its server session (psql also dies with this
+#     script), two runs can't overlap, and the end reports from the
+#     transaction's own status whether it committed.
 #
 # Settings (environment; the defaults are the server's, tests change them):
 #   SYNC_DB, SYNC_PG_HOST, SYNC_PG_PORT, SYNC_PG_USER, SYNC_APP_USER,
-#   SYNC_BACKUP_DIR, SYNC_LOCK_TIMEOUT, SYNC_LOCK_FILE
+#   SYNC_BACKUP_DIR, SYNC_LOCK_TIMEOUT, SYNC_SKIP_DATA_DIR_CHECK (tests only:
+#   the data directory isn't on this machine)
 set -euo pipefail
 umask 077
+trap '' PIPE
 
-SOURCE="${1:-}"
-TARGET="${2:-}"
 DB_NAME="${SYNC_DB:-stock_items}"
 PG_HOST="${SYNC_PG_HOST:-localhost}"
 PG_PORT="${SYNC_PG_PORT:-5432}"
@@ -46,9 +59,8 @@ PG_USER="${SYNC_PG_USER:-postgres}"
 APP_USER="${SYNC_APP_USER:-stock}"
 BACKUP_DIR="${SYNC_BACKUP_DIR:-${HOME}/pitbox-sync-backups}"
 LOCK_TIMEOUT="${SYNC_LOCK_TIMEOUT:-10s}"
-LOCK_FILE="${SYNC_LOCK_FILE:-/run/lock/pitbox-schema-sync.lock}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-STAGING_DB="sync_staging_$$"
+STAGING_DB="pitbox_sync_staging_$$"
 APP_NAME="pitbox-schema-sync" # our sessions' application_name
 
 # Only these settings decide where we connect and how sessions behave: a
@@ -61,41 +73,68 @@ export PGOPTIONS="-c lock_timeout=${LOCK_TIMEOUT}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+FROM_BACKUP=""
+if [ "${1:-}" = --from-backup ]; then
+  FROM_BACKUP="${2:-}"
+  SOURCE="backup"
+  TARGET="${3:-}"
+  [ -n "${FROM_BACKUP}" ] && [ -n "${TARGET}" ] || die "usage: $0 --from-backup FILE TARGET"
+  [ -f "${FROM_BACKUP}" ] && [ -r "${FROM_BACKUP}" ] || die "can't read ${FROM_BACKUP}"
+else
+  SOURCE="${1:-}"
+  TARGET="${2:-}"
+  [ -n "${SOURCE}" ] && [ -n "${TARGET}" ] || die "usage: $0 SOURCE TARGET   or   $0 --from-backup FILE TARGET"
+fi
 valid_name() { [[ "$1" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] && [[ "$1" != pg_* ]] && [[ "$1" != information_schema ]]; }
-[ -n "${SOURCE}" ] && [ -n "${TARGET}" ] || die "usage: $0 SOURCE TARGET"
-valid_name "${SOURCE}" || die "'${SOURCE}' is not a schema this script copies from"
+[ -n "${FROM_BACKUP}" ] || valid_name "${SOURCE}" || die "'${SOURCE}' is not a schema this script copies from"
 valid_name "${TARGET}" || die "'${TARGET}' is not a schema this script copies to"
 [ "${SOURCE}" != "${TARGET}" ] || die "SOURCE and TARGET are the same schema"
-[[ "${LOCK_TIMEOUT}" =~ ^[0-9]+(ms|s|min)?$ ]] || die "SYNC_LOCK_TIMEOUT '${LOCK_TIMEOUT}' is not a duration like 10s"
-for tool in psql pg_dump pg_restore flock df awk tee; do
+[[ "${DB_NAME}" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || die "SYNC_DB '${DB_NAME}' is not a plain database name"
+[[ "${APP_USER}" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || die "SYNC_APP_USER '${APP_USER}' is not a plain role name"
+[[ "${LOCK_TIMEOUT}" =~ ^[1-9][0-9]*(ms|s|min)?$ ]] || die "SYNC_LOCK_TIMEOUT '${LOCK_TIMEOUT}' is not a duration like 10s (0 would mean no limit)"
+for tool in psql pg_dump pg_restore flock df stat awk tee setpriv comm; do
   command -v "${tool}" >/dev/null || die "${tool} is not installed"
 done
 
 # One run at a time (this also makes the leftover clean-up below safe).
-exec 9>"${LOCK_FILE}" || die "can't open the lock file ${LOCK_FILE}"
-flock -n 9 || die "another schema sync is running (${LOCK_FILE})"
-
 mkdir -p "${BACKUP_DIR}"
-LOG="${BACKUP_DIR}/sync-${STAMP}-${SOURCE}-to-${TARGET}.log"
-exec > >(tee -a "${LOG}") 2>&1
+exec 9>"${BACKUP_DIR}/.pitbox-schema-sync.lock" || die "can't open the lock file in ${BACKUP_DIR}"
+flock -n 9 || die "another schema sync is running (lock in ${BACKUP_DIR})"
+
+# Everything also goes to a log. tee ignores Ctrl-C and hang-ups, and keeps
+# writing the log when the terminal is gone, so the end is always logged.
+LOG="${BACKUP_DIR}/pitbox-sync-${STAMP}-${SOURCE}-to-${TARGET}.log"
+exec > >(trap '' INT HUP TERM; exec tee -i --output-error=warn -a "${LOG}") 2>&1
 TEE_PID=$!
-echo "==> $(date -Is) sync ${SOURCE} -> ${TARGET} (log: ${LOG})"
+echo "==> $(date -Is) sync ${FROM_BACKUP:-${SOURCE}} -> ${TARGET} (log: ${LOG})"
 
-q() { psql -X -q -v ON_ERROR_STOP=1 -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" "$@"; }
+admin() { psql -X -q -w -v ON_ERROR_STOP=1 -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" "$@"; }
+app() { psql -X -q -w -v ON_ERROR_STOP=1 -h "${PG_HOST}" -p "${PG_PORT}" -U "${APP_USER}" "$@"; }
 
-# Leftovers of a run that was killed: its work files (copies of the data)
-# and its staging database.
-rm -rf "${BACKUP_DIR}"/work.* "${BACKUP_DIR}"/*.dump.partial
-WORK="$(mktemp -d -p "${BACKUP_DIR}" work.XXXXXX)"
+# Leftovers of a run that was killed outright: its work files (copies of
+# the data), unfinished backups and staging database.
+rm -rf "${BACKUP_DIR}"/pitbox-sync-work.* "${BACKUP_DIR}/${DB_NAME}"-*.dump.partial
+WORK="$(mktemp -d -p "${BACKUP_DIR}" pitbox-sync-work.XXXXXX)"
 BACKUP=""
+PSQL_PID=""
+stop_transaction() {
+  # Stop first, talk afterwards.
+  if [ -n "${PSQL_PID}" ] && kill -0 "${PSQL_PID}" 2>/dev/null; then
+    kill -TERM "${PSQL_PID}" 2>/dev/null || true
+    echo "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'d' AND application_name = :'a' AND pid <> pg_backend_pid();" |
+      admin -d postgres -At -v d="${DB_NAME}" -v a="${APP_NAME}" >/dev/null 2>&1 || true
+    echo "==> Interrupted: stopped psql and its session (the transaction rolls back)." >&2 || true
+  fi
+}
 cleanup() {
   local rc=$?
-  if ! q -d postgres -c "DROP DATABASE IF EXISTS ${STAGING_DB} WITH (FORCE);" >/dev/null 2>&1; then
-    echo "WARNING: could not drop the staging database ${STAGING_DB} (a copy of ${SOURCE}); drop it by hand." >&2
+  stop_transaction
+  if ! admin -d postgres -c "DROP DATABASE IF EXISTS ${STAGING_DB} WITH (FORCE);" >/dev/null 2>&1; then
+    echo "WARNING: could not drop the staging database ${STAGING_DB} (a copy of the data); drop it by hand." >&2 || true
   fi
   rm -rf "${WORK}"
   [ -z "${BACKUP}" ] || rm -f "${BACKUP}.partial"
-  # Let tee write the last lines to the terminal and the log.
+  # Let tee write the last lines.
   exec 1>&- 2>&-
   wait "${TEE_PID}" 2>/dev/null || true
   exit "${rc}"
@@ -105,40 +144,53 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-for old in $(q -d postgres -At -c "SELECT datname FROM pg_database WHERE datname ~ '^sync_staging_[0-9]+$'"); do
+for old in $(admin -d postgres -At -c "SELECT datname FROM pg_database WHERE datname ~ '^pitbox_sync_staging_[0-9]+$'"); do
   echo "==> Dropping ${old}, the staging database of an earlier run that was stopped."
-  q -d postgres -c "DROP DATABASE ${old} WITH (FORCE);" >/dev/null
+  admin -d postgres -c "DROP DATABASE ${old} WITH (FORCE);" >/dev/null
 done
 
-# info SCHEMA prints "exists tables rows goose_max goose_applied latest":
-# goose_applied is the applied migration versions (comma-separated) and
-# latest the newest created_at/updated_at in the schema; "none" for none.
+# Both logins must work without a password prompt.
+admin -d "${DB_NAME}" -At -c "SELECT 1" >/dev/null || die "can't log in as ${PG_USER} to ${DB_NAME} (~/.pgpass)"
+app -d "${DB_NAME}" -At -c "SELECT 1" >/dev/null ||
+  die "can't log in as ${APP_USER} to ${DB_NAME}: add 'localhost:5432:*:${APP_USER}:<the app's password>' to ~/.pgpass (the copy is restored as ${APP_USER}, never as the superuser)"
+[ "$(admin -d "${DB_NAME}" -At -v a="${APP_USER}" <<<"SELECT rolsuper FROM pg_roles WHERE rolname = :'a';")" = f ] ||
+  die "${APP_USER} is a superuser (or missing): refusing, the restore must run without superuser rights"
+
+# info DATABASE SCHEMA prints "exists tables rows goose_max goose_applied
+# latest" (applied versions comma-separated; latest is the newest
+# created_at/updated_at; "none" for none). Read-only, as the superuser,
+# with only pg_catalog on the search path (no function of the schema runs).
 info() {
   local out
-  out="$(q -d "${DB_NAME}" -At -F ' ' -v info_schema="$1" <<'SQL'
-SET statement_timeout = '120s';
-WITH ns AS (SELECT to_regnamespace(:'info_schema') AS oid),
-tables AS (SELECT c.relname FROM pg_class c, ns WHERE c.relnamespace = ns.oid AND c.relkind IN ('r', 'p')),
+  out="$(admin -d "$1" -At -F ' ' -v info_schema="$2" <<'SQL'
+SET search_path = pg_catalog;
+SET statement_timeout = '300s';
+WITH ns AS (SELECT pg_catalog.to_regnamespace(:'info_schema') AS oid),
+tables AS (SELECT c.relname FROM pg_catalog.pg_class c, ns WHERE c.relnamespace = ns.oid AND c.relkind IN ('r', 'p')),
 goose AS (
-    SELECT (xpath('/row/v/text()', query_to_xml(format(
-        'SELECT string_agg(version_id::text, '','' ORDER BY version_id) AS v FROM %I.goose_db_version WHERE is_applied', :'info_schema'), false, true, '')))[1]::text AS applied
-    WHERE to_regclass(format('%I.goose_db_version', :'info_schema')) IS NOT NULL
+    SELECT (pg_catalog.xpath('/row/v/text()', pg_catalog.query_to_xml(pg_catalog.format(
+        'SELECT pg_catalog.string_agg(version_id::pg_catalog.text, '','' ORDER BY version_id) AS v FROM %I.goose_db_version WHERE is_applied',
+        :'info_schema'), false, true, '')))[1]::pg_catalog.text AS applied
+    WHERE pg_catalog.to_regclass(pg_catalog.format('%I.goose_db_version', :'info_schema')) IS NOT NULL
 ),
 stamps AS (
-    SELECT (xpath('/row/t/text()', query_to_xml(format('SELECT max(%I) AS t FROM %I.%I', a.attname, :'info_schema', c.relname), false, true, '')))[1]::text::timestamptz AS t
-    FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid, ns
+    SELECT (pg_catalog.xpath('/row/t/text()', pg_catalog.query_to_xml(pg_catalog.format(
+        'SELECT pg_catalog.max(%I) AS t FROM %I.%I', a.attname, :'info_schema', c.relname), false, true, '')))[1]::pg_catalog.text::pg_catalog.timestamptz AS t
+    FROM pg_catalog.pg_class c JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid, ns
     WHERE c.relnamespace = ns.oid AND c.relkind IN ('r', 'p') AND a.attname IN ('created_at', 'updated_at') AND NOT a.attisdropped
+      AND a.atttypid = 'pg_catalog.timestamptz'::pg_catalog.regtype
 )
-SELECT (SELECT oid IS NOT NULL FROM ns)::int,
-       (SELECT count(*) FROM tables),
-       (SELECT COALESCE(sum((xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM %I.%I', :'info_schema', relname), false, true, '')))[1]::text::bigint), 0) FROM tables),
-       COALESCE((SELECT split_part(applied, ',', -1) FROM goose WHERE applied IS NOT NULL), 'none'),
+SELECT (SELECT oid IS NOT NULL FROM ns)::pg_catalog.int4,
+       (SELECT pg_catalog.count(*) FROM tables),
+       (SELECT COALESCE(pg_catalog.sum((pg_catalog.xpath('/row/n/text()', pg_catalog.query_to_xml(pg_catalog.format(
+            'SELECT pg_catalog.count(*) AS n FROM %I.%I', :'info_schema', relname), false, true, '')))[1]::pg_catalog.text::pg_catalog.int8), 0) FROM tables),
+       COALESCE((SELECT pg_catalog.split_part(applied, ',', -1) FROM goose WHERE applied IS NOT NULL), 'none'),
        COALESCE((SELECT applied FROM goose WHERE applied IS NOT NULL), 'none'),
-       COALESCE((SELECT to_char(max(t) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') FROM stamps), 'none');
+       COALESCE((SELECT pg_catalog.to_char(pg_catalog.max(t) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') FROM stamps), 'none');
 SQL
-)" || die "could not read schema $1 (see above); nothing was changed"
+)" || die "could not read schema $2 (see above); nothing was changed"
   [[ "${out}" =~ ^[01]\ [0-9]+\ [0-9]+\ ([0-9]+|none)\ ([0-9,]+|none)\ ([0-9T:Z-]+|none)$ ]] ||
-    die "unexpected answer reading schema $1: '${out}'; nothing was changed"
+    die "unexpected answer reading schema $2: '${out}'; nothing was changed"
   echo "${out}"
 }
 
@@ -149,6 +201,7 @@ SQL
 # how many entries it covers. Settings that change how values print are
 # pinned, and sorting is bytewise, so the server's or database's defaults
 # can't make two equal schemas differ. Extension members are left out.
+# It only reads catalogs and tables (no function of the schema runs).
 MANIFEST_SQL=$(cat <<'SQL'
 SET search_path = pg_catalog;
 SET TimeZone = 'UTC';
@@ -210,17 +263,14 @@ SELECT COALESCE(md5(string_agg(x, E'\n' ORDER BY x COLLATE "C")), 'none') || ' '
 ) m
 SQL
 )
-manifest() { # manifest DATABASE SCHEMA
+manifest() { # manifest DATABASE SCHEMA, read as the superuser
   local out
-  out="$(printf '%s\n' "${MANIFEST_SQL}" | q -d "$1" -At -v pitbox_sync_schema="$2")" || return 1
+  out="$(printf '%s\n' "${MANIFEST_SQL}" | admin -d "$1" -At -v pitbox_sync_schema="$2")" || return 1
   [[ "${out}" =~ ^([0-9a-f]{32}|none)\ [0-9]+$ ]] || return 1
   echo "${out}"
 }
 
-# The refusal checks, as one DO block reading pitbox_sync.* settings:
-# reused before the prompt (read-only) and inside the transaction. It
-# also records TARGET's grants and comments in pitbox_sync.privs_before,
-# for the check after the restore.
+# TARGET's grants and comments, one per line (in a DO block with ns set).
 PRIVS_SQL=$(cat <<'SQL'
     SELECT COALESCE(string_agg(p, E'\n' ORDER BY p COLLATE "C"), '') FROM (
         SELECT format('grant %s %s %s', c.relname, a.grantee::regrole, a.privilege_type) AS p
@@ -245,15 +295,20 @@ PRIVS_SQL=$(cat <<'SQL'
     ) privs
 SQL
 )
+# The refusal checks, as one DO block reading pitbox_sync.* settings: run
+# before the prompt (read-only, as the superuser) and in the transaction
+# (as the app user). It records TARGET's grants and comments in
+# pitbox_sync.privs_before for the check after the restore.
 CHECKS_SQL=$(cat <<SQL
 DO \$\$
 DECLARE
     s text := current_setting('pitbox_sync.target');
     app text := current_setting('pitbox_sync.app_user');
-    ns oid := to_regnamespace(s);
+    ns oid := pg_catalog.to_regnamespace(s);
     problems text[] := '{}';
     list text;
 BEGIN
+    SET LOCAL search_path = pg_catalog;
     IF current_setting('pitbox_sync.no_app_sessions') = 'on' THEN
         SELECT string_agg(format('pid %s from %s (%s)', pid, COALESCE(client_addr::text, 'local socket'),
                                  COALESCE(NULLIF(application_name, ''), 'no name')), ', ' ORDER BY pid) INTO list
@@ -264,9 +319,31 @@ BEGIN
             problems := problems || format('%s is connected to %s (%s): stop the Pitbox app first', app, current_database(), list);
         END IF;
     END IF;
-    IF ns IS NOT NULL THEN
+    IF ns IS NULL THEN
+        IF NOT has_database_privilege(app, current_database(), 'CREATE') THEN
+            problems := problems || format('%s can''t create schema %s (GRANT CREATE ON DATABASE %I TO %I)', app, s, current_database(), app);
+        END IF;
+        PERFORM set_config('pitbox_sync.privs_before', '', false);
+    ELSE
         IF NOT has_schema_privilege(app, ns, 'CREATE') OR NOT has_schema_privilege(app, ns, 'USAGE') THEN
-            problems := problems || format('%s lacks CREATE or USAGE on schema %s (as the app migrates it, make %s its owner: ALTER SCHEMA %I OWNER TO %I)', app, s, app, s, app);
+            problems := problems || format('%s lacks CREATE or USAGE on schema %s (as the app migrates it, make it the owner: ALTER SCHEMA %I OWNER TO %I)', app, s, s, app);
+        END IF;
+        -- The restore runs as the app user, which can only drop its own.
+        SELECT string_agg(o, ', ' ORDER BY o) INTO list FROM (
+            SELECT format('%s (owned by %s)', c.relname, pg_get_userbyid(c.relowner)) AS o FROM pg_class c
+            WHERE c.relnamespace = ns AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S') AND pg_get_userbyid(c.relowner) <> app
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype IN ('a', 'i', 'e'))
+            UNION ALL
+            SELECT format('%s() (owned by %s)', p.proname, pg_get_userbyid(p.proowner)) FROM pg_proc p
+            WHERE p.pronamespace = ns AND pg_get_userbyid(p.proowner) <> app
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+            UNION ALL
+            SELECT format('type %s (owned by %s)', t.typname, pg_get_userbyid(t.typowner)) FROM pg_type t
+            WHERE t.typnamespace = ns AND t.typtype IN ('d', 'e', 'r') AND pg_get_userbyid(t.typowner) <> app
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
+        ) o;
+        IF list IS NOT NULL THEN
+            problems := problems || format('%s holds objects %s doesn''t own: %s (ALTER ... OWNER TO %I first)', s, app, list, app);
         END IF;
         -- Objects in other schemas that DROP ... CASCADE would take along.
         SELECT string_agg(DISTINCT pg_describe_object(d.classid, d.objid, d.objsubid), ', ') INTO list
@@ -298,8 +375,6 @@ BEGIN
             problems := problems || format('tables of %s are published (the copy would leave the publication): %s', s, list);
         END IF;
         PERFORM set_config('pitbox_sync.privs_before', (${PRIVS_SQL}), false);
-    ELSE
-        PERFORM set_config('pitbox_sync.privs_before', '', false);
     END IF;
     IF cardinality(problems) > 0 THEN
         RAISE EXCEPTION 'Refusing to replace %: %. Nothing was changed.', s, array_to_string(problems, '; ');
@@ -307,54 +382,101 @@ BEGIN
 END \$\$;
 SQL
 )
-
-echo "==> Checking ${DB_NAME}.${SOURCE} and ${DB_NAME}.${TARGET}..."
-# (A failing info exits only its subshell: "|| exit 1" stops the script.)
-SRC_INFO="$(info "${SOURCE}")" || exit 1
-TGT_INFO="$(info "${TARGET}")" || exit 1
-read -r SRC_EXISTS SRC_TABLES SRC_ROWS SRC_GOOSE SRC_APPLIED SRC_LATEST <<<"${SRC_INFO}"
-read -r TGT_EXISTS TGT_TABLES TGT_ROWS TGT_GOOSE TGT_APPLIED TGT_LATEST <<<"${TGT_INFO}"
-[ "${SRC_EXISTS}" = 1 ] || die "schema ${SOURCE} does not exist"
-[ "${SRC_TABLES}" -gt 0 ] || die "schema ${SOURCE} has no tables: copying it would leave ${TARGET} empty"
-[ "${SRC_GOOSE}" != none ] || die "schema ${SOURCE} has no applied migrations (goose_db_version): not a Pitbox schema"
 NO_APP_SESSIONS=off
+[ "${TARGET}" != public ] || NO_APP_SESSIONS=on
+run_checks() { # the refusal checks, read-only, as the superuser
+  { printf '%s\n' "BEGIN READ ONLY;" \
+      "SELECT set_config('pitbox_sync.target', :'t', false), set_config('pitbox_sync.app_user', :'a', false), set_config('pitbox_sync.no_app_sessions', :'n', false) \\g /dev/null"
+    printf '%s\n' "${CHECKS_SQL}" "COMMIT;"; } |
+    admin -d "${DB_NAME}" -v t="${TARGET}" -v a="${APP_USER}" -v n="${NO_APP_SESSIONS}" ||
+    die "the checks above refused or failed; nothing was changed"
+}
+
+echo "==> 1. Checking ${DB_NAME}.${TARGET}..."
+TGT_INFO="$(info "${DB_NAME}" "${TARGET}")" || exit 1 # (info's die only ends its subshell)
+read -r TGT_EXISTS TGT_TABLES TGT_ROWS TGT_GOOSE TGT_APPLIED TGT_LATEST <<<"${TGT_INFO}"
+run_checks
+
+echo "==> 2. Copying ${FROM_BACKUP:-${SOURCE}} into a staging database (as ${APP_USER})..."
+ENC_LOCALE="$(admin -d "${DB_NAME}" -At -c "
+  SELECT format('ENCODING %L LOCALE_PROVIDER %s LC_COLLATE %L LC_CTYPE %L%s', pg_encoding_to_char(encoding),
+                CASE datlocprovider WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'libc' END, datcollate, datctype,
+                CASE datlocprovider WHEN 'i' THEN format(' ICU_LOCALE %L', datlocale) WHEN 'b' THEN format(' BUILTIN_LOCALE %L', datlocale) ELSE '' END)
+  FROM pg_database WHERE datname = current_database()")" || die "could not read the database's locale; nothing was changed"
+admin -d postgres -c "CREATE DATABASE ${STAGING_DB} OWNER ${APP_USER} TEMPLATE template0 ${ENC_LOCALE};" >/dev/null ||
+  die "could not create the staging database; nothing was changed"
+app -d "${STAGING_DB}" -c "DROP SCHEMA public;" >/dev/null || die "could not prepare the staging database; nothing was changed"
+if [ -n "${FROM_BACKUP}" ]; then
+  # The backup must be of TARGET (a schema of that name and nothing else).
+  SCHEMAS="$(pg_restore -l "${FROM_BACKUP}" | awk '$4 == "SCHEMA" { print $6 }' | sort -u | tr '\n' ' ')" ||
+    die "can't read ${FROM_BACKUP}; nothing was changed"
+  [ "${SCHEMAS}" = "${TARGET} " ] || die "${FROM_BACKUP} holds schema(s) '${SCHEMAS% }', not ${TARGET}; nothing was changed"
+  pg_restore --no-owner --no-privileges -f - "${FROM_BACKUP}" | app -d "${STAGING_DB}" >/dev/null ||
+    die "loading ${FROM_BACKUP} into staging failed; nothing was changed"
+else
+  pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -w -d "${DB_NAME}" --schema="${SOURCE}" --no-owner --no-privileges \
+    --lock-wait-timeout="${LOCK_TIMEOUT}" | app -d "${STAGING_DB}" >/dev/null ||
+    die "copying ${SOURCE} into staging failed; nothing was changed"
+  app -d "${STAGING_DB}" -c "ALTER SCHEMA ${SOURCE} RENAME TO ${TARGET};" >/dev/null || die "could not rename the staging copy; nothing was changed"
+fi
+# From here on, the copy is what was checked and shown: changes to SOURCE
+# after this don't reach TARGET.
+SRC_INFO="$(info "${STAGING_DB}" "${TARGET}")" || exit 1
+read -r _ SRC_TABLES SRC_ROWS SRC_GOOSE SRC_APPLIED SRC_LATEST <<<"${SRC_INFO}"
+[ "${SRC_TABLES}" -gt 0 ] || die "${FROM_BACKUP:-schema ${SOURCE}} has no tables: copying it would leave ${TARGET} empty; nothing was changed"
+[ "${SRC_GOOSE}" != none ] || die "${FROM_BACKUP:-schema ${SOURCE}} has no applied migrations (goose_db_version): not a Pitbox schema; nothing was changed"
 NOTE=""
-if [ "${TARGET}" = public ]; then
-  NO_APP_SESSIONS=on
-  if [ "${TGT_APPLIED}" != none ] && [ "${TGT_APPLIED}" != "${SRC_APPLIED}" ]; then
+if [ "${TARGET}" = public ] && [ "${TGT_APPLIED}" != none ] && [ "${TGT_APPLIED}" != "${SRC_APPLIED}" ]; then
+  if [ -z "${FROM_BACKUP}" ]; then
     die "public and ${SOURCE} have different migrations applied (public up to ${TGT_GOOSE}, ${SOURCE} up to ${SRC_GOOSE}): the deployed app expects public's. Refusing; nothing was changed."
   fi
+  # A backup may be older (the app applies what's missing on start), never
+  # hold a migration public lacks.
+  EXTRA="$(comm -13 <(tr ',' '\n' <<<"${TGT_APPLIED}" | sort) <(tr ',' '\n' <<<"${SRC_APPLIED}" | sort) | tr '\n' ' ')"
+  [ -z "${EXTRA}" ] || die "the backup has migrations public doesn't (${EXTRA% }): refusing; nothing was changed"
+  NOTE=" - NOTE: the backup is at migration ${SRC_GOOSE}, public at ${TGT_GOOSE}; the app applies the rest when it starts."
 elif [ "${TGT_GOOSE}" != none ] && [ "${TGT_GOOSE}" -gt "${SRC_GOOSE}" ]; then
-  NOTE=" - NOTE: ${TARGET} is at migration ${TGT_GOOSE}, newer than ${SOURCE} (${SRC_GOOSE}); it goes back to ${SRC_GOOSE}."
+  NOTE=" - NOTE: ${TARGET} is at migration ${TGT_GOOSE}, newer than the copy (${SRC_GOOSE}); it goes back to ${SRC_GOOSE}."
 fi
 
-# The refusal checks, read-only, before asking.
-{ printf '%s\n' "BEGIN READ ONLY;" \
-    "SELECT set_config('pitbox_sync.target', :'t', false), set_config('pitbox_sync.app_user', :'a', false), set_config('pitbox_sync.no_app_sessions', :'n', false) \\g /dev/null"
-  printf '%s\n' "${CHECKS_SQL}" "COMMIT;"; } |
-  q -d "${DB_NAME}" -v t="${TARGET}" -v a="${APP_USER}" -v n="${NO_APP_SESSIONS}" ||
-  die "the checks above refused or failed; nothing was changed"
-
-# Room for the backup, the work files (up to about three times the
-# schema, photos as hex) and, in the data directory, the staging copy
-# and the restore (about twice, plus WAL).
-SRC_BYTES="$(echo "SELECT COALESCE(sum(pg_total_relation_size(c.oid)), 0) FROM pg_class c WHERE c.relnamespace = to_regnamespace(:'s') AND c.relkind IN ('r', 'p', 'm');" |
-  q -d "${DB_NAME}" -At -v s="${SOURCE}")" || SRC_BYTES=""
-[[ "${SRC_BYTES}" =~ ^[0-9]+$ ]] || die "could not read the size of ${SOURCE}; nothing was changed"
-free_bytes() { df -P -B1 "$1" 2>/dev/null | awk 'NR == 2 { print $4 }'; }
-NEED_WORK=$((4 * SRC_BYTES + 256 * 1024 * 1024))
-HAVE_WORK="$(free_bytes "${BACKUP_DIR}")"
-[[ "${HAVE_WORK}" =~ ^[0-9]+$ ]] || die "could not read the free space of ${BACKUP_DIR}"
-[ "${HAVE_WORK}" -ge "${NEED_WORK}" ] || die "${BACKUP_DIR} has $((HAVE_WORK / 1048576)) MB free, needs $((NEED_WORK / 1048576)) MB; nothing was changed"
-DATA_DIR="$(q -d "${DB_NAME}" -At -c "SHOW data_directory" 2>/dev/null || true)"
-DATA_NOTE="Postgres data directory: free space not checked (not on this machine)."
-if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
-  NEED_DATA=$((3 * SRC_BYTES + 512 * 1024 * 1024))
-  HAVE_DATA="$(free_bytes "${DATA_DIR}")"
-  [[ "${HAVE_DATA}" =~ ^[0-9]+$ ]] && [ "${HAVE_DATA}" -ge "${NEED_DATA}" ] ||
-    die "the Postgres data directory ${DATA_DIR} has too little free space ($((${HAVE_DATA:-0} / 1048576)) MB, needs $((NEED_DATA / 1048576)) MB); nothing was changed"
-  DATA_NOTE="Postgres data directory: $((HAVE_DATA / 1048576)) MB free."
+# Room on each filesystem: the backup and the work files (up to about
+# three times the copy, photos as hex) next to the backups; the staging
+# copy and the restore in the data directory; their WAL in pg_wal. Needs on
+# the same filesystem add up.
+size_of() { # size_of DATABASE SCHEMA, in bytes
+  local out
+  out="$(admin -d "$1" -At -v s="$2" <<<"SELECT COALESCE(sum(pg_total_relation_size(c.oid)), 0) FROM pg_class c WHERE c.relnamespace = to_regnamespace(:'s') AND c.relkind IN ('r', 'p', 'm');")" || return 1
+  [[ "${out}" =~ ^[0-9]+$ ]] || return 1
+  echo "${out}"
+}
+SRC_BYTES="$(size_of "${STAGING_DB}" "${TARGET}")" || die "could not read the size of the copy; nothing was changed"
+TGT_BYTES="$(size_of "${DB_NAME}" "${TARGET}")" || die "could not read the size of ${TARGET}; nothing was changed"
+MB=$((1024 * 1024))
+declare -A NEED=() WHERE=()
+need() { # need PATH BYTES
+  local dev
+  dev="$(stat -L -c %d "$1" 2>/dev/null)" || die "can't check the free space of $1; nothing was changed"
+  NEED[${dev}]=$(( ${NEED[${dev}]:-0} + $2 ))
+  WHERE[${dev}]="${WHERE[${dev}]:+${WHERE[${dev}]}, }$1"
+}
+need "${BACKUP_DIR}" $((TGT_BYTES + 3 * SRC_BYTES + 256 * MB))
+DATA_NOTE="the backup directory has room"
+if [ "${SYNC_SKIP_DATA_DIR_CHECK:-}" = 1 ]; then
+  DATA_NOTE="the data directory was NOT checked (SYNC_SKIP_DATA_DIR_CHECK=1)"
+else
+  DATA_DIR="$(admin -d "${DB_NAME}" -At -c "SHOW data_directory")" || die "can't read the data directory's location; nothing was changed"
+  [ -d "${DATA_DIR}" ] || die "the data directory ${DATA_DIR} isn't on this machine: run this on the database server; nothing was changed"
+  need "${DATA_DIR}" $((2 * SRC_BYTES + 512 * MB))
+  need "${DATA_DIR}/pg_wal" $((2 * SRC_BYTES + 256 * MB))
+  DATA_NOTE="the backup directory, data directory and pg_wal have room"
 fi
+for dev in "${!NEED[@]}"; do
+  path="${WHERE[${dev}]%%,*}"
+  free="$(df -P -B1 "${path}" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+  [[ "${free}" =~ ^[0-9]+$ ]] || die "can't read the free space of ${path}; nothing was changed"
+  [ "${free}" -ge "${NEED[${dev}]}" ] ||
+    die "${WHERE[${dev}]}: $((free / MB)) MB free, the sync needs $((NEED[${dev}] / MB)) MB there; nothing was changed"
+done
 
 if [ "${TGT_EXISTS}" = 1 ]; then
   BACKUP="${BACKUP_DIR}/${DB_NAME}-${TARGET}-${STAMP}.dump"
@@ -367,21 +489,21 @@ cat <<EOF
                      ⚠️   CRITICAL ACTION WARNING   ⚠️
 ======================================================================
  DATABASE : ${DB_NAME} on ${PG_HOST}:${PG_PORT}
- SOURCE   : ${SOURCE}  (${SRC_TABLES} tables, ${SRC_ROWS} rows, migration ${SRC_GOOSE}, latest change ${SRC_LATEST}; not changed)
+ SOURCE   : ${FROM_BACKUP:-${SOURCE}}  (as copied just now: ${SRC_TABLES} tables, ${SRC_ROWS} rows, migration ${SRC_GOOSE}, latest change ${SRC_LATEST})
  TARGET   : ${TARGET}  (${TGT_TABLES} tables, ${TGT_ROWS} rows, migration ${TGT_GOOSE}, latest change ${TGT_LATEST}; WILL BE REPLACED)
 
  WHAT WILL HAPPEN:
  - ${TARGET} is backed up first${BACKUP:+ to ${BACKUP}}.
- - Then, in one transaction, everything in ${TARGET} (tables, views,
-   sequences, functions, types and data) is dropped and replaced with a
-   copy of ${SOURCE}, owned by '${APP_USER}'. It commits only if nothing
-   was written to ${TARGET} since the backup and the copy matches
-   ${SOURCE} exactly; otherwise nothing changes.
+ - Then, in one transaction run as '${APP_USER}', everything in ${TARGET}
+   (tables, views, sequences, functions, types and data) is dropped and
+   replaced with the copy above. It commits only if nothing was written to
+   ${TARGET} since the backup and the result matches the copy exactly;
+   otherwise nothing changes.
  - Stop the Pitbox app that uses ${TARGET} first (for public: the
-   Portainer stack; this script refuses while '${APP_USER}' is connected)
+   Portainer stack; this refuses while '${APP_USER}' is connected to it)
    and start it again afterwards. A lock held longer than ${LOCK_TIMEOUT}
    stops the sync, changing nothing.
- - ${DATA_NOTE}
+ - Disk space: ${DATA_NOTE}.
 ${NOTE}
 ======================================================================
 EOF
@@ -395,10 +517,9 @@ fi
 # TARGET's fingerprint before the backup: the transaction checks TARGET
 # still has it, so nothing written in between can be lost.
 BEFORE="$(manifest "${DB_NAME}" "${TARGET}")" || die "could not fingerprint ${TARGET}; nothing was changed"
-
 if [ -n "${BACKUP}" ]; then
-  echo "==> 1. Backing up ${TARGET} to ${BACKUP}..."
-  pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${DB_NAME}" --schema="${TARGET}" -Fc \
+  echo "==> 3. Backing up ${TARGET} to ${BACKUP}..."
+  pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -w -d "${DB_NAME}" --schema="${TARGET}" -Fc \
     --lock-wait-timeout="${LOCK_TIMEOUT}" -f "${BACKUP}.partial" || die "the backup failed; nothing was changed"
   # Read it back completely (pg_restore -l only reads the table of contents).
   pg_restore -f /dev/null "${BACKUP}.partial" || die "the backup can't be read back; nothing was changed"
@@ -406,59 +527,56 @@ if [ -n "${BACKUP}" ]; then
   AFTER_BACKUP="$(manifest "${DB_NAME}" "${TARGET}")" || die "could not fingerprint ${TARGET}; nothing was changed"
   [ "${AFTER_BACKUP}" = "${BEFORE}" ] || die "${TARGET} changed while it was being backed up (is the app still running?); nothing was changed"
 else
-  echo "==> 1. ${TARGET} doesn't exist yet: nothing to back up."
+  echo "==> 3. ${TARGET} doesn't exist yet: nothing to back up."
 fi
-
-echo "==> 2. Copying ${SOURCE} into a staging database as ${TARGET}..."
-ENC_LOCALE="$(q -d "${DB_NAME}" -At -c "
-  SELECT format('ENCODING %L LOCALE_PROVIDER %s LC_COLLATE %L LC_CTYPE %L%s', pg_encoding_to_char(encoding),
-                CASE datlocprovider WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'libc' END, datcollate, datctype,
-                CASE datlocprovider WHEN 'i' THEN format(' ICU_LOCALE %L', datlocale) WHEN 'b' THEN format(' BUILTIN_LOCALE %L', datlocale) ELSE '' END)
-  FROM pg_database WHERE datname = current_database()")" || die "could not read the database's locale; nothing was changed"
-q -d postgres -c "CREATE DATABASE ${STAGING_DB} TEMPLATE template0 ${ENC_LOCALE};" >/dev/null
-# The staging database's own empty public schema makes way for the copy.
-q -d "${STAGING_DB}" -c "DROP SCHEMA public CASCADE;" >/dev/null
-pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${DB_NAME}" --schema="${SOURCE}" --lock-wait-timeout="${LOCK_TIMEOUT}" |
-  q -d "${STAGING_DB}" >/dev/null || die "copying ${SOURCE} into staging failed; nothing was changed"
-q -d "${STAGING_DB}" -c "ALTER SCHEMA ${SOURCE} RENAME TO ${TARGET};" >/dev/null
 EXPECTED="$(manifest "${STAGING_DB}" "${TARGET}")" || die "could not fingerprint the copy; nothing was changed"
 
-echo "==> 3. Writing the transaction..."
+echo "==> 4. Writing the transaction..."
 TX="${WORK}/transaction.sql"
 {
   cat <<'SQL'
+-- This transaction's id first (stderr is unbuffered), so the end can ask
+-- the server whether it committed.
+SELECT pg_catalog.pg_current_xact_id() AS pitbox_sync_xid \gset
+\warn pitbox-sync-xid :pitbox_sync_xid
+\unset pitbox_sync_xid
 -- The settings the rest reads, then the psql variables go: nothing in the
 -- restored dump may be taken for one.
-SELECT set_config('pitbox_sync.target', :'pitbox_sync_target', false),
-       set_config('pitbox_sync.app_user', :'pitbox_sync_app_user', false),
-       set_config('pitbox_sync.no_app_sessions', :'pitbox_sync_no_app_sessions', false),
-       set_config('pitbox_sync.lock_timeout', :'pitbox_sync_lock_timeout', false),
-       set_config('pitbox_sync.before', :'pitbox_sync_before', false),
-       set_config('pitbox_sync.expected', :'pitbox_sync_expected', false),
-       set_config('lock_timeout', :'pitbox_sync_lock_timeout', false) \g /dev/null
+SELECT pg_catalog.set_config('pitbox_sync.target', :'pitbox_sync_target', false),
+       pg_catalog.set_config('pitbox_sync.app_user', :'pitbox_sync_app_user', false),
+       pg_catalog.set_config('pitbox_sync.no_app_sessions', :'pitbox_sync_no_app_sessions', false),
+       pg_catalog.set_config('pitbox_sync.lock_timeout', :'pitbox_sync_lock_timeout', false),
+       pg_catalog.set_config('pitbox_sync.before', :'pitbox_sync_before', false),
+       pg_catalog.set_config('pitbox_sync.expected', :'pitbox_sync_expected', false),
+       pg_catalog.set_config('lock_timeout', :'pitbox_sync_lock_timeout', false) \g /dev/null
 \unset pitbox_sync_target
 \unset pitbox_sync_app_user
 \unset pitbox_sync_no_app_sessions
 \unset pitbox_sync_lock_timeout
 \unset pitbox_sync_before
 \unset pitbox_sync_expected
+SET search_path = pg_catalog;
 SQL
   printf '%s\n' "${CHECKS_SQL}"
   cat <<'SQL'
--- TARGET (created for the app user if new) locked against writes, then
--- still as it was before the backup.
+-- TARGET (created if new) with its tables locked: nobody reads, writes or
+-- builds on them until the end.
 DO $$
 DECLARE
     s text := current_setting('pitbox_sync.target');
     r record;
 BEGIN
     IF to_regnamespace(s) IS NULL THEN
-        EXECUTE format('CREATE SCHEMA %I AUTHORIZATION %I', s, current_setting('pitbox_sync.app_user'));
+        EXECUTE format('CREATE SCHEMA %I', s);
     END IF;
     FOR r IN SELECT c.relname FROM pg_class c WHERE c.relnamespace = to_regnamespace(s) AND c.relkind IN ('r', 'p') ORDER BY c.relname LOOP
-        EXECUTE format('LOCK TABLE %I.%I IN SHARE MODE', s, r.relname);
+        EXECUTE format('LOCK TABLE %I.%I IN ACCESS EXCLUSIVE MODE', s, r.relname);
     END LOOP;
 END $$;
+SQL
+  # The checks again, now that nothing can be added to TARGET's tables.
+  printf '%s\n' "${CHECKS_SQL}"
+  cat <<'SQL'
 SELECT current_setting('pitbox_sync.target') AS pitbox_sync_schema \gset
 SQL
   printf '%s \\gset pitbox_sync_now_\n' "${MANIFEST_SQL}"
@@ -528,17 +646,22 @@ BEGIN
     END IF;
 END $$;
 
--- Restore the copy as the app user, so it owns everything.
-SELECT set_config('role', current_setting('pitbox_sync.app_user'), false) \g /dev/null
+-- The copy (from the staging database, dumped by pg_dump), restored in
+-- this session of the app user.
 SQL
-  pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${STAGING_DB}" --schema="${TARGET}" --no-owner --no-privileges |
-    sed -E -e "/^CREATE SCHEMA ${TARGET};\$/d" -e "/^COMMENT ON SCHEMA ${TARGET} IS /d"
+  # The dump's header turns the lock timeout off and creates the schema we
+  # kept: both lines go (only in the header, before any data).
+  pg_dump -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -w -d "${STAGING_DB}" --schema="${TARGET}" --no-owner --no-privileges |
+    awk -v schema="${TARGET}" '
+      !data && /^(CREATE TABLE|COPY) / { data = 1 }
+      !data && $0 == "SET lock_timeout = 0;" { next }
+      !data && $0 == "CREATE SCHEMA " schema ";" { next }
+      !data && index($0, "COMMENT ON SCHEMA " schema " IS ") == 1 { next }
+      { print }'
   cat <<'SQL'
 
-RESET ROLE;
--- The dump turned the lock timeout off; it applies again.
+SET search_path = pg_catalog;
 SELECT set_config('lock_timeout', current_setting('pitbox_sync.lock_timeout'), false) \g /dev/null
-SELECT set_config('statement_timeout', '0', false) \g /dev/null
 DO $$
 DECLARE
     s text := current_setting('pitbox_sync.target');
@@ -568,8 +691,8 @@ SQL
     END IF;
 END $$;
 
--- The copy must match the staging copy exactly, and the app must still be
--- stopped, or everything rolls back.
+-- The result must match the staging copy exactly, and the app must still
+-- be stopped, or everything rolls back.
 SELECT current_setting('pitbox_sync.target') AS pitbox_sync_schema \gset
 SQL
   printf '%s \\gset pitbox_sync_got_\n' "${MANIFEST_SQL}"
@@ -578,60 +701,76 @@ SELECT set_config('pitbox_sync.got', :'pitbox_sync_got_manifest', false) \g /dev
 DO $$
 BEGIN
     IF current_setting('pitbox_sync.got') IS DISTINCT FROM current_setting('pitbox_sync.expected') THEN
-        RAISE EXCEPTION 'The restored % does not match the source (manifest %, expected %). Rolled back: nothing was changed.',
+        RAISE EXCEPTION 'The restored % does not match the copy (manifest %, expected %). Rolled back: nothing was changed.',
             current_setting('pitbox_sync.target'), current_setting('pitbox_sync.got'), current_setting('pitbox_sync.expected');
     END IF;
 END $$;
 SQL
   printf '%s\n' "${CHECKS_SQL}"
   echo "-- pitbox-sync: end of transaction"
-} >"${TX}"
+} >"${TX}" || die "could not write the transaction; nothing was changed"
 [ "$(tail -n 1 "${TX}")" = "-- pitbox-sync: end of transaction" ] || die "the transaction file is incomplete; nothing was changed"
 
-echo "==> 4. Replacing ${TARGET} in one transaction..."
-# psql runs in the background so Ctrl-C, a kill or a hang-up can stop it:
-# psql gets SIGTERM (a script's background job ignores SIGINT) and its
-# server session is terminated, so the transaction rolls back at once
-# instead of after a lock wait.
-q -d "${DB_NAME}" --single-transaction \
-  -v pitbox_sync_target="${TARGET}" -v pitbox_sync_app_user="${APP_USER}" -v pitbox_sync_no_app_sessions="${NO_APP_SESSIONS}" \
-  -v pitbox_sync_lock_timeout="${LOCK_TIMEOUT}" -v pitbox_sync_before="${BEFORE}" -v pitbox_sync_expected="${EXPECTED}" \
-  -f "${TX}" >"${WORK}/transaction.log" 2>&1 &
-PSQL_PID=$!
-stop_transaction() {
-  echo "==> Interrupted: stopping psql (the transaction rolls back)..." >&2
-  kill -TERM "${PSQL_PID}" 2>/dev/null || true
-  echo "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'d' AND application_name = :'a' AND pid <> pg_backend_pid();" |
-    q -d postgres -At -v d="${DB_NAME}" -v a="${APP_NAME}" >/dev/null 2>&1 || true
-}
+echo "==> 5. Replacing ${TARGET} in one transaction (as ${APP_USER})..."
+# psql is started directly (its own PID, for the signal handling above) and
+# dies with this script (--pdeathsig), so it can't commit on its own. An
+# interrupt stops it, then the report below still runs.
 trap stop_transaction INT TERM HUP
+( exec setpriv --pdeathsig TERM -- psql -X -q -w -v ON_ERROR_STOP=1 -h "${PG_HOST}" -p "${PG_PORT}" -U "${APP_USER}" -d "${DB_NAME}" \
+    --single-transaction \
+    -v pitbox_sync_target="${TARGET}" -v pitbox_sync_app_user="${APP_USER}" -v pitbox_sync_no_app_sessions="${NO_APP_SESSIONS}" \
+    -v pitbox_sync_lock_timeout="${LOCK_TIMEOUT}" -v pitbox_sync_before="${BEFORE}" -v pitbox_sync_expected="${EXPECTED}" \
+    -f "${TX}" >"${WORK}/transaction.log" 2>&1 ) &
+PSQL_PID=$!
 RC=0
 wait "${PSQL_PID}" || RC=$?
 while kill -0 "${PSQL_PID}" 2>/dev/null; do
   RC=0
   wait "${PSQL_PID}" || RC=$?
 done
+PSQL_PID=""
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-# Say what TARGET actually holds now, whatever psql's status says (a lost
-# connection during COMMIT leaves the outcome unknown to psql).
+# What happened, from the server: did this transaction commit?
+XID="$(awk '$1 == "pitbox-sync-xid" { print $2; exit }' "${WORK}/transaction.log")"
+STATUS="not started"
+xact_status() { admin -d "${DB_NAME}" -At -v x="${XID}" <<<"SELECT COALESCE(pg_xact_status(:'x'::xid8), 'unknown');"; }
+if [[ "${XID}" =~ ^[0-9]+$ ]]; then
+  STATUS="$(xact_status)" || STATUS="unknown"
+  if [ "${STATUS}" = "in progress" ]; then
+    echo "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'d' AND application_name = :'a' AND pid <> pg_backend_pid();" |
+      admin -d postgres -At -v d="${DB_NAME}" -v a="${APP_NAME}" >/dev/null 2>&1 || true
+    sleep 1
+    STATUS="$(xact_status)" || STATUS="unknown"
+  fi
+fi
 NOW="$(manifest "${DB_NAME}" "${TARGET}" || echo unknown)"
-RESTORE_HINT="pg_restore -h ${PG_HOST} -p ${PG_PORT} -U ${PG_USER} -d ${DB_NAME} --single-transaction --exit-on-error --clean --if-exists ${BACKUP}"
-if [ "${RC}" = 0 ] && [ "${NOW}" = "${EXPECTED}" ]; then
-  NEW_INFO="$(info "${TARGET}")" || NEW_INFO="? ? ? ? ? ?"
-  read -r _ NEW_TABLES NEW_ROWS NEW_GOOSE _ _ <<<"${NEW_INFO}"
-  echo "==> Done. ${TARGET} is now a copy of ${SOURCE}: ${NEW_TABLES} tables, ${NEW_ROWS} rows, migration ${NEW_GOOSE}; verified against the source."
-  [ -z "${BACKUP}" ] || echo "    The old ${TARGET} is in ${BACKUP}. To go back: ${RESTORE_HINT}"
-  echo "    Start the Pitbox app that uses ${TARGET} again."
-  exit 0
-fi
-sed 's/^/    | /' "${WORK}/transaction.log" | tail -n 25 >&2
-if [ "${NOW}" = "${BEFORE}" ]; then
-  die "the transaction did not complete (psql exit ${RC}): ${TARGET} is unchanged${BACKUP:+ (backup: ${BACKUP})}"
-fi
-if [ "${NOW}" = "${EXPECTED}" ]; then
-  die "psql reported a failure (exit ${RC}), but ${TARGET} holds the verified copy of ${SOURCE}: the commit went through${BACKUP:+ (the old ${TARGET} is in ${BACKUP})}"
-fi
-die "${TARGET} matches neither its old state nor the copy (psql exit ${RC}). Check it before starting the app${BACKUP:+; to go back: ${RESTORE_HINT}}"
+RESTORE_HINT="$(readlink -f "$0") --from-backup ${BACKUP} ${TARGET}"
+case "${STATUS}" in
+  committed)
+    if [ "${NOW}" = "${EXPECTED}" ]; then
+      NEW_INFO="$(info "${DB_NAME}" "${TARGET}")" || NEW_INFO="? ? ? ? ? ?"
+      read -r _ NEW_TABLES NEW_ROWS NEW_GOOSE _ _ <<<"${NEW_INFO}"
+      echo "==> Done. ${TARGET} is now a copy of ${FROM_BACKUP:-${SOURCE}}: ${NEW_TABLES} tables, ${NEW_ROWS} rows, migration ${NEW_GOOSE}; verified."
+    else
+      echo "==> Done: the copy was committed and verified in the transaction, but ${TARGET} has changed since (something wrote to it after the commit)."
+    fi
+    [ -z "${BACKUP}" ] || echo "    The old ${TARGET} is in ${BACKUP}. To go back (it checks and backs up first, like this run): ${RESTORE_HINT}"
+    echo "    Start the Pitbox app that uses ${TARGET} again."
+    [ "${RC}" = 0 ] || echo "    (psql exited ${RC} after the commit.)"
+    exit 0
+    ;;
+  aborted | "not started")
+    sed 's/^/    | /' "${WORK}/transaction.log" | tail -n 25 >&2
+    if [ "${NOW}" = "${BEFORE}" ]; then
+      die "the transaction was rolled back (psql exit ${RC}): this sync changed nothing, and ${TARGET} is as it was."
+    fi
+    die "the transaction was rolled back (psql exit ${RC}): this sync changed nothing. ${TARGET} differs from its backup because something else wrote to it since; do NOT restore the backup over those changes."
+    ;;
+  *)
+    sed 's/^/    | /' "${WORK}/transaction.log" | tail -n 25 >&2
+    die "could not find out whether the transaction committed (status: ${STATUS}, psql exit ${RC}). ${TARGET}'s fingerprint is ${NOW}; the copy's was ${EXPECTED}, the old one ${BEFORE}. Check before starting the app${BACKUP:+ (backup: ${BACKUP})}."
+    ;;
+esac

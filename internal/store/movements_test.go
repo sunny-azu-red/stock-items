@@ -344,9 +344,9 @@ func TestMovementsOfAVehicle(t *testing.T) {
 		Parts: []stock.KitLineInput{{ItemID: shared, Quantity: 1}}}); err != nil {
 		t.Fatal(err)
 	}
-	names := func(v int64) []string {
+	names := func(v int64, general bool) []string {
 		t.Helper()
-		moves, err := s.ListMovements(ctx, store.MovementFilter{VehicleID: v, Sort: store.MoveSortItem})
+		moves, err := s.ListMovements(ctx, store.MovementFilter{VehicleID: v, General: general, Sort: store.MoveSortItem})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -356,13 +356,21 @@ func TestMovementsOfAVehicle(t *testing.T) {
 		}
 		return out
 	}
-	if got, want := names(a), []string{"A part/bought", "Grease/bought", "Shared/bought"}; !slices.Equal(got, want) {
-		t.Errorf("A's stock changes = %v, want %v", got, want)
+	for _, c := range []struct {
+		v       int64
+		general bool
+		want    []string
+	}{
+		{a, true, []string{"A part/bought", "Grease/bought", "Shared/bought"}},
+		{b, true, []string{"B part/bought", "Grease/bought", "Shared/service", "Shared/bought"}},
+		{a, false, []string{"A part/bought", "Shared/bought"}},
+		{0, true, []string{"Grease/bought"}},
+	} {
+		if got := names(c.v, c.general); !slices.Equal(got, c.want) {
+			t.Errorf("stock changes of vehicle %d, General %v = %v, want %v", c.v, c.general, got, c.want)
+		}
 	}
-	if got, want := names(b), []string{"B part/bought", "Grease/bought", "Shared/service", "Shared/bought"}; !slices.Equal(got, want) {
-		t.Errorf("B's stock changes = %v, want %v", got, want)
-	}
-	if years, err := s.MovementYears(ctx, store.MovementFilter{VehicleID: a}); err != nil || !slices.Equal(years, []int{2030}) {
+	if years, err := s.MovementYears(ctx, store.MovementFilter{VehicleID: a, General: true}); err != nil || !slices.Equal(years, []int{2030}) {
 		t.Errorf("A's years = %v, %v", years, err)
 	}
 	if years, _ := s.MovementYears(ctx, store.MovementFilter{VehicleID: b}); !slices.Equal(years, []int{2030, 2029, 2028}) {

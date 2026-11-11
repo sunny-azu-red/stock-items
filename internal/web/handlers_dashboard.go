@@ -34,10 +34,11 @@ type dashboardPage struct {
 
 // Link is the list a tile or a "more" link opens: path with extra (an
 // encoded query) for the dashboard's vehicle, so the number on the tile is
-// the number of rows it opens. The stock includes General, like the tiles.
+// the number of rows it opens. The stock and the activity include General,
+// like the tiles.
 func (p dashboardPage) Link(path, extra string) template.URL {
 	q, _ := url.ParseQuery(extra)
-	if path == "/stock" && p.VehicleID != 0 {
+	if path != "/services" && p.VehicleID != 0 {
 		q.Set("general", "1")
 	}
 	setVehicleParam(q, p.VehicleID, p.Working)
@@ -75,7 +76,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	recent, err := s.store.ListMovements(ctx, store.MovementFilter{Limit: 8, VehicleID: vid})
+	recent, err := s.store.ListMovements(ctx, store.MovementFilter{Limit: 8, VehicleID: vid, General: vid != 0})
 	if err != nil {
 		return err
 	}
@@ -137,19 +138,22 @@ type activityPage struct {
 	More      bool        // there are older entries
 	Sort      sortOrder
 	// VehicleID is the vehicle whose stock changes are shown (0 for all;
-	// ignored with an item), VehicleName its name, Vehicles the active ones
-	// for the chips, Working the vehicle being worked on.
+	// ignored with an item), and General adds the items that fit no
+	// vehicle (alone, it shows only theirs), like the stock's filter.
+	// VehicleName is the vehicle's name, Vehicles the active ones for the
+	// chips, Working the vehicle being worked on.
 	VehicleID   int64
+	General     bool
 	VehicleName string
 	Vehicles    []stock.Vehicle
 	Working     int64
 }
 
-// VehicleQuery is the query string for the given vehicle (0 for all),
+// ChipQuery is the query string for a vehicle (0 for none) and General,
 // keeping the kind and the sort, and starting at the first page of every
 // year (a vehicle may have none in the one shown).
-func (p activityPage) VehicleQuery(id int64) string {
-	p.VehicleID = id
+func (p activityPage) ChipQuery(id int64, general bool) string {
+	p.VehicleID, p.General = id, general
 	return p.filterValues(p.Kind, 0).Encode()
 }
 
@@ -191,6 +195,9 @@ func (p activityPage) filterValues(kind string, year int) url.Values {
 		q.Set("item", strconv.FormatInt(p.Item.ID, 10))
 	} else {
 		setVehicleParam(q, p.VehicleID, p.Working)
+		if p.General {
+			q.Set("general", "1")
+		}
 	}
 	return q
 }
@@ -256,31 +263,43 @@ func (s *Server) activityItem(r *http.Request) (*stock.Item, error) {
 	return &it, nil
 }
 
-// activityVehicle reads the ?v= filter of the Activity page and its
-// export: with no item and no vehicle in the address, the one worked on
-// (defaulted, so the page goes to its address). It also returns the
-// vehicles, the one worked on, and the chosen one's name.
-func (s *Server) activityVehicle(r *http.Request, item *stock.Item) (vehicles []stock.Vehicle, id, working int64, name string, defaulted bool, err error) {
-	if vehicles, err = s.store.ListVehicles(r.Context()); err != nil {
-		return
+// activityChoice is the Activity page's vehicle filter, read by
+// activityVehicle.
+type activityChoice struct {
+	vehicles  []stock.Vehicle
+	id        int64 // the vehicle, 0 for none
+	general   bool
+	working   int64
+	name      string // the vehicle's
+	defaulted bool   // the address chose nothing and got the vehicle worked on
+}
+
+// activityVehicle reads the ?v= and ?general= filter of the Activity page
+// and its export: with no item and nothing chosen in the address, the
+// vehicle worked on with General (defaulted, so the page goes to its
+// address), like the stock.
+func (s *Server) activityVehicle(r *http.Request, item *stock.Item) (activityChoice, error) {
+	var c activityChoice
+	var err error
+	if c.vehicles, err = s.store.ListVehicles(r.Context()); err != nil {
+		return c, err
 	}
-	working = workingOn(r, vehicles)
+	c.working = workingOn(r, c.vehicles)
 	if item != nil {
-		return vehicles, 0, working, "", false, nil
+		return c, nil
 	}
-	id, chosen := parseVehicleParam(r.URL.Query())
-	if !chosen && working != 0 {
-		id, defaulted = working, true
+	q := r.URL.Query()
+	id, chosen := parseVehicleParam(q)
+	c.general = q.Get("general") == "1"
+	if !chosen && !c.general && c.working != 0 {
+		id, c.general, c.defaulted = c.working, true, true
 	}
-	for _, v := range vehicles {
+	for _, v := range c.vehicles {
 		if v.ID == id {
-			name = v.Name
+			c.id, c.name = id, v.Name
 		}
 	}
-	if name == "" {
-		id = 0
-	}
-	return vehicles, id, working, name, defaulted, nil
+	return c, nil
 }
 
 func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
@@ -288,14 +307,15 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	vehicles, vid, working, vname, defaulted, err := s.activityVehicle(r, item)
+	c, err := s.activityVehicle(r, item)
 	if err != nil {
 		return err
 	}
+	vid := c.id
 	p := activityPage{Kind: string(activityKind(r)), Kinds: activityKinds, Year: activityYear(r), Item: item, Page: parsePage(r),
-		Sort: activitySorts.parse(r.URL.Query()), VehicleID: vid, VehicleName: vname, Working: working,
-		Vehicles: activeVehicles(vehicles, vid)}
-	if defaulted {
+		Sort: activitySorts.parse(r.URL.Query()), VehicleID: vid, General: c.general, VehicleName: c.name, Working: c.working,
+		Vehicles: activeVehicles(c.vehicles, vid)}
+	if c.defaulted {
 		http.Redirect(w, r, joinQuery("/activity", p.PageQuery(p.Page)), http.StatusSeeOther)
 		return nil
 	}
@@ -303,7 +323,7 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if item != nil {
 		itemID = item.ID
 	}
-	if p.Years, err = s.store.MovementYears(r.Context(), store.MovementFilter{ItemID: itemID, Kind: stock.MovementKind(p.Kind), VehicleID: vid}); err != nil {
+	if p.Years, err = s.store.MovementYears(r.Context(), store.MovementFilter{ItemID: itemID, Kind: stock.MovementKind(p.Kind), VehicleID: vid, General: p.General}); err != nil {
 		return err
 	}
 	// A year with nothing in it yet (this year's first days) still gets
@@ -313,7 +333,7 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 		slices.SortFunc(p.Years, func(a, b int) int { return b - a })
 	}
 	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Year: p.Year, Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize,
-		Sort: p.Sort.Key, Desc: p.Sort.Desc, VehicleID: vid}
+		Sort: p.Sort.Key, Desc: p.Sort.Desc, VehicleID: vid, General: p.General}
 	if item != nil {
 		f.ItemID = item.ID
 	}
@@ -326,13 +346,15 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	title := "Activity"
 	if item != nil {
 		title = "History of " + item.DisplayName()
-	} else if vname != "" {
-		title = vname + " activity"
+	} else if c.name != "" {
+		title = c.name + " activity"
+	} else if p.General {
+		title = "General activity"
 	}
 	view := View{Title: title, Nav: "activity", Data: p}
-	if working != 0 && item == nil && vid != working {
+	if c.working != 0 && item == nil && (vid != c.working || !p.General) {
 		away := p
-		away.VehicleID, away.Working = 0, 0
+		away.VehicleID, away.General, away.Working = 0, false, 0
 		view.WorkingAway = joinQuery("/activity", away.filterValues(p.Kind, p.Year).Encode())
 	}
 	s.render(w, r, http.StatusOK, "activity", view)
@@ -346,12 +368,12 @@ func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	_, vid, _, _, _, err := s.activityVehicle(r, item)
+	c, err := s.activityVehicle(r, item)
 	if err != nil {
 		return err
 	}
 	order := activitySorts.parse(r.URL.Query())
-	f := store.MovementFilter{Kind: activityKind(r), Year: activityYear(r), Sort: order.Key, Desc: order.Desc, VehicleID: vid}
+	f := store.MovementFilter{Kind: activityKind(r), Year: activityYear(r), Sort: order.Key, Desc: order.Desc, VehicleID: c.id, General: c.general}
 	if item != nil {
 		f.ItemID = item.ID
 	}

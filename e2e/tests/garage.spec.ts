@@ -799,6 +799,11 @@ test("no page scrolls sideways", async ({ page }) => {
   await page.locator(".working-on").getByText("Switch").click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
+  // Nor past the left edge, which scrollWidth doesn't count: the list
+  // once hung from the Switch button and stuck out on a phone.
+  const pick = await page.locator(".working-pick").boundingBox();
+  const width = await page.evaluate(() => document.documentElement.clientWidth);
+  expect(pick && pick.x >= 0 && pick.x + pick.width <= width, `Switch list at ${JSON.stringify(pick)} in ${width}px`).toBe(true);
 });
 
 // The item names of the table's rows, with repeats next to each other

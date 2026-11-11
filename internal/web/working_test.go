@@ -128,8 +128,8 @@ func TestWorkingOnPages(t *testing.T) {
 			"/stock?view=list":            "/stock?general=1&v=" + w + "&view=list",
 			"/services":                   "/services?v=" + w,
 			"/services?archived=1&page=2": "/services?archived=1&v=" + w,
-			"/activity":                   "/activity?v=" + w,
-			"/activity?kind=bought":       "/activity?kind=bought&v=" + w,
+			"/activity":                   "/activity?general=1&v=" + w,
+			"/activity?kind=bought":       "/activity?general=1&kind=bought&v=" + w,
 		} {
 			expectRedirect(t, a.getWorking(path, w), want)
 		}
@@ -139,9 +139,17 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, "<title>KTM 390 stock", workingBar, "Working on <strong>KTM 390</strong>", "Chain lube", "Only this vehicle")
 		expectNot(t, rec, "Hiflofiltro", "Back to KTM 390", "Clear filters")
 		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>KTM 390 services</h1>")
-		rec = a.getWorking("/activity?v="+w, w)
+		rec = a.getWorking("/activity?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "<h1>KTM 390 activity</h1>", "Chain lube", "Silkolene")
-		expectNot(t, rec, "Hiflofiltro", "Big service") // B's service took the shared ring: not A's
+		expectNot(t, rec, "Hiflofiltro", "Big service", "Back to KTM 390") // B's service took the shared ring: not A's
+		// The General chip, like the stock's: off shows the vehicle's own
+		// items, alone it shows only General ones.
+		rec = a.getWorking("/activity?v="+w, w)
+		expect(t, rec, http.StatusOK, "Silkolene", "Back to KTM 390")
+		expectNot(t, rec, "Chain lube")
+		rec = a.getWorking("/activity?general=1&v=all", w)
+		expect(t, rec, http.StatusOK, "<h1>General activity</h1>", "Chain lube")
+		expectNot(t, rec, "Silkolene")
 		expect(t, a.getWorking("/activity?v="+itoa(k1290), w), http.StatusOK, "Big service", "Back to KTM 390")
 	})
 	t.Run("dashboard", func(t *testing.T) {
@@ -149,7 +157,7 @@ func TestWorkingOnPages(t *testing.T) {
 		// Pads, oil, ring, M3.0 and the General lube fit the KTM 390.
 		expect(t, rec, http.StatusOK, "<h1>KTM 390 dashboard</h1>",
 			`href="/stock?general=1&amp;v=`+w+`"><span class="label">`, `<span class="value">5</span>`,
-			`href="/stock?general=1&amp;low=1&amp;v=`+w+`"`, `href="/activity?kind=bought&amp;v=`+w+`&amp;year=2026"`,
+			`href="/stock?general=1&amp;low=1&amp;v=`+w+`"`, `href="/activity?general=1&amp;kind=bought&amp;v=`+w+`&amp;year=2026"`,
 			`href="/services/new?vehicle=`+w+`"`)
 		expectNot(t, rec, "Big service", "Back to KTM 390")
 		rec = a.getWorking("/?v=all", w)

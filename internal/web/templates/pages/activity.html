@@ -1,18 +1,19 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
   <div class="page-title">
-    <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}{{with $d.VehicleName}}{{.}} activity{{else}}Activity{{end}}{{end}}</h1>
-    <div class="sub flex"><span>{{if $d.Item}}Every change to this item's stock{{else if $d.VehicleName}}Every change to the stock that fits {{$d.VehicleName}}, and the parts of its services{{else}}Every change to your stock{{end}}{{with $d.Year}} in {{.}}{{end}}, {{$d.SortNote}}{{if not $d.Heads.Custom}}.{{end}}</span>{{if $d.Heads.Custom}}<span>·</span><a class="reset-link" href="{{$d.Heads.ResetHref}}" title="Show the newest changes first">Reset order {{icon "x"}}</a>{{end}}</div>
+    <h1>{{with $d.Item}}History of {{.DisplayName}}{{else}}{{with $d.VehicleName}}{{.}} activity{{else}}{{if $d.General}}General activity{{else}}Activity{{end}}{{end}}{{end}}</h1>
+    <div class="sub flex"><span>{{if $d.Item}}Every change to this item's stock{{else if and $d.VehicleName $d.General}}Every change to the stock that fits {{$d.VehicleName}} (General too), and the parts of its services{{else if $d.VehicleName}}Every change to {{$d.VehicleName}}'s own stock, and the parts of its services{{else if $d.General}}Every change to the stock that fits no vehicle{{else}}Every change to your stock{{end}}{{with $d.Year}} in {{.}}{{end}}, {{$d.SortNote}}{{if not $d.Heads.Custom}}.{{end}}</span>{{if $d.Heads.Custom}}<span>·</span><a class="reset-link" href="{{$d.Heads.ResetHref}}" title="Show the newest changes first">Reset order {{icon "x"}}</a>{{end}}</div>
   </div>
   <div class="actions">
     {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Trash ({{.TrashCount}})</a>{{end}}
     <a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
   </div>
 </div>
-{{if and (not $d.Item) (gt (len $d.Vehicles) 1)}}
+{{if and (not $d.Item) $d.Vehicles}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
-  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/activity" ($d.VehicleQuery 0)}}">All vehicles</a>
-  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/activity" ($d.VehicleQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  <a class="chip chip-toggle{{if not (or $d.VehicleID $d.General)}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery 0 false)}}">All vehicles</a>
+  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery .ID $d.General)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  <a class="chip chip-toggle{{if $d.General}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery $d.VehicleID (not $d.General))}}"><span class="dot"></span>General</a>
 </div>
 {{end}}
 <div class="filters-row mb">

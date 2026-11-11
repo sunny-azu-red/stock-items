@@ -135,10 +135,12 @@ type MovementFilter struct {
 	Kind   stock.MovementKind
 	// Year keeps only stock changes dated in that year (0 for any).
 	Year int
-	// VehicleID keeps the stock changes of what fits the vehicle: of items
-	// that fit it or no vehicle (General), but of services only its own
-	// (0 for any). The same items as the stock filtered to it with General.
+	// VehicleID keeps the stock changes of the vehicle: of items tagged with
+	// it, but of services only its own (0 for any vehicle). General adds
+	// the items that fit no vehicle; alone, it keeps only theirs. Both are
+	// the stock filtered to the vehicle with General.
 	VehicleID int64
+	General   bool
 	Limit     int
 	Offset    int // skip this many, for paging
 	// Sort is one of the MoveSort* keys (anything else sorts by date), and
@@ -213,9 +215,16 @@ func movementWhere(args *sqlArgs, f MovementFilter) string {
 		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
 		sql += " AND m.occurred_on >= " + args.add(from) + "::date AND m.occurred_on < " + args.add(from.AddDate(1, 0, 0)) + "::date"
 	}
-	if f.VehicleID != 0 {
+	switch {
+	case f.VehicleID != 0:
 		p := args.add(f.VehicleID)
-		sql += " AND CASE WHEN m.service_record_id IS NOT NULL THEN sr.vehicle_id = " + p + " ELSE " + fitsSQL("m.item_id", p) + " END"
+		items := taggedSQL("m.item_id", p)
+		if f.General {
+			items = fitsSQL("m.item_id", p)
+		}
+		sql += " AND CASE WHEN m.service_record_id IS NOT NULL THEN sr.vehicle_id = " + p + " ELSE " + items + " END"
+	case f.General:
+		sql += " AND " + untaggedSQL("m.item_id")
 	}
 	return sql
 }
@@ -224,8 +233,19 @@ func movementWhere(args *sqlArgs, f MovementFilter) string {
 // argument placeholder): tagged with it, or with no vehicle (General). The
 // same rows as the stock filtered to the vehicle with General.
 func fitsSQL(col, p string) string {
-	return "(EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + " AND iv.vehicle_id = " + p + ")" +
-		" OR NOT EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + "))"
+	return "(" + taggedSQL(col, p) + " OR " + untaggedSQL(col) + ")"
+}
+
+// taggedSQL is the condition that the item in column col is tagged with
+// vehicle p.
+func taggedSQL(col, p string) string {
+	return "EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + " AND iv.vehicle_id = " + p + ")"
+}
+
+// untaggedSQL is the condition that the item in column col fits no vehicle
+// (General).
+func untaggedSQL(col string) string {
+	return "NOT EXISTS (SELECT 1 FROM item_vehicles iv WHERE iv.item_id = " + col + ")"
 }
 
 // ListMovements returns ledger entries, newest first unless f says
@@ -455,7 +475,7 @@ func (s *Store) GetVehicleStats(ctx context.Context, today time.Time, vehicleID 
 // years the Activity page can show with its other filters.
 func (s *Store) MovementYears(ctx context.Context, f MovementFilter) ([]int, error) {
 	var args sqlArgs
-	f = MovementFilter{ItemID: f.ItemID, Kind: f.Kind, VehicleID: f.VehicleID}
+	f = MovementFilter{ItemID: f.ItemID, Kind: f.Kind, VehicleID: f.VehicleID, General: f.General}
 	sql := `SELECT min(m.occurred_on), max(m.occurred_on) FROM stock_movements m
 		LEFT JOIN service_records sr ON sr.id = m.service_record_id WHERE true` + movementWhere(&args, f)
 	var first, last *time.Time

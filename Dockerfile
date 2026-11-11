@@ -8,7 +8,7 @@
 # the target's (CI publishes linux/amd64). The run stage below still runs
 # apt-get on the target platform, so building for another architecture
 # (an amd64 image on an arm64 Mac) needs QEMU emulation for that stage.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 # Cache mounts keep the module and build caches between builds on the same

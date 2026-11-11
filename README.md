@@ -42,7 +42,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 
 ## Quick start
 
-Requirements: [Go](https://go.dev/dl/) 1.27.3+, a PostgreSQL database (tested with 18), and for photos the libvips command line tools (`sudo apt install libvips-tools`; without them the app runs, logs a warning and refuses photo uploads). The Docker image has everything.
+Requirements: [Go](https://go.dev/dl/) 1.27.4+, a PostgreSQL database (tested with 18), and for photos the libvips command line tools (`sudo apt install libvips-tools`; without them the app runs, logs a warning and refuses photo uploads). The Docker image has everything.
 
 ```bash
 cp .env.example .env     # then fill in your database credentials

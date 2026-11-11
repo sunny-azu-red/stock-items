@@ -43,7 +43,7 @@
       </div>
     </div>
     {{if $d.Sections}}
-      {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" true)}}{{end}}
+      {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Here" $v.ID)}}{{end}}
     {{else}}
       <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
     {{end}}
@@ -78,7 +78,7 @@
 
     <section class="card">
       <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="meta">{{if $d.Labor}}<span>{{money $d.Labor}} labour</span><span>·</span>{{end}}<a class="more" href="/services?v={{$v.ID}}">All services →</a></span></div>
-      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
+      {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $v.ID)}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
     </section>
   </div>
 </div>

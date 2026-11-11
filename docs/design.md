@@ -34,9 +34,24 @@ Chips and badges serve two completely different purposes and have distinct visua
 * **Dot**: Contains a `.dot` colored with the vehicle's theme color.
 * **Dimensions**: Height **26px** (`font-size: .78rem`, `padding: 3px 9px`, line-height `18px`).
 * **Hover (as link)**: The 1px border illuminates with the vehicle's color (`border-color: var(--chip)`). **No text underline.**
-* **Placement in Rows**: In compound item rows (e.g. `.kit-row`), the vehicle `.chip` sits on Line 1 next to the record title (`.title-row`), leaving Line 2 (`.meta`) as clean, unobstructed metadata text.
+* **Placement in Rows**: In compound item rows (e.g. `.kit-row`), the vehicle `.chip` sits on Line 1 next to the record title (`.title-row`), leaving Line 2 (`.meta`) as clean, unobstructed metadata text. Inside a vehicle's scope (below), a row leaves out that vehicle's chip.
 * **Sidebar Navigation & Filters**: Vehicles in the sidebar (`.nav-vehicles`), filter bars, and tag lists are standard `.chip` / `chip-link` pills, standardizing vehicle tags everywhere.
 * **Vehicle Entity Titles**: When a vehicle itself is the primary record of a card or list row (e.g. on `/vehicles` cards and the dashboard "Vehicles" card), it is represented as a title link with its vehicle kind icon (`{{icon .Kind.Icon}}`) colored with `var(--chip)` (`.vehicle-title`, `.vehicle-card .name`), distinguishing primary record titles from secondary reference chips.
+
+#### Scope: say the vehicle once
+A page about one vehicle names it once, at the top. Its rows and headings show a chip only for a *different* vehicle, which then says something ("Shared with KTM 1290"). A list that mixes vehicles keeps every chip, because there the chip tells the rows apart.
+
+| Page | Names the vehicle by | Leaves out its chip on |
+|---|---|---|
+| A vehicle's page | its hero | kit rows, service rows, stock section headings |
+| A kit's page | the header `chip-link` | service rows |
+| `/services?v=ID` | the title ("KTM 390 services") and the active filter chip | service rows, kit rows |
+| `/stock?v=ID` (exactly one vehicle) | the title ("KTM 390 stock") and the active filter chip | section headings, list rows (the other vehicles' chips stay) |
+| An item fitting one vehicle | the header chip | the rows of that vehicle's kits |
+
+The partials take the scope as `"Here"` (a vehicle id, 0 for none): `stock-section`, `service-list`, and `item-row` (`rowFor`, kept across a quick +/- by a hidden `here` input). `kit-row` takes `kitView.HideVehicle` (`scopeKits`).
+
+Stock section headings (`stock-section`) each lead with an icon and a word: `package` **General** (not tied to a vehicle), `tag` **Shared** + chips, and `warehouse` **Vehicle** + chip (+ "only" when the stock is filtered by vehicle). Inside a scope they read `warehouse` **This vehicle only** and `tag` **Shared with** + the other vehicles' chips.
 
 ### Status & State Badges (`.badge`, `a.badge`)
 * **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).

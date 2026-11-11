@@ -173,6 +173,15 @@ type stockPage struct {
 	Selected    []stock.Vehicle
 }
 
+// Here is the one vehicle the stock is filtered to, or 0: the page names it
+// once in its title, its rows and headings leave out its chip.
+func (p stockPage) Here() int64 {
+	if len(p.Selected) == 1 {
+		return p.Selected[0].ID
+	}
+	return 0
+}
+
 func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	ctx := r.Context()
 	f := parseStockFilter(r.URL.Query())

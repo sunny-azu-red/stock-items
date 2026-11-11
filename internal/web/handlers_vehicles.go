@@ -415,7 +415,7 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	}
 	p := vehiclePage{
 		ServiceCount: serviceCount, KitCount: kitCount, Labor: labor,
-		Vehicle: v, Kits: s.kitViews(kits, vehicles), Sections: stock.GroupByVehicles(items, vehicles),
+		Vehicle: v, Kits: scopeKits(s.kitViews(kits, vehicles), id), Sections: stock.GroupByVehicles(items, vehicles),
 		VehicleMap: vehicleMap(vehicles), Services: services, ItemCount: len(items),
 		StockQuery: "v=" + strconv.FormatInt(id, 10),
 	}
@@ -456,6 +456,18 @@ type kitView struct {
 	// count from (stock.Kit.MonthsUncounted); the page asks for the
 	// vehicle's purchase date.
 	MonthsUncounted bool
+	// HideVehicle leaves out the kit's vehicle chip on a page that already
+	// names that vehicle once at the top (see scopeKits).
+	HideVehicle bool
+}
+
+// scopeKits hides the vehicle chip of the kits of vehicle here: the page
+// says the vehicle once, its rows show only a different one. 0 is no scope.
+func scopeKits(kvs []kitView, here int64) []kitView {
+	for i := range kvs {
+		kvs[i].HideVehicle = here != 0 && kvs[i].Kit.VehicleID == here
+	}
+	return kvs
 }
 
 // kitViews computes readiness and due state, most urgent first.

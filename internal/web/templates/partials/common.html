@@ -70,7 +70,7 @@
   <span class="grow">
     <span class="title-row">
       <span class="title">{{.Kit.Name}}</span>
-      {{template "chip" .Kit.VehicleChip}}
+      {{if not .HideVehicle}}{{template "chip" .Kit.VehicleChip}}{{end}}
     </span>
     {{template "kit-meta" .}}
   </span>
@@ -155,17 +155,17 @@
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
       {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{add (len $skus) -2}} more {{pluralOnly (add (len $skus) -2) "SKU"}}">+{{add (len $skus) -2}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
-      {{if not .HideChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles "Link" true)}}{{end}}
+      {{if .ShowChips}}{{template "vehicle-chips" (dict "IDs" .ChipIDs "Vehicles" .Vehicles "Link" true)}}{{end}}
     </div>
   </div>
   {{if not $it.Archived}}
   <div class="item-actions">
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
-      <input type="hidden" name="dir" value="down">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
+      <input type="hidden" name="dir" value="down">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}{{with .Here}}<input type="hidden" name="here" value="{{.}}">{{end}}
       <button class="icon-btn" type="submit" title="Use {{step $it.Unit}}" aria-label="Use {{step $it.Unit}} of {{$it.DisplayName}}" {{if $it.IsOut}}disabled{{end}}>{{icon "minus"}}</button>
     </form>
     <form class="inline-form" method="post" action="/items/{{$it.ID}}/adjust" hx-post="/items/{{$it.ID}}/adjust" hx-target="#item-{{$it.ID}}" hx-swap="outerHTML">
-      <input type="hidden" name="dir" value="up">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}
+      <input type="hidden" name="dir" value="up">{{if .HideChips}}<input type="hidden" name="hide_chips" value="1">{{end}}{{with .Here}}<input type="hidden" name="here" value="{{.}}">{{end}}
       <button class="icon-btn" type="submit" title="Add {{step $it.Unit}} (Adjusted)" aria-label="Add {{step $it.Unit}} of {{$it.DisplayName}} (Adjusted)">{{icon "plus"}}</button>
     </form>
   </div>
@@ -173,19 +173,25 @@
 </li>
 {{end}}
 
-{{/* A group of item rows: dict "Section" Section "Vehicles" map "Title" string (optional) */}}
-{{define "stock-section"}}{{$vs := .Vehicles}}{{$sec := .Section}}
+{{/* A group of item rows: dict "Section" Section "Vehicles" map, "Only"
+     true when the stock is filtered by vehicle, and "Here" the one vehicle
+     the page is about (a vehicle's page, the stock filtered to it). The
+     page names that vehicle once at the top, so its headings leave out its
+     chip and show only the others ("Shared with"). */}}
+{{define "stock-section"}}{{$vs := .Vehicles}}{{$sec := .Section}}{{$here := or .Here 0}}
 <section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}">
   <div class="section-head">
     <h2>
       {{if $sec.General}}{{icon "package"}} General <span class="muted small">(not tied to a vehicle)</span>
+      {{else if and $sec.Shared $here}}{{icon "tag"}} Shared with {{range $sec.Vehicles}}{{if ne .ID $here}}{{template "chip" .}}{{end}}{{end}}
       {{else if $sec.Shared}}{{icon "tag"}} Shared {{range $sec.Vehicles}}{{template "chip" .}}{{end}}
-      {{else}}{{with index $sec.Vehicles 0}}{{template "chip" .}}{{end}}{{with $.Only}} only{{end}}{{end}}
+      {{else if $here}}{{icon "warehouse"}} This vehicle only
+      {{else}}{{icon "warehouse"}} Vehicle {{with index $sec.Vehicles 0}}{{template "chip" .}}{{end}}{{with $.Only}} only{{end}}{{end}}
     </h2>
     <span class="n">{{plural (len $sec.Items) "item"}}</span>
   </div>
   <ul class="item-list">
-    {{range $sec.Items}}{{template "item-row" (rowFor . $vs true)}}{{end}}
+    {{range $sec.Items}}{{template "item-row" (rowFor . $vs true 0)}}{{end}}
   </ul>
 </section>
 {{end}}
@@ -241,15 +247,17 @@
 </div>
 {{end}}
 
-{{define "service-list"}}
+{{/* dict "Services" []ServiceRecord "Here" vehicle id (0 for none): the
+     vehicle the page is about, whose chip the rows leave out. */}}
+{{define "service-list"}}{{$here := or .Here 0}}
 <ul class="list">
-{{range .}}
+{{range .Services}}
   <li>
     <span class="grow">
       <a class="title" href="/services/{{.ID}}">{{.Title}}</a>
       <span class="meta">{{date .PerformedOn}}{{with .Odometer}} · {{distance .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
     </span>
-    {{template "chip" .VehicleChip}}
+    {{if ne .VehicleID $here}}{{template "chip" .VehicleChip}}{{end}}
   </li>
 {{end}}
 </ul>

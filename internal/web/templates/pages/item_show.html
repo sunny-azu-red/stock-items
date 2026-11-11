@@ -117,7 +117,7 @@
             <span class="title-row"><a class="title" href="/kits/{{.Kit.ID}}">{{.Kit.Name}}</a>{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{end}}</span>
             {{template "kit-meta" .}}
           </span>
-          {{template "chip" .Kit.VehicleChip}}
+          {{if not .HideVehicle}}{{template "chip" .Kit.VehicleChip}}{{end}}
         </li>{{end}}
       </ul>
     </section>

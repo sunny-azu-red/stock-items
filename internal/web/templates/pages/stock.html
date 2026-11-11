@@ -84,11 +84,11 @@
   {{else if eq $f.View "list"}}
     <section class="card">
       <ul class="item-list">
-        {{range $d.Items}}{{template "item-row" (rowFor . $d.VehicleMap false)}}{{end}}
+        {{range $d.Items}}{{template "item-row" (rowFor . $d.VehicleMap false $d.Here)}}{{end}}
       </ul>
     </section>
   {{else}}
-    {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" (gt (len $d.Selected) 0))}}{{end}}
+    {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Only" (gt (len $d.Selected) 0) "Here" $d.Here)}}{{end}}
   {{end}}
 </div>
 {{end}}

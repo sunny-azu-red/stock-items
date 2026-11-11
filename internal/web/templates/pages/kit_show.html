@@ -100,7 +100,7 @@
 
     <section class="card">
       <div class="card-head"><h2>{{icon "wrench"}} Service history</h2>{{if $d.Services}}<span class="meta">{{plural (len $d.Services) "service"}}</span>{{end}}</div>
-      {{if $d.Services}}{{template "service-list" $d.Services}}{{else}}<div class="card-body muted small">No services logged with this kit yet.</div>{{end}}
+      {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $k.VehicleID)}}{{else}}<div class="card-body muted small">No services logged with this kit yet.</div>{{end}}
     </section>
   </div>
 </div>

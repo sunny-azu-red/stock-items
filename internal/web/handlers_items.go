@@ -633,6 +633,9 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
 		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
 	}
+	if len(it.VehicleIDs) == 1 {
+		scopeKits(p.Kits, it.VehicleIDs[0])
+	}
 	if p.HistoryCapped {
 		p.Movements = moves[:itemHistory]
 	}
@@ -869,8 +872,12 @@ func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Ite
 		return err
 	}
 	toast(w, kind, msg)
-	s.renderPartial(w, r, "item-row", rowData{Item: it, Vehicles: vehicleMap(vehicles), Flash: kind == "success",
-		HideChips: r.PostFormValue("hide_chips") == "1"})
+	row := rowData{Item: it, Vehicles: vehicleMap(vehicles), Flash: kind == "success",
+		HideChips: r.PostFormValue("hide_chips") == "1"}
+	if here := parseOptID(r.PostFormValue("here")); here != nil {
+		row.Here = *here
+	}
+	s.renderPartial(w, r, "item-row", row)
 	return nil
 }
 
@@ -939,7 +946,31 @@ type rowData struct {
 	Item      stock.Item
 	Vehicles  map[int64]stock.Vehicle
 	HideChips bool
-	Flash     bool
+	// Here is the one vehicle the list is filtered to (0 for none): the
+	// row leaves out its chip, the page names it once at the top.
+	Here  int64
+	Flash bool
+}
+
+// ChipIDs are the vehicles the row's chips show: the item's, but for Here.
+func (d rowData) ChipIDs() []int64 {
+	if d.Here == 0 {
+		return d.Item.VehicleIDs
+	}
+	ids := make([]int64, 0, len(d.Item.VehicleIDs))
+	for _, id := range d.Item.VehicleIDs {
+		if id != d.Here {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// ShowChips reports whether the row shows vehicle chips: not in a section
+// (its heading names the vehicles), and not when Here is the only one. An
+// item with no vehicle shows the General chip.
+func (d rowData) ShowChips() bool {
+	return !d.HideChips && (len(d.Item.VehicleIDs) == 0 || len(d.ChipIDs()) > 0)
 }
 
 func vehicleMap(vs []stock.Vehicle) map[int64]stock.Vehicle {

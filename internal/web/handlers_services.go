@@ -419,7 +419,8 @@ type servicesPage struct {
 	Services          []stock.ServiceRecord
 	Vehicles          []stock.Vehicle
 	VehicleID         int64
-	Archived          bool // the filtered vehicle is archived: no new services
+	VehicleName       string // the filtered vehicle's, for the title
+	Archived          bool   // the filtered vehicle is archived: no new services
 	ShowArchivedKits  bool
 	ArchivedKitsCount int
 	Labor             float64 // labour cost of all the services logged (for the vehicle filter), not just this page
@@ -489,6 +490,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		}
 		if v.ID == p.VehicleID {
 			p.Archived = v.Archived()
+			p.VehicleName = v.Name
 		}
 	}
 	p.Vehicles = activeVehicles(allVehicles, p.VehicleID)
@@ -513,6 +515,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	} else {
 		p.Kits = s.kitViews(activeKits, allVehicles)
 	}
+	scopeKits(p.Kits, p.VehicleID)
 	f := store.ServiceFilter{VehicleID: p.VehicleID, Limit: servicesPageSize + 1, Offset: (p.Page - 1) * servicesPageSize}
 	if p.Services, err = s.store.ListServices(ctx, f); err != nil {
 		return err
@@ -526,6 +529,10 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	if p.Labor, err = s.store.LaborTotal(ctx, p.VehicleID); err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "services", View{Title: "Services", Nav: "services", Data: p})
+	title := "Services"
+	if p.VehicleName != "" {
+		title = p.VehicleName + " services"
+	}
+	s.render(w, r, http.StatusOK, "services", View{Title: title, Nav: "services", Data: p})
 	return nil
 }

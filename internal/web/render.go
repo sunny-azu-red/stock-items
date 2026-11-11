@@ -145,8 +145,8 @@ func (s *Server) funcs() template.FuncMap {
 			}
 			return false
 		},
-		"rowFor": func(it stock.Item, vs map[int64]stock.Vehicle, hideChips bool) rowData {
-			return rowData{Item: it, Vehicles: vs, HideChips: hideChips}
+		"rowFor": func(it stock.Item, vs map[int64]stock.Vehicle, hideChips bool, here int64) rowData {
+			return rowData{Item: it, Vehicles: vs, HideChips: hideChips, Here: here}
 		},
 		"placeholderFor": func(u stock.Unit) string { return "e.g. " + examplesFor(u) },
 		"optInt":         optIntString,

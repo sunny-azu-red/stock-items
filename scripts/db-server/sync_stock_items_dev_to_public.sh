@@ -21,7 +21,7 @@ cat <<EOF
  TARGET   : public (WILL BE ERASED AND REPLACED)
 
  WHAT WILL HAPPEN:
- - ALL existing tables, views, sequences, and data in '${DB_NAME}'.public
+ - ALL existing tables, views, sequences, functions, and data in '${DB_NAME}'.public
    will be PERMANENTLY DROPPED.
  - The 'public' schema will then be populated with a fresh replica of
    everything currently in 'dev', owned by '${APP_USER}'.
@@ -77,6 +77,13 @@ BEGIN
     END LOOP;
     FOR r IN (SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public') LOOP
         EXECUTE 'DROP SEQUENCE IF EXISTS public.' || quote_ident(r.sequence_name) || ' CASCADE';
+    END LOOP;
+    -- Functions and procedures (reorder_columns, migration 00022); an
+    -- extension's own are left to the extension.
+    FOR r IN (SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p
+              WHERE p.pronamespace = 'public'::regnamespace AND p.prokind IN ('f', 'p')
+                AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')) LOOP
+        EXECUTE format('DROP ROUTINE IF EXISTS public.%I(%s) CASCADE', r.proname, r.args);
     END LOOP;
     FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype IN ('e', 'c')) LOOP
         EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';

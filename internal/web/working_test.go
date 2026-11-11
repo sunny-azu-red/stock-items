@@ -136,16 +136,20 @@ func TestWorkingOnPages(t *testing.T) {
 	})
 	t.Run("they show it", func(t *testing.T) {
 		rec := a.getWorking("/stock?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, "<title>KTM 390 stock", workingBar, `<span class="working-label">Working on </span><strong>KTM 390</strong>`, "Chain lube", "Only this vehicle")
+		// The bar names the vehicle; the title doesn't say it again.
+		expect(t, rec, http.StatusOK, "<title>Stock ·", "<h1>Stock</h1>", workingBar, `<span class="working-label">Working on </span><strong>KTM 390</strong>`, "Chain lube", "Only this vehicle")
 		expectNot(t, rec, "Hiflofiltro", "Back to KTM 390", "Clear filters")
-		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>KTM 390 services</h1>")
+		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>Services</h1>")
+		// Another vehicle than the bar's: the title says which.
+		expect(t, a.getWorking("/services?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 services</h1>")
+		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 stock</h1>")
 		rec = a.getWorking("/activity?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, "<h1>KTM 390 activity</h1>", "Chain lube", "Silkolene")
+		expect(t, rec, http.StatusOK, "<h1>Activity</h1>", "Chain lube", "Silkolene")
 		expectNot(t, rec, "Hiflofiltro", "Big service", "Back to KTM 390") // B's service took the shared ring: not A's
 		// The General chip, like the stock's: off shows the vehicle's own
 		// items, alone it shows only General ones.
 		rec = a.getWorking("/activity?v="+w, w)
-		expect(t, rec, http.StatusOK, "Silkolene", "Back to KTM 390")
+		expect(t, rec, http.StatusOK, "<h1>KTM 390 activity</h1>", "Silkolene", "Back to KTM 390")
 		expectNot(t, rec, "Chain lube")
 		rec = a.getWorking("/activity?general=1&v=all", w)
 		expect(t, rec, http.StatusOK, "<h1>General activity</h1>", "Chain lube")
@@ -155,7 +159,7 @@ func TestWorkingOnPages(t *testing.T) {
 	t.Run("dashboard", func(t *testing.T) {
 		rec := a.getWorking("/?v="+w, w)
 		// Pads, oil, ring, M3.0 and the General lube fit the KTM 390.
-		expect(t, rec, http.StatusOK, "<h1>KTM 390 dashboard</h1>",
+		expect(t, rec, http.StatusOK, "<h1>Dashboard</h1>",
 			`href="/stock?general=1&amp;v=`+w+`"><span class="label">`, `<span class="value">5</span>`,
 			`href="/stock?general=1&amp;low=1&amp;v=`+w+`"`, `href="/activity?general=1&amp;kind=bought&amp;v=`+w+`&amp;year=2026"`,
 			`href="/services/new?vehicle=`+w+`"`)

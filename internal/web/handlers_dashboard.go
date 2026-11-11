@@ -30,6 +30,9 @@ type dashboardPage struct {
 	VehicleID   int64
 	VehicleName string
 	Working     int64
+	// TitleName is the vehicle the title names: VehicleName, unless it is
+	// the one worked on, which the bar names.
+	TitleName string
 }
 
 // Link is the list a tile or a "more" link opens: path with extra (an
@@ -116,9 +119,12 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 			p.Upcoming = append(p.Upcoming, kv)
 		}
 	}
+	if vid != working {
+		p.TitleName = p.VehicleName
+	}
 	view := View{Title: "Dashboard", Nav: "dashboard", Data: p}
-	if p.VehicleName != "" {
-		view.Title = p.VehicleName + " dashboard"
+	if p.TitleName != "" {
+		view.Title = p.TitleName + " dashboard"
 	}
 	if working != 0 && vid != working {
 		view.WorkingAway = "/"
@@ -147,6 +153,9 @@ type activityPage struct {
 	VehicleName string
 	Vehicles    []stock.Vehicle
 	Working     int64
+	// TitleName is the vehicle the title names: VehicleName, unless it is
+	// the one worked on (with General), which the bar names.
+	TitleName string
 }
 
 // ChipQuery is the query string for a vehicle (0 for none) and General,
@@ -347,7 +356,10 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if item != nil {
 		title = "History of " + item.DisplayName()
 	} else if c.name != "" {
-		title = c.name + " activity"
+		if vid != c.working || !p.General {
+			p.TitleName = c.name
+			title = c.name + " activity"
+		}
 	} else if p.General {
 		title = "General activity"
 	}

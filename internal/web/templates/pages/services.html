@@ -1,7 +1,7 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
   <div class="page-title">
-    <h1>{{with $d.VehicleName}}{{.}} services{{else}}Services{{end}}</h1>
+    <h1>{{with $d.TitleName}}{{.}} services{{else}}Services{{end}}</h1>
     <p class="sub">Service kits with their reminders, and everything you have done.</p>
   </div>
   {{if not $d.Archived}}

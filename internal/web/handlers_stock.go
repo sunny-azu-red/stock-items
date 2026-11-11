@@ -207,6 +207,9 @@ type stockPage struct {
 	Categories  []string
 	Selected    []stock.Vehicle
 	Sole        int64 // soleVehicle
+	// TitleName is the vehicle the title names ("KTM 390 stock"): the one
+	// selected, unless it is the one worked on, which the bar names.
+	TitleName string
 	// Others is how many more items the search and filters find in other
 	// vehicles, while the stock follows the vehicle being worked on.
 	Others int
@@ -304,8 +307,9 @@ func (s *Server) stockPage(w http.ResponseWriter, r *http.Request) error {
 		p.Others = len(all) - len(p.Items)
 	}
 	title := "Stock"
-	if len(p.Selected) == 1 {
-		title = p.Selected[0].Name + " stock"
+	if len(p.Selected) == 1 && !f.followsWorking() {
+		p.TitleName = p.Selected[0].Name
+		title = p.TitleName + " stock"
 	}
 	v := View{Title: title, Nav: "stock", Data: p}
 	if f.Working != 0 && !f.followsWorking() {

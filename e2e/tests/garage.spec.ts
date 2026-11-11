@@ -590,16 +590,18 @@ test("work on a vehicle", async ({ page }, testInfo) => {
     expect(box && box.x === 0 && box.y === 0 && box.width === width, `bar at ${JSON.stringify(box)} in ${width}px`).toBe(true);
     await expect(bar).toHaveCSS("border-top-width", "0px");
     await expect(bar).toHaveCSS("border-bottom-width", "1px");
-    // One row: 28px buttons in 6px padding and the bottom border.
-    expect(box?.height, "the bar wraps onto a second row").toBe(41);
+    // One row: the buttons in 6px padding, and the bottom border.
+    const buttons = await bar.locator(".working-actions").boundingBox();
+    expect(box?.height, "the bar wraps onto a second row").toBe((buttons?.height ?? 0) + 13);
   }
   await expect(page).toHaveURL(/\/\?v=\d+$/);
-  await expect(page.locator("main h1")).toHaveText("KTM 390 dashboard");
+  // The bar names the vehicle; the title doesn't say it again.
+  await expect(page.locator("main h1")).toHaveText("Dashboard");
 
   // The stock tab goes to the vehicle's stock, and says so in its address.
   await page.goto("/stock");
   await expect(page).toHaveURL(/\/stock\?general=1&v=\d+$/);
-  await expect(page.locator("main h1")).toHaveText("KTM 390 stock");
+  await expect(page.locator("main h1")).toHaveText("Stock");
   await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
   // A search says what it finds in other vehicles, one tap away.
   await page.getByPlaceholder(/Search name/).fill("Oil Filter");
@@ -626,7 +628,9 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await bar.getByText("Switch").click();
   await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
   await expect(bar).toContainText("Working on KTM 1290");
-  await expect(page.locator("main h1")).toHaveText("KTM 1290 stock");
+  await expect(page.locator("main h1")).toHaveText("Stock");
+  // Back shows the KTM 390's stock while the bar says KTM 1290: the title
+  // says which.
   await page.goBack();
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("KTM 390 stock");

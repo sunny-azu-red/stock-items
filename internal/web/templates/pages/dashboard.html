@@ -1,7 +1,7 @@
 {{define "content"}}{{$d := .Data}}
 <div class="page-head">
   <div class="page-title">
-    <h1>{{with $d.VehicleName}}{{.}} dashboard{{else}}Dashboard{{end}}</h1>
+    <h1>{{with $d.TitleName}}{{.}} dashboard{{else}}Dashboard{{end}}</h1>
     <p class="sub">{{.Today.Format "Monday, 2 January 2006"}}</p>
   </div>
   <div class="actions">

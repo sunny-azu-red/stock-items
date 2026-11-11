@@ -425,7 +425,8 @@ type servicesPage struct {
 	Services          []stock.ServiceRecord
 	Vehicles          []stock.Vehicle
 	VehicleID         int64
-	VehicleName       string // the filtered vehicle's, for the title
+	VehicleName       string // the filtered vehicle's
+	TitleName         string // the vehicle the title names: VehicleName, unless the bar names it (worked on)
 	Sole              int64  // soleVehicle
 	Working           int64  // the vehicle being worked on, see working.go
 	Archived          bool   // the filtered vehicle is archived: no new services
@@ -547,8 +548,9 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	title := "Services"
-	if p.VehicleName != "" {
-		title = p.VehicleName + " services"
+	if p.VehicleName != "" && p.VehicleID != p.Working {
+		p.TitleName = p.VehicleName
+		title = p.TitleName + " services"
 	}
 	view := View{Title: title, Nav: "services", Data: p}
 	if p.Working != 0 && p.VehicleID != p.Working {

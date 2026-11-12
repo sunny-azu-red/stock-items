@@ -823,11 +823,12 @@
     var theme = m ? m[1] : "system";
     if (theme !== (document.documentElement.getAttribute("data-theme") || "system")) applyTheme(theme);
   });
-  // The same for the vehicle worked on (working.go): it decides what a list
-  // page with no vehicle in its address shows, and the bar says so. A page
-  // from before a switch reloads, unless it holds unsaved typing.
+  // The same for the vehicle worked on (working.go): it decides what the
+  // list pages show, and the bar says so. A page from before a switch
+  // reloads, unless it holds unsaved typing. Only the plain digits the
+  // server counts (no leading zero), so the two never disagree in a loop.
   window.addEventListener("pageshow", function () {
-    var m = document.cookie.match(/(?:^|;\s*)working_on="?(\d+)"?(?:;|$)/);
+    var m = document.cookie.match(/(?:^|;\s*)working_on="?([1-9]\d*)"?(?:;|$)/);
     var now = m ? m[1] : "";
     if (now !== (document.documentElement.getAttribute("data-working-on") || "") && !dirty) location.reload();
   });

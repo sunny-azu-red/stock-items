@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -124,6 +125,12 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 		kits, err := s.store.ListKits(ctx, store.KitFilter{})
 		if err != nil {
 			return err
+		}
+		// While a vehicle is worked on, new work is for it: only its kits
+		// to start from (another's would lead to its form, which goes to
+		// the worked-on vehicle's and drops what was typed).
+		if wid := workingOn(r, vehicles); wid != 0 {
+			kits = slices.DeleteFunc(kits, func(k stock.Kit) bool { return k.VehicleID != wid })
 		}
 		p.Kits = s.kitViews(kits, vehicles)
 	}
@@ -295,7 +302,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	// New work is for the vehicle worked on (a form opened before a switch).
-	msg, err := s.otherWork(r, in.VehicleID, "log this", f.KitID != 0)
+	msg, err := s.otherWork(r, in.VehicleID, "log this service", f.KitID != 0)
 	if err != nil {
 		return err
 	}
@@ -462,7 +469,7 @@ const servicesPageSize = 100
 // PageQuery is the query string for page n of the log.
 func (p servicesPage) PageQuery(n int) string {
 	q := url.Values{}
-	setVehicleParam(q, p.VehicleID, p.Working)
+	setVehicleParam(q, p.VehicleID)
 	if p.ShowArchivedKits {
 		q.Set("archived", "1")
 	}
@@ -484,7 +491,7 @@ func (p servicesPage) Scope() int64 {
 // ArchivedKitsQuery toggles viewing archived kits.
 func (p servicesPage) ArchivedKitsQuery(show bool) string {
 	q := url.Values{}
-	setVehicleParam(q, p.VehicleID, p.Working)
+	setVehicleParam(q, p.VehicleID)
 	if show {
 		q.Set("archived", "1")
 	}
@@ -494,7 +501,7 @@ func (p servicesPage) ArchivedKitsQuery(show bool) string {
 // VehicleFilterQuery preserves the archived kits view when switching vehicle chips.
 func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
 	q := url.Values{}
-	setVehicleParam(q, vehicleID, p.Working)
+	setVehicleParam(q, vehicleID)
 	if p.ShowArchivedKits {
 		q.Set("archived", "1")
 	}
@@ -504,7 +511,7 @@ func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
 func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	p := servicesPage{Page: parsePage(r)}
-	p.VehicleID, _ = parseVehicleParam(r.URL.Query())
+	p.VehicleID = vehicleParam(r.URL.Query())
 	p.ShowArchivedKits = r.URL.Query().Get("archived") == "1"
 	var err error
 	var allVehicles []stock.Vehicle

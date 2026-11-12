@@ -26,8 +26,6 @@ type stockFilter struct {
 	Archived   bool   // show archived items instead of active ones
 	View       string // "grouped" (default) or "list"
 	Sort       sortOrder
-	// All is v=all: every vehicle, chosen on purpose while one is worked on.
-	All bool
 	// Working is the vehicle being worked on (0 for none); never read from
 	// the address.
 	Working int64
@@ -36,7 +34,6 @@ type stockFilter struct {
 func parseStockFilter(q url.Values) stockFilter {
 	return stockFilter{
 		VehicleIDs: parseIDs(q["v"]),
-		All:        slices.Contains(q["v"], "all"),
 		MatchAll:   q.Get("match") == "all",
 		General:    q.Get("general") == "1",
 		Query:      strings.TrimSpace(q.Get("q")),
@@ -64,18 +61,13 @@ func parseStockSort(q url.Values) sortOrder {
 
 // fromFilterForm reports whether the request comes from the filter form,
 // which always sends was_sort and was_dir: only the server reads them, and
-// the address bar gets the filter's own, shorter URL instead. A form with
-// no vehicle ticked means every vehicle, not the one worked on.
+// the address bar gets the filter's own, shorter URL instead.
 func fromFilterForm(q url.Values) bool { return q.Has("was_sort") || q.Has("was_dir") }
 
-// chosen reports whether the address chooses the vehicles (some, General,
-// or all): then it wins over the vehicle being worked on.
-func (f stockFilter) chosen() bool { return len(f.VehicleIDs) > 0 || f.General || f.All }
-
 // followsWorking reports whether the filter is the vehicle being worked on
-// with General, the stock it starts at.
+// with General: what the page shows while one is.
 func (f stockFilter) followsWorking() bool {
-	return f.Working != 0 && !f.All && !f.MatchAll && f.General && slices.Equal(f.VehicleIDs, []int64{f.Working})
+	return f.Working != 0 && !f.MatchAll && f.General && slices.Equal(f.VehicleIDs, []int64{f.Working})
 }
 
 // narrowed reports whether anything but the vehicles narrows the stock.
@@ -99,9 +91,6 @@ func (f stockFilter) Values() url.Values {
 	q := url.Values{}
 	for _, id := range f.VehicleIDs {
 		q.Add("v", strconv.FormatInt(id, 10))
-	}
-	if len(f.VehicleIDs) == 0 && !f.General && f.Working != 0 {
-		q.Set("v", "all")
 	}
 	set := func(k string, on bool) {
 		if on {
@@ -159,7 +148,7 @@ func (f stockFilter) WithView(view string) string {
 // AllVehicles returns the query string without the vehicle filter, keeping
 // the search, category, toggles, view and sort.
 func (f stockFilter) AllVehicles() string {
-	f.VehicleIDs, f.General, f.MatchAll, f.All = nil, false, false, true
+	f.VehicleIDs, f.General, f.MatchAll = nil, false, false
 	return f.Encode()
 }
 
@@ -252,16 +241,8 @@ func (s *Server) loadStock(r *http.Request, forPage bool) (stockPage, error) {
 		f.Working = workingOn(r, vehicles)
 	}
 	defaulted := false
-	switch {
-	case f.Working != 0:
-		if !f.followsWorking() {
-			f.VehicleIDs, f.General, f.MatchAll, f.All, defaulted = []int64{f.Working}, true, false, false, true
-		}
-	case !f.chosen() && fromFilterForm(q):
-		f.All = true
-	}
-	if len(f.VehicleIDs) > 0 || f.General {
-		f.All = false
+	if f.Working != 0 && !f.followsWorking() {
+		f.VehicleIDs, f.General, f.MatchAll, defaulted = []int64{f.Working}, true, false, true
 	}
 	sf := f.store()
 	sf.Today = s.now()

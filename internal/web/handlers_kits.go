@@ -332,7 +332,7 @@ func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	// New work is for the vehicle worked on (a form opened before a switch).
-	msg, err := s.otherWork(r, in.VehicleID, "add it", false)
+	msg, err := s.otherWork(r, in.VehicleID, "add this kit", false)
 	if err != nil {
 		return err
 	}

@@ -11,11 +11,13 @@ import (
 
 // Working on a vehicle is a cookie, like the theme: it belongs to the
 // device (the phone in the garage works on the bike on the stand, the
-// desktop sees every vehicle). It is never a hidden filter. It decides
-// where a list page with no vehicle in its address goes (a 303 to the
-// address with the vehicle added); the address decides what a page shows,
-// and v=all says "every vehicle" on purpose. See docs/design.md, "Working
-// on a vehicle".
+// desktop sees every vehicle). It is never a hidden filter: while it is
+// set, a list page (listPages) whose address asks for anything but that
+// vehicle (with General on Stock and Activity) gets a 303 to the address
+// for it, so the address always says what the page shows, and the bar and
+// the page never disagree. New services and kits are for it (otherWork).
+// Exports follow their address only. See docs/design.md, "Working on a
+// vehicle".
 const workingCookie = "working_on"
 
 // workingMaxAge is the longest browsers keep a cookie.
@@ -86,8 +88,7 @@ func workingOn(r *http.Request, vehicles []stock.Vehicle) int64 {
 // workingFor is the vehicle being worked on for the layout (nil for none)
 // and the cookie as it stands after this response, which app.js compares
 // on Back. A cookie that names no active vehicle (deleted, archived,
-// garbage) is cleared; with a single active vehicle it is kept, for when a
-// second one comes back.
+// garbage) is cleared, and so is one while a single vehicle is active.
 func workingFor(w http.ResponseWriter, r *http.Request, vehicles []stock.Vehicle) (*stock.Vehicle, string) {
 	if _, err := r.Cookie(workingCookie); err != nil {
 		return nil, ""
@@ -98,37 +99,27 @@ func workingFor(w http.ResponseWriter, r *http.Request, vehicles []stock.Vehicle
 		http.SetCookie(w, &http.Cookie{Name: workingCookie, Path: "/", MaxAge: -1, SameSite: http.SameSiteLaxMode})
 		return nil, ""
 	}
-	value := strconv.FormatInt(id, 10)
 	if countActive(vehicles) < 2 {
-		return nil, value
+		// Nothing to switch with one active vehicle: stop, so a choice made
+		// months ago doesn't come back when a second one is added.
+		http.SetCookie(w, &http.Cookie{Name: workingCookie, Path: "/", MaxAge: -1, SameSite: http.SameSiteLaxMode})
+		return nil, ""
 	}
-	return v, value
+	return v, strconv.FormatInt(id, 10)
 }
 
-// parseVehicleParam reads a list page's ?v=: an id (chosen), "all" (every
-// vehicle, chosen on purpose: id 0), or nothing (not chosen).
-func parseVehicleParam(q url.Values) (id int64, chosen bool) {
-	if !q.Has("v") {
-		return 0, false
-	}
-	if q.Get("v") == "all" {
-		return 0, true
-	}
+// vehicleParam reads a list page's ?v=, 0 for none (or not an id).
+func vehicleParam(q url.Values) int64 {
 	if p := parseOptID(q.Get("v")); p != nil {
-		return *p, true
+		return *p
 	}
-	return 0, false
+	return 0
 }
 
-// setVehicleParam writes a list page's vehicle into q: v=id, or for every
-// vehicle v=all while one is worked on (without it the page would go to
-// that one), and nothing otherwise.
-func setVehicleParam(q url.Values, id, working int64) {
-	switch {
-	case id != 0:
+// setVehicleParam writes a list page's vehicle into q (v=id), nothing for 0.
+func setVehicleParam(q url.Values, id int64) {
+	if id != 0 {
 		q.Set("v", strconv.FormatInt(id, 10))
-	case working != 0:
-		q.Set("v", "all")
 	}
 }
 
@@ -166,8 +157,8 @@ func (s *Server) working(r *http.Request) (int64, error) {
 // otherWork is the form error for new work (a service, a kit) for another
 // vehicle than the one worked on, "" when it is fine: while a vehicle is
 // worked on, new work is for it (like "archived means no new work"). A
-// form opened before a switch comes back with this. what is "log this" or
-// "add it"; fixed reports that the form can't choose the vehicle (a kit's
+// form opened before a switch comes back with this. what is "log this
+// service" or "add this kit"; fixed reports that the form can't choose the vehicle (a kit's
 // service), so the only way is to work on the other one.
 func (s *Server) otherWork(r *http.Request, vehicleID int64, what string, fixed bool) (string, error) {
 	vehicles, err := s.store.ListVehicles(r.Context())
@@ -189,7 +180,7 @@ func (s *Server) otherWork(r *http.Request, vehicleID int64, what string, fixed 
 	if fixed {
 		return "You're working on " + name(working) + ": work on " + name(vehicleID) + " first to " + what, nil
 	}
-	return "You're working on " + name(working) + ": choose it, or work on " + name(vehicleID) + " first to " + what + " for it", nil
+	return "You're working on " + name(working) + ": choose it, or work on " + name(vehicleID) + " first to " + what, nil
 }
 
 // setWorkingOn starts working on a vehicle (vehicle=ID) or stops (empty),

@@ -44,7 +44,7 @@ func (p dashboardPage) Link(path, extra string) template.URL {
 	if path != "/services" && p.VehicleID != 0 {
 		q.Set("general", "1")
 	}
-	setVehicleParam(q, p.VehicleID, p.Working)
+	setVehicleParam(q, p.VehicleID)
 	return template.URL(joinQuery(path, q.Encode())) //nolint:gosec // our own paths, and a query url.Values encoded
 }
 
@@ -57,7 +57,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	// While a vehicle is worked on, the dashboard is about it, whatever the
 	// address asks for.
 	working := workingOn(r, vehicles)
-	vid, _ := parseVehicleParam(r.URL.Query())
+	vid := vehicleParam(r.URL.Query())
 	if working != 0 && vid != working {
 		http.Redirect(w, r, "/?v="+strconv.FormatInt(working, 10), http.StatusSeeOther)
 		return nil
@@ -202,7 +202,7 @@ func (p activityPage) filterValues(kind string, year int) url.Values {
 	if p.Item != nil {
 		q.Set("item", strconv.FormatInt(p.Item.ID, 10))
 	} else {
-		setVehicleParam(q, p.VehicleID, p.Working)
+		setVehicleParam(q, p.VehicleID)
 		if p.General {
 			q.Set("general", "1")
 		}
@@ -300,7 +300,7 @@ func (s *Server) activityVehicle(r *http.Request, item *stock.Item, forPage bool
 		return c, nil
 	}
 	q := r.URL.Query()
-	id, _ := parseVehicleParam(q)
+	id := vehicleParam(q)
 	c.general = q.Get("general") == "1"
 	if c.working != 0 && (id != c.working || !c.general) {
 		id, c.general, c.defaulted = c.working, true, true

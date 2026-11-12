@@ -106,12 +106,13 @@ func TestWorkingOnStaleCookie(t *testing.T) {
 		t.Errorf("archived vehicle's cookie not cleared: %+v", c)
 	}
 	// With one active vehicle there is nothing to switch: no bar, no
-	// redirect, no Work on chips; the cookie stays for when one comes back.
+	// redirect, no Work on chips, and the choice stops, so it doesn't come
+	// back months later when a second vehicle is added.
 	rec = a.getWorking("/stock", itoa(k390))
 	expect(t, rec, http.StatusOK, "Stock by vehicle")
 	expectNot(t, rec, workingBar, `action="/working-on"`)
-	if c := workingCookieSet(rec); c != nil {
-		t.Errorf("one vehicle's cookie touched: %+v", c)
+	if c := workingCookieSet(rec); c == nil || c.MaxAge >= 0 {
+		t.Errorf("one vehicle's cookie not cleared: %+v", c)
 	}
 }
 
@@ -154,7 +155,8 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, "Hiflofiltro", "Clear filters")
 		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>Services</h1>")
 		rec = a.getWorking("/activity?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, "<h1>Activity</h1>", "Chain lube", "Silkolene")
+		expect(t, rec, http.StatusOK, "<h1>Activity</h1>", "Chain lube", "Silkolene",
+			"Every change to the stock that fits KTM 390 (General too), except parts other vehicles' services took")
 		expectNot(t, rec, "Hiflofiltro", "Big service") // B's service took the shared ring: not A's
 	})
 	t.Run("dashboard", func(t *testing.T) {
@@ -241,6 +243,9 @@ func TestWorkingOnPages(t *testing.T) {
 		rec = a.getWorking("/activity/export.csv?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "Silkolene")
 		expectNot(t, rec, "Hiflofiltro")
+		rec = a.getWorking("/activity/export.csv?general=1", w)
+		expect(t, rec, http.StatusOK, "Chain lube")
+		expectNot(t, rec, "Silkolene", "Hiflofiltro")
 	})
 	t.Run("an unknown vehicle isn't chosen", func(t *testing.T) {
 		// Without a vehicle worked on, a deleted vehicle's link shows every
@@ -253,6 +258,8 @@ func TestWorkingOnPages(t *testing.T) {
 		// "Oil Filter" finds the shared ring here, and the KTM 1290's filter.
 		rec := a.getWorking("/stock?general=1&q=Oil+Filter&v="+w, w)
 		expect(t, rec, http.StatusOK, "O-Ring", "<span>1 more in other vehicles</span>")
+		// Without a search or filter there is no note: the bar says it.
+		expectNot(t, a.getWorking("/stock?general=1&v="+w, w), "more in other vehicles")
 	})
 	t.Run("the bar is the vehicle control", func(t *testing.T) {
 		// The pages' vehicle and General chips are hidden; the stock's filter
@@ -327,17 +334,34 @@ func TestWorkingOnPages(t *testing.T) {
 		// An item isn't work on a vehicle: its vehicles stay a choice.
 		expect(t, a.getWorking("/items/new?vehicle="+k, w), http.StatusOK, `name="vehicle" value="`+k+`" checked`)
 		// A form opened before the switch is refused, keeping what was typed.
-		rec := a.postWorking("/services", url.Values{"vehicle_id": {k}, "title": {"Tyre swap"}, "performed_on": {"2026-10-29"}}, w)
-		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to log this for it", `value="Tyre swap"`)
+		// The Vehicle field comes back with the other vehicle chosen and the
+		// error under it, so it can be changed; the form key is kept.
+		key := newFormKey()
+		form := url.Values{"vehicle_id": {k}, "title": {"Tyre swap"}, "performed_on": {"2026-10-29"}, "form_key": {key}}
+		rec := a.postWorking("/services", form, w)
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to log this service",
+			`value="Tyre swap"`, `id="vehicle_id"`, `value="`+key+`"`)
+		if !regexp.MustCompile(`<option value="` + k + `"[^>]*selected>`).MatchString(rec.Body.String()) {
+			t.Error("the refused form doesn't keep the other vehicle chosen")
+		}
 		rec = a.postWorking("/services", url.Values{"vehicle_id": {k}, "kit_id": {itoa(kit)}, "kit_name": {"Big kit"}, "title": {"Big kit"}, "performed_on": {"2026-10-29"}}, w)
-		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: work on KTM 1290 first to log this")
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: work on KTM 1290 first to log this service")
 		rec = a.postWorking("/kits", url.Values{"vehicle_id": {k}, "name": {"Tyre kit"}}, w)
-		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to add it for it", `value="Tyre kit"`)
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to add this kit", `value="Tyre kit"`)
 		if services, _ := a.store.ListServices(ctx, store.ServiceFilter{VehicleID: k1290}); slices.ContainsFunc(services, func(r stock.ServiceRecord) bool { return r.Title == "Tyre swap" }) {
 			t.Error("a service for another vehicle was saved")
 		}
+		// Working on that vehicle, the same form (and key) saves.
+		if rec := a.postWorking("/services", form, k); rec.Code != http.StatusSeeOther {
+			t.Errorf("the refused form, after switching: %d\n%s", rec.Code, truncate(rec.Body.String()))
+		}
 		// Without a vehicle worked on, they save.
 		expect(t, a.post("/kits", url.Values{"vehicle_id": {k}, "name": {"Tyre kit"}}), http.StatusSeeOther)
+		// Log service offers only the worked-on vehicle's kits to start from.
+		rec = a.getWorking("/services/new", w)
+		expect(t, rec, http.StatusOK)
+		expectNot(t, rec, `href="/services/new?kit=`+itoa(kit)+`"`)
+		expect(t, a.get("/services/new"), http.StatusOK, `href="/services/new?kit=`+itoa(kit)+`"`)
 	})
 	t.Run("add another keeps General", func(t *testing.T) {
 		rec := a.postWorking("/items", url.Values{"name": {"Zip ties"}, "unit": {"piece"}, "quantity": {"10"}, "next": {"new"}}, w)

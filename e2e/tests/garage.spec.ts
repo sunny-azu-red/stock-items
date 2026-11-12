@@ -656,6 +656,37 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page.locator("#filter-all")).toBeVisible();
 });
 
+test("Back after switching vehicles shows the one worked on now", async ({ page, browserName }, testInfo) => {
+  // Back may bring a page from before the switch out of the page cache,
+  // which the server never sees: app.js compares the cookie with the page
+  // and reloads it. Shopping isn't narrowed, so only the bar tells.
+  const base = testInfo.project.use.baseURL as string;
+  const check = async (p: Page, fromPageCache: boolean) => {
+    await p.addInitScript(() => {
+      window.addEventListener("pageshow", (e) => { if (e.persisted) sessionStorage.setItem("restored", "1"); });
+    });
+    await workingCookie(p, base, "KTM 390");
+    await p.goto("/shopping");
+    await expect(p.locator(".working-on")).toContainText("Working on KTM 390");
+    await workingCookie(p, base, "KTM 1290"); // another page, then the switch
+    await p.goBack();
+    await expect(p).toHaveURL(/\/shopping$/);
+    await expect(p.locator(".working-on")).toContainText("Working on KTM 1290");
+    if (fromPageCache) expect(await p.evaluate(() => sessionStorage.getItem("restored"))).toBe("1");
+  };
+  await check(page, false);
+
+  // Playwright turns Chromium's page cache off; this full Chromium has it.
+  test.skip(browserName !== "chromium");
+  const browser = await chromium.launch({ channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] });
+  try {
+    const context = await browser.newContext({ baseURL: base });
+    await check(await context.newPage(), true);
+  } finally {
+    await browser.close();
+  }
+});
+
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
   await page.goto("/stock");
   const copy = page.getByRole("link", { name: "Copy as text" });

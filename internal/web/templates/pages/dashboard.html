@@ -7,7 +7,6 @@
   <div class="actions">
     <a class="btn" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
     <a class="btn btn-primary" href="/items/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "plus"}} Add item</a>
-    {{template "theme-toggle" "mobile-only"}}
   </div>
 </div>
 {{if and (not .WorkingOn) (gt (len .NavVehicles) 1)}}
@@ -57,6 +56,9 @@
   </div>
 
   <div class="stack">
+    {{/* While a vehicle is worked on, the dashboard is about it; the bar,
+         the nav's Vehicle and Switch lead to the others. */}}
+    {{if not .WorkingOn}}
     <section class="card">
       <div class="card-head"><h2>{{icon "warehouse"}} Vehicles</h2><a class="more" href="/vehicles">All vehicles →</a></div>
       {{if $d.Vehicles}}
@@ -67,12 +69,13 @@
             <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
             <span class="meta">{{plural .ItemCount "item"}}{{with .Odometer}} · {{distance .}}{{end}}</span>
           </span>
-          {{if or (not $.WorkingOn) (eq .ID $.WorkingOn.ID)}}<a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>{{end}}
+          <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
         </li>
         {{end}}
       </ul>
       {{else}}<div class="card-body"><a href="/vehicles/new">Add a vehicle</a> to start tagging items.</div>{{end}}
     </section>
+    {{end}}
 
     <section class="card">
       <div class="card-head"><h2>{{icon "triangle-alert"}} Low stock</h2>{{if $d.SuggestionCount}}<a class="more" href="/shopping">{{$d.SuggestionCount}} suggested →</a>{{end}}</div>

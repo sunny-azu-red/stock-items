@@ -209,9 +209,11 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, other, "Stock list →", `href="/services?v=`+itoa(k1290)+`"`)
 		expect(t, a.getWorking("/vehicles/"+w, w), http.StatusOK, "Stock list →", `href="/services?v=`+w+`"`)
 		expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Stock list →")
+		// The dashboard leaves out its Vehicles panel (and its Stock →).
 		dash := a.getWorking("/?v="+w, w)
-		expect(t, dash, http.StatusOK, `href="/stock?v=`+w+`">Stock →`)
-		expectNot(t, dash, `href="/stock?v=`+itoa(k1290)+`">Stock →`)
+		expect(t, dash, http.StatusOK)
+		expectNot(t, dash, `All vehicles →`, `">Stock →`)
+		expect(t, a.get("/"), http.StatusOK, `All vehicles →`, `href="/stock?v=`+w+`">Stock →`, `href="/stock?v=`+itoa(k1290)+`">Stock →`)
 		// Stock rows' vehicle chips are labels, also after a quick +/-.
 		list := a.getWorking("/stock?general=1&v="+w+"&view=list", w)
 		expect(t, list, http.StatusOK, `<span class="dot"></span>KTM 1290</span>`)
@@ -399,6 +401,37 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
 		expectNot(t, rec, workingBar, `aria-pressed="true"`)
 	})
+}
+
+// While a vehicle is worked on, the nav's Vehicles is that vehicle's page
+// (Vehicle, its kind icon) and the bar's name opens it; the list stays
+// where it was, one link away on the vehicle's page.
+func TestWorkingOnNav(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	w := itoa(k390)
+	nav := `<a class="nav-vehicle" href="/vehicles/` + w + `"`
+	barLink := `<a class="working-name" href="/vehicles/` + w + `">`
+	for _, path := range []string{"/shopping", "/trash", "/vehicles", "/vehicles/" + itoa(k1290)} {
+		rec := a.getWorking(path, w)
+		expect(t, rec, http.StatusOK, nav, `"></use></svg>Vehicle</a>`, barLink)
+		expectNot(t, rec, `<a href="/vehicles" `)
+	}
+	// The list isn't narrowed, and the vehicle's page leads back to it.
+	expect(t, a.getWorking("/vehicles", w), http.StatusOK, "<h1>Vehicles</h1>", "KTM 1290")
+	own := a.getWorking("/vehicles/"+w, w)
+	expect(t, own, http.StatusOK, `<a class="btn btn-ghost" href="/vehicles">`, `<span class="working-name">`, nav+` aria-current="page"`)
+	expectNot(t, own, barLink)
+	// Without one: the list, under its own name.
+	rec := a.get("/shopping")
+	expect(t, rec, http.StatusOK, `<a href="/vehicles" >`, `#i-warehouse"></use></svg>Vehicles</a>`)
+	expectNot(t, rec, `class="nav-vehicle"`)
+	// The phone's More opens the sidebar, which leaves out what the
+	// tabbar has; Activity and Trash moved off the vehicles list into it.
+	rec = a.getWorking("/activity?general=1&v="+w, w)
+	expect(t, rec, http.StatusOK, `<aside class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
+	expectNot(t, a.get("/vehicles"), `href="/activity"><svg`, `Trash (`)
+	expectNot(t, a.get("/shopping"), `popovertarget="more" class="current"`)
 }
 
 // An empty stock while working on a vehicle says so; it once failed (500)

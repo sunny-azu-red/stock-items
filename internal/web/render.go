@@ -35,6 +35,7 @@ var staticFS embed.FS
 type View struct {
 	Title    string
 	Nav      string
+	Path     string // the request's path
 	Flash    *Flash
 	Currency string
 	Version  string
@@ -211,6 +212,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	v.Version = s.version
 	v.Today = s.now()
 	v.Theme = themeFrom(r)
+	v.Path = r.URL.Path
 	if v.Flash == nil {
 		v.Flash = s.popFlash(w, r)
 	}

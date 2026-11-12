@@ -15,17 +15,22 @@
 <body>
 {{template "icons"}}
 <div class="shell">
-  <aside class="sidebar">
+  {{/* On a phone, the tabbar's More opens it as a sheet (a popover: Esc
+       and a tap outside close it). */}}
+  <aside class="sidebar" id="more" popover aria-label="More">
     <div class="sidebar-head">
       <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
       {{template "theme-toggle" ""}}
     </div>
     <nav class="nav" aria-label="Main">
-      {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard"))}}
-      {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock"))}}
-      {{template "nav-link" (dict "Href" "/services" "Icon" "wrench" "Label" "Services" "Active" (eq .Nav "services"))}}
-      {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping" "Active" (eq .Nav "shopping") "Count" .ShoppingCount)}}
-      {{template "nav-link" (dict "Href" "/vehicles" "Icon" "warehouse" "Label" "Vehicles" "Active" (eq .Nav "vehicles"))}}
+      {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard") "Tab" true)}}
+      {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock") "Tab" true)}}
+      {{template "nav-link" (dict "Href" "/services" "Icon" "wrench" "Label" "Services" "Active" (eq .Nav "services") "Tab" true)}}
+      {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping" "Active" (eq .Nav "shopping") "Count" .ShoppingCount "Tab" true)}}
+      {{/* While a vehicle is worked on, its page: the list stays one link
+           away, on that page (working.go). */}}
+      {{with .WorkingOn}}<a class="nav-vehicle" href="/vehicles/{{.ID}}" {{if eq $.Nav "vehicles"}}aria-current="page" {{end}}style="{{chipStyle .Color}}">{{icon .Kind.Icon}}Vehicle</a>
+      {{else}}{{template "nav-link" (dict "Href" "/vehicles" "Icon" "warehouse" "Label" "Vehicles" "Active" (eq .Nav "vehicles"))}}{{end}}
       {{template "nav-link" (dict "Href" "/activity" "Icon" "history" "Label" "Activity" "Active" (eq .Nav "activity"))}}
       {{if .TrashCount}}{{template "nav-link" (dict "Href" "/trash" "Icon" "trash-2" "Label" "Trash" "Active" (eq .Nav "trash") "Count" .TrashCount "Muted" true)}}{{end}}
     </nav>
@@ -69,13 +74,14 @@
   <a href="/stock" {{if eq .Nav "stock"}}aria-current="page"{{end}}>{{icon "package"}}Stock</a>
   <a href="/services" {{if eq .Nav "services"}}aria-current="page"{{end}}>{{icon "wrench"}}Services</a>
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shop{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>
-  <a href="/vehicles" {{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash")}}aria-current="page"{{end}}>{{icon "warehouse"}}Vehicles</a>
+  <button type="button" popovertarget="more"{{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash")}} class="current"{{end}}>{{icon "menu"}}More</button>
 </nav>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 </body>
 </html>{{end}}
 
-{{define "nav-link"}}<a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}</a>{{end}}
+{{/* Tab: the tabbar has it too, so the phone's sheet leaves it out. */}}
+{{define "nav-link"}}<a href="{{.Href}}" {{if .Tab}}class="tab-dup" {{end}}{{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}</a>{{end}}
 
 {{/* Both buttons are rendered; CSS shows the one that switches away from the
      current theme, so it also works without JavaScript. Data: extra class. */}}
@@ -93,11 +99,13 @@
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so, switches to another (Switch, on a phone; a desktop has the
+     so (its name opens the vehicle's page), switches to another (Switch, on a phone; a desktop has the
      sidebar's Work on chips), or stops (All vehicles, an ×). It is the
      pages' vehicle control: their vehicle chips are hidden meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
-  <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
+  {{/* The name opens the vehicle's page, except on that page. */}}
+  {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
+  {{else}}<a class="working-name" href="/vehicles/{{.ID}}">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></a>{{end}}
   <span class="working-actions">
     <details class="working-switch">
       <summary class="btn btn-sm" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></summary>

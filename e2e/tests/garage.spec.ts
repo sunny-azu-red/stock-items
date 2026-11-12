@@ -508,19 +508,19 @@ test("switch between light and dark theme", async ({ page }) => {
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const light = await bg();
 
-  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await (await sidebar(page)).getByRole("button", { name: "Switch to dark theme" }).click();
   await expect(html).toHaveAttribute("data-theme", "dark");
   expect(await bg()).not.toBe(light);
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
 
   // Back to what the system shows: the choice is forgotten.
-  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await (await sidebar(page)).getByRole("button", { name: "Switch to light theme" }).click();
   await expect(html).not.toHaveAttribute("data-theme");
   expect(await bg()).toBe(light);
   await page.reload();
   await expect(html).not.toHaveAttribute("data-theme");
-  await expect(page.getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
+  await expect((await sidebar(page)).getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
 });
 
 test("Back shows the theme chosen on the next page", async ({ page, browserName }, testInfo) => {
@@ -533,7 +533,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
       window.addEventListener("pageshow", (e) => { (window as any).fromCache = e.persisted; });
     });
     await p.goto("/");
-    await p.getByRole("button", { name: "Switch to dark theme" }).click();
+    await (await sidebar(p)).getByRole("button", { name: "Switch to dark theme" }).click();
     await expect(p.locator("html")).toHaveAttribute("data-theme", "dark");
     await p.goBack({ waitUntil: "commit" });
     await expect(p).toHaveURL(/\/stock$/);
@@ -543,7 +543,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
 
     // And back to following the system.
     await p.goForward({ waitUntil: "commit" });
-    await p.getByRole("button", { name: "Switch to light theme" }).click();
+    await (await sidebar(p)).getByRole("button", { name: "Switch to light theme" }).click();
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
     await p.goBack({ waitUntil: "commit" });
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
@@ -561,6 +561,15 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
     await browser.close();
   }
 });
+
+// The sidebar, for its buttons: on a phone, the sheet the tab bar's More
+// opens (opened if it isn't).
+async function sidebar(page: Page) {
+  const sheet = page.locator("#more");
+  const more = page.locator(".tabbar").getByRole("button", { name: "More" });
+  if ((await more.isVisible()) && !(await sheet.evaluate((e) => e.matches(":popover-open")))) await more.click();
+  return sheet;
+}
 
 // Taps a vehicle in the Work on chips: the sidebar's on a desktop, the
 // dashboard's row on a phone (the sidebar is hidden there).
@@ -685,6 +694,44 @@ test("Back after switching vehicles shows the one worked on now", async ({ page,
   } finally {
     await browser.close();
   }
+});
+
+test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds the sidebar", async ({ page }, testInfo) => {
+  await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+  await page.goto("/shopping");
+  const sheet = page.locator("#more");
+  const mobile = testInfo.project.name === "mobile";
+  if (mobile) {
+    await expect(sheet).toBeHidden();
+    await sidebar(page);
+    await expect(sheet).toBeVisible();
+    // It holds what the tab bar hasn't: Activity, the theme, Work on.
+    await expect(sheet.getByRole("link", { name: "Activity" })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "Stock", exact: true })).toBeHidden();
+    await expect(sheet.locator(".work-on")).toBeVisible();
+    // A tap outside closes it.
+    await page.mouse.click(10, 10);
+    await expect(sheet).toBeHidden();
+  }
+  await (await sidebar(page)).getByRole("link", { name: "Vehicle", exact: true }).click();
+  await expect(page).toHaveURL(/\/vehicles\/\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 390");
+  if (mobile) {
+    await expect(sheet).toBeHidden();
+    await expect(page.locator(".tabbar .current")).toHaveText("More");
+  }
+  // On its own page the bar's name is no link.
+  await expect(page.locator(".working-on a.working-name")).toHaveCount(0);
+  // The list is one link away, and shows every vehicle.
+  await page.locator(".page-head").getByRole("link", { name: "Vehicles", exact: true }).click();
+  await expect(page).toHaveURL(/\/vehicles$/);
+  await expect(page.locator("a.vehicle-card").filter({ hasText: "KTM 1290" })).toBeVisible();
+  // The bar's name opens the vehicle too.
+  await page.locator(".working-on a.working-name").click();
+  await expect(page.locator("main h1")).toHaveText("KTM 390");
+  // The dashboard leaves out its Vehicles panel meanwhile.
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toHaveCount(0);
 });
 
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
@@ -1240,6 +1287,14 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   if (await page.locator(".working-on summary").isVisible()) {
     await page.locator(".working-on summary").click();
     await check("the Switch open");
+    // A phone's More sheet, working on a vehicle and not.
+    await page.goto("/shopping");
+    await sidebar(page);
+    await check("the More sheet open");
+    await page.context().clearCookies({ name: "working_on" });
+    await page.goto("/shopping");
+    await sidebar(page);
+    await check("the More sheet open, no vehicle worked on");
   }
   expect(problems).toEqual([]);
 });

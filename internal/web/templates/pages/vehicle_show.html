@@ -11,6 +11,9 @@
     </div>
   </div>
   <div class="actions">
+    {{/* The way to the list, which the nav leaves out while a vehicle is
+         worked on (it opens that vehicle's page instead). */}}
+    <a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
     <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
     {{/* While another vehicle is worked on, new work is for it (working.go). */}}
     {{$other := and .WorkingOn (ne .WorkingOn.ID $v.ID)}}

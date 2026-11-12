@@ -99,9 +99,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   /* paint the sidebar column all the way down, also below the sticky sidebar */
   background: linear-gradient(90deg, var(--surface) calc(var(--sidebar) - 1px), var(--border) calc(var(--sidebar) - 1px), var(--border) var(--sidebar), transparent var(--sidebar));
 }
+/* It is a popover (the phone's More sheet), so it undoes the browser's
+   popover box here: centred, fit to its content, bordered, Canvas colours. */
 .sidebar {
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
-  background: var(--surface); border-right: 1px solid var(--border);
+  position: sticky; inset: 0 auto auto; height: 100vh; width: auto; margin: 0; overflow-y: auto;
+  color: inherit; background: var(--surface); border: 0; border-right: 1px solid var(--border);
   padding: 18px 13px; display: flex; flex-direction: column; gap: 20px;
 }
 /* The nav links' inset, so the logo lines up with their icons. */
@@ -117,6 +119,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .nav a .icon { width: 18px; height: 18px; }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
+/* The vehicle worked on: its kind icon in its colour, as on its page. */
+.nav a.nav-vehicle .icon { color: var(--chip); }
 .nav .count { margin-left: auto; font-size: .75rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 7px; font-weight: 700; }
 /* A count that needs no action, such as what is in the trash. */
 .nav .count-muted { background: var(--surface-2); color: var(--muted); }
@@ -178,11 +182,23 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
     height: calc(var(--tabbar) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface); border-top: 1px solid var(--border);
   }
-  .tabbar a {
+  .tabbar a, .tabbar button {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     text-decoration: none; color: var(--muted); font-size: .7rem; font-weight: 500; position: relative;
   }
-  .tabbar a[aria-current="page"] { color: var(--accent); }
+  .tabbar button { font-family: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: pointer; }
+  /* More is current on the pages its sheet leads to. */
+  .tabbar a[aria-current="page"], .tabbar .current { color: var(--accent); }
+  /* More opens the sidebar as a sheet over the tabbar, without what the
+     tabbar has already, or what needs a keyboard or is on every page. */
+  .sidebar:popover-open {
+    display: flex; position: fixed; inset: auto 0 calc(var(--tabbar) + env(safe-area-inset-bottom));
+    height: auto; max-height: calc(100dvh - var(--tabbar) - env(safe-area-inset-bottom) - 64px);
+    border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 32px light-dark(rgb(0 0 0 / .15), rgb(0 0 0 / .5));
+  }
+  .sidebar::backdrop { background: rgb(0 0 0 / .35); }
+  .sidebar .tab-dup, .sidebar .sidebar-actions, .sidebar .shortcuts { display: none; }
   .tabbar .icon { width: 22px; height: 22px; }
   .tabbar .count { position: absolute; top: 8px; left: calc(50% + 6px); font-size: .65rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 6px; font-weight: 700; }
   h1 { font-size: 1.35rem; }
@@ -266,9 +282,6 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 /* Only the icon shows, so pull the button out by the space around it: the
    icon's right edge lines up with the nav's counts, or the page's edge. */
 .sidebar-head .theme-toggle .icon-btn { margin-right: calc((round(1.15em, 2px) - 34px) / 2); }
-/* Next to the page's buttons: their height, so its icon centres on theirs. */
-.page-head .theme-toggle { margin-right: calc(-10px - 1px); }
-.page-head .theme-toggle .icon-btn { width: auto; height: auto; padding: 10px; font-size: .9rem; }
 .theme-to-light { display: none !important; }
 :root[data-theme="dark"] .theme-to-dark { display: none !important; }
 :root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }
@@ -456,6 +469,9 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 }
 .working-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; }
 .working-name .icon { color: var(--chip); }
+/* The name opens the vehicle's page: plain, like a content row. */
+a.working-name { color: inherit; text-decoration: none; }
+a.working-name:hover strong { text-decoration: underline; }
 .working-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .working-actions .btn { padding-left: 8px; padding-right: 8px; }
 .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

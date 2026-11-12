@@ -833,6 +833,14 @@
     if (now !== (document.documentElement.getAttribute("data-working-on") || "") && !dirty) location.reload();
   });
 
+  // The phone's More sheet (the sidebar, a popover) closes on the way out,
+  // so a page that Back brings from the page cache doesn't come with it
+  // open.
+  window.addEventListener("pagehide", function () {
+    var more = document.getElementById("more");
+    if (more && more.matches(":popover-open")) more.hidePopover();
+  });
+
   // ---- Keyboard shortcuts -------------------------------------------------
   // "/" focuses search (opening the stock page when this page has none),
   // "a" opens Add item and "l" Log service: the first letter of the button

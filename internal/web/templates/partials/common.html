@@ -302,7 +302,7 @@
 {{define "pager"}}
 {{- if or .Prev .Next}}
 <div class="pager flex">
-  {{with .Prev}}<a class="btn btn-ghost btn-sm" href="{{.}}">{{icon "arrow-left"}} Newer</a>{{end}}
+  {{with .Prev}}<a class="btn btn-ghost btn-sm" href="{{.}}">{{icon "chevron-left"}} Newer</a>{{end}}
   {{with .Next}}<a class="btn btn-ghost btn-sm" href="{{.}}">Older {{icon "chevron-right"}}</a>{{end}}
 </div>
 {{- end}}

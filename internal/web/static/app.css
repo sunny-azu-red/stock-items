@@ -710,7 +710,11 @@ a.kit-row.muted:hover { color: var(--muted); }
 /* A card's footer: a total under its list (Service history's labour), with
    the list's pager on the same row when it has pages. */
 .card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 12px 19px; border-top: 1px solid var(--border); background: var(--surface-2); font-size: .85rem; }
-.card-foot .pager { padding: 0; }
+/* The pager's ghost buttons line their icon up with the list's text (their
+   padding and border, 11px, hang into the gutter), and the row keeps the
+   height of a footer with only text: 7 + 30px button + 7. */
+.card-foot:has(.pager) { padding-block: 7px; }
+.card-foot .pager { padding: 0; margin-left: -11px; }
 .card-foot .total { flex: 1; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
 .card-foot .pager + .total { flex: none; }
 .card-foot .total strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }

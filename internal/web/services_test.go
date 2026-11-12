@@ -162,8 +162,23 @@ func TestServicesShowLabour(t *testing.T) {
 	k390, _ := a.seed()
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"},
 		"labor_cost": {"350"}}), http.StatusSeeOther)
-	expect(t, a.get("/services"), http.StatusOK, "350.00 EUR labour", "350.00 EUR labour in total")
-	expect(t, a.get("/vehicles/"+itoa(k390)), http.StatusOK, "350.00 EUR labour")
+	// Each service shows its own labour; the card's footer shows the total, not its header.
+	total := `<div class="card-foot"><span class="total"><span>Labour in total</span><strong>350.00 EUR</strong></span>`
+	services := a.get("/services")
+	expect(t, services, http.StatusOK, "350.00 EUR labour", total)
+	expectNot(t, services, "labour in total")
+	vehicle := a.get("/vehicles/" + itoa(k390))
+	expect(t, vehicle, http.StatusOK, "350.00 EUR labour",
+		`<div class="card-foot"><span class="total"><span>Labour in total</span><strong>350.00 EUR</strong></span></div>`)
+	expectNot(t, vehicle, "EUR labour</span><span>·")
+}
+
+func TestServicesNoLabourNoFooter(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
+	expectNot(t, a.get("/services"), "card-foot")
+	expectNot(t, a.get("/vehicles/"+itoa(k390)), "card-foot")
 }
 
 func TestServicesPaging(t *testing.T) {
@@ -176,7 +191,11 @@ func TestServicesPaging(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	expect(t, a.get("/services"), http.StatusOK, `<span class="muted small">101`, `href="/services?page=2"`, "Check 100")
+	// No labour: the footer holds only the pager.
+	page1 := a.get("/services")
+	expect(t, page1, http.StatusOK, `<span class="muted small">101 services</span>`, `href="/services?page=2"`, "Check 100",
+		`<div class="card-foot">`+"\n"+`<div class="pager flex">`)
+	expectNot(t, page1, "Labour in total")
 	page2 := a.get("/services?page=2")
 	expect(t, page2, http.StatusOK, "Check 0", "Newer")
 	expectNot(t, page2, "Check 100")

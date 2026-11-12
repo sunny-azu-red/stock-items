@@ -264,6 +264,9 @@
 </ul>
 {{end}}
 
+{{/* A card footer's labour total, all of the services and not just those listed: float64 */}}
+{{define "labour-total"}}<span class="total"><span>Labour in total</span><strong>{{money .}}</strong></span>{{end}}
+
 {{/* Compact movement list for narrow columns: []Movement */}}
 {{define "activity-list"}}
 <ul class="list">
@@ -297,10 +300,10 @@
 
 {{/* Pager controls: dict "Prev" string "Next" string */}}
 {{define "pager"}}
-{{if or .Prev .Next}}
+{{- if or .Prev .Next}}
 <div class="pager flex">
   {{with .Prev}}<a class="btn btn-ghost btn-sm" href="{{.}}">{{icon "arrow-left"}} Newer</a>{{end}}
   {{with .Next}}<a class="btn btn-ghost btn-sm" href="{{.}}">Older {{icon "chevron-right"}}</a>{{end}}
 </div>
-{{end}}
-{{end}}
+{{- end}}
+{{- end}}

@@ -109,6 +109,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 * **Flex alignment**: All heading containers (`.card-head h2`, `.results-head h2`, `.section-head h2`) must use `display: flex; align-items: center; gap: 8px;` so icons, heading text, delimiters, and count badges center on the exact same vertical line.
 * **Delimiters**: Separate a title from its item counter or secondary info using the middle dot ` · ` (e.g. `Stock for KillJoy · 0 items`).
 * **Card Head Meta (`.card-head .meta`) & Results Count (`.results-head .count`)**: Sort-reset links, bullet delimiters, and count texts must be wrapped in an inline-flex container (`display: inline-flex; align-items: center; gap: 6px; color: var(--muted);`, at `.85rem` in a card head and `.9rem` in a results head).
+* **Card footer (`.card-foot`)**: A total that sums the card's list (Service history's "Labour in total") goes in a footer band under the list, not in the header, which keeps only the title, a count and its link. The label is on the left and the amount on the right; when the list has pages, Newer / Older take the left of the same row and the total sits together on the right.
 
 ---
 

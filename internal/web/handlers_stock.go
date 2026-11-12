@@ -208,7 +208,8 @@ type stockPage struct {
 	// Others is how many more items the search and filters find in other
 	// vehicles, while the stock follows the vehicle being worked on.
 	Others int
-	// defaulted: the address chose no vehicle and got the one worked on.
+	// defaulted: the address asked for other vehicles than the one worked
+	// on (with General), which a page with the bar always shows.
 	defaulted bool
 }
 
@@ -230,7 +231,12 @@ func (p stockPage) RowScope() int64 {
 	return p.Sole
 }
 
-func (s *Server) loadStock(r *http.Request) (stockPage, error) {
+// loadStock reads the stock the address asks for. For the page (forPage),
+// while a vehicle is worked on, that is always its stock with General:
+// whatever else the address asks for is replaced (defaulted, so the page
+// goes to its own address). The exports follow their address only: the
+// page links to them with its own.
+func (s *Server) loadStock(r *http.Request, forPage bool) (stockPage, error) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	f := parseStockFilter(q)
@@ -238,14 +244,21 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 	if err != nil {
 		return stockPage{}, err
 	}
-	f.Working = workingOn(r, vehicles)
+	// A vehicle that doesn't exist (deleted, a typo) isn't chosen.
+	f.VehicleIDs = slices.DeleteFunc(f.VehicleIDs, func(id int64) bool {
+		return !slices.ContainsFunc(vehicles, func(v stock.Vehicle) bool { return v.ID == id })
+	})
+	if forPage {
+		f.Working = workingOn(r, vehicles)
+	}
 	defaulted := false
 	switch {
-	case f.chosen():
-	case fromFilterForm(q):
-		f.All = true
 	case f.Working != 0:
-		f.VehicleIDs, f.General, defaulted = []int64{f.Working}, true, true
+		if !f.followsWorking() {
+			f.VehicleIDs, f.General, f.MatchAll, f.All, defaulted = []int64{f.Working}, true, false, false, true
+		}
+	case !f.chosen() && fromFilterForm(q):
+		f.All = true
 	}
 	if len(f.VehicleIDs) > 0 || f.General {
 		f.All = false
@@ -270,12 +283,19 @@ func (s *Server) loadStock(r *http.Request) (stockPage, error) {
 }
 
 func (s *Server) stockPage(w http.ResponseWriter, r *http.Request) error {
-	p, err := s.loadStock(r)
+	p, err := s.loadStock(r, true)
 	if err != nil {
 		return err
 	}
 	if p.defaulted {
-		http.Redirect(w, r, joinQuery("/stock", p.Filter.Encode()), http.StatusSeeOther)
+		to := joinQuery("/stock", p.Filter.Encode())
+		if isHTMX(r) {
+			// A filter from a page opened before the vehicle was chosen:
+			// the whole page changes (its vehicle chips go), not the results.
+			w.Header().Set("HX-Redirect", to)
+			return nil
+		}
+		http.Redirect(w, r, to, http.StatusSeeOther)
 		return nil
 	}
 	if fromFilterForm(r.URL.Query()) {
@@ -311,7 +331,7 @@ func (s *Server) stockPage(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) stockExportText(w http.ResponseWriter, r *http.Request) error {
-	p, err := s.loadStock(r)
+	p, err := s.loadStock(r, false)
 	if err != nil {
 		return err
 	}
@@ -326,7 +346,7 @@ func (s *Server) stockExportText(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) stockExportCSV(w http.ResponseWriter, r *http.Request) error {
-	p, err := s.loadStock(r)
+	p, err := s.loadStock(r, false)
 	if err != nil {
 		return err
 	}

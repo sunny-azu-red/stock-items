@@ -67,7 +67,7 @@
             <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
             <span class="meta">{{plural .ItemCount "item"}}{{with .Odometer}} · {{distance .}}{{end}}</span>
           </span>
-          <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
+          {{if or (not $.WorkingOn) (eq .ID $.WorkingOn.ID)}}<a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>{{end}}
         </li>
         {{end}}
       </ul>

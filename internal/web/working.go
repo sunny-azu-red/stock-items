@@ -27,16 +27,28 @@ var listPages = []string{"/", "/stock", "/services", "/activity"}
 // newPages are the add forms that start with the vehicle chosen.
 var newPages = []string{"/items/new", "/services/new", "/kits/new"}
 
-// workingCookieID is the vehicle id the cookie holds, or 0.
+// workingCookieID is the vehicle id the cookie holds, or 0. Only the plain
+// digits the server writes count ("+1" or " 1" don't): app.js compares the
+// cookie with what the page was rendered for, and must read it the same.
 func workingCookieID(r *http.Request) int64 {
 	c, err := r.Cookie(workingCookie)
 	if err != nil {
 		return 0
 	}
-	if id := parseOptID(c.Value); id != nil {
-		return *id
+	id, err := strconv.ParseInt(c.Value, 10, 64)
+	if err != nil || id <= 0 || strconv.FormatInt(id, 10) != c.Value {
+		return 0
 	}
-	return 0
+	return id
+}
+
+// workingCookieValue is the cookie's id as the page renders it for app.js,
+// "" for none or one that isn't plain digits.
+func workingCookieValue(r *http.Request) string {
+	if id := workingCookieID(r); id != 0 {
+		return strconv.FormatInt(id, 10)
+	}
+	return ""
 }
 
 // countActive is how many vehicles are not archived.
@@ -77,8 +89,7 @@ func workingOn(r *http.Request, vehicles []stock.Vehicle) int64 {
 // garbage) is cleared; with a single active vehicle it is kept, for when a
 // second one comes back.
 func workingFor(w http.ResponseWriter, r *http.Request, vehicles []stock.Vehicle) (*stock.Vehicle, string) {
-	c, err := r.Cookie(workingCookie)
-	if err != nil {
+	if _, err := r.Cookie(workingCookie); err != nil {
 		return nil, ""
 	}
 	id := workingCookieID(r)
@@ -87,10 +98,11 @@ func workingFor(w http.ResponseWriter, r *http.Request, vehicles []stock.Vehicle
 		http.SetCookie(w, &http.Cookie{Name: workingCookie, Path: "/", MaxAge: -1, SameSite: http.SameSiteLaxMode})
 		return nil, ""
 	}
+	value := strconv.FormatInt(id, 10)
 	if countActive(vehicles) < 2 {
-		return nil, c.Value
+		return nil, value
 	}
-	return v, c.Value
+	return v, value
 }
 
 // parseVehicleParam reads a list page's ?v=: an id (chosen), "all" (every

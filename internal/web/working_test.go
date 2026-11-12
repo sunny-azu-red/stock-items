@@ -86,7 +86,8 @@ func TestWorkingOnSwitch(t *testing.T) {
 func TestWorkingOnStaleCookie(t *testing.T) {
 	a := newApp(t)
 	k390, k1290 := a.seed()
-	for _, cookie := range []string{"99999", "abc"} {
+	// Only the plain digits the server writes: app.js compares them.
+	for _, cookie := range []string{"99999", "abc", "+" + itoa(k390), "0" + itoa(k390)} {
 		rec := a.getWorking("/stock", cookie)
 		expect(t, rec, http.StatusOK, "Hiflofiltro")
 		expectNot(t, rec, workingBar)
@@ -152,22 +153,9 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, "<title>Stock ·", "<h1>Stock</h1>", workingBar, "Working on <strong>KTM 390</strong>", "Chain lube", "Only this vehicle")
 		expectNot(t, rec, "Hiflofiltro", "Clear filters")
 		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>Services</h1>")
-		// Another vehicle than the bar's: the title says which.
-		expect(t, a.getWorking("/services?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 services</h1>")
-		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 stock</h1>")
 		rec = a.getWorking("/activity?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "<h1>Activity</h1>", "Chain lube", "Silkolene")
 		expectNot(t, rec, "Hiflofiltro", "Big service") // B's service took the shared ring: not A's
-		// The General chip, like the stock's: off shows the vehicle's own
-		// items, alone it shows only General ones.
-		rec = a.getWorking("/activity?v="+w, w)
-		expect(t, rec, http.StatusOK, "<h1>Activity</h1>") // the bar names it
-		expect(t, rec, http.StatusOK, "Silkolene")
-		expectNot(t, rec, "Chain lube")
-		rec = a.getWorking("/activity?general=1&v=all", w)
-		expect(t, rec, http.StatusOK, "<h1>General activity</h1>", "Chain lube")
-		expectNot(t, rec, "Silkolene")
-		expect(t, a.getWorking("/activity?v="+itoa(k1290), w), http.StatusOK, "Big service")
 	})
 	t.Run("dashboard", func(t *testing.T) {
 		rec := a.getWorking("/?v="+w, w)
@@ -177,31 +165,89 @@ func TestWorkingOnPages(t *testing.T) {
 			`href="/stock?general=1&amp;low=1&amp;v=`+w+`"`, `href="/activity?general=1&amp;kind=bought&amp;v=`+w+`&amp;year=2026"`,
 			`href="/services/new?vehicle=`+w+`"`)
 		expectNot(t, rec, "Big service")
-		rec = a.getWorking("/?v=all", w)
-		expect(t, rec, http.StatusOK, "<h1>Dashboard</h1>", `<span class="value">7</span>`, `href="/stock?v=all"`)
 	})
-	t.Run("the address wins", func(t *testing.T) {
-		rec := a.getWorking("/stock?v=all", w)
-		expect(t, rec, http.StatusOK, "Hiflofiltro", "Silkolene")
-		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "Hiflofiltro", "<h1>KTM 1290 stock</h1>")
-		// The filter form with no vehicle ticked means every vehicle.
-		expectRedirect(t, a.getWorking("/stock?was_sort=name&was_dir=asc", w), "/stock?v=all")
-		// An item's history is never narrowed.
+	t.Run("the bar wins over the address", func(t *testing.T) {
+		// Whatever else an address asks for (an old bookmark, a link from
+		// before), a page with the bar shows the vehicle with General,
+		// keeping the rest of the address. An item's history is a record.
+		k := itoa(k1290)
+		for path, want := range map[string]string{
+			"/stock?v=all":                        "/stock?general=1&v=" + w,
+			"/stock?v=" + k:                       "/stock?general=1&v=" + w,
+			"/stock?v=" + w:                       "/stock?general=1&v=" + w,
+			"/stock?general=1":                    "/stock?general=1&v=" + w,
+			"/stock?v=99999&q=oil":                "/stock?general=1&q=oil&v=" + w,
+			"/stock?match=all&v=" + w + "&v=" + k: "/stock?general=1&v=" + w,
+			"/stock?was_sort=name&was_dir=asc":    "/stock?general=1&v=" + w,
+			"/services?v=all":                     "/services?v=" + w,
+			"/services?v=" + k + "&archived=1":    "/services?archived=1&v=" + w,
+			"/services?v=99999":                   "/services?v=" + w,
+			"/activity?v=all":                     "/activity?general=1&v=" + w,
+			"/activity?v=" + w:                    "/activity?general=1&v=" + w,
+			"/activity?general=1&v=all":           "/activity?general=1&v=" + w,
+			"/activity?v=" + k + "&page=3":        "/activity?general=1&v=" + w,
+			"/?v=all":                             "/?v=" + w,
+			"/?v=" + k:                            "/?v=" + w,
+		} {
+			expectRedirect(t, a.getWorking(path, w), want)
+		}
+		// The filter of a page opened before: the whole page changes.
+		req := httptest.NewRequest(http.MethodGet, "/stock?was_sort=name&was_dir=asc&v="+k, nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+		if rec := a.do(req); rec.Header().Get("HX-Redirect") != "/stock?general=1&v="+w {
+			t.Errorf("htmx filter: HX-Redirect %q", rec.Header().Get("HX-Redirect"))
+		}
 		expect(t, a.getWorking("/activity?item="+itoa(itemID(t, a.store, "Hiflofiltro")), w), http.StatusOK, "History of")
+	})
+	t.Run("links to another vehicle's list are hidden", func(t *testing.T) {
+		// They would show the worked-on vehicle's list instead.
+		other := a.getWorking("/vehicles/"+itoa(k1290), w)
+		expect(t, other, http.StatusOK)
+		expectNot(t, other, "Stock list →", `href="/services?v=`+itoa(k1290)+`"`)
+		expect(t, a.getWorking("/vehicles/"+w, w), http.StatusOK, "Stock list →", `href="/services?v=`+w+`"`)
+		expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Stock list →")
+		dash := a.getWorking("/?v="+w, w)
+		expect(t, dash, http.StatusOK, `href="/stock?v=`+w+`">Stock →`)
+		expectNot(t, dash, `href="/stock?v=`+itoa(k1290)+`">Stock →`)
+		// Stock rows' vehicle chips are labels, also after a quick +/-.
+		list := a.getWorking("/stock?general=1&v="+w+"&view=list", w)
+		expect(t, list, http.StatusOK, `<span class="dot"></span>KTM 1290</span>`)
+		expectNot(t, list, `title="Show KTM 1290 stock"`, `title="Show KTM 390 stock"`)
+		req := httptest.NewRequest(http.MethodPost, "/items/"+itoa(ring)+"/adjust", strings.NewReader("dir=up&here="+w))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+		rec := a.do(req)
+		expect(t, rec, http.StatusOK, `<span class="dot"></span>KTM 1290</span>`)
+		expectNot(t, rec, `title="Show KTM 1290 stock"`)
 	})
 	t.Run("records and global pages are not filtered", func(t *testing.T) {
 		for _, path := range []string{"/shopping", "/vehicles", "/trash", "/items/" + itoa(itemID(t, a.store, "Hiflofiltro")), "/vehicles/" + itoa(k1290)} {
 			expect(t, a.getWorking(path, w), http.StatusOK, workingBar)
 		}
 	})
-	t.Run("exports follow the address", func(t *testing.T) {
-		rec := a.getWorking("/stock/export.txt", w)
+	t.Run("exports follow their address only", func(t *testing.T) {
+		// No bar on an export: a bookmarked one keeps showing what it
+		// asks for, and a vehicle page's Copy as text that vehicle's.
+		expect(t, a.getWorking("/stock/export.txt", w), http.StatusOK, "Silkolene", "Hiflofiltro")
+		rec := a.getWorking("/stock/export.txt?v="+itoa(k1290), w)
+		expect(t, rec, http.StatusOK, "Hiflofiltro")
+		expectNot(t, rec, "Silkolene")
+		rec = a.getWorking("/stock/export.csv?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "Silkolene")
 		expectNot(t, rec, "Hiflofiltro")
-		expect(t, a.getWorking("/stock/export.txt?v=all", w), http.StatusOK, "Silkolene", "Hiflofiltro")
-		rec = a.getWorking("/activity/export.csv", w)
+		expect(t, a.getWorking("/activity/export.csv", w), http.StatusOK, "Silkolene", "Hiflofiltro")
+		rec = a.getWorking("/activity/export.csv?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "Silkolene")
 		expectNot(t, rec, "Hiflofiltro")
+	})
+	t.Run("an unknown vehicle isn't chosen", func(t *testing.T) {
+		// Without a vehicle worked on, a deleted vehicle's link shows every
+		// vehicle, not an empty list.
+		expect(t, a.get("/stock?v=99999"), http.StatusOK, "Silkolene", "Hiflofiltro")
+		expect(t, a.get("/services?v=99999"), http.StatusOK, "Big service", "<h1>Services</h1>")
+		expect(t, a.get("/activity?v=99999"), http.StatusOK, "<h1>Activity</h1>", "Hiflofiltro")
 	})
 	t.Run("a search says what is elsewhere", func(t *testing.T) {
 		// "Oil Filter" finds the shared ring here, and the KTM 1290's filter.
@@ -279,4 +325,37 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
 		expectNot(t, rec, workingBar, `aria-pressed="true"`)
 	})
+}
+
+// An empty stock while working on a vehicle says so; it once failed (500)
+// on a page asking for every vehicle.
+func TestWorkingOnEmptyStock(t *testing.T) {
+	a := newApp(t)
+	ctx := context.Background()
+	var ids []int64
+	for _, name := range []string{"A", "B"} {
+		in := stock.VehicleInput{Name: name}
+		in.Normalize()
+		id, err := a.store.CreateVehicle(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	w := itoa(ids[0])
+	expect(t, a.getWorking("/stock?general=1&v="+w, w), http.StatusOK, "Nothing in stock for A")
+	expect(t, a.getWorking("/stock?general=1&v="+w+"&view=list", w), http.StatusOK, "Nothing in stock for A")
+	expectRedirect(t, a.getWorking("/stock?v=all", w), "/stock?general=1&v="+w)
+}
+
+// The page renders the cookie for app.js even when it can't list the
+// vehicles, so app.js doesn't reload it over and over.
+func TestWorkingCookieValue(t *testing.T) {
+	for raw, want := range map[string]string{"7": "7", "+7": "", "07": "", " 7": "", "abc": "", "0": "", "-7": ""} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: raw})
+		if got := workingCookieValue(req); got != want {
+			t.Errorf("cookie %q = %q, want %q", raw, got, want)
+		}
+	}
 }

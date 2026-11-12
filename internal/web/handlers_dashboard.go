@@ -54,9 +54,11 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// While a vehicle is worked on, the dashboard is about it, whatever the
+	// address asks for.
 	working := workingOn(r, vehicles)
-	vid, chosen := parseVehicleParam(r.URL.Query())
-	if !chosen && working != 0 {
+	vid, _ := parseVehicleParam(r.URL.Query())
+	if working != 0 && vid != working {
 		http.Redirect(w, r, "/?v="+strconv.FormatInt(working, 10), http.StatusSeeOther)
 		return nil
 	}
@@ -281,28 +283,31 @@ type activityChoice struct {
 }
 
 // activityVehicle reads the ?v= and ?general= filter of the Activity page
-// and its export: with no item and nothing chosen in the address, the
-// vehicle worked on with General (defaulted, so the page goes to its
-// address), like the stock.
-func (s *Server) activityVehicle(r *http.Request, item *stock.Item) (activityChoice, error) {
+// (forPage) and of its export. For the page, while a vehicle is worked on
+// and no item is asked for, that is always the vehicle with General,
+// whatever the address asks for (defaulted, so the page goes to its own
+// address), like the stock. The export follows its address only.
+func (s *Server) activityVehicle(r *http.Request, item *stock.Item, forPage bool) (activityChoice, error) {
 	var c activityChoice
 	var err error
 	if c.vehicles, err = s.store.ListVehicles(r.Context()); err != nil {
 		return c, err
 	}
-	c.working = workingOn(r, c.vehicles)
+	if forPage {
+		c.working = workingOn(r, c.vehicles)
+	}
 	if item != nil {
 		return c, nil
 	}
 	q := r.URL.Query()
-	id, chosen := parseVehicleParam(q)
+	id, _ := parseVehicleParam(q)
 	c.general = q.Get("general") == "1"
-	if !chosen && !c.general && c.working != 0 {
+	if c.working != 0 && (id != c.working || !c.general) {
 		id, c.general, c.defaulted = c.working, true, true
 	}
 	for _, v := range c.vehicles {
 		if v.ID == id {
-			c.id, c.name = id, v.Name
+			c.id, c.name = id, v.Name // a vehicle that doesn't exist isn't chosen
 		}
 	}
 	return c, nil
@@ -313,7 +318,7 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	c, err := s.activityVehicle(r, item)
+	c, err := s.activityVehicle(r, item, true)
 	if err != nil {
 		return err
 	}
@@ -322,7 +327,8 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 		Sort: activitySorts.parse(r.URL.Query()), VehicleID: vid, General: c.general, VehicleName: c.name, Working: c.working,
 		Vehicles: activeVehicles(c.vehicles, vid)}
 	if c.defaulted {
-		http.Redirect(w, r, joinQuery("/activity", p.PageQuery(p.Page)), http.StatusSeeOther)
+		// From the first page: the vehicle's list may be shorter.
+		http.Redirect(w, r, joinQuery("/activity", p.PageQuery(1)), http.StatusSeeOther)
 		return nil
 	}
 	var itemID int64
@@ -371,7 +377,7 @@ func (s *Server) activityExportCSV(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	c, err := s.activityVehicle(r, item)
+	c, err := s.activityVehicle(r, item, false)
 	if err != nil {
 		return err
 	}

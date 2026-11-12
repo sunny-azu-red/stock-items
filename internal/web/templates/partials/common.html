@@ -155,7 +155,9 @@
       {{with $it.Category}}<a class="badge badge-muted" href="/stock?cat={{.}}" title="Show all {{.}} in stock">{{icon "tag"}} {{.}}</a>{{end}}
       {{$skus := $it.DisplaySKUs}}{{range $i, $s := $skus}}<a class="sku sku-link" href="{{skuSearch $s.Code $s.Brand}}" target="_blank" rel="noopener noreferrer" title="{{$s.Kind.Label}}{{with $s.Brand}} · {{.}}{{end}} — {{skuSearchTitle}}"{{if ge $i 2}} hidden{{end}}>{{$s.Code}}</a>{{end}}{{if gt (len $skus) 2}}<a class="sku-more" href="/items/{{$it.ID}}" data-reveal-skus aria-label="Show {{add (len $skus) -2}} more {{pluralOnly (add (len $skus) -2) "SKU"}}">+{{add (len $skus) -2}} more</a>{{end}}
       {{with $it.Location}}<span>{{icon "map-pin"}} {{.}}</span>{{end}}
-      {{if .ShowChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles "Link" true)}}{{end}}
+      {{/* While a vehicle is worked on, the chips are labels: a list of
+           another vehicle would show the worked-on one's (see working.go). */}}
+      {{if .ShowChips}}{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" .Vehicles "Link" (not .Working))}}{{end}}
     </div>
   </div>
   {{if not $it.Archived}}
@@ -192,7 +194,7 @@
     <span class="n">{{plural (len $sec.Items) "item"}}</span>
   </div>
   <ul class="item-list">
-    {{range $sec.Items}}{{template "item-row" (rowFor . $vs true 0)}}{{end}}
+    {{range $sec.Items}}{{template "item-row" (rowFor . $vs true 0 0)}}{{end}}
   </ul>
 </section>
 {{end}}

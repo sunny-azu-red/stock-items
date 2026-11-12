@@ -150,8 +150,8 @@ func (s *Server) funcs() template.FuncMap {
 			}
 			return false
 		},
-		"rowFor": func(it stock.Item, vs map[int64]stock.Vehicle, hideChips bool, here int64) rowData {
-			return rowData{Item: it, Vehicles: vs, HideChips: hideChips, Here: here}
+		"rowFor": func(it stock.Item, vs map[int64]stock.Vehicle, hideChips bool, here, working int64) rowData {
+			return rowData{Item: it, Vehicles: vs, HideChips: hideChips, Here: here, Working: working}
 		},
 		"placeholderFor": func(u stock.Unit) string { return "e.g. " + examplesFor(u) },
 		"optInt":         optIntString,
@@ -217,6 +217,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	if vs, err := s.store.ListVehicles(r.Context()); err == nil {
 		v.NavVehicles = activeVehicles(vs)
 		v.WorkingOn, v.WorkingCookie = workingFor(w, r, vs)
+	} else {
+		// Still the cookie, so app.js doesn't reload a page that can't
+		// tell which vehicle it is (it would, over and over).
+		v.WorkingCookie = workingCookieValue(r)
 	}
 	if list, err := s.store.ListShopping(r.Context()); err == nil {
 		v.ShoppingCount = len(list)

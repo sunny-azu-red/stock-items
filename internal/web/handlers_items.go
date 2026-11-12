@@ -888,7 +888,7 @@ func (s *Server) adjustDone(w http.ResponseWriter, r *http.Request, it stock.Ite
 	}
 	toast(w, kind, msg)
 	row := rowData{Item: it, Vehicles: vehicleMap(vehicles), Flash: kind == "success",
-		HideChips: r.PostFormValue("hide_chips") == "1"}
+		HideChips: r.PostFormValue("hide_chips") == "1", Working: workingOn(r, vehicles)}
 	if here := parseOptID(r.PostFormValue("here")); here != nil {
 		row.Here = *here
 	}
@@ -963,8 +963,10 @@ type rowData struct {
 	HideChips bool
 	// Here is the vehicle the page names once at the top (the one the list
 	// is filtered to, or the only active one); 0 for none.
-	Here  int64
-	Flash bool
+	Here int64
+	// Working is the vehicle worked on (0 for none): the chips are labels.
+	Working int64
+	Flash   bool
 }
 
 // ShowChips reports whether the row shows vehicle chips: not in a section

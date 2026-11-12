@@ -620,11 +620,13 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await page.goto("/services/new");
   await expect(page.locator("#vehicle_id")).toHaveCount(0);
 
-  // Switch, then Back: the page from before the switch shows the bar as
-  // it is now, and its title says which vehicle it shows. A phone switches
+  // Switch, then Back: the page from before the switch shows the bar, and
+  // its vehicle, as they are now. A phone switches
   // in the bar (it lists the other vehicles only); a desktop with the
   // sidebar's Work on chips, so its bar has no Switch.
   await page.goto("/stock");
+  await expect(page).toHaveURL(/v=\d+/);
+  const k390 = new URL(page.url()).searchParams.get("v");
   if (testInfo.project.name === "mobile") {
     await bar.locator("summary").click();
     await expect(bar.locator(".working-pick").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
@@ -635,9 +637,13 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   }
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("Stock");
+  // Back brings the KTM 390's stock from before the switch: it reloads, and
+  // with the bar on the KTM 1290 it shows the KTM 1290's.
   await page.goBack();
   await expect(bar).toContainText("Working on KTM 1290");
-  await expect(page.locator("main h1")).toHaveText("KTM 390 stock");
+  await expect(page).not.toHaveURL(new RegExp(`v=${k390}(&|$)`));
+  await expect(page.locator("main h1")).toHaveText("Stock");
+  await expect(page.locator("#results")).toContainText("Hiflofiltro");
 
   // All vehicles stops and keeps the search: every vehicle's matches.
   await page.goto("/stock");

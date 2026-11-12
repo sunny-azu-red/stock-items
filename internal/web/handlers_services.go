@@ -486,8 +486,7 @@ func (p servicesPage) VehicleFilterQuery(vehicleID int64) string {
 func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	p := servicesPage{Page: parsePage(r)}
-	vid, chosen := parseVehicleParam(r.URL.Query())
-	p.VehicleID = vid
+	p.VehicleID, _ = parseVehicleParam(r.URL.Query())
 	p.ShowArchivedKits = r.URL.Query().Get("archived") == "1"
 	var err error
 	var allVehicles []stock.Vehicle
@@ -504,10 +503,15 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 			p.VehicleName = v.Name
 		}
 	}
+	if p.VehicleName == "" {
+		p.VehicleID = 0 // a vehicle that doesn't exist isn't chosen
+	}
 	p.Vehicles = activeVehicles(allVehicles, p.VehicleID)
 	p.Sole = soleVehicle(allVehicles)
+	// While a vehicle is worked on, the page shows it, whatever the
+	// address asks for.
 	p.Working = workingOn(r, allVehicles)
-	if !chosen && p.Working != 0 {
+	if p.Working != 0 && p.VehicleID != p.Working {
 		p.VehicleID = p.Working
 		http.Redirect(w, r, joinQuery("/services", p.ArchivedKitsQuery(p.ShowArchivedKits)), http.StatusSeeOther)
 		return nil

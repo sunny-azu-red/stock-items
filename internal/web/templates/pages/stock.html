@@ -82,7 +82,7 @@
     <div class="card">
       {{if $f.Active}}
         {{template "empty" (dict "Icon" "search" "Title" "Nothing matches" "Text" "Try another search, or clear the filters." "Href" (withQuery "/stock" $f.Cleared) "Action" "Clear filters" "ActionIcon" "x")}}
-      {{else if $f.Working}}
+      {{else if and $f.Working $d.Selected}}
         {{with index $d.Selected 0}}{{template "empty" (dict "Icon" "package" "Title" (print "Nothing in stock for " .Name) "Text" "Add the parts and fluids you keep for it." "Href" (print "/items/new?vehicle=" .ID) "Action" "Add item")}}{{end}}
       {{else}}
         {{template "empty" (dict "Icon" "package" "Title" "No items yet" "Text" "Add the parts and fluids you keep in stock." "Href" "/items/new" "Action" "Add item")}}
@@ -91,7 +91,7 @@
   {{else if eq $f.View "list"}}
     <section class="card">
       <ul class="item-list">
-        {{range $d.Items}}{{template "item-row" (rowFor . $d.VehicleMap false $d.RowScope)}}{{end}}
+        {{range $d.Items}}{{template "item-row" (rowFor . $d.VehicleMap false $d.RowScope $f.Working)}}{{end}}
       </ul>
     </section>
   {{else}}

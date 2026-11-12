@@ -827,7 +827,7 @@
   // page with no vehicle in its address shows, and the bar says so. A page
   // from before a switch reloads, unless it holds unsaved typing.
   window.addEventListener("pageshow", function () {
-    var m = document.cookie.match(/(?:^|;\s*)working_on=(\d+)(?:;|$)/);
+    var m = document.cookie.match(/(?:^|;\s*)working_on="?(\d+)"?(?:;|$)/);
     var now = m ? m[1] : "";
     if (now !== (document.documentElement.getAttribute("data-working-on") || "") && !dirty) location.reload();
   });

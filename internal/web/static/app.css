@@ -480,6 +480,8 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
      dashed line; the two cast one shadow. top: 100% is the bar's padding
      edge, so the tray covers its bottom border and has its own. */
   .working-switch { display: block; }
+  /* Its chips line up on the right, under the buttons that opened it. */
+  .working-pick .work-on { justify-content: flex-end; }
   .working-pick {
     position: absolute; left: 0; right: 0; top: 100%; z-index: 25;
     padding: 10px 16px; border-width: 1px 0;

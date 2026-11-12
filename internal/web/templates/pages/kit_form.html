@@ -13,8 +13,14 @@
   {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}
+  {{/* While a vehicle is worked on, a new kit is for it: the Working on bar
+       names it, and the form doesn't ask (a link that names another vehicle
+       still shows the field). */}}
+  {{$byBar := and $d.IsNew .WorkingOn (eq $f.VehicleID .WorkingOn.ID)}}
+  {{if $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   <div class="form-section">
     <div class="form-grid">
+      {{if not $byBar}}
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
         <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
@@ -23,6 +29,7 @@
         </select>
         {{template "err" (index $e "vehicle_id")}}
       </div>
+      {{end}}
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" placeholder="e.g. Oil Service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>

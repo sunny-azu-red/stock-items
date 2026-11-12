@@ -23,13 +23,17 @@
     </select>
   </div>
   <div class="filters-row" role="group" aria-label="Vehicles">
+    {{if $f.Working}}{{/* The Working on bar is the vehicle control: the vehicles stay as they are. */}}
+    {{range $f.VehicleIDs}}<input type="hidden" name="v" value="{{.}}">{{end}}{{if $f.MatchAll}}<input type="hidden" name="match" value="all">{{end}}
+    {{else}}
     <a class="chip chip-toggle{{if not (or $f.VehicleIDs $f.General)}} active{{end}}" id="filter-all" href="{{withQuery "/stock" $f.AllVehicles}}">All vehicles</a>
     {{range $d.Vehicles}}
     <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="v" value="{{.ID}}" {{if $f.HasVehicle .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
     {{end}}
+    {{end}}
     <label class="chip chip-toggle"><input type="checkbox" name="general" value="1" {{if $f.General}}checked{{end}}><span class="dot"></span>General</label>
     {{/* Always present, so htmx can swap it in when a second vehicle is ticked. */}}
-    <span id="match-toggle">{{if gt (len $f.VehicleIDs) 1}}
+    <span id="match-toggle">{{if and (not $f.Working) (gt (len $f.VehicleIDs) 1)}}
     <span class="segmented" title="How to combine the selected vehicles">
       <label><input type="radio" id="match-any" name="match" value="any" {{if not $f.MatchAll}}checked{{end}}>Fits any</label>
       <label><input type="radio" id="match-all" name="match" value="all" {{if $f.MatchAll}}checked{{end}}>Fits all</label>
@@ -62,7 +66,7 @@
 
 <div id="results" class="loading-dim">
   <div class="results-head">
-    <span class="count"><span>{{plural (len $d.Items) "item"}}{{if $f.Active}} match{{end}}</span>{{if $f.Active}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.Cleared}}">Clear filters {{icon "x"}}</a>{{end}}{{with $d.Others}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.AllVehicles}}" title="Search every vehicle">{{.}} more in other vehicles</a>{{end}}</span>
+    <span class="count"><span>{{plural (len $d.Items) "item"}}{{if $f.Active}} match{{end}}</span>{{if $f.Active}}<span>·</span><a class="reset-link" href="{{withQuery "/stock" $f.Cleared}}">Clear filters {{icon "x"}}</a>{{end}}{{with $d.Others}}<span>·</span><span>{{.}} more in other vehicles</span>{{end}}</span>
     <div class="flex">
       <span class="segmented" role="group" aria-label="View">
         <a class="btn btn-sm {{if ne $f.View "list"}}btn-primary{{end}}" href="{{withQuery "/stock" ($f.WithView "")}}">Grouped</a>

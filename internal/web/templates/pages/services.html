@@ -12,7 +12,7 @@
   {{end}}
 </div>
 
-{{if $d.Vehicles}}
+{{if and $d.Vehicles (not .WorkingOn)}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
   <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery 0)}}">All vehicles</a>
   {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}

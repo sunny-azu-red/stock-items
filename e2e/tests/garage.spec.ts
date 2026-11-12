@@ -603,44 +603,43 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/\/stock\?general=1&v=\d+$/);
   await expect(page.locator("main h1")).toHaveText("Stock");
   await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
-  // A search says what it finds in other vehicles, one tap away.
+  // The page's vehicle chips are hidden: the bar is the vehicle control.
+  await expect(page.locator("#filter-all")).toHaveCount(0);
+  // A search says what it finds in other vehicles.
   await page.getByPlaceholder(/Search name/).fill("Oil Filter");
-  const more = page.getByRole("link", { name: /more in other vehicles/ });
-  await expect(more).toHaveText("1 more in other vehicles");
-  await more.click();
-  await expect(page).toHaveURL(/v=all/);
-  await expect(page.locator("#results")).toContainText("Hiflofiltro");
-  await bar.getByRole("link", { name: "Back to KTM 390" }).click();
+  await expect(page.locator(".results-head")).toContainText("1 more in other vehicles");
   await expect(page).toHaveURL(/q=Oil/);
-  await expect(page).toHaveURL(/v=\d+/);
   await expect(page.locator("#results")).not.toContainText("Hiflofiltro");
 
-  // Add item starts with the vehicle.
+  // Add item starts with the vehicle; Log service doesn't ask for one.
   await page.locator("main h1").click();
   await page.keyboard.press("a");
   await expect(page).toHaveURL(/\/items\/new$/);
   await expect(page.locator("label.chip-toggle").filter({ hasText: exact("KTM 390") }).locator("input")).toBeChecked();
   await expect(page.locator("label.chip-toggle").filter({ hasText: exact("KTM 1290") }).locator("input")).not.toBeChecked();
+  await page.goto("/services/new");
+  await expect(page.locator("#vehicle_id")).toHaveCount(0);
 
   // Switch, then Back: the page from before the switch shows the bar as
-  // it is now.
+  // it is now, and its title says which vehicle it shows.
   await page.goto("/stock");
-  await bar.getByText("Switch").click();
+  await bar.locator("summary").click();
   await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("Stock");
-  // Back shows the KTM 390's stock while the bar says KTM 1290: the title
-  // says which.
   await page.goBack();
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("KTM 390 stock");
-  await expect(bar.getByRole("link", { name: "Back to KTM 1290" })).toBeVisible();
 
-  // All vehicles stops: no bar, every vehicle.
+  // All vehicles stops and keeps the search: every vehicle's matches.
+  await page.goto("/stock");
+  await page.getByPlaceholder(/Search name/).fill("Oil Filter");
+  await expect(page).toHaveURL(/q=Oil/);
   await bar.getByRole("button", { name: "All vehicles" }).click();
   await expect(page.locator(".working-on")).toHaveCount(0);
-  await expect(page).toHaveURL(/\/stock$/);
+  await expect(page).toHaveURL(/\/stock\?q=Oil\+Filter$/);
   await expect(page.locator("#results")).toContainText("Hiflofiltro");
+  await expect(page.locator("#filter-all")).toBeVisible();
 });
 
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
@@ -811,7 +810,7 @@ test("no page scrolls sideways", async ({ page }) => {
   // The bar while working on a vehicle, with its Switch open.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 1290");
   for (const p of ["/", "/stock", "/services", "/activity", "/shopping"]) await overflows(p);
-  await page.locator(".working-on").getByText("Switch").click();
+  await page.locator(".working-on summary").click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
   // Nor past the left edge, which scrollWidth doesn't count: the list
@@ -1013,13 +1012,14 @@ test("screenshots", async ({ page }, testInfo) => {
 // the browser snaps text to whole pixels but not icons or borders, so text
 // on a fraction moves against its icon from row to row, and a border on one
 // is drawn blurred across two. Icons, images and inline text are skipped,
-// and so is what is hidden from sight (.sr-only).
+// and so is what is hidden from sight (.sr-only, or clipped away like it,
+// as the Working on bar's button names on a phone).
 async function offGrid(page: Page) {
   return page.evaluate(() => {
     const frac = (v: number) => Math.abs(v - Math.round(v)) > 0.01;
     const out: string[] = [];
     for (const el of document.querySelectorAll("body *")) {
-      if (el.closest("svg") || el.closest(".sr-only") || ["IMG", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "OPTION", "BR"].includes(el.tagName)) continue;
+      if (el.closest("svg") || el.closest(".sr-only") || getComputedStyle(el).clip === "rect(0px, 0px, 0px, 0px)" || ["IMG", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "OPTION", "BR"].includes(el.tagName)) continue;
       const display = getComputedStyle(el).display;
       if (display === "inline" || display === "none" || display === "contents") continue;
       const r = el.getBoundingClientRect();
@@ -1045,7 +1045,7 @@ async function misaligned(page: Page) {
     const vis = (el: Element) => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
-      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest(".sr-only");
+      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest(".sr-only") && cs.clip !== "rect(0px, 0px, 0px, 0px)";
     };
     const mono = (el: Element) => /mono|Menlo|Consolas/i.test(getComputedStyle(el).fontFamily);
     const caps = (t: Text) => {
@@ -1190,7 +1190,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
     await page.goto(p);
     await check(`${p} working on a vehicle`);
   }
-  await page.locator(".working-on").getByText("Switch").click();
+  await page.locator(".working-on summary").click();
   await check("the Switch open");
   expect(problems).toEqual([]);
 });

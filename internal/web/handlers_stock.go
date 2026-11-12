@@ -163,13 +163,6 @@ func (f stockFilter) AllVehicles() string {
 	return f.Encode()
 }
 
-// Away is the address of this view for the vehicle being worked on: the
-// same filters with no vehicle, which goes to it.
-func (f stockFilter) Away() string {
-	f.VehicleIDs, f.General, f.MatchAll, f.All, f.Working = nil, false, false, false, 0
-	return f.Encode()
-}
-
 // Cleared returns the query string without any filter, keeping only how
 // the stock is shown (view and sort).
 func (f stockFilter) Cleared() string {
@@ -208,7 +201,9 @@ type stockPage struct {
 	Selected    []stock.Vehicle
 	Sole        int64 // soleVehicle
 	// TitleName is the vehicle the title names ("KTM 390 stock"): the one
-	// selected, unless it is the one worked on, which the bar names.
+	// selected, unless it is the one worked on, which the bar names. While
+	// one is worked on, the filter's vehicle chips are hidden (the bar is
+	// the vehicle control), and the title says when the page shows another.
 	TitleName string
 	// Others is how many more items the search and filters find in other
 	// vehicles, while the stock follows the vehicle being worked on.
@@ -307,15 +302,11 @@ func (s *Server) stockPage(w http.ResponseWriter, r *http.Request) error {
 		p.Others = len(all) - len(p.Items)
 	}
 	title := "Stock"
-	if len(p.Selected) == 1 && !f.followsWorking() {
+	if len(p.Selected) == 1 && p.Selected[0].ID != f.Working {
 		p.TitleName = p.Selected[0].Name
 		title = p.TitleName + " stock"
 	}
-	v := View{Title: title, Nav: "stock", Data: p}
-	if f.Working != 0 && !f.followsWorking() {
-		v.WorkingAway = joinQuery("/stock", f.Away())
-	}
-	s.render(w, r, http.StatusOK, "stock", v)
+	s.render(w, r, http.StatusOK, "stock", View{Title: title, Nav: "stock", Data: p})
 	return nil
 }
 

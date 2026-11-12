@@ -552,12 +552,6 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		p.TitleName = p.VehicleName
 		title = p.TitleName + " services"
 	}
-	view := View{Title: title, Nav: "services", Data: p}
-	if p.Working != 0 && p.VehicleID != p.Working {
-		away := p
-		away.VehicleID, away.Working = 0, 0
-		view.WorkingAway = joinQuery("/services", away.ArchivedKitsQuery(p.ShowArchivedKits))
-	}
-	s.render(w, r, http.StatusOK, "services", view)
+	s.render(w, r, http.StatusOK, "services", View{Title: title, Nav: "services", Data: p})
 	return nil
 }

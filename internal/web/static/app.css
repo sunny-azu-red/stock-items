@@ -475,18 +475,15 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
     margin: -16px -16px 16px; padding: 6px 16px; border-radius: 0; border-width: 0 0 1px;
   }
-  /* One row: the name takes what the buttons leave (cut short with "…"
-     if it must), and Back to goes under it. */
+  /* One row: the buttons show their icons only (their names stay for
+     screen readers and as tooltips), and the name takes the rest, cut
+     short with "…" if it must. */
   .working-name { flex: 1 1 0; min-width: 0; }
   .working-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .working-back { order: 1; flex-basis: 100%; }
+  .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .working-actions .btn { padding-left: 8px; padding-right: 8px; }
   .working-pick { right: 16px; max-width: min(288px, calc(100% - 32px)); }
   html:has(.working-on) { scroll-padding-top: 58px; }
-}
-/* A narrow phone keeps the vehicle's name; "Working on" stays for screen
-   readers. */
-@media (max-width: 440px) {
-  .working-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 /* The phone's way in (the sidebar is hidden): the dashboard's Work on row. */
 .work-on-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

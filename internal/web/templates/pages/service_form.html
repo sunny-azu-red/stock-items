@@ -32,7 +32,11 @@
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}
   {{if or $f.KitID $f.ID}}{{with index $e "kit_id"}}<div class="form-section">{{template "err" .}}</div>{{end}}{{end}}
-  {{if or $f.KitID $f.ID}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
+  {{/* While a vehicle is worked on, a new service is for it: the Working on
+       bar names it, and the form doesn't ask (a link that names another
+       vehicle still shows the field). */}}
+  {{$byBar := and (not (or $f.KitID $f.ID)) .WorkingOn (eq $f.VehicleID .WorkingOn.ID)}}
+  {{if or $f.KitID $f.ID $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   {{if $d.Kits}}
   {{/* A new service without a kit: the chosen vehicle's kits to start from
@@ -48,7 +52,7 @@
   {{end}}
   <div class="form-section">
     <div class="form-grid">
-      {{if not (or $f.KitID $f.ID)}}
+      {{if not (or $f.KitID $f.ID $byBar)}}
       <div class="field{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
         <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">

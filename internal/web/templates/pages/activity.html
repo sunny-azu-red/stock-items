@@ -11,8 +11,10 @@
 </div>
 {{if and (not $d.Item) $d.Vehicles}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
+  {{if not $.WorkingOn}}{{/* While one is worked on, the Working on bar is the vehicle control. */}}
   <a class="chip chip-toggle{{if not (or $d.VehicleID $d.General)}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery 0 false)}}">All vehicles</a>
   {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery .ID $d.General)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  {{end}}
   <a class="chip chip-toggle{{if $d.General}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery $d.VehicleID (not $d.General))}}"><span class="dot"></span>General</a>
 </div>
 {{end}}

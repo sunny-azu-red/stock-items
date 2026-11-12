@@ -92,17 +92,17 @@
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so, goes back to it from a page showing something else, switches to
-     another, or stops (All vehicles). */}}
+     so, switches to another, or stops (All vehicles). It is the pages'
+     vehicle control: their vehicle chips are hidden meanwhile. On a phone
+     its buttons show their icons only. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
-  <span class="working-name">{{icon .Kind.Icon}}<span><span class="working-label">Working on </span><strong>{{.Name}}</strong></span></span>
-  {{with $.WorkingAway}}<a class="reset-link working-back" href="{{.}}">{{icon "arrow-left"}} Back to {{$.WorkingOn.Name}}</a>{{end}}
+  <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
   <span class="working-actions">
     <details class="working-switch">
-      <summary class="btn btn-sm">{{icon "arrow-left-right"}} Switch</summary>
+      <summary class="btn btn-sm" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></summary>
       <div class="working-pick"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title")}}</div>
     </details>
-    <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="">{{icon "x"}} All vehicles</button></form>
+    <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>
 </section>{{end}}{{end}}
 

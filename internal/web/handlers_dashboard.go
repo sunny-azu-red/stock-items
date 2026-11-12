@@ -122,14 +122,11 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	if vid != working {
 		p.TitleName = p.VehicleName
 	}
-	view := View{Title: "Dashboard", Nav: "dashboard", Data: p}
+	title := "Dashboard"
 	if p.TitleName != "" {
-		view.Title = p.TitleName + " dashboard"
+		title = p.TitleName + " dashboard"
 	}
-	if working != 0 && vid != working {
-		view.WorkingAway = "/"
-	}
-	s.render(w, r, http.StatusOK, "dashboard", view)
+	s.render(w, r, http.StatusOK, "dashboard", View{Title: title, Nav: "dashboard", Data: p})
 	return nil
 }
 
@@ -356,20 +353,14 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 	if item != nil {
 		title = "History of " + item.DisplayName()
 	} else if c.name != "" {
-		if vid != c.working || !p.General {
+		if vid != c.working {
 			p.TitleName = c.name
 			title = c.name + " activity"
 		}
 	} else if p.General {
 		title = "General activity"
 	}
-	view := View{Title: title, Nav: "activity", Data: p}
-	if c.working != 0 && item == nil && (vid != c.working || !p.General) {
-		away := p
-		away.VehicleID, away.General, away.Working = 0, false, 0
-		view.WorkingAway = joinQuery("/activity", away.filterValues(p.Kind, p.Year).Encode())
-	}
-	s.render(w, r, http.StatusOK, "activity", view)
+	s.render(w, r, http.StatusOK, "activity", View{Title: title, Nav: "activity", Data: p})
 	return nil
 }
 

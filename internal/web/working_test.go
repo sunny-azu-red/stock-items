@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,17 @@ import (
 // (any cookie value: "abc" too).
 func (a *testApp) getWorking(path, cookie string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.AddCookie(&http.Cookie{Name: workingCookie, Value: cookie})
+	return a.do(req)
+}
+
+// postWorking is a.post from a device working on that vehicle.
+func (a *testApp) postWorking(path string, form url.Values, cookie string) *httptest.ResponseRecorder {
+	if !form.Has("form_key") {
+		form.Set("form_key", newFormKey())
+	}
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: workingCookie, Value: cookie})
 	return a.do(req)
 }
@@ -137,24 +149,25 @@ func TestWorkingOnPages(t *testing.T) {
 	t.Run("they show it", func(t *testing.T) {
 		rec := a.getWorking("/stock?general=1&v="+w, w)
 		// The bar names the vehicle; the title doesn't say it again.
-		expect(t, rec, http.StatusOK, "<title>Stock ·", "<h1>Stock</h1>", workingBar, `<span class="working-label">Working on </span><strong>KTM 390</strong>`, "Chain lube", "Only this vehicle")
-		expectNot(t, rec, "Hiflofiltro", "Back to KTM 390", "Clear filters")
+		expect(t, rec, http.StatusOK, "<title>Stock ·", "<h1>Stock</h1>", workingBar, "Working on <strong>KTM 390</strong>", "Chain lube", "Only this vehicle")
+		expectNot(t, rec, "Hiflofiltro", "Clear filters")
 		expect(t, a.getWorking("/services?v="+w, w), http.StatusOK, "<h1>Services</h1>")
 		// Another vehicle than the bar's: the title says which.
 		expect(t, a.getWorking("/services?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 services</h1>")
 		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "<h1>KTM 1290 stock</h1>")
 		rec = a.getWorking("/activity?general=1&v="+w, w)
 		expect(t, rec, http.StatusOK, "<h1>Activity</h1>", "Chain lube", "Silkolene")
-		expectNot(t, rec, "Hiflofiltro", "Big service", "Back to KTM 390") // B's service took the shared ring: not A's
+		expectNot(t, rec, "Hiflofiltro", "Big service") // B's service took the shared ring: not A's
 		// The General chip, like the stock's: off shows the vehicle's own
 		// items, alone it shows only General ones.
 		rec = a.getWorking("/activity?v="+w, w)
-		expect(t, rec, http.StatusOK, "<h1>KTM 390 activity</h1>", "Silkolene", "Back to KTM 390")
+		expect(t, rec, http.StatusOK, "<h1>Activity</h1>") // the bar names it
+		expect(t, rec, http.StatusOK, "Silkolene")
 		expectNot(t, rec, "Chain lube")
 		rec = a.getWorking("/activity?general=1&v=all", w)
 		expect(t, rec, http.StatusOK, "<h1>General activity</h1>", "Chain lube")
 		expectNot(t, rec, "Silkolene")
-		expect(t, a.getWorking("/activity?v="+itoa(k1290), w), http.StatusOK, "Big service", "Back to KTM 390")
+		expect(t, a.getWorking("/activity?v="+itoa(k1290), w), http.StatusOK, "Big service")
 	})
 	t.Run("dashboard", func(t *testing.T) {
 		rec := a.getWorking("/?v="+w, w)
@@ -163,14 +176,14 @@ func TestWorkingOnPages(t *testing.T) {
 			`href="/stock?general=1&amp;v=`+w+`"><span class="label">`, `<span class="value">5</span>`,
 			`href="/stock?general=1&amp;low=1&amp;v=`+w+`"`, `href="/activity?general=1&amp;kind=bought&amp;v=`+w+`&amp;year=2026"`,
 			`href="/services/new?vehicle=`+w+`"`)
-		expectNot(t, rec, "Big service", "Back to KTM 390")
+		expectNot(t, rec, "Big service")
 		rec = a.getWorking("/?v=all", w)
-		expect(t, rec, http.StatusOK, "<h1>Dashboard</h1>", `<span class="value">7</span>`, `href="/stock?v=all"`, "Back to KTM 390")
+		expect(t, rec, http.StatusOK, "<h1>Dashboard</h1>", `<span class="value">7</span>`, `href="/stock?v=all"`)
 	})
 	t.Run("the address wins", func(t *testing.T) {
 		rec := a.getWorking("/stock?v=all", w)
-		expect(t, rec, http.StatusOK, "Hiflofiltro", "Silkolene", `<a class="reset-link working-back" href="/stock">`)
-		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "Hiflofiltro", "Back to KTM 390")
+		expect(t, rec, http.StatusOK, "Hiflofiltro", "Silkolene")
+		expect(t, a.getWorking("/stock?v="+itoa(k1290), w), http.StatusOK, "Hiflofiltro", "<h1>KTM 1290 stock</h1>")
 		// The filter form with no vehicle ticked means every vehicle.
 		expectRedirect(t, a.getWorking("/stock?was_sort=name&was_dir=asc", w), "/stock?v=all")
 		// An item's history is never narrowed.
@@ -193,7 +206,22 @@ func TestWorkingOnPages(t *testing.T) {
 	t.Run("a search says what is elsewhere", func(t *testing.T) {
 		// "Oil Filter" finds the shared ring here, and the KTM 1290's filter.
 		rec := a.getWorking("/stock?general=1&q=Oil+Filter&v="+w, w)
-		expect(t, rec, http.StatusOK, "O-Ring", "1 more in other vehicles", `href="/stock?q=Oil&#43;Filter&amp;v=all"`)
+		expect(t, rec, http.StatusOK, "O-Ring", "<span>1 more in other vehicles</span>")
+	})
+	t.Run("the bar is the vehicle control", func(t *testing.T) {
+		// The pages' vehicle chips are hidden; the stock's filter keeps its
+		// vehicles in hidden fields, and General stays a choice.
+		rec := a.getWorking("/stock?general=1&v="+w, w)
+		expect(t, rec, http.StatusOK, `<input type="hidden" name="v" value="`+w+`">`, `name="general" value="1" checked`)
+		expectNot(t, rec, `id="filter-all"`, `name="v" value="`+itoa(k1290)+`"`)
+		expectNot(t, a.getWorking("/services?v="+w, w), `aria-label="Filter by vehicle"`)
+		rec = a.getWorking("/activity?general=1&v="+w, w)
+		expect(t, rec, http.StatusOK, ">General</a>")
+		expectNot(t, rec, ">All vehicles</a>")
+		// Without one, the chips are there.
+		expect(t, a.get("/stock"), http.StatusOK, `id="filter-all"`)
+		expect(t, a.get("/services"), http.StatusOK, `aria-label="Filter by vehicle"`)
+		expect(t, a.get("/activity"), http.StatusOK, ">All vehicles</a>")
 	})
 	t.Run("add forms start with it", func(t *testing.T) {
 		checked := regexp.MustCompile(`name="vehicle" value="` + w + `" checked`)
@@ -203,14 +231,26 @@ func TestWorkingOnPages(t *testing.T) {
 		if body := a.getWorking("/items/new?vehicle="+itoa(k1290), w).Body.String(); checked.MatchString(body) {
 			t.Error("an explicit vehicle lost to the one worked on")
 		}
-		selected := regexp.MustCompile(`<option value="` + w + `"[^>]*selected>`)
+		// A new service or kit is for the vehicle worked on, without asking;
+		// a link that names another one shows the field with it.
 		for _, path := range []string{"/services/new", "/kits/new"} {
-			if !selected.MatchString(a.getWorking(path, w).Body.String()) {
-				t.Errorf("%s doesn't start with the vehicle", path)
-			}
-			if selected.MatchString(a.getWorking(path+"?vehicle="+itoa(k1290), w).Body.String()) {
+			rec := a.getWorking(path, w)
+			expect(t, rec, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+w+`">`)
+			expectNot(t, rec, `id="vehicle_id"`)
+			expect(t, a.getWorking(path+"?vehicle="+itoa(k1290), w), http.StatusOK, `id="vehicle_id"`)
+			if !regexp.MustCompile(`<option value="` + itoa(k1290) + `"[^>]*selected>`).MatchString(a.getWorking(path+"?vehicle="+itoa(k1290), w).Body.String()) {
 				t.Errorf("%s: an explicit vehicle lost to the one worked on", path)
 			}
+			expect(t, a.get(path), http.StatusOK, `id="vehicle_id"`)
+		}
+		// Saved without the field, it is the vehicle's.
+		rec := a.postWorking("/kits", url.Values{"vehicle_id": {w}, "name": {"Chain service"}}, w)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("saving a kit while working: %d\n%s", rec.Code, truncate(rec.Body.String()))
+		}
+		kits, err := a.store.ListKits(ctx, store.KitFilter{VehicleID: k390})
+		if err != nil || !slices.ContainsFunc(kits, func(k stock.Kit) bool { return k.Name == "Chain service" }) {
+			t.Errorf("the kit isn't the KTM 390's: %v, %v", kits, err)
 		}
 	})
 	t.Run("quick adjust has no bar", func(t *testing.T) {

@@ -277,17 +277,15 @@ func TestWorkingOnPages(t *testing.T) {
 		if body := a.getWorking("/items/new?vehicle="+itoa(k1290), w).Body.String(); checked.MatchString(body) {
 			t.Error("an explicit vehicle lost to the one worked on")
 		}
-		// A new service or kit is for the vehicle worked on, without asking;
-		// a link that names another one shows the field with it.
+		// A new service or kit is for the vehicle worked on, without asking.
 		for _, path := range []string{"/services/new", "/kits/new"} {
 			rec := a.getWorking(path, w)
 			expect(t, rec, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+w+`">`)
 			expectNot(t, rec, `id="vehicle_id"`)
-			expect(t, a.getWorking(path+"?vehicle="+itoa(k1290), w), http.StatusOK, `id="vehicle_id"`)
-			if !regexp.MustCompile(`<option value="` + itoa(k1290) + `"[^>]*selected>`).MatchString(a.getWorking(path+"?vehicle="+itoa(k1290), w).Body.String()) {
-				t.Errorf("%s: an explicit vehicle lost to the one worked on", path)
-			}
 			expect(t, a.get(path), http.StatusOK, `id="vehicle_id"`)
+			if !regexp.MustCompile(`<option value="` + itoa(k1290) + `"[^>]*selected>`).MatchString(a.get(path + "?vehicle=" + itoa(k1290)).Body.String()) {
+				t.Errorf("%s: without a vehicle worked on, ?vehicle= doesn't choose it", path)
+			}
 		}
 		// Saved without the field, it is the vehicle's.
 		rec := a.postWorking("/kits", url.Values{"vehicle_id": {w}, "name": {"Chain service"}}, w)
@@ -298,6 +296,58 @@ func TestWorkingOnPages(t *testing.T) {
 		if err != nil || !slices.ContainsFunc(kits, func(k stock.Kit) bool { return k.Name == "Chain service" }) {
 			t.Errorf("the kit isn't the KTM 390's: %v, %v", kits, err)
 		}
+	})
+	t.Run("no new work for another vehicle", func(t *testing.T) {
+		// While a vehicle is worked on, new services and kits are for it,
+		// like "archived means no new work". Its own records stay editable.
+		kin := stock.KitInput{VehicleID: k1290, Name: "Big kit", Lines: []stock.KitLineInput{{ItemID: ring, Quantity: 1, Unit: stock.UnitPiece}}}
+		kin.Normalize()
+		kit, err := a.store.CreateKit(ctx, kin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		k := itoa(k1290)
+		// Its pages don't offer it.
+		page := a.getWorking("/kits/"+itoa(kit), w)
+		expect(t, page, http.StatusOK, "Work on KTM 1290 to log this service.", `href="/kits/`+itoa(kit)+`/edit"`)
+		expectNot(t, page, `href="/services/new?kit=`)
+		page = a.getWorking("/vehicles/"+k, w)
+		expect(t, page, http.StatusOK, `href="/vehicles/`+k+`/edit"`, `action="/vehicles/`+k+`/odometer"`)
+		expectNot(t, page, `href="/services/new?vehicle=`+k+`"`, `href="/items/new?vehicle=`+k+`"`, `href="/kits/new?vehicle=`+k+`"`)
+		expect(t, a.getWorking("/vehicles/"+w, w), http.StatusOK, `href="/services/new?vehicle=`+w+`"`, `href="/kits/new?vehicle=`+w+`"`)
+		expect(t, a.get("/kits/"+itoa(kit)), http.StatusOK, `href="/services/new?kit=`+itoa(kit)+`"`)
+		// Old links open the worked-on vehicle's form.
+		for path, want := range map[string]string{
+			"/services/new?vehicle=" + k:     "/services/new",
+			"/services/new?kit=" + itoa(kit): "/services/new",
+			"/kits/new?vehicle=" + k:         "/kits/new",
+		} {
+			expectRedirect(t, a.getWorking(path, w), want)
+		}
+		// An item isn't work on a vehicle: its vehicles stay a choice.
+		expect(t, a.getWorking("/items/new?vehicle="+k, w), http.StatusOK, `name="vehicle" value="`+k+`" checked`)
+		// A form opened before the switch is refused, keeping what was typed.
+		rec := a.postWorking("/services", url.Values{"vehicle_id": {k}, "title": {"Tyre swap"}, "performed_on": {"2026-10-29"}}, w)
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to log this for it", `value="Tyre swap"`)
+		rec = a.postWorking("/services", url.Values{"vehicle_id": {k}, "kit_id": {itoa(kit)}, "kit_name": {"Big kit"}, "title": {"Big kit"}, "performed_on": {"2026-10-29"}}, w)
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: work on KTM 1290 first to log this")
+		rec = a.postWorking("/kits", url.Values{"vehicle_id": {k}, "name": {"Tyre kit"}}, w)
+		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to add it for it", `value="Tyre kit"`)
+		if services, _ := a.store.ListServices(ctx, store.ServiceFilter{VehicleID: k1290}); slices.ContainsFunc(services, func(r stock.ServiceRecord) bool { return r.Title == "Tyre swap" }) {
+			t.Error("a service for another vehicle was saved")
+		}
+		// Without a vehicle worked on, they save.
+		expect(t, a.post("/kits", url.Values{"vehicle_id": {k}, "name": {"Tyre kit"}}), http.StatusSeeOther)
+	})
+	t.Run("add another keeps General", func(t *testing.T) {
+		rec := a.postWorking("/items", url.Values{"name": {"Zip ties"}, "unit": {"piece"}, "quantity": {"10"}, "next": {"new"}}, w)
+		if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "vehicle=") {
+			t.Fatalf("add another: %d to %q", rec.Code, rec.Header().Get("Location"))
+		}
+		// The next form starts as General, not with the vehicle worked on.
+		next := a.getWorking(rec.Header().Get("Location"), w)
+		expect(t, next, http.StatusOK)
+		expectNot(t, next, `name="vehicle" value="`+w+`" checked`)
 	})
 	t.Run("quick adjust has no bar", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/items/"+itoa(ring)+"/adjust", strings.NewReader("dir=up"))

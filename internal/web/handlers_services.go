@@ -147,13 +147,13 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	q := r.URL.Query()
 	f := serviceForm{PerformedOn: s.now().Format("2006-01-02")}
+	wid, err := s.working(r)
+	if err != nil {
+		return err
+	}
 	if id := parseOptID(q.Get("vehicle")); id != nil {
 		f.VehicleID = *id
 	} else if !q.Has("kit") {
-		wid, err := s.working(r)
-		if err != nil {
-			return err
-		}
 		f.VehicleID = wid
 	}
 	if id := parseOptID(q.Get("kit")); id != nil {
@@ -176,6 +176,12 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			lines = k.InterLines
 		}
 		f.Parts = kitPartRows(lines)
+	}
+	if wid != 0 && f.VehicleID != wid {
+		// While a vehicle is worked on, new work is for it: an old link to
+		// another vehicle's (or its kit's) service opens the worked-on one's.
+		http.Redirect(w, r, "/services/new", http.StatusSeeOther)
+		return nil
 	}
 	if f.VehicleID != 0 {
 		// The odometer starts empty: a reading copied from the vehicle would
@@ -287,6 +293,18 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	f, in, err := s.parseServiceForm(r)
 	if err != nil {
 		return err
+	}
+	// New work is for the vehicle worked on (a form opened before a switch).
+	msg, err := s.otherWork(r, in.VehicleID, "log this", f.KitID != 0)
+	if err != nil {
+		return err
+	}
+	if msg != "" {
+		field := "vehicle_id"
+		if f.KitID != 0 {
+			field = "kit_id"
+		}
+		f.Errors.Add(field, msg)
 	}
 	if !f.Errors.Any() {
 		id, err := s.store.CreateService(r.Context(), in)

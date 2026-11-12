@@ -163,6 +163,35 @@ func (s *Server) working(r *http.Request) (int64, error) {
 	return workingOn(r, vehicles), nil
 }
 
+// otherWork is the form error for new work (a service, a kit) for another
+// vehicle than the one worked on, "" when it is fine: while a vehicle is
+// worked on, new work is for it (like "archived means no new work"). A
+// form opened before a switch comes back with this. what is "log this" or
+// "add it"; fixed reports that the form can't choose the vehicle (a kit's
+// service), so the only way is to work on the other one.
+func (s *Server) otherWork(r *http.Request, vehicleID int64, what string, fixed bool) (string, error) {
+	vehicles, err := s.store.ListVehicles(r.Context())
+	if err != nil {
+		return "", err
+	}
+	working := workingOn(r, vehicles)
+	if working == 0 || vehicleID == 0 || vehicleID == working {
+		return "", nil
+	}
+	name := func(id int64) string {
+		for _, v := range vehicles {
+			if v.ID == id {
+				return v.Name
+			}
+		}
+		return "that vehicle"
+	}
+	if fixed {
+		return "You're working on " + name(working) + ": work on " + name(vehicleID) + " first to " + what, nil
+	}
+	return "You're working on " + name(working) + ": choose it, or work on " + name(vehicleID) + " first to " + what + " for it", nil
+}
+
 // setWorkingOn starts working on a vehicle (vehicle=ID) or stops (empty),
 // then goes back to the page, which now shows the new choice.
 func (s *Server) setWorkingOn(w http.ResponseWriter, r *http.Request) error {

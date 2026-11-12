@@ -238,7 +238,9 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 	f.Location = q.Get("location")
 	if !q.Has("vehicle") && !q.Has("from") && !q.Has("shopping") {
 		// It starts with the vehicle being worked on; something new from the
-		// shopping list starts with none, like its entry.
+		// shopping list starts with none, like its entry. (An item isn't
+		// work on a vehicle: it may fit several, so its vehicles stay a
+		// choice on the form, also while one is worked on.)
 		wid, err := s.working(r)
 		if err != nil {
 			return err
@@ -326,6 +328,9 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 				q := url.Values{"unit": {string(in.Unit)}, "category": {in.Category}, "location": {in.Location}}
 				for _, v := range in.VehicleIDs {
 					q.Add("vehicle", strconv.FormatInt(v, 10))
+				}
+				if len(in.VehicleIDs) == 0 {
+					q.Set("vehicle", "") // General: not the vehicle worked on
 				}
 				s.redirect(w, r, "/items/new?"+q.Encode(), "Added "+displayInput(in)+". Add the next one.")
 				return nil

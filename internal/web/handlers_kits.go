@@ -304,14 +304,18 @@ func kitFormFrom(k stock.Kit) kitForm {
 
 func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 	f := kitForm{}
+	wid, err := s.working(r)
+	if err != nil {
+		return err
+	}
+	f.VehicleID = wid
 	if id := parseOptID(r.URL.Query().Get("vehicle")); id != nil {
-		f.VehicleID = *id
-	} else {
-		wid, err := s.working(r)
-		if err != nil {
-			return err
+		if wid != 0 && *id != wid {
+			// While a vehicle is worked on, new work is for it.
+			http.Redirect(w, r, "/kits/new", http.StatusSeeOther)
+			return nil
 		}
-		f.VehicleID = wid
+		f.VehicleID = *id
 	}
 	return s.renderKitForm(w, r, http.StatusOK, f, true)
 }
@@ -326,6 +330,14 @@ func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {
 	f, in, err := s.parseKitForm(r)
 	if err != nil {
 		return err
+	}
+	// New work is for the vehicle worked on (a form opened before a switch).
+	msg, err := s.otherWork(r, in.VehicleID, "add it", false)
+	if err != nil {
+		return err
+	}
+	if msg != "" {
+		f.Errors.Add("vehicle_id", msg)
 	}
 	if !f.Errors.Any() {
 		id, err := s.store.CreateKit(r.Context(), in)

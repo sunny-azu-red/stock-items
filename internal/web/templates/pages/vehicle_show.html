@@ -12,7 +12,9 @@
   </div>
   <div class="actions">
     <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
-    {{if not $v.Archived}}
+    {{/* While another vehicle is worked on, new work is for it (working.go). */}}
+    {{$other := and .WorkingOn (ne .WorkingOn.ID $v.ID)}}
+    {{if not (or $v.Archived $other)}}
     <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
     <a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
     {{end}}
@@ -29,7 +31,7 @@
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not $v.Archived}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} Add kit</a>{{end}}</div>
+      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not (or $v.Archived $other)}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} Add kit</a>{{end}}</div>
       {{with $d.MonthsUncounted}}<p class="card-body hint" role="note">{{join . ", "}} {{if eq (len .) 1}}repeats{{else}}repeat{{end}} by months, with nothing to count them from yet. <a href="/vehicles/{{$v.ID}}/edit">Set the purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}
       {{if $d.Kits}}{{range $d.Kits}}{{if not .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}{{range $d.Kits}}{{if .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}
       {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
@@ -46,7 +48,7 @@
     {{if $d.Sections}}
       {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Here" $v.ID)}}{{end}}
     {{else}}
-      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
+      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not (or $v.Archived $other)) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
     {{end}}
   </div>
 

@@ -93,9 +93,9 @@
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so, switches to another, or stops (All vehicles). It is the pages'
-     vehicle control: their vehicle chips are hidden meanwhile. On a phone
-     its buttons show their icons only. */}}
+     so, switches to another (Switch, on a phone; a desktop has the
+     sidebar's Work on chips), or stops (All vehicles, an ×). It is the
+     pages' vehicle control: their vehicle chips are hidden meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
   <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
   <span class="working-actions">

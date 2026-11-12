@@ -446,7 +446,8 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 }
 .sidebar .work-on { padding: 0 11px; gap: 6px; }
 /* The bar at the top of every page while a vehicle is worked on: 28px
-   buttons in 6px padding and a 1px border, 42px in all. */
+   buttons in 6px padding and a 1px border, 42px in all. Its buttons show
+   their icons only (their names stay for screen readers and as tooltips). */
 .working-on {
   position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
   margin-bottom: 20px; padding: 6px 6px 6px 14px; border-radius: var(--radius-sm);
@@ -456,23 +457,14 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 .working-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; }
 .working-name .icon { color: var(--chip); }
 .working-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-/* On a desktop, Switch opens a card under the button, its right edge on
-   the button's, with a pointer up at the button's middle (a pseudo-element
-   that turns, which the whole-pixel test leaves alone). */
-.working-switch { position: relative; }
-.working-switch summary { position: relative; list-style: none; }
+.working-actions .btn { padding-left: 8px; padding-right: 8px; }
+.working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Switch is the phone's: a desktop switches with the sidebar's Work on
+   chips, right beside the bar. */
+.working-switch { display: none; }
+.working-switch summary { list-style: none; }
 .working-switch summary::-webkit-details-marker { display: none; }
 .working-switch[open] summary { border-color: var(--muted); }
-.working-switch[open] summary::after {
-  content: ""; position: absolute; left: calc(50% - 6px); top: calc(100% + 6px); z-index: 26; width: 12px; height: 12px;
-  background: var(--surface); border: 1px solid var(--border); border-width: 1px 0 0 1px; border-top-left-radius: 2px;
-  transform: rotate(45deg); pointer-events: none;
-}
-.working-pick {
-  position: absolute; right: 0; top: calc(100% + 12px); z-index: 25; width: max-content; max-width: 320px;
-  padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);
-}
-.working-pick .work-on { gap: 6px; }
 /* On a phone: edge to edge at the top, a bottom border only, kept in view.
    (After the rules above, which it overrides.) */
 @media (max-width: 820px) {
@@ -480,21 +472,17 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
     margin: -16px -16px 16px; padding: 6px 16px; border-radius: 0; border-width: 0 0 1px;
   }
-  /* One row: the buttons show their icons only (their names stay for
-     screen readers and as tooltips), and the name takes the rest, cut
-     short with "…" if it must. */
+  /* One row: the name takes what the buttons leave, cut short with "…" if
+     it must. */
   .working-name { flex: 1 1 0; min-width: 0; }
   .working-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .working-actions .btn { padding-left: 8px; padding-right: 8px; }
   /* Switch opens a tray under the bar, as wide and as tinted, past a
      dashed line; the two cast one shadow. top: 100% is the bar's padding
      edge, so the tray covers its bottom border and has its own. */
-  .working-switch { position: static; }
-  .working-switch[open] summary::after { display: none; }
+  .working-switch { display: block; }
   .working-pick {
-    left: 0; right: 0; top: 100%; width: auto; max-width: none;
-    padding: 10px 16px; border-radius: 0; border-width: 1px 0;
+    position: absolute; left: 0; right: 0; top: 100%; z-index: 25;
+    padding: 10px 16px; border-width: 1px 0;
     border-style: dashed none solid; border-color: color-mix(in srgb, var(--chip) 45%, transparent);
     background: color-mix(in srgb, var(--chip) 12%, var(--surface));
     box-shadow: 0 20px 20px 4px rgb(0 0 0 / .5);

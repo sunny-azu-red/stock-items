@@ -621,12 +621,18 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page.locator("#vehicle_id")).toHaveCount(0);
 
   // Switch, then Back: the page from before the switch shows the bar as
-  // it is now, and its title says which vehicle it shows.
+  // it is now, and its title says which vehicle it shows. A phone switches
+  // in the bar (it lists the other vehicles only); a desktop with the
+  // sidebar's Work on chips, so its bar has no Switch.
   await page.goto("/stock");
-  await bar.locator("summary").click();
-  // It lists the other vehicles, not the one worked on.
-  await expect(bar.locator(".working-pick").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
-  await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
+  if (testInfo.project.name === "mobile") {
+    await bar.locator("summary").click();
+    await expect(bar.locator(".working-pick").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
+    await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
+  } else {
+    await expect(bar.locator("summary")).toBeHidden();
+    await page.locator(".sidebar .work-on").getByRole("button", { name: "KTM 1290" }).click();
+  }
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("Stock");
   await page.goBack();
@@ -812,6 +818,8 @@ test("no page scrolls sideways", async ({ page }) => {
   // The bar while working on a vehicle, with its Switch open.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 1290");
   for (const p of ["/", "/stock", "/services", "/activity", "/shopping"]) await overflows(p);
+  // Switch is a phone's: a desktop switches in the sidebar.
+  if (!(await page.locator(".working-on summary").isVisible())) return;
   await page.locator(".working-on summary").click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
@@ -1192,8 +1200,10 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
     await page.goto(p);
     await check(`${p} working on a vehicle`);
   }
-  await page.locator(".working-on summary").click();
-  await check("the Switch open");
+  if (await page.locator(".working-on summary").isVisible()) {
+    await page.locator(".working-on summary").click();
+    await check("the Switch open");
+  }
   expect(problems).toEqual([]);
 });
 

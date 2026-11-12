@@ -105,4 +105,4 @@ When you press a Save button (Save item, Save service, …) or Add to stock, Tak
 - Shortcuts, the same on every page: `/` searches stock, `a` opens Add item, `l` opens Log service.
 - The app follows your system's light or dark mode. The sun / moon button (top of the sidebar; on a phone, top of the dashboard) overrides it on that device. Switch back to what your system shows to follow it again.
 - The *Activity* page lists every stock change across all items, 200 per page (**Older** / **Newer**), filtered by type and year if you like. An item's page shows its first 100 changes (the newest, unless you sorted it otherwise); **Full history →** opens its whole history there, in the same order. The CSV button downloads what the page is filtered on.
-- The services list (100 per page) and each vehicle show the labour cost of every service and the total.
+- The services list (100 per page) and each vehicle show the labour cost of every service, and the total of all of them in the footer under the list (**Labour in total**). On the services list, **Newer** / **Older** sit in the same footer.

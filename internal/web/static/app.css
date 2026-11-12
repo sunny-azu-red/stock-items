@@ -437,15 +437,13 @@ a.badge-accent:hover { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- Working on a vehicle (working.go) ---------- */
 /* The Work on chips are buttons: tapping one works on it. The one worked
-   on is pressed; the others step back while it is. */
+   on is pressed (tapping it stops); the bar's Switch lists the others. */
 button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 .work-on .chip:hover { border-color: var(--chip); }
 .work-on .chip[aria-pressed="true"] {
   background: color-mix(in srgb, var(--chip) 30%, var(--surface)); border-color: var(--chip);
   box-shadow: 0 0 0 1px var(--chip);
 }
-.work-on:has([aria-pressed="true"]) .chip[aria-pressed="false"] { opacity: .7; }
-.work-on:has([aria-pressed="true"]) .chip[aria-pressed="false"]:hover { opacity: 1; }
 .sidebar .work-on { padding: 0 11px; gap: 6px; }
 /* The bar at the top of every page while a vehicle is worked on: 28px
    buttons in 6px padding and a 1px border, 42px in all. */
@@ -482,7 +480,16 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
   .working-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .working-actions .btn { padding-left: 8px; padding-right: 8px; }
-  .working-pick { right: 16px; max-width: min(288px, calc(100% - 32px)); }
+  /* Switch opens a tray under the bar, as wide and as tinted, past a
+     dashed line; the two cast one shadow. top: 100% is the bar's padding
+     edge, so the tray covers its bottom border and has its own. */
+  .working-pick {
+    left: 0; right: 0; top: 100%; width: auto; max-width: none;
+    padding: 10px 16px; border-radius: 0; border-width: 1px 0;
+    border-style: dashed none solid; border-color: color-mix(in srgb, var(--chip) 45%, transparent);
+    background: color-mix(in srgb, var(--chip) 12%, var(--surface));
+    box-shadow: 0 10px 16px -6px rgb(0 0 0 / .35);
+  }
   html:has(.working-on) { scroll-padding-top: 58px; }
 }
 /* The phone's way in (the sidebar is hidden): the dashboard's Work on row. */

@@ -85,10 +85,11 @@
 </form>{{end}}
 
 {{/* The vehicles to work on, as buttons: tapping one works on it, tapping
-     the one worked on stops. dict "View" View "Label" (id of its label). See
+     the one worked on stops. dict "View" View "Label" (id of its label), and
+     "Others" true to leave out the one worked on (the bar's Switch). See
      working.go. */}}
-{{define "work-on"}}{{$on := .View.WorkingOn}}<form class="chips work-on" method="post" action="/working-on" role="group" aria-labelledby="{{.Label}}">
-  {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}
+{{define "work-on"}}{{$on := .View.WorkingOn}}{{$others := .Others}}<form class="chips work-on" method="post" action="/working-on" role="group" aria-labelledby="{{.Label}}">
+  {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}{{if not (and $others $this)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}{{end}}
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
@@ -100,7 +101,7 @@
   <span class="working-actions">
     <details class="working-switch">
       <summary class="btn btn-sm" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></summary>
-      <div class="working-pick"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title")}}</div>
+      <div class="working-pick"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title" "Others" true)}}</div>
     </details>
     <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>

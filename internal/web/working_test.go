@@ -267,6 +267,14 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, `action="/working-on"`,
 			`name="vehicle" value="" aria-pressed="true"`, `name="vehicle" value="`+itoa(k1290)+`" aria-pressed="false"`)
 		expectNot(t, rec, "Stock by vehicle")
+		// The bar's Switch lists the others only; the sidebar's chip of the
+		// one worked on is pressed, and tapping it stops.
+		if n := strings.Count(rec.Body.String(), `value="" aria-pressed="true"`); n != 1 {
+			t.Errorf("the vehicle worked on is offered %d times, want once (the sidebar)", n)
+		}
+		if n := strings.Count(rec.Body.String(), `name="vehicle" value="`+itoa(k1290)+`"`); n != 2 {
+			t.Errorf("the other vehicle is offered %d times, want twice (the sidebar and Switch)", n)
+		}
 		rec = a.get("/vehicles")
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
 		expectNot(t, rec, workingBar, `aria-pressed="true"`)

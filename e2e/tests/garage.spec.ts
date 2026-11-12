@@ -624,6 +624,8 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   // it is now, and its title says which vehicle it shows.
   await page.goto("/stock");
   await bar.locator("summary").click();
+  // It lists the other vehicles, not the one worked on.
+  await expect(bar.locator(".working-pick").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
   await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("Stock");

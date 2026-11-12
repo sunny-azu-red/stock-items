@@ -209,15 +209,15 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, "O-Ring", "<span>1 more in other vehicles</span>")
 	})
 	t.Run("the bar is the vehicle control", func(t *testing.T) {
-		// The pages' vehicle chips are hidden; the stock's filter keeps its
-		// vehicles in hidden fields, and General stays a choice.
+		// The pages' vehicle and General chips are hidden; the stock's filter
+		// keeps its vehicles, with General, in hidden fields.
 		rec := a.getWorking("/stock?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, `<input type="hidden" name="v" value="`+w+`">`, `name="general" value="1" checked`)
-		expectNot(t, rec, `id="filter-all"`, `name="v" value="`+itoa(k1290)+`"`)
+		expect(t, rec, http.StatusOK, `<input type="hidden" name="v" value="`+w+`">`, `<input type="hidden" name="general" value="1">`)
+		expectNot(t, rec, `id="filter-all"`, `name="v" value="`+itoa(k1290)+`"`, `type="checkbox" name="general"`)
 		expectNot(t, a.getWorking("/services?v="+w, w), `aria-label="Filter by vehicle"`)
 		rec = a.getWorking("/activity?general=1&v="+w, w)
-		expect(t, rec, http.StatusOK, ">General</a>")
-		expectNot(t, rec, ">All vehicles</a>")
+		expect(t, rec, http.StatusOK)
+		expectNot(t, rec, ">All vehicles</a>", ">General</a>")
 		// Without one, the chips are there.
 		expect(t, a.get("/stock"), http.StatusOK, `id="filter-all"`)
 		expect(t, a.get("/services"), http.StatusOK, `aria-label="Filter by vehicle"`)

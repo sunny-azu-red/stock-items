@@ -84,6 +84,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing, on the add form and the edit form alike: the page title, *Add vehicle* or *Edit KTM 390*, and the message after, *Added X* or *Saved X*, say which) | Save, Save changes, Update vehicle, Add vehicle (as the submit button: the sidebar's Add vehicle opens the form, and the two would look the same) |
 | Added X · Saved X · Deleted X · Archived X · Restored X · Logged X (a service) (messages lead with the verb and name the thing) | Created kit X, Photo saved, Added to the shopping list |
 | Shopping list (the list, and its dashboard tile) · N suggested (what the list could take) | To buy |
+| Dash · Stock · Services · Shop · Vehicles (the phone's tab bar, short so they fit; the sidebar says Dashboard and Shopping) | Home, Cart |
 | Low stock (the tile, the filter and the dashboard card) · Below the minimum of 2 pcs | Running low, Below minimum of |
 | Service history (a vehicle's or all services) · No services yet | Service log, Nothing logged yet |
 | 300 km overdue · 3 days overdue | over, late |

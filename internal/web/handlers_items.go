@@ -573,23 +573,26 @@ type movementForm struct {
 }
 
 type itemPage struct {
-	Item          stock.Item
-	Vehicles      []stock.Vehicle
-	VehicleMap    map[int64]stock.Vehicle
-	Movements     []stock.Movement
-	Kits          []kitView
-	UnitPrice     *float64
-	StockValue    *float64
-	Move          movementForm
-	OnShopping    bool
-	SubUnits      []stock.SubUnit
-	Suppliers     []string
-	ExpiryState   string
-	PurchaseCount int
-	Usage         stock.ItemUsage
-	HistoryCapped bool   // Movements holds only the first itemHistory entries
-	Today         string // yyyy-mm-dd, the default date of a stock change
-	History       sortHeads
+	Item       stock.Item
+	Vehicles   []stock.Vehicle
+	VehicleMap map[int64]stock.Vehicle
+	Movements  []stock.Movement
+	Kits       []kitView
+	UnitPrice  *float64
+	StockValue *float64
+	Move       movementForm
+	OnShopping bool
+	// ShoppingElsewhere: on another vehicle's part of the list than the one
+	// worked on.
+	ShoppingElsewhere bool
+	SubUnits          []stock.SubUnit
+	Suppliers         []string
+	ExpiryState       string
+	PurchaseCount     int
+	Usage             stock.ItemUsage
+	HistoryCapped     bool   // Movements holds only the first itemHistory entries
+	Today             string // yyyy-mm-dd, the default date of a stock change
+	History           sortHeads
 }
 
 // AllEntriesQuery is the query string of the item's full history on the
@@ -663,9 +666,14 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		v := *price * it.Quantity
 		p.StockValue = &v
 	}
+	working := workingOn(r, vehicles)
 	for _, e := range shopping {
 		if e.ItemID != nil && *e.ItemID == id {
 			p.OnShopping = true
+			// Another vehicle's part of the list is out of view while one
+			// is worked on: the badge says so, without a link to a list
+			// that doesn't show it.
+			p.ShoppingElsewhere = working != 0 && !e.For(working)
 		}
 	}
 	if p.Move.Kind == "" {

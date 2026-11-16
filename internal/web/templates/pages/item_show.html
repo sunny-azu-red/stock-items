@@ -28,7 +28,7 @@
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "package"}} Stock</h2>{{if $d.OnShopping}}<a class="badge badge-accent" href="/shopping">{{icon "shopping-cart"}} On shopping list</a>{{end}}</div>
+      <div class="card-head"><h2>{{icon "package"}} Stock</h2>{{if $d.ShoppingElsewhere}}<span class="badge badge-accent">{{icon "shopping-cart"}} On shopping list</span>{{else if $d.OnShopping}}<a class="badge badge-accent" href="/shopping">{{icon "shopping-cart"}} On shopping list</a>{{end}}</div>
       <div class="card-body">
         <div class="flex between">
           <div>

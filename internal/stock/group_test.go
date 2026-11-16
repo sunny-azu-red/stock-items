@@ -129,8 +129,8 @@ func TestExportShoppingText(t *testing.T) {
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
-	// The whole list says whose each part is; an archived vehicle (3, no
-	// name) is left out.
+	// The whole list says whose each part is; a vehicle without a name
+	// (3: the sole active one) is left out.
 	got = ExportShoppingText(entries, map[int64]string{1: "GreyJoy", 2: "KillJoy"})
 	want = "Shopping list\n-------------\n2 pcs - OEM Oil Filter [GreyJoy, KillJoy]\n4 L - Motorex Power Synt (4 L can)\n- Chain lube\n"
 	if got != want {

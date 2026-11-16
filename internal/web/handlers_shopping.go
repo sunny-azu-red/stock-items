@@ -32,7 +32,25 @@ type shoppingPage struct {
 	Vehicles    []stock.Vehicle // the filter chips: the active vehicles
 	VehicleID   int64           // the vehicle whose part shows, 0 for all
 	VehicleName string
-	TitleName   string // the vehicle the title names: VehicleName, unless the bar names it (worked on)
+	TitleName   string          // the vehicle the title names: VehicleName, unless the bar names it (worked on)
+	chips       []stock.Vehicle // what a row's chips may name: chipVehicles
+}
+
+// chipVehicles are the vehicles a shopping row's chips may name: the active
+// ones in the sidebar's order, then the archived ones (a row of an archived
+// vehicle keeps its chip, as a stock row does), without the sole active
+// vehicle, which is every page's scope (soleVehicle).
+func chipVehicles(vehicles []stock.Vehicle) []stock.Vehicle {
+	sole := soleVehicle(vehicles)
+	var out []stock.Vehicle
+	for _, archived := range []bool{false, true} {
+		for _, v := range vehicles {
+			if v.Archived() == archived && v.ID != sole {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 // VehicleQuery is the address of a vehicle's part (0: the whole list).
@@ -44,13 +62,13 @@ func (p shoppingPage) VehicleQuery(vehicleID int64) string {
 
 // Chips are the vehicles an entry or a suggestion is for, as the whole
 // list shows them (a vehicle's part says its vehicle once, in the bar or
-// the title, so its rows have none). Archived vehicles are left out.
+// the title, so its rows have none).
 func (p shoppingPage) Chips(ids []int64) []stock.Vehicle {
 	if p.VehicleID != 0 {
 		return nil
 	}
 	var out []stock.Vehicle
-	for _, v := range p.Vehicles {
+	for _, v := range p.chips {
 		if slices.Contains(ids, v.ID) {
 			out = append(out, v)
 		}
@@ -73,7 +91,29 @@ func shoppingVehicle(r *http.Request, vehicles []stock.Vehicle) (vid int64, redi
 	return vid, ""
 }
 
-// loadShopping reads the shopping list's part for vehicle vid (0: all).
+// shoppingListPath is the list an action on it goes back to: the part its
+// form or address names (v), so a list filtered by a chip stays filtered
+// (while a vehicle is worked on, /shopping is its part anyway).
+func shoppingListPath(r *http.Request) string {
+	q := url.Values{}
+	setVehicleParam(q, listVehicle(r))
+	return joinQuery("/shopping", q.Encode())
+}
+
+// listVehicle is the list's vehicle a request carries (v), 0 for none.
+func listVehicle(r *http.Request) int64 {
+	return vehicleParam(url.Values{"v": {r.FormValue("v")}})
+}
+
+// boughtPath is an entry's Bought page, for the list the request came from.
+func boughtPath(r *http.Request, id int64) string {
+	q := url.Values{}
+	setVehicleParam(q, listVehicle(r))
+	return joinQuery(fmt.Sprintf("/shopping/%d/bought", id), q.Encode())
+}
+
+// loadShopping reads the shopping list's part for vehicle vid (0: all; a
+// vehicle that doesn't exist counts as none).
 func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shoppingPage, error) {
 	ctx := r.Context()
 	vehicles, err := s.store.ListVehicles(ctx)
@@ -92,7 +132,10 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shopp
 	if err != nil {
 		return shoppingPage{}, err
 	}
-	p := shoppingPage{Items: items, Form: f, Vehicles: activeVehicles(vehicles), VehicleID: vid,
+	if !slices.ContainsFunc(vehicles, func(v stock.Vehicle) bool { return v.ID == vid }) {
+		vid = 0
+	}
+	p := shoppingPage{Items: items, Form: f, Vehicles: activeVehicles(vehicles), VehicleID: vid, chips: chipVehicles(vehicles),
 		// What is listed counts whoever it was added for: a shared item on
 		// the list covers every vehicle's need.
 		Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries), *s.today(), vid)}
@@ -165,7 +208,7 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Unit: formText(r, "quantity_unit"),
 		Note: formText(r, "note"), FormKey: parseFormKey(r), Errors: stock.Errors{}}
-	if done, err := s.savedBefore(w, r, f.FormKey, "", nil, "/shopping"); done || err != nil {
+	if done, err := s.savedBefore(w, r, f.FormKey, "", nil, shoppingListPath(r)); done || err != nil {
 		return err
 	}
 	checkFormKey(f.Errors, f.FormKey)
@@ -211,10 +254,10 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if !f.Errors.Any() {
 		_, err := s.store.AddShopping(r.Context(), in)
 		if err == nil {
-			s.redirect(w, r, "/shopping", "Added "+title+" to the shopping list")
+			s.redirect(w, r, shoppingListPath(r), "Added "+title+" to the shopping list")
 			return nil
 		}
-		if s.savedAlready(w, r, err, nil, "/shopping") {
+		if s.savedAlready(w, r, err, nil, shoppingListPath(r)) {
 			return nil
 		}
 		var invalid stock.Errors
@@ -231,12 +274,15 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	// The form posts to /shopping: it was the part of the vehicle worked
-	// on, if any.
-	working, err := s.working(r)
+	// on, or the one its chip chose (v).
+	vid, err := s.working(r)
 	if err != nil {
 		return err
 	}
-	p, err := s.loadShopping(r, f, working)
+	if vid == 0 {
+		vid = listVehicle(r)
+	}
+	p, err := s.loadShopping(r, f, vid)
 	if err != nil {
 		return err
 	}
@@ -290,11 +336,13 @@ func (s *Server) shoppingAddSuggestions(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusNoContent)
 		return nil
 	}
-	s.redirect(w, r, "/shopping", msg)
+	s.redirect(w, r, shoppingListPath(r), msg)
 	return nil
 }
 
 type boughtPage struct {
+	List      string // the list it came from, for Cancel
+	V         int64  // that list's vehicle (v), which its forms carry back
 	Entry     stock.ShoppingEntry
 	Move      movementForm
 	Units     []stock.SubUnit
@@ -328,7 +376,7 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 	s.render(w, r, http.StatusOK, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches, Suppliers: suppliers}})
+		Data: boughtPage{List: shoppingListPath(r), V: listVehicle(r), Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches, Suppliers: suppliers}})
 	return nil
 }
 
@@ -353,9 +401,9 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		// Deleted in another tab since the page offered it: back to the
 		// entry's page, which offers what is left (or to the list, when
 		// the entry is gone too).
-		to := fmt.Sprintf("/shopping/%d/bought", id)
+		to := boughtPath(r, id)
 		if _, err := s.store.GetShopping(r.Context(), id); errors.Is(err, store.ErrNotFound) {
-			to = "/shopping"
+			to = shoppingListPath(r)
 		}
 		s.setFlash(w, "error", "That item was deleted meanwhile, so nothing was linked. Choose another, or add it as a new item.")
 		s.redirect(w, r, to, "")
@@ -368,16 +416,16 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		// Linked already (a second click, which also finds a new version)
 		// or ticked off meanwhile.
 		if e, err := s.store.GetShopping(r.Context(), id); err == nil && e.ItemID != nil {
-			s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", id), "")
+			s.redirect(w, r, boughtPath(r, id), "")
 			return nil
 		}
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		s.setFlash(w, "error", "That entry is no longer on the shopping list")
-		s.redirect(w, r, "/shopping", "")
+		s.redirect(w, r, shoppingListPath(r), "")
 		return nil
 	}
-	if s.staleButton(w, r, err, fmt.Sprintf("/shopping/%d/bought", id), "/shopping") {
+	if s.staleButton(w, r, err, boughtPath(r, id), shoppingListPath(r)) {
 		return nil
 	} else if err != nil {
 		return err
@@ -390,7 +438,7 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		notes = append(notes, "The listed amount was in another unit than "+it.DisplayName()+"'s, so enter what you bought.")
 	}
 	msg := strings.Join(notes, " ")
-	s.redirect(w, r, fmt.Sprintf("/shopping/%d/bought", entry), msg)
+	s.redirect(w, r, boughtPath(r, entry), msg)
 	return nil
 }
 
@@ -403,7 +451,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	// Before the entry is looked at: the first save ticked it off.
-	if done, err := s.savedBefore(w, r, parseFormKey(r), "", nil, "/shopping"); done || err != nil {
+	if done, err := s.savedBefore(w, r, parseFormKey(r), "", nil, shoppingListPath(r)); done || err != nil {
 		return err
 	}
 	e, err := s.store.GetShopping(r.Context(), id)
@@ -413,11 +461,11 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
-	page := fmt.Sprintf("/shopping/%d/bought", id)
+	page := boughtPath(r, id)
 	if e.ItemID != nil && !r.PostForm.Has("amount") && parseVersion(r) != e.Version {
 		// "Just tick it off" from a page where the entry was still free
 		// text: it has been linked to an item since.
-		s.staleButton(w, r, &store.StaleError{What: store.WhatShopping}, page, "/shopping")
+		s.staleButton(w, r, &store.StaleError{What: store.WhatShopping}, page, shoppingListPath(r))
 		return nil
 	}
 	if e.ItemID == nil {
@@ -425,12 +473,12 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		if errors.Is(err, store.ErrNotFound) {
 			s.shoppingGone(w, r)
 			return nil
-		} else if s.staleButton(w, r, err, page, "/shopping") {
+		} else if s.staleButton(w, r, err, page, shoppingListPath(r)) {
 			return nil
 		} else if err != nil {
 			return err
 		}
-		s.redirectUndo(w, r, "/shopping", "Ticked off "+e.Title(), trashID)
+		s.redirectUndo(w, r, shoppingListPath(r), "Ticked off "+e.Title(), trashID)
 		return nil
 	}
 	f := movementForm{
@@ -468,9 +516,9 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 			if left > 0 {
 				msg += ". " + stock.FormatQuantity(left, e.ItemUnit) + " still on the list."
 			}
-			s.redirectUndo(w, r, "/shopping", msg, trashID)
+			s.redirectUndo(w, r, shoppingListPath(r), msg, trashID)
 			return nil
-		} else if s.savedAlready(w, r, err, nil, "/shopping") {
+		} else if s.savedAlready(w, r, err, nil, shoppingListPath(r)) {
 			return nil
 		} else if errors.Is(err, store.ErrNotFound) {
 			s.shoppingGone(w, r)
@@ -484,7 +532,7 @@ func (s *Server) shoppingBought(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	s.render(w, r, http.StatusUnprocessableEntity, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Suppliers: suppliers}})
+		Data: boughtPage{List: shoppingListPath(r), V: listVehicle(r), Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Suppliers: suppliers}})
 	return nil
 }
 
@@ -507,12 +555,12 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 	if errors.Is(err, store.ErrNotFound) {
 		s.shoppingGone(w, r)
 		return nil
-	} else if s.staleButton(w, r, err, "/shopping", "/shopping") {
+	} else if s.staleButton(w, r, err, shoppingListPath(r), shoppingListPath(r)) {
 		return nil
 	} else if err != nil {
 		return err
 	}
-	s.redirectUndo(w, r, "/shopping", "Removed "+e.Title()+" from the shopping list", trashID)
+	s.redirectUndo(w, r, shoppingListPath(r), "Removed "+e.Title()+" from the shopping list", trashID)
 	return nil
 }
 
@@ -520,7 +568,7 @@ func (s *Server) shoppingDelete(w http.ResponseWriter, r *http.Request) error {
 // removed meanwhile, say in another tab, with a message instead of a 404.
 func (s *Server) shoppingGone(w http.ResponseWriter, r *http.Request) {
 	s.setFlash(w, "error", "That entry is no longer on the shopping list")
-	s.redirect(w, r, "/shopping", "")
+	s.redirect(w, r, shoppingListPath(r), "")
 }
 
 // shoppingExportText is the list as text: the part its address asks for
@@ -545,7 +593,7 @@ func (s *Server) shoppingExportText(w http.ResponseWriter, r *http.Request) erro
 	var names map[int64]string
 	if vid == 0 {
 		names = map[int64]string{}
-		for _, v := range activeVehicles(vehicles) {
+		for _, v := range chipVehicles(vehicles) {
 			names[v.ID] = v.Name
 		}
 	}

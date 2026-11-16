@@ -131,8 +131,8 @@ func ExportText(sections []Section) string {
 //
 // names, when given, are the vehicles' names by id: each line then ends
 // with the vehicles it is for ("[GreyJoy, KillJoy]"), which the whole list
-// needs and a vehicle's part doesn't. Vehicles without a name (archived)
-// are left out.
+// needs and a vehicle's part doesn't. Vehicles without a name (the sole
+// active one, which needs no saying) are left out.
 func ExportShoppingText(entries []ShoppingEntry, names map[int64]string) string {
 	var b strings.Builder
 	writeHeading(&b, "Shopping list")

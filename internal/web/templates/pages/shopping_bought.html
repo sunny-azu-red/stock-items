@@ -7,25 +7,25 @@
   </div>
 </div>
 {{if not $d.Entry.ItemID}}
-{{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Version" $d.Entry.Version "Matches" $d.Matches)}}{{end}}
+{{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Version" $d.Entry.Version "Matches" $d.Matches "V" $d.V)}}{{end}}
 <div class="card card-body{{if $d.Matches}} mt{{end}}">
   <p>Add it as a new item to keep track of it, with the price and shop you bought it at. Or just tick it off if it's not something you keep in stock.</p>
   <div class="form-actions">
-    <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>
-    <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><input type="hidden" name="version" value="{{$d.Entry.Version}}"><button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
+    <a class="btn btn-ghost spacer" href="{{$d.List}}">Cancel</a>
+    <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><input type="hidden" name="version" value="{{$d.Entry.Version}}">{{with $d.V}}<input type="hidden" name="v" value="{{.}}">{{end}}<button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
     <a class="btn btn-primary" href="/items/new?shopping={{$d.Entry.ID}}">{{icon "package-plus"}} Add to stock as a new item</a>
   </div>
 </div>
 {{else}}
 <form class="card form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
-  <input type="hidden" name="version" value="{{$m.Version}}">
+  <input type="hidden" name="version" value="{{$m.Version}}">{{with $d.V}}<input type="hidden" name="v" value="{{.}}">{{end}}
   {{template "form-key" $m.FormKey}}
   {{template "stale" $m.Stale}}
   {{template "error-summary" $e}}
   {{template "bought-fields" (dict "ID" "" "Move" $m "Show" true "Unit" $d.Entry.ItemUnit "Units" $d.Units "Currency" .Currency "Autofocus" true "Suppliers" $d.Suppliers)}}
   <div class="form-actions">
     {{template "req-note"}}
-    <a class="btn btn-ghost spacer" href="/shopping">Cancel</a>
+    <a class="btn btn-ghost spacer" href="{{$d.List}}">Cancel</a>
     <button class="btn btn-primary" type="submit">{{icon "package-plus"}} Add to stock</button>
   </div>
 </form>

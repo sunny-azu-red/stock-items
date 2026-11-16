@@ -40,7 +40,8 @@ func (s *Server) trashThumb(w http.ResponseWriter, r *http.Request) error {
 
 // restoredTo is the page that shows what a restore brought back, or the
 // trash when that belongs to another vehicle than the one worked on (its
-// page is out of view meanwhile, elsewhere).
+// page is out of view meanwhile, elsewhere; a shopping entry: it isn't on
+// the vehicle's part of the list).
 func (s *Server) restoredTo(r *http.Request, res store.Restored) (string, error) {
 	working, err := s.working(r)
 	if err != nil || working == 0 {
@@ -62,6 +63,17 @@ func (s *Server) restoredTo(r *http.Request, res store.Restored) (string, error)
 			return "", err
 		}
 		vehicleID = rec.VehicleID
+	case store.TrashShopping, store.TrashBought:
+		// The entry is back on the list: on the vehicle's part, or the
+		// trash it came from when it is another vehicle's.
+		e, err := s.store.GetShopping(r.Context(), res.ID)
+		if err != nil {
+			return "", err
+		}
+		if e.For(working) {
+			return restoredPath(res), nil
+		}
+		return "/trash", nil
 	default:
 		return restoredPath(res), nil
 	}

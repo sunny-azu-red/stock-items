@@ -290,14 +290,15 @@
 
 {{/* Items already in stock with a free-text shopping entry's name:
      dict "EntryID" int64 "Version" int "Matches" []Item */}}
-{{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}
+{{/* "V": the shopping list's vehicle the page came from, carried back. */}}
+{{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}{{$v := .V}}
 <div class="card card-body">
   <p><strong>Already have it?</strong> Add this purchase to the item instead of creating a new one.</p>
   <ul class="list">
     {{range .Matches}}
     <li>
       <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="stock-line">{{template "stock-badge" (stockBadge . true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
-      <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}"><button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
+      <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}">{{with $v}}<input type="hidden" name="v" value="{{.}}">{{end}}<button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}
   </ul>

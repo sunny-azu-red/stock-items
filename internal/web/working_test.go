@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -679,9 +680,104 @@ func TestWorkingOnShopping(t *testing.T) {
 		// The dashboard's vehicle counts its part, and links to it.
 		expect(t, a.get("/?v="+b), http.StatusOK, `href="/shopping?v=`+b+`"><span class="label">`, `Shopping list</span><span class="value">4</span>`)
 	})
+	t.Run("a chip's part stays chosen", func(t *testing.T) {
+		// Without a vehicle worked on, what is done on a vehicle's part
+		// comes back to it: its forms and the Bought page carry it (v).
+		rec := a.get("/shopping?v=" + b)
+		expect(t, rec, http.StatusOK, `<input type="hidden" name="v" value="`+b+`">`, `/bought?v=`+b+`"`)
+		expectRedirect(t, a.post("/shopping", url.Values{"free_text": {"Gloves"}, "quantity": {"2"}, "v": {b}}), "/shopping?v="+b)
+		expectRedirect(t, a.post("/shopping", url.Values{"free_text": {"Gloves"}, "quantity": {"2"}}), "/shopping")
+		// A failed add comes back on that part, with its items.
+		rec = a.post("/shopping", url.Values{"free_text": {""}, "v": {b}})
+		expect(t, rec, http.StatusUnprocessableEntity, "<h1>Bravo shopping</h1>", ">Grips (")
+		expectNot(t, rec, ">Pads (")
+		list, err := a.store.ListShopping(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var gloves stock.ShoppingEntry
+		for _, e := range list {
+			if e.FreeText == "Gloves" {
+				gloves = e
+			}
+		}
+		bought := a.get(fmt.Sprintf("/shopping/%d/bought?v=%s", gloves.ID, b))
+		expect(t, bought, http.StatusOK, `href="/shopping?v=`+b+`">Cancel</a>`, `<input type="hidden" name="v" value="`+b+`">`)
+		rec = a.post(fmt.Sprintf("/shopping/%d/bought", gloves.ID), url.Values{"version": {itoa(int64(gloves.Version))}, "v": {b}})
+		expectRedirect(t, rec, "/shopping?v="+b)
+	})
+	t.Run("what is out of view while working", func(t *testing.T) {
+		// Grips is Bravo's: its item page says it is listed, without a link
+		// to Alpha's part, which doesn't show it.
+		rec := a.getWorking("/items/"+itoa(grips), w)
+		expect(t, rec, http.StatusOK, `<span class="badge badge-accent">`)
+		expectNot(t, rec, `<a class="badge badge-accent" href="/shopping">`)
+		expect(t, a.getWorking("/items/"+itoa(pads), w), http.StatusOK, `<a class="badge badge-accent" href="/shopping">`)
+		expect(t, a.get("/items/"+itoa(grips)), http.StatusOK, `<a class="badge badge-accent" href="/shopping">`)
+		// Restoring Bravo's entry stays on the trash; Alpha's opens its part.
+		for id, want := range map[int64]string{grips: "/trash", pads: "/shopping"} {
+			var entry stock.ShoppingEntry
+			list, err := a.store.ListShopping(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range list {
+				if e.ItemID != nil && *e.ItemID == id {
+					entry = e
+				}
+			}
+			trashID, err := a.store.DeleteShopping(ctx, entry.ID, entry.Version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/trash/"+itoa(trashID)+"/restore", nil)
+			req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+			expectRedirect(t, a.do(req), want)
+		}
+	})
 	t.Run("switching shows the next vehicle's part", func(t *testing.T) {
 		rec := a.post("/working-on", url.Values{"vehicle": {b}}, "Referer", "http://example.com"+alpha)
 		expectRedirect(t, rec, "/shopping")
 		expectRedirect(t, a.getWorking("/shopping", b), "/shopping?v="+b)
 	})
+}
+
+// With one active vehicle, Shopping's rows and its copy leave its chip out
+// (it is every page's scope), and an archived vehicle's row keeps its own.
+func TestShoppingSoleVehicle(t *testing.T) {
+	a := newApp(t)
+	ctx := context.Background()
+	vehicle := func(name string) stock.Vehicle {
+		in := stock.VehicleInput{Name: name}
+		in.Normalize()
+		id, err := a.store.CreateVehicle(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := a.store.GetVehicle(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	only, old := vehicle("Only"), vehicle("Old")
+	if err := a.store.ArchiveVehicle(ctx, old.ID, old.Version); err != nil {
+		t.Fatal(err)
+	}
+	for name, vehicles := range map[string][]int64{"Pads": {only.ID}, "Tyre": {old.ID}} {
+		in := stock.ItemInput{Name: name, Unit: stock.UnitPiece, VehicleIDs: vehicles}
+		in.Normalize()
+		id, err := a.store.CreateItem(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.store.EnsureShopping(ctx, id, 1, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := a.get("/shopping")
+	expect(t, rec, http.StatusOK, ">Pads</a></span>", `>Tyre</a><span class="chip"`, `<span class="dot"></span>Old</span>`)
+	expectNot(t, rec, `<span class="dot"></span>Only</span>`, `aria-label="Filter by vehicle"`)
+	rec = a.get("/shopping/export.txt")
+	expect(t, rec, http.StatusOK, "1 pcs - Pads\n", "1 pcs - Tyre [Old]\n")
 }

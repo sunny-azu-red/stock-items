@@ -469,6 +469,24 @@ test("form hints open from the question mark", async ({ page }) => {
   await expect(hint).toBeHidden();
 });
 
+test("a clicked select keeps its focus ring while its list is open", async ({ page }) => {
+  await page.goto("/shopping");
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  });
+  const unit = page.locator('select[name="quantity_unit"]');
+  await unit.click();
+  // Open, the list has focus, not the select itself.
+  await expect.poll(() => unit.evaluate((e) => e.matches(":open") && document.activeElement?.tagName === "OPTION")).toBe(true);
+  await expect(unit).toHaveCSS("border-top-color", accent);
+  await page.keyboard.press("Escape");
+});
+
 test("slash focuses search from any page", async ({ page }) => {
   await page.goto("/");
   await page.keyboard.press("/");

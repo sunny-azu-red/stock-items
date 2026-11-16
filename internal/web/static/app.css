@@ -377,6 +377,9 @@ select.input { cursor: pointer; }
      wherever the box is taller (the sort select). */
   select.input { align-items: center; }
   select.input::picker-icon { display: none; }
+  /* Open, focus moves onto an option in the list (not :focus, nor
+     :focus-within): keep the select's focus ring while it is open. */
+  select.input:open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   select.input::picker(select) {
     margin-top: 4px; padding: 4px; color: var(--text); background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);

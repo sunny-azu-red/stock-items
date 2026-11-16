@@ -138,7 +138,7 @@ func (s *Server) shoppingList(w http.ResponseWriter, r *http.Request) error {
 			w.Header().Set("HX-Redirect", to)
 			return nil
 		}
-		http.Redirect(w, r, to, http.StatusSeeOther)
+		http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // our own path and a vehicle id
 		return nil
 	}
 	p, err := s.loadShopping(r, shoppingForm{}, vid)
@@ -551,6 +551,7 @@ func (s *Server) shoppingExportText(w http.ResponseWriter, r *http.Request) erro
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, err = w.Write([]byte(stock.ExportShoppingText(entries, names)))
+	_, err = w.Write([]byte(stock.ExportShoppingText(entries, names))) //nolint:gosec // text/plain; the address only picks the entries
+
 	return err
 }

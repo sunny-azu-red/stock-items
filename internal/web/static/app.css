@@ -308,6 +308,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover, a.btn-ghost:hover { background: var(--surface-2); border-color: transparent; color: var(--text); text-decoration: none; }
 .btn-sm { padding: 6px 10px; font-size: .82rem; }
+/* Log service's kit starts: the kit's status is the button's end, a badge
+   flush to its border (the button's inside, 28px) behind a divider,
+   10px from the name as the icon is from the left edge (6px gap + 4px). */
+.kit-start { overflow: hidden; }
+.kit-start .badge { align-self: stretch; margin: -6px -10px -6px 4px; border-radius: 0; border-left: 1px solid var(--border); }
+.kit-start:hover .badge { border-left-color: var(--muted); }
 .btn-block { width: 100%; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .icon-btn {

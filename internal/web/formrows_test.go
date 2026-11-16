@@ -89,10 +89,11 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	kitID := kit[len("/kits/"):]
 	start := `href="/services/new?kit=` + kitID + `" data-kit-start>`
 
-	// From the vehicle page: its kits show at once, with their due badge.
+	// From the vehicle page: its kits show at once, each ending in its due badge.
 	// The odometer starts empty, the last reading as its placeholder.
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK,
-		`<div class="form-section" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit", "Not done yet",
+		`<div class="form-section" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit",
+		`Oil service<span class="badge badge-muted">Not done yet</span></a>`,
 		`name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
 		`data-odometer="10`+"\u202f"+`000 km"`)
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`)
@@ -109,4 +110,27 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	expect(t, a.get("/services/new?kit="+kitID+"&performed_on=2026-10-01&odometer=12345&labor_cost=80"), http.StatusOK,
 		`id="performed_on" name="performed_on" value="2026-10-01"`, `name="odometer" value="12345"`, `name="labor_cost" value="80"`,
 		`value="Oil service"`)
+
+	// A kit on track is a plain button; one that is due ends in its badge,
+	// most urgent first, with how far off it is as the button's title.
+	logKit := func(name, months, on string) string {
+		t.Helper()
+		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {name}, "interval_months": {months}})
+		expect(t, rec, http.StatusSeeOther)
+		id := rec.Header().Get("Location")[len("/kits/"):]
+		expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {id}, "title": {name}, "performed_on": {on}}), http.StatusSeeOther)
+		return id
+	}
+	coolant := logKit("Coolant", "24", "2026-10-01")
+	brakes := logKit("Brake fluid", "12", "2025-10-01") // due 2026-10-01, 28 days ago
+	page := a.get("/services/new?vehicle=" + itoa(k390))
+	expect(t, page, http.StatusOK,
+		`title="28 days overdue" href="/services/new?kit=`+brakes+`" data-kit-start>`,
+		`Brake fluid<span class="badge badge-danger">`,
+		`href="/services/new?kit=`+coolant+`" data-kit-start>`, `Coolant</a>`)
+	expectNot(t, page, "On track")
+	body := page.Body.String()
+	if strings.Index(body, "Brake fluid<span") > strings.Index(body, "Oil service<span") {
+		t.Error("the overdue kit should come before the one not done yet")
+	}
 }

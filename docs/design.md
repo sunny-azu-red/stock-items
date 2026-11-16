@@ -66,6 +66,7 @@ Stock section headings (`stock-section`) answer one question, which vehicles the
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
 * **Dimensions**: Height **26px** (`padding: 4px 8px`, line-height `18px`).
 * **Hover (as link)**: Container background color transition (e.g. `.badge-muted:hover { background: var(--surface-3); }`, `.badge-accent:hover { background: var(--accent); color: var(--on-accent); }`). **Never use a text underline on badges.**
+* **A status that belongs to a button is part of it**, never a badge beside it: beside it, the badge is as far from its button as from the next one, and a wrapped row pairs them wrong. Log service's "Start from a kit" buttons (`.kit-start`) end in the kit's due badge, flush to the button's border behind a 1px divider (the way the sort pill's two halves share an edge), with `Due.Summary` as the button's title. Only a status that asks for something shows there (Overdue, Due soon, Not done yet, Needs odometer): picking a kit is the form's job, and On track, like an `ok` stock badge, says nothing. Lists of kits (the Services page, a vehicle's page) and a kit's header still show On track: there the status is the point.
 
 ### The stock badge
 
@@ -99,7 +100,7 @@ Everything else is a plain label (`{{template "chip" …}}`, `<span class="badge
 * Tags that only describe the record in its own header: an item's vehicles and category. The page already is that record.
 * Chips and badges in list rows other than stock rows: kit rows, service lists, an item's "Service kits" card, the shopping list's entries and suggestions. A row that is a link itself (`.kit-row`, `.vehicle-card`) can't hold another link; the others match it.
 * Status and state badges (due, parts ready/short, stock, expiry, archived). The one exception is the item page's **On shopping list** badge, which links to `/shopping`: it says where the item is, and nothing else on the page goes there. While a vehicle is worked on and the entry is on another vehicle's part of the list, it is a plain label, as the list it would open doesn't show it.
-* Anything on a form (Log/Edit service, an edit of a stock change). A link there would leave what was typed; Cancel goes back.
+* Anything on a form (Log/Edit service, an edit of a stock change). A link there would leave what was typed; Cancel goes back. A kit start's due badge is part of its button: the button is the link, the badge isn't one of its own.
 
 Only links that leave the app open a new tab (`target="_blank" rel="noopener noreferrer"`): SKU searches and the full-size photo. A form's hint may open a new tab when its point is to keep the form (the kit form's "add the item"). A chip or badge never does.
 

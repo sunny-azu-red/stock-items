@@ -772,6 +772,15 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   // More: the bar under the grey only closes it.
   await more.click();
   await expect(sheet).toBeVisible();
+  // It covers the tab bar's top border with its dashed seam, and casts no
+  // shadow: the grey sets it apart. So does the Switch tray (below).
+  const seam = (await sheet.boundingBox())!;
+  const tabs = (await page.locator(".tabbar").boundingBox())!;
+  expect(seam.y + seam.height, "the sheet's bottom").toBe(tabs.y + 1);
+  await expect(sheet).toHaveCSS("border-bottom-style", "dashed");
+  await expect(sheet).toHaveCSS("box-shadow", "none");
+  // The build isn't in it: it is the logo's title (and /healthz).
+  await expect(sheet.locator(".sidebar-foot")).toBeHidden();
   // More is lit while it is open, as the current tab (Shop) is.
   await expect(more).toHaveCSS("color", await page.locator(".tabbar a[href='/shopping']").evaluate((e) => getComputedStyle(e).color));
   await tap(".working-on a.working-name");
@@ -795,6 +804,8 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   const t = (await tray.boundingBox())!;
   expect(t.y, "the tray's top").toBe(b.y + b.height - 1);
   expect(t.x === 0 && t.width === b.width, `tray at ${JSON.stringify(t)}, bar ${JSON.stringify(b)}`).toBe(true);
+  await expect(tray).toHaveCSS("border-top-style", "dashed");
+  await expect(tray).toHaveCSS("box-shadow", "none");
   // Everything below is grey, the tab bar too: a tap only closes it.
   await tap(".tabbar a[href='/stock']");
   await expect(tray).toBeHidden();

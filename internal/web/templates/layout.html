@@ -19,7 +19,8 @@
        and a tap outside close it). */}}
   <aside class="sidebar" id="more" popover aria-label="More">
     <div class="sidebar-head">
-      <a class="app-brand" href="/"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
+      {{/* The build, for a hover (and /healthz, from any device). */}}
+      <a class="app-brand" href="/" title="Pitbox {{.Version}}"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
       {{template "theme-toggle" ""}}
     </div>
     <nav class="nav" aria-label="Main">
@@ -58,7 +59,6 @@
         <li><span class="kbd">a</span> Add item</li>
         <li><span class="kbd">l</span> Log service</li>
       </ul>
-      <p class="sidebar-version">{{.Version}}</p>
     </div>
   </aside>
 

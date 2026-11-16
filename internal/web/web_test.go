@@ -272,9 +272,13 @@ func TestErrorsAndInfrastructure(t *testing.T) {
 	expect(t, a.get("/items/999999"), http.StatusNotFound, "Not found")
 	expect(t, a.get("/items/abc"), http.StatusNotFound)
 	expect(t, a.get("/does-not-exist"), http.StatusNotFound)
-	expect(t, a.get("/healthz"), http.StatusOK, `"status":"ok"`)
+	expect(t, a.get("/healthz"), http.StatusOK, `"status":"ok"`, `"version":"test"`)
+	// The build is a hover on the logo, not a line under the sidebar.
+	rec := a.get("/")
+	expect(t, rec, http.StatusOK, `<a class="app-brand" href="/" title="Pitbox test">`)
+	expectNot(t, rec, "sidebar-version")
 
-	rec := a.get("/static/app.css?v=x")
+	rec = a.get("/static/app.css?v=x")
 	expect(t, rec, http.StatusOK, "--accent")
 	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "immutable") {
 		t.Errorf("Cache-Control = %q", cc)

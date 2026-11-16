@@ -50,6 +50,12 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sidebar: 236px;
   --tabbar: 64px;
+  /* The spacing scale (docs/design.md#11-spacing): --gap between cards,
+     sections and tiles; --inset inside a card, from its border to its
+     text, left and right (15px on a phone: with the border, as far in as
+     the page's 16px margin is out). */
+  --gap: 16px;
+  --inset: 19px;
   /* Line height as a factor of the font size, like a unitless line-height:
      set --lh, not line-height. See the rule below. */
   --lh: 1.5;
@@ -104,10 +110,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .sidebar {
   position: sticky; inset: 0 auto auto; height: 100vh; width: auto; margin: 0; overflow-y: auto;
   color: inherit; background: var(--surface); border: 0; border-right: 1px solid var(--border);
-  padding: 18px 13px; display: flex; flex-direction: column; gap: 20px;
+  padding: 24px 13px; display: flex; flex-direction: column; gap: 20px;
 }
-/* The nav links' inset, so the logo lines up with their icons. */
-.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; }
+/* The nav links' inset, so the logo lines up with their icons. As tall as
+   the page's heading row (38px), and as far down as the page's top (24px),
+   so the logo is level with the heading. */
+.sidebar-head { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; }
 .app-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; }
 .app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -136,7 +144,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .sidebar-actions .kbd { position: absolute; top: 0; bottom: 0; right: 10px; margin: auto 0; }
 .btn-primary .kbd { color: var(--on-accent); border-color: color-mix(in srgb, var(--on-accent) 35%, transparent); }
 
-.main { padding: 24px clamp(16px, 3vw, 40px) 48px; max-width: 1180px; width: 100%; }
+.main { padding: 24px; width: 100%; }
+/* The same space on all four sides; nothing at the end adds a margin of
+   its own. */
+.main > :last-child { margin-bottom: 0; }
 .tabbar { display: none; }
 
 /* Page header, on every page: the heading and the record's buttons share
@@ -158,7 +169,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .page-head:has(.vehicle-hero) h1 { grid-column: 2; }
 .page-head:has(.vehicle-hero) .actions { grid-column: 3; }
 .page-head:has(.vehicle-hero) .sub { grid-column: 2 / -1; min-height: 26px; }
-/* Narrow content (under about 760px: phones, and windows up to 1060px wide
+/* Narrow content (under about 780px: phones, and windows up to 1060px wide
    with the sidebar): the heading at the top, the line 6px below, then the
    buttons on their own row. */
 @media (max-width: 1060px) {
@@ -174,10 +185,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 820px) {
+  :root { --inset: 15px; }
   html { scroll-padding-bottom: calc(var(--tabbar) + 16px); }
   .shell { grid-template-columns: minmax(0, 1fr); background: none; }
   .sidebar { display: none; }
-  .main { padding: 16px 16px calc(var(--tabbar) + 32px + env(safe-area-inset-bottom)); }
+  .main { padding: 16px 16px calc(var(--tabbar) + 16px + env(safe-area-inset-bottom)); }
   .tabbar {
     display: grid; grid-template-columns: repeat(5, 1fr);
     position: fixed; inset: auto 0 0 0; z-index: 30;
@@ -222,27 +234,32 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
 /* ---------- Cards & grids ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: clip; }
-.card-pad { padding: 18px 19px; }
+.card-pad { padding: 18px var(--inset); }
 .card-pad > h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
 /* Its links and counts go under the heading when both don't fit, so the
    heading never squeezes onto two lines. */
-.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 14px 19px; border-bottom: 1px solid var(--border); }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 14px var(--inset); border-bottom: 1px solid var(--border); }
 .card-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
 .card-head .meta { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+/* A small button (30px) hangs into the padding, so the bar is as tall as
+   one with text alone (a 20px line). */
+.card-head .btn-sm { margin-block: -5px; }
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
 .reset-link, .card-head a.sort-reset { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 600; text-decoration: none; }
 .reset-link:hover, .card-head a.sort-reset:hover { color: var(--accent); }
 .reset-link .icon, .card-head a.sort-reset .icon { width: 14px; height: 14px; }
-.card-body { padding: 16px 19px; }
-.card + .card, .stack > * + * { margin-top: 16px; }
-.grid { display: grid; gap: 16px; }
+.card-body { padding: 16px var(--inset); }
+/* What ends a card's padding adds no margin to it. */
+.card-pad > :last-child, .card-body > :last-child, .empty > :last-child { margin-bottom: 0; }
+.card + .card, .stack > * + * { margin-top: var(--gap); }
+.grid { display: grid; gap: var(--gap); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
 .grid > .card + .card, .tiles > .card + .card, .split > .card + .card { margin-top: 0; }
-.split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--gap); align-items: start; }
 @media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
 .tile { padding: 14px; text-decoration: none; display: flex; flex-direction: column; gap: 6px; }
 .tile:hover { border-color: var(--accent); color: inherit; }
 .tile .label { color: var(--muted); font-size: .8rem; display: flex; align-items: center; gap: 6px; }
@@ -412,7 +429,7 @@ select.input { cursor: pointer; }
 .req-note .req { font-size: inherit; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }
-.form-section { padding: 18px 19px; }
+.form-section { padding: 18px var(--inset); }
 .form-section + .form-section { border-top: 1px solid var(--border); }
 .form-section h2 { font-size: .95rem; margin-bottom: 13px; }
 .error-summary { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-sm); padding: 11px 14px; font-weight: 500; }
@@ -544,7 +561,7 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 .badge-accent { background: var(--accent-soft); color: var(--accent-strong); }
 
 /* ---------- Stock list ---------- */
-.filters { display: grid; gap: 12px; padding: 16px 19px; }
+.filters { display: grid; gap: 12px; padding: 16px var(--inset); }
 .filters-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters-row .input-icon { flex: 1 1 260px; }
 .filters-row select.input { width: auto; flex: 0 1 200px; }
@@ -563,17 +580,20 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 .sort-by .segmented .icon { width: 16px; height: 16px; }
 @media (max-width: 640px) { .sort-by { margin-left: 0; } }
 .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 20px 0 12px; }
+/* Closer to what it heads than to what is above it: 12px, also in a
+   .stack, whose 16px would otherwise win. */
+.results-head + * { margin-top: 0; }
 .results-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; }
 .results-head .count { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .9rem; }
 
-.section { margin-bottom: 20px; }
-.section-head { display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+/* As tall with chips as without: a 26px chip in 11px padding. */
+.section-head { display: flex; align-items: center; gap: 10px; min-height: 49px; padding: 11px var(--inset); border-bottom: 1px solid var(--border); }
 .section-head h2 { font-size: .95rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .section-head .n { margin-left: auto; color: var(--muted); font-size: .8rem; white-space: nowrap; }
 .section-shared .section-head { background: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
 
 .item-list { list-style: none; margin: 0; padding: 0; }
-.item-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--border); }
+.item-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 11px var(--inset); border-top: 1px solid var(--border); }
 .item-list > .item-row:first-child { border-top: 0; }
 .item-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
 .qty { font-weight: 700; font-size: 1rem; text-align: right; white-space: nowrap; }
@@ -588,7 +608,7 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 .item-actions { display: flex; gap: 6px; align-items: center; }
 .thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); }
 @media (max-width: 640px) {
-  .item-row { grid-template-columns: 66px minmax(0, 1fr) auto; gap: 10px; padding: 10px 13px; }
+  .item-row { grid-template-columns: 66px minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; }
   .item-actions { gap: 4px; }
   .item-actions .icon-btn { width: 32px; height: 32px; }
   .qty { font-size: .92rem; }
@@ -602,8 +622,12 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 /* Separate: collapsed, a cell owns half of each border, and rows end on
    half pixels. */
 table.table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .9rem; }
-.table th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 10px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.table td { padding: 10px 18px; border-top: 1px solid var(--border); vertical-align: middle; }
+.table th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
+/* 24px between columns, and the card's inset at its edges, so the first
+   column lines up with the card's heading. */
+.table :is(th, td):first-child { padding-left: var(--inset); }
+.table :is(th, td):last-child { padding-right: var(--inset); }
 .table tr:first-child td { border-top: 0; }
 .table .num { text-align: right; white-space: nowrap; }
 .table .nowrap { white-space: nowrap; }
@@ -628,7 +652,7 @@ table.table { width: 100%; border-collapse: separate; border-spacing: 0; font-si
 
 /* Simple list rows used on dashboard and detail pages */
 .list { list-style: none; margin: 0; padding: 0; }
-.list > li { display: flex; align-items: center; gap: 12px; padding: 10px 19px; border-top: 1px solid var(--border); }
+.list > li { display: flex; align-items: center; gap: 12px; padding: 10px var(--inset); border-top: 1px solid var(--border); }
 .list > li:first-child { border-top: 0; }
 .list .grow { flex: 1; min-width: 0; }
 .list .title { font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
@@ -653,7 +677,7 @@ a.title:hover { color: var(--accent); }
     linear-gradient(var(--surface), var(--surface)) padding-box,
     linear-gradient(to bottom, var(--chip) 18px, var(--rim-fade) 60%) border-box;
 }
-.vehicle-card .body { padding: 16px 18px; display: grid; gap: 10px; }
+.vehicle-card .body { padding: 16px var(--inset); display: grid; gap: 10px; }
 .vehicle-card .name { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
 .vehicle-card .name .icon { color: var(--chip); }
 .vehicle-card .stats { display: flex; gap: 20px; color: var(--muted); font-size: .85rem; flex-wrap: wrap; }
@@ -683,7 +707,7 @@ p a:not(.btn):not(.chip):not(.badge):hover,
 }
 
 /* ---------- Kits ---------- */
-.kit-row { display: flex; align-items: center; gap: 14px; padding: 13px 19px; border-top: 1px solid var(--border); text-decoration: none; }
+.kit-row { display: flex; align-items: center; gap: 14px; padding: 13px var(--inset); border-top: 1px solid var(--border); text-decoration: none; }
 .kit-row:first-child, .card-head + .kit-row { border-top: 0; }
 a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); color: inherit; }
 a.kit-row.muted:hover { color: var(--muted); }
@@ -722,7 +746,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .sku-link:hover, .table a.sku-link:hover { color: var(--accent); text-decoration-style: solid; }
 .sku-more { color: var(--muted); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .sku-more:hover { color: var(--accent); }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 19px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 var(--inset); }
 .tabs button { display: flex; align-items: center; gap: 8px; font: inherit; line-height: round(var(--lh) * 1em, 2px); font-weight: 600; font-size: .9rem; background: none; border: 0; padding: 13px 10px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
 .tabs button[aria-selected="true"] { color: var(--accent-strong); border-bottom-color: var(--accent); }
 
@@ -734,8 +758,8 @@ a.kit-row.muted:hover { color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .nowrap { white-space: nowrap; }
-.mt { margin-top: 16px; }
-.mb { margin-bottom: 16px; }
+.mt { margin-top: var(--gap); }
+.mb { margin-bottom: var(--gap); }
 .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .between { justify-content: space-between; }
 .welcome ol { margin: 8px 0 0; padding-left: 19px; display: grid; gap: 6px; }
@@ -748,11 +772,11 @@ a.kit-row.muted:hover { color: var(--muted); }
   border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; color: var(--muted);
 }
 
-.pager { padding: 12px 19px; }
+.pager { padding: 12px var(--inset); }
 .card > .pager { border-top: 1px solid var(--border); }
 /* A card's footer: a total under its list (Service history's labour), with
    the list's pager on the same row when it has pages. */
-.card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 12px 19px; border-top: 1px solid var(--border); background: var(--surface-2); font-size: .85rem; }
+.card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 12px var(--inset); border-top: 1px solid var(--border); background: var(--surface-2); font-size: .85rem; }
 /* The pager's ghost buttons line their icon up with the list's text (their
    padding and border, 11px, hang into the gutter), and the row keeps the
    height of a footer with only text: 7 + 30px button + 7. */

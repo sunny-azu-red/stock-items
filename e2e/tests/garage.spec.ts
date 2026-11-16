@@ -1532,6 +1532,146 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   }
   expect(problems).toEqual([]);
 });
+
+test("every page's spacing follows the scale", async ({ page }, testInfo) => {
+  // docs/design.md#11-spacing. The page had twice the space under it as
+  // above (and a section's margin on top of that), stock sections were 20px
+  // apart and tiles 12px while other cards were 16px, card parts sat 18 or
+  // 19px in (13px for a phone's stock rows), the item's History table was
+  // wider than its card, and a heading bar grew with a button or shrank
+  // without chips.
+  const desktop = testInfo.project.name === "desktop";
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const movement = await link("/activity", 'a[href^="/movements/"]');
+  const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
+    "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/no-such-page"];
+  const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
+  const problems: string[] = [];
+  let cookie = false;
+  for (const entry of [...paths, ...working.map((p) => "working " + p)]) {
+    const p = entry.replace(/^working /, "");
+    if (entry !== p && !cookie) {
+      await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+      cookie = true;
+    }
+    await page.goto(p);
+    const found = await page.evaluate((desktop) => {
+      const out: string[] = [];
+      const root = getComputedStyle(document.documentElement);
+      const gap = parseFloat(root.getPropertyValue("--gap"));
+      const inset = parseFloat(root.getPropertyValue("--inset"));
+      const px = (el: Element, prop: string) => parseFloat(getComputedStyle(el).getPropertyValue(prop)) || 0;
+      const shown = (el: Element) => {
+        const s = getComputedStyle(el);
+        return s.display !== "none" && s.position !== "fixed" && s.position !== "absolute" && el.getBoundingClientRect().height > 0;
+      };
+      const name = (el: Element) => el.tagName.toLowerCase() + [...el.classList].map((c) => "." + c).join("");
+      const main = document.querySelector(".main") as HTMLElement;
+      // The same space on the page's sides and under it as above it (and
+      // the tab bar's height under it on a phone), and nothing at the end adding a margin: the
+      // main column fitted to its content, its last box ends at its padding.
+      const pt = px(main, "padding-top"), pb = px(main, "padding-bottom");
+      const tabbar = desktop ? 0 : parseFloat(root.getPropertyValue("--tabbar"));
+      if (pb !== pt + tabbar) out.push(`the page has ${pb}px under it and ${pt}px above`);
+      const pl = px(main, "padding-left"), pr = px(main, "padding-right");
+      if (pl !== pt || pr !== pt) out.push(`the page has ${pl}px on the left and ${pr}px on the right, ${pt}px above`);
+      // It fills the width: no empty space beyond its padding on a wide window.
+      const right = Math.round(main.getBoundingClientRect().right);
+      if (right !== document.documentElement.clientWidth) out.push(`the page ends at ${right}px in a ${document.documentElement.clientWidth}px window`);
+      main.style.alignSelf = "start";
+      const kids = [...main.children].filter(shown);
+      const end = Math.max(...kids.map((k) => k.getBoundingClientRect().bottom));
+      const left = Math.round(main.getBoundingClientRect().bottom - pb - end);
+      main.style.alignSelf = "";
+      if (left !== 0) out.push(`${left}px of margin under the last box (${name(kids[kids.length - 1])})`);
+      // Cards, sections, tiles and columns side by side or one under the
+      // other are --gap apart.
+      const block = ".card, .split > *, .grid > *, .tiles > *, .stack > *";
+      // A results heading ("13 items") is nearer what it heads: 20px above
+      // it, 12px below.
+      for (const h of document.querySelectorAll(".results-head")) {
+        const above = h.previousElementSibling, below = h.nextElementSibling, r = h.getBoundingClientRect();
+        if (above && shown(above) && Math.round(r.top - above.getBoundingClientRect().bottom) !== 20)
+          out.push(`a results heading is ${Math.round(r.top - above.getBoundingClientRect().bottom)}px below ${name(above)}, not 20`);
+        if (below && shown(below) && Math.round(below.getBoundingClientRect().top - r.bottom) !== 12)
+          out.push(`${name(below)} is ${Math.round(below.getBoundingClientRect().top - r.bottom)}px below its results heading, not 12`);
+      }
+      for (const b of document.querySelectorAll(block)) {
+        const a = b.previousElementSibling;
+        if (!a || !a.matches(block) || !shown(a) || !shown(b) || a.matches(".results-head") || b.matches(".results-head")) continue;
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        let d: number | null = null;
+        if (rb.top >= ra.bottom - 1 && rb.left < ra.right && ra.left < rb.right) d = rb.top - ra.bottom;
+        else if (rb.left >= ra.right - 1 && rb.top < ra.bottom && ra.top < rb.bottom) d = rb.left - ra.right;
+        if (d !== null && Math.round(d) !== gap) out.push(`${name(a)} and ${name(b)} are ${Math.round(d)}px apart, not ${gap}`);
+      }
+      // Each part of a card starts and ends --inset inside its border:
+      // its own padding, or the table's first and last cells.
+      const part = [".card-head", ".section-head", ".card-body", ".card-pad", ".form-section", ".filters", ".list > li", ".kit-row", ".item-row",
+        ".card > .pager", ".card-foot", ".tabs", ".vehicle-card > .body"].join(", ");
+      for (const el of document.querySelectorAll(part)) {
+        const card = el.closest(".card");
+        if (!card || !shown(el) || el.matches(".tile")) continue;
+        const outer = el.parentElement?.closest(part);
+        if (outer && card.contains(outer)) continue; // counted with the part it is in
+        const rc = card.getBoundingClientRect(), r = el.getBoundingClientRect();
+        const l = Math.round(r.left + px(el, "padding-left") + px(el, "border-left-width") - rc.left - px(card, "border-left-width"));
+        const rr = Math.round(rc.right - px(card, "border-right-width") - (r.right - px(el, "padding-right") - px(el, "border-right-width")));
+        if (l !== inset || rr !== inset) out.push(`${name(el)} is ${l}px in on the left and ${rr}px on the right, not ${inset}`);
+      }
+      for (const table of document.querySelectorAll(".card .table")) {
+        const card = table.closest(".card")!;
+        const wrap = table.closest(".table-wrap") ?? table;
+        if (desktop && wrap.scrollWidth > wrap.clientWidth) out.push(`a table is ${wrap.scrollWidth - wrap.clientWidth}px wider than its card`);
+        const rc = card.getBoundingClientRect();
+        for (const row of table.querySelectorAll("tr")) {
+          const cells = [...row.children];
+          if (cells.length === 0) continue;
+          const first = cells[0], last = cells[cells.length - 1];
+          const l = Math.round(first.getBoundingClientRect().left + px(first, "padding-left") - rc.left - px(card, "border-left-width"));
+          if (l !== inset) out.push(`a table's first column is ${l}px in, not ${inset}`);
+          if (wrap.scrollWidth <= wrap.clientWidth) {
+            const rr = Math.round(rc.right - px(card, "border-right-width") - (last.getBoundingClientRect().right - px(last, "padding-right")));
+            if (rr !== inset) out.push(`a table's last column is ${rr}px in, not ${inset}`);
+          }
+          break; // one row tells
+        }
+      }
+      // Heading bars are one height, whatever they hold, unless they wrap.
+      for (const sel of [".card-head", ".section-head"]) {
+        const heights = new Map<number, string>();
+        for (const h of document.querySelectorAll(sel)) {
+          if (!shown(h)) continue;
+          const tops = [...h.children].filter(shown).map((c) => c.getBoundingClientRect().top);
+          const bottoms = [...h.children].filter(shown).map((c) => c.getBoundingClientRect().bottom);
+          if (tops.length && Math.min(...bottoms) <= Math.max(...tops)) continue; // wrapped onto two lines
+          heights.set(Math.round(h.getBoundingClientRect().height), (h.textContent ?? "").trim().slice(0, 30));
+        }
+        if (heights.size > 1) out.push(`${sel} bars of ${[...heights].map(([hh, t]) => `${hh}px ("${t}")`).join(", ")}`);
+      }
+      // The sidebar's logo is level with the page heading's row.
+      const mark = document.querySelector(".sidebar .app-brand-mark");
+      const head = document.querySelector(".page-head");
+      if (desktop && mark && head && !document.querySelector(".working-on")) {
+        const m = mark.getBoundingClientRect(), h = head.getBoundingClientRect();
+        const off = Math.round((m.top + m.height / 2) - (h.top + 19));
+        if (off !== 0) out.push(`the logo is ${off}px off the heading's row`);
+      }
+      return out;
+    }, desktop);
+    for (const f of found) problems.push(`${entry}: ${f}`);
+  }
+  expect(problems).toEqual([]);
+});
+
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/stock");

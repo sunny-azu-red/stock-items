@@ -110,6 +110,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 * **Flex alignment**: All heading containers (`.card-head h2`, `.results-head h2`, `.section-head h2`) must use `display: flex; align-items: center; gap: 8px;` so icons, heading text, delimiters, and count badges center on the exact same vertical line.
 * **Delimiters**: Separate a title from its item counter or secondary info using the middle dot ` · ` (e.g. `Stock for KillJoy · 0 items`).
 * **Card Head Meta (`.card-head .meta`) & Results Count (`.results-head .count`)**: Sort-reset links, bullet delimiters, and count texts must be wrapped in an inline-flex container (`display: inline-flex; align-items: center; gap: 6px; color: var(--muted);`, at `.85rem` in a card head and `.9rem` in a results head).
+* **One height** ([§11](#11-spacing)): every card head (`.card-head`) and stock section heading (`.section-head`) is 49px tall (a 20px line, or a 26px chip, in its padding, and the 1px border), whatever it holds. A section heading without chips (General) is as tall as one with them (`min-height`), and a small button in a card head (the vehicle page's **Add kit**, 30px) hangs into the padding (`margin-block: -5px`), as the pager does in a footer. Only a head whose links wrap under the title on a narrow screen grows.
 * **Card footer (`.card-foot`)**: A total that sums the card's list (Service history's "Labour in total") goes in a footer band under the list, not in the header, which keeps only the title, a count and its link. The label is on the left and the amount on the right; when the list has pages, Newer / Older take the left of the same row and the total sits together on the right.
 
 ---
@@ -157,6 +158,7 @@ Adhere to the existing whole-pixel constraints from [conventions.md](conventions
 Kit lines and tables use vertical centering (`vertical-align: middle` via standard `.table td`):
 * Keeps the row status disc (`[✕]`, `[✓]`), item name block (including the stock meter), and quantity figures (`NEED`, `IN STOCK`, `MISSING`) vertically balanced.
 * On mobile and narrow viewports where part names wrap onto multiple lines, middle alignment prevents large dead spaces under single-line quantities and maintains a balanced visual row.
+* **Columns**: cells have 12px on each side (24px between columns), and the first and last cell the card's `--inset` ([§11](#11-spacing)), so the first column lines up with the card's heading and the last button sits as far from the edge as the heading's count. A table fits its card on a desktop; a phone may scroll it inside its `.table-wrap`, never the page.
 
 ---
 
@@ -211,3 +213,25 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`) and a
 * **Strong enough for WCAG.** Both rings are visible on focus (2.4.7, AA) and at least 2px with 3:1 against the unfocused state (2.4.13 Focus Appearance, AAA). The pale glow alone counts for neither.
 * **Nothing moves.** A ring is a box-shadow or an outline, never a thicker border, so a focused control keeps its box (section 5).
 * **For a new control:** use `.input` for a field and `.btn` or `.icon-btn` for a button, and the ring comes with the class. A new kind of clickable control joins the `:focus-visible` outline rule in `app.css`. Never set `outline: none` without a ring in its place, and don't give a component a focus colour of its own.
+
+---
+
+## 11. Spacing
+
+One scale, so a page reads as one thing: the same space wherever the same kind of space is. The values are tokens on `:root` in `app.css`. A new component uses them, never a number of its own.
+
+| Space | Desktop | Phone (≤ 820px) | Where |
+|---|---|---|---|
+| Around the page | 24px on all four sides, the content filling the width (no maximum) | 16px; at the bottom 16px above the tab bar | `.main` |
+| The sidebar's top and bottom | 24px, its header row 38px | (the More sheet) | `.sidebar`, `.sidebar-head` |
+| Between cards, sections, tiles and columns | `--gap`: 16px | 16px | `.card + .card`, `.grid`, `.split`, `.tiles`, `.stack`, `.mt`, `.mb` |
+| Inside a card, from its border to its text, left and right | `--inset`: 19px | 15px | every part of a card (below) |
+| Between table columns | 12px each side; `--inset` at the table's edges | the same | `.table` ([§6](#6-table-row-alignment-kit-lines)) |
+| A heading bar | 49px, whatever it holds | the same | `.card-head`, `.section-head` ([§3](#3-section--card-headers)) |
+
+* **The same space on every side of the page.** The content fills the window beside the sidebar, so a wide window has no empty band on the right, and nothing at the end of a page or of a card adds a margin of its own: `.main > :last-child`, `.card-pad > :last-child`, `.card-body > :last-child` and `.empty > :last-child` have none (a `<p>` keeps its 12px only between paragraphs). On a desktop the last card then ends level with the sidebar's buttons.
+* **The logo is level with the page heading.** The sidebar starts 24px down, as the page does, and its header row is as tall as the heading row (38px), so the logo and the heading share a centre line.
+* **The inset is the card's, for every part.** `.card-pad`, `.card-head`, `.card-body`, `.form-section`, `.filters`, `.section-head`, `.item-row`, `.list > li`, `.kit-row`, `.pager`, `.card-foot`, `.tabs`, `.vehicle-card .body` and the table's outer cells all use `--inset` left and right, so text, icons and buttons line up from the card's heading down to its last row. On a phone it is 15px: with the 1px border, as far inside the card as the page's 16px margin is outside it. Top and bottom padding is the part's own (a row is shorter than a form section).
+* **Kept on purpose:** a heading sits closer to what it labels than to what comes before it. The page header has 20px under it, a results heading (`.results-head`, "13 items" with its buttons) 20px above and 12px below, the Working on bar 20px under it (16px on a phone, where it runs edge to edge), a flash 16px. A dashboard tile (`.tile`) is padded 14px: its figures need the width, and nothing lines up against them.
+* **For a new component:** space cards with `--gap` (or put them in a `.grid`, `.split` or `.stack`), pad a card's part with `--inset` left and right, and leave no margin under its last child.
+* The e2e test "every page's spacing follows the scale" checks every page on desktop and phone: the space under the page, the gaps between cards, every part's inset on both sides, that tables fit their cards, that heading bars are one height, and the logo against the heading.

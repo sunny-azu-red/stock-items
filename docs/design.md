@@ -197,3 +197,15 @@ Pitbox maintains a strict distinction in text capitalization:
   * e.g. `Starting stock`, `All types`, `All vehicles`, `Out of stock`, `Clear filters`, `Used in this service`, `1 PART SHORT`, `PARTS READY`.
 
 
+
+---
+
+## 10. Focus Rings
+
+Where focus is always shows, the way browsers decide it (`:focus-visible`) and as GitHub's Primer does it. A new control gets its ring from its class, never one of its own.
+
+* **Fields show it on any focus**, click or keyboard: anything you type into or choose from (`.input` on an input, select, textarea, suggestion, date or search field). You type next where the ring is. The ring is the field's own 1px border plus a 1px box-shadow in `--ring` (2px solid), then a 3px `--ring-soft` glow (`.input:focus`). `--ring` is the accent, or red (`--danger`, `--danger-soft`) in a field with an error (`.has-error`), so the field never mixes a red border with a purple ring. An open select keeps it too (`select.input:open`), as its list takes the focus from it.
+* **Buttons and other clickables show it from the keyboard only** (`:focus-visible`): `.btn`, `.icon-btn`, the segmented toggles, sort links and chips get a 2px solid `--accent` outline, 2px off the control (1px for sort links), so it shows on a filled button too. A mouse click leaves no ring: it has done what it does, and a ring left behind looks stuck.
+* **Strong enough for WCAG.** Both rings are visible on focus (2.4.7, AA) and at least 2px with 3:1 against the unfocused state (2.4.13 Focus Appearance, AAA). The pale glow alone counts for neither.
+* **Nothing moves.** A ring is a box-shadow or an outline, never a thicker border, so a focused control keeps its box (section 5).
+* **For a new control:** use `.input` for a field and `.btn` or `.icon-btn` for a button, and the ring comes with the class. A new kind of clickable control joins the `:focus-visible` outline rule in `app.css`. Never set `outline: none` without a ring in its place, and don't give a component a focus colour of its own.

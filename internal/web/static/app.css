@@ -333,12 +333,15 @@ form:not(:has(input[name="unit"][value="piece"]:checked)) .pieces-only { display
 .input, select.input, textarea.input {
   width: 100%; font: inherit; line-height: round(var(--lh) * 1em, 2px); color: var(--text); background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; min-height: var(--control-h);
+  --ring: var(--accent); --ring-soft: var(--accent-soft);
 }
 /* Single-line controls share one exact height, whatever the browser adds inside. */
 input.input, select.input { height: var(--control-h); }
 textarea.input { min-height: 80px; resize: vertical; }
-.input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
-.has-error .input { border-color: var(--danger); }
+/* A field's focus ring (docs/design.md#10-focus-rings): its border and a 1px
+   shadow make 2px solid, then a pale glow. Red in a field with an error. */
+.input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
+.has-error .input { border-color: var(--danger); --ring: var(--danger); --ring-soft: var(--danger-soft); }
 input[type="color"].input { padding: 3px; width: 64px; }
 /* Dates: Chromium pads the inner fields, and its calendar icon ignores the
    theme. Strip the padding and draw the icon in the selects' chevron grey,
@@ -378,8 +381,8 @@ select.input { cursor: pointer; }
   select.input { align-items: center; }
   select.input::picker-icon { display: none; }
   /* Open, focus moves onto an option in the list (not :focus, nor
-     :focus-within): keep the select's focus ring while it is open. */
-  select.input:open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+     :focus-within): keep the select's focus ring (as .input:focus) while it is open. */
+  select.input:open { border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
   select.input::picker(select) {
     margin-top: 4px; padding: 4px; color: var(--text); background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);

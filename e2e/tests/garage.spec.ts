@@ -469,22 +469,40 @@ test("form hints open from the question mark", async ({ page }) => {
   await expect(hint).toBeHidden();
 });
 
-test("a clicked select keeps its focus ring while its list is open", async ({ page }) => {
+test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page }) => {
   await page.goto("/shopping");
-  const accent = await page.evaluate(() => {
+  const colour = (v: string) => page.evaluate((v) => {
     const probe = document.createElement("div");
-    probe.style.color = "var(--accent)";
+    probe.style.color = `var(${v})`;
     document.body.append(probe);
     const c = getComputedStyle(probe).color;
     probe.remove();
     return c;
-  });
+  }, v);
+  const accent = await colour("--accent");
+  // The border and a 1px shadow in the ring colour, then the pale glow.
+  const ring = (c: string) => new RegExp(`^${c.replace(/[()]/g, "\\$&")} 0px 0px 0px 1px, `);
+
+  const name = page.getByLabel("Something new");
+  await name.click();
+  await expect(name).toHaveCSS("border-top-color", accent);
+  await expect(name).toHaveCSS("box-shadow", ring(accent));
+
   const unit = page.locator('select[name="quantity_unit"]');
   await unit.click();
   // Open, the list has focus, not the select itself.
   await expect.poll(() => unit.evaluate((e) => e.matches(":open") && document.activeElement?.tagName === "OPTION")).toBe(true);
   await expect(unit).toHaveCSS("border-top-color", accent);
+  await expect(unit).toHaveCSS("box-shadow", ring(accent));
   await page.keyboard.press("Escape");
+
+  // A field with an error rings red, not purple around a red border.
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".has-error").getByLabel("Something new")).toBeVisible();
+  await name.click();
+  const danger = await colour("--danger");
+  await expect(name).toHaveCSS("border-top-color", danger);
+  await expect(name).toHaveCSS("box-shadow", ring(danger));
 });
 
 test("slash focuses search from any page", async ({ page }) => {

@@ -223,12 +223,17 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Space | Desktop | Phone (≤ 820px) | Where |
 |---|---|---|---|
 | Around the page | 24px on all four sides, the content filling the width (no maximum) | 16px; at the bottom 16px above the tab bar | `.main` |
+| A page that is a form (Add/Edit item, vehicle, kit, service; a stock change; Bought) | `--form-width`: 1000px, its header and flash too | the page's width | `.page-form` |
+| A form's fields | at most 4 a row, at least 220px each | one a row | `.form-grid` |
+| A page's side column (details, photo, short lists) | 280–440px; the main column takes the rest | under the main column | `.split` |
+| Vehicle cards | at least 360px, as many as fit | one a row | `.grid-3` |
 | The sidebar's top and bottom | 24px, its header row 38px | (the More sheet) | `.sidebar`, `.sidebar-head` |
 | Between cards, sections, tiles and columns | `--gap`: 16px | 16px | `.card + .card`, `.grid`, `.split`, `.tiles`, `.stack`, `.mt`, `.mb` |
 | Inside a card, from its border to its text, left and right | `--inset`: 19px | 15px | every part of a card (below) |
 | Between table columns | 12px each side; `--inset` at the table's edges | the same | `.table` ([§6](#6-table-row-alignment-kit-lines)) |
 | A heading bar | 49px, whatever it holds | the same | `.card-head`, `.section-head` ([§3](#3-section--card-headers)) |
 
+* **Wide windows: lists fill, the rest stops.** Lists, tables and the dashboard fill the window, as they get more readable with room. What doesn't is capped: a form stops at four fields a row (`.page-form`, `.form-grid`), so its fields don't stretch to 500px and its notes to 1600px; a side column stops at 440px (its photo once grew to 800px); vehicle cards keep their width instead of splitting the screen (`auto-fill`, not `auto-fit`). A new page that is a form gets `page-form` on its `<form class="card">`.
 * **The same space on every side of the page.** The content fills the window beside the sidebar, so a wide window has no empty band on the right, and nothing at the end of a page or of a card adds a margin of its own: `.main > :last-child`, `.card-pad > :last-child`, `.card-body > :last-child` and `.empty > :last-child` have none (a `<p>` keeps its 12px only between paragraphs). On a desktop the last card then ends level with the sidebar's buttons.
 * **The logo is level with the page heading.** The sidebar starts 24px down, as the page does, and its header row is as tall as the heading row (38px), so the logo and the heading share a centre line.
 * **The inset is the card's, for every part.** `.card-pad`, `.card-head`, `.card-body`, `.form-section`, `.filters`, `.section-head`, `.item-row`, `.list > li`, `.kit-row`, `.pager`, `.card-foot`, `.tabs`, `.vehicle-card .body` and the table's outer cells all use `--inset` left and right, so text, icons and buttons line up from the card's heading down to its last row. On a phone it is 15px: with the 1px border, as far inside the card as the page's 16px margin is outside it. Top and bottom padding is the part's own (a row is shorter than a form section).

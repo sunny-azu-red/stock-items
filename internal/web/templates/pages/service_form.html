@@ -27,7 +27,7 @@
   {{end}}
 </form>
 {{end}}
-<form class="card" method="post" action="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}" novalidate>
+<form class="card page-form" method="post" action="{{if $f.ID}}/services/{{$f.ID}}{{else}}/services{{end}}" novalidate>
   {{if $f.ID}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}

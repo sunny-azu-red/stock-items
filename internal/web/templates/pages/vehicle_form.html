@@ -5,7 +5,7 @@
   </div>
 </div>
 
-<form class="card" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
+<form class="card page-form" method="post" action="{{if $d.IsNew}}/vehicles{{else}}/vehicles/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}

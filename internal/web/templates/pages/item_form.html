@@ -6,7 +6,7 @@
 </div>
 
 {{if $d.Matches}}<div class="mb">{{template "shopping-matches" (dict "EntryID" $f.ShoppingID "Version" $d.ShoppingVersion "Matches" $d.Matches)}}</div>{{end}}
-<form class="card" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
+<form class="card page-form" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
   {{/* Enter submits with the first submit button in the form: make that a plain save, not "Save & add another". Out of sight, focus and the accessibility tree. */}}
   {{if and $d.IsNew (not $f.ShoppingID)}}<button class="sr-only" type="submit" tabindex="-1" aria-hidden="true">Save item</button>{{end}}
   {{if not $d.IsNew}}<input type="hidden" name="quantity_was" value="{{$f.QuantityWas}}"><input type="hidden" name="version" value="{{$f.Version}}">{{end}}

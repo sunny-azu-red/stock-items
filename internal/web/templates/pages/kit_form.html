@@ -9,7 +9,7 @@
 {{if not $d.Vehicles}}
 <div class="card">{{template "empty" (dict "Icon" "warehouse" "Title" "Add a vehicle first" "Text" "Kits belong to a vehicle." "Href" "/vehicles/new" "Action" "Add vehicle")}}</div>
 {{else}}
-<form class="card" method="post" action="{{if $d.IsNew}}/kits{{else}}/kits/{{$f.ID}}{{end}}" novalidate>
+<form class="card page-form" method="post" action="{{if $d.IsNew}}/kits{{else}}/kits/{{$f.ID}}{{end}}" novalidate>
   {{if not $d.IsNew}}<input type="hidden" name="version" value="{{$f.Version}}">{{end}}
   {{template "form-key" $f.FormKey}}
   {{template "form-banners" $f}}

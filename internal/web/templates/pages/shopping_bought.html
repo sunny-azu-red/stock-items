@@ -17,7 +17,7 @@
   </div>
 </div>
 {{else}}
-<form class="card form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
+<form class="card page-form form card-body" method="post" action="/shopping/{{$d.Entry.ID}}/bought" novalidate>
   <input type="hidden" name="version" value="{{$m.Version}}">{{with $d.V}}<input type="hidden" name="v" value="{{.}}">{{end}}
   {{template "form-key" $m.FormKey}}
   {{template "stale" $m.Stale}}

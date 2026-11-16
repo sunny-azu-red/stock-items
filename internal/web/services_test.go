@@ -851,7 +851,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	badge := `<use href="#i-list-checks"></use></svg> Oil Service</span>`
 	header := func(t *testing.T, body string) string {
 		t.Helper()
-		i, j := strings.Index(body, `class="page-head"`), strings.Index(body, `<form class="card"`)
+		i, j := strings.Index(body, `class="page-head"`), strings.Index(body, `<form class="card page-form"`)
 		if i < 0 || j < i {
 			t.Fatal("no page header before the form")
 		}

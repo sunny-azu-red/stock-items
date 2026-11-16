@@ -56,6 +56,8 @@
      the page's 16px margin is out). */
   --gap: 16px;
   --inset: 19px;
+  /* A page that is a form: four 220px fields a row, and no wider. */
+  --form-width: 1000px;
   /* Line height as a factor of the font size, like a unitless line-height:
      set --lh, not line-height. See the rule below. */
   --lh: 1.5;
@@ -254,9 +256,14 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .card-pad > :last-child, .card-body > :last-child, .empty > :last-child { margin-bottom: 0; }
 .card + .card, .stack > * + * { margin-top: var(--gap); }
 .grid { display: grid; gap: var(--gap); }
-.grid-3 { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+/* auto-fill, not auto-fit: two cards keep a card's width on a wide window
+   instead of taking half of it each. */
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); }
 .grid > .card + .card, .tiles > .card + .card, .split > .card + .card { margin-top: 0; }
-.split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--gap); align-items: start; }
+/* The page's main column and a side column of details. The main column
+   takes what a wide window adds: the side one stays 280-440px (its photo,
+   facts and short lists don't get better wider). */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, round(38%, 1px), 440px); gap: var(--gap); align-items: start; }
 @media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
@@ -325,7 +332,13 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
 /* ---------- Forms ---------- */
 .form { display: grid; gap: 16px; }
-.form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+/* At most four fields a row: no lone field on a second row of a wide one. */
+.form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(max(min(220px, 100%), round(down, (100% - 48px) / 4, 1px)), 1fr)); }
+/* A page that is a form (Add item, Edit service, …) is as wide as four
+   fields: fields don't stretch with a wide window. Lists and tables do. */
+.page-form { max-width: var(--form-width); }
+/* Its header and flash end with it, so a Delete sits over the form. */
+.main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
 .field { display: grid; gap: 6px; align-content: start; min-width: 0; }
 .field > label, .label-row > label, .label { font-weight: 600; font-size: .85rem; }
 /* A field label followed by a "?" hint; the hint opens below the label. */

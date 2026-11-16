@@ -1592,6 +1592,13 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       const left = Math.round(main.getBoundingClientRect().bottom - pb - end);
       main.style.alignSelf = "";
       if (left !== 0) out.push(`${left}px of margin under the last box (${name(kids[kids.length - 1])})`);
+      // A page that is a form stops at --form-width (or the page's width).
+      const form = document.querySelector(".main > .page-form");
+      if (form) {
+        const want = Math.min(parseFloat(root.getPropertyValue("--form-width")), main.clientWidth - pt * 2);
+        const w = Math.round(form.getBoundingClientRect().width);
+        if (w !== want) out.push(`the form is ${w}px wide, not ${want}`);
+      }
       // Cards, sections, tiles and columns side by side or one under the
       // other are --gap apart.
       const block = ".card, .split > *, .grid > *, .tiles > *, .stack > *";

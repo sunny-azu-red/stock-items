@@ -310,9 +310,12 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .btn-sm { padding: 6px 10px; font-size: .82rem; }
 /* Log service's kit starts: the kit's status is the button's end, a badge
    flush to its border (the button's inside, 28px) behind a divider,
-   10px from the name as the icon is from the left edge (6px gap + 4px). */
+   10px from the name as the icon is from the left edge (6px gap + 4px).
+   Centred, its smaller text would stand on a baseline 1px above the name's,
+   and side by side the eye reads the baseline: 5px over it, 3px under, puts
+   them on one line. */
 .kit-start { overflow: hidden; }
-.kit-start .badge { align-self: stretch; margin: -6px -10px -6px 4px; border-radius: 0; border-left: 1px solid var(--border); }
+.kit-start .badge { align-self: stretch; margin: -6px -10px -6px 4px; padding-block: 5px 3px; border-radius: 0; border-left: 1px solid var(--border); }
 .kit-start:hover .badge { border-left-color: var(--muted); }
 .btn-block { width: 100%; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }

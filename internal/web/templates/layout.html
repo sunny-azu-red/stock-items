@@ -21,7 +21,7 @@
     <div class="sidebar-head">
       {{/* The build, for a hover (and /healthz, from any device). */}}
       <a class="app-brand" href="/" title="Pitbox {{.Version}}"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
-      {{template "theme-toggle" ""}}
+      {{template "theme-toggle"}}
     </div>
     <nav class="nav" aria-label="Main">
       {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard") "Tab" true)}}
@@ -82,8 +82,8 @@
 {{define "nav-link"}}<a href="{{.Href}}" {{if .Tab}}class="tab-dup" {{end}}{{with .Key}}aria-keyshortcuts="{{.}}" {{end}}{{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}{{with .Key}}<span class="kbd" aria-hidden="true">{{.}}</span>{{end}}</a>{{end}}
 
 {{/* Both buttons are rendered; CSS shows the one that switches away from the
-     current theme, so it also works without JavaScript. Data: extra class. */}}
-{{define "theme-toggle"}}<form class="theme-toggle {{.}}" method="post" action="/theme">
+     current theme, so it also works without JavaScript. */}}
+{{define "theme-toggle"}}<form class="theme-toggle" method="post" action="/theme">
   <button class="icon-btn theme-to-dark" type="submit" name="theme" value="dark" title="Switch to dark theme" aria-label="Switch to dark theme">{{icon "moon"}}</button>
   <button class="icon-btn theme-to-light" type="submit" name="theme" value="light" title="Switch to light theme" aria-label="Switch to light theme">{{icon "sun"}}</button>
 </form>{{end}}

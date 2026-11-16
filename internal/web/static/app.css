@@ -731,8 +731,6 @@ a.kit-row.muted:hover { color: var(--muted); }
 .empty > .icon { width: 42px; height: 42px; color: var(--border); margin: 0 auto 12px; display: block; }
 .empty h2 { color: var(--text); margin-bottom: 6px; }
 .empty .btn { margin-top: 12px; }
-/* For things that live in the sidebar on wider screens. */
-@media (min-width: 821px) { .mobile-only { display: none !important; } }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .nowrap { white-space: nowrap; }
@@ -777,7 +775,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
 
 @media print {
-  .sidebar, .tabbar, .working-on, .work-on-row, .page-head .actions, .filters, .item-actions, .results-head .btn, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
+  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
   .shell { display: block; }
   .card { box-shadow: none; }
 }

@@ -837,6 +837,9 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   expect(seam.y + seam.height, "the sheet's bottom").toBe(tabs.y + 1);
   await expect(sheet).toHaveCSS("border-bottom-style", "dashed");
   await expect(sheet).toHaveCSS("box-shadow", "none");
+  // Rounded on its free edge, the top; square along the seam. The tray
+  // (below) mirrors it.
+  await expect(sheet).toHaveCSS("border-radius", "16px 16px 0px 0px");
   // The build isn't in it: it is the logo's title (and /healthz).
   await expect(sheet.locator(".sidebar-foot")).toBeHidden();
   // More is lit while it is open, as the current tab (Shop) is.
@@ -864,6 +867,7 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   expect(t.x === 0 && t.width === b.width, `tray at ${JSON.stringify(t)}, bar ${JSON.stringify(b)}`).toBe(true);
   await expect(tray).toHaveCSS("border-top-style", "dashed");
   await expect(tray).toHaveCSS("box-shadow", "none");
+  await expect(tray).toHaveCSS("border-radius", "0px 0px 16px 16px");
   // Everything below is grey, the tab bar too: a tap only closes it.
   await tap(".tabbar a[href='/stock']");
   await expect(tray).toBeHidden();

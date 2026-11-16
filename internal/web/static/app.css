@@ -58,6 +58,9 @@
   --inset: 19px;
   /* A page that is a form: four 220px fields a row, and no wider. */
   --form-width: 1000px;
+  /* The phone's popovers (More, Switch): rounded on the edge that is free,
+     square along the seam where they meet their bar. */
+  --sheet-radius: 16px;
   /* Line height as a factor of the font size, like a unitless line-height:
      set --lh, not line-height. See the rule below. */
   --lh: 1.5;
@@ -213,7 +216,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   .sidebar:popover-open {
     display: flex; position: fixed; inset: auto 0 calc(var(--tabbar) + env(safe-area-inset-bottom) - 1px);
     height: auto; max-height: calc(100dvh - var(--tabbar) - env(safe-area-inset-bottom) - 64px);
-    border: 0; border-top: 1px solid var(--border); border-bottom: 1px dashed var(--border); border-radius: 16px 16px 0 0;
+    border: 0; border-top: 1px solid var(--border); border-bottom: 1px dashed var(--border); border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
   }
   /* Behind the phone's two popovers, the page goes grey; what opened them
      doesn't: More's grey stops at the tab bar (as Switch's does at the
@@ -552,13 +555,13 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
      it; the bar is 41px with its bottom border, under the notch), so the
      tray covers the bar's bottom border and has its own. The grey stops
      there too: the bar and its tray stay bright, as the tab bar and its
-     sheet do. */
+     sheet do. Its free edge, the bottom, is rounded as the sheet's top is. */
   .working-switch { display: inline-flex; }
   /* Its chips line up on the right, under the buttons that opened it. */
   .working-pick .work-on { justify-content: flex-end; }
   .working-pick:popover-open {
     position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 40px)) 0 auto; width: auto; margin: 0;
-    color: inherit; padding: 10px 16px; border-width: 1px 0;
+    color: inherit; padding: 10px 16px; border-width: 1px 0; border-radius: 0 0 var(--sheet-radius) var(--sheet-radius);
     border-style: dashed none solid; border-color: color-mix(in srgb, var(--chip) 45%, transparent);
     background: color-mix(in srgb, var(--chip) 12%, var(--surface));
   }

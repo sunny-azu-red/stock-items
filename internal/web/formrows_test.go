@@ -111,8 +111,8 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 		`id="performed_on" name="performed_on" value="2026-10-01"`, `name="odometer" value="12345"`, `name="labor_cost" value="80"`,
 		`value="Oil service"`)
 
-	// A kit on track is a plain button; one that is due ends in its badge,
-	// most urgent first, with how far off it is as the button's title.
+	// Every scheduled kit ends in its due badge, on track too, most urgent
+	// first, with how far off it is as the button's title.
 	logKit := func(name, months, on string) string {
 		t.Helper()
 		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {name}, "interval_months": {months}})
@@ -127,8 +127,8 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	expect(t, page, http.StatusOK,
 		`title="28 days overdue" href="/services/new?kit=`+brakes+`" data-kit-start>`,
 		`Brake fluid<span class="badge badge-danger">`,
-		`href="/services/new?kit=`+coolant+`" data-kit-start>`, `Coolant</a>`)
-	expectNot(t, page, "On track")
+		`title="in 703 days" href="/services/new?kit=`+coolant+`" data-kit-start>`, // due 2028-10-01
+		`Coolant<span class="badge badge-ok">On track</span></a>`)
 	body := page.Body.String()
 	if strings.Index(body, "Brake fluid<span") > strings.Index(body, "Oil service<span") {
 		t.Error("the overdue kit should come before the one not done yet")

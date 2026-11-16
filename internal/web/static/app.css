@@ -526,9 +526,10 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 }
 .working-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; }
 .working-name .icon { color: var(--chip); }
-/* The name opens the vehicle's page: plain, like a content row. */
+/* The name opens the vehicle's page: plain, and on hover in the vehicle's
+   colour, like a vehicle title in a list (never underlined). */
 a.working-name { color: inherit; text-decoration: none; }
-a.working-name:hover strong { text-decoration: underline; }
+a.working-name:hover strong { color: var(--chip); }
 .working-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .working-actions .btn { padding-left: 8px; padding-right: 8px; }
 .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

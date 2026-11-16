@@ -277,6 +277,10 @@ func TestErrorsAndInfrastructure(t *testing.T) {
 	rec := a.get("/")
 	expect(t, rec, http.StatusOK, `<a class="app-brand" href="/" title="Pitbox test">`)
 	expectNot(t, rec, "sidebar-version")
+	// Each keyboard shortcut shows on what it does; there is no list.
+	expect(t, rec, http.StatusOK, `href="/stock" class="tab-dup" aria-keyshortcuts="/"`, `<span class="kbd" aria-hidden="true">/</span></a>`,
+		`aria-keyshortcuts="a">`, `Add item<span class="kbd" aria-hidden="true">a</span>`, `aria-keyshortcuts="l">`)
+	expectNot(t, rec, "Keyboard shortcuts")
 
 	rec = a.get("/static/app.css?v=x")
 	expect(t, rec, http.StatusOK, "--accent")

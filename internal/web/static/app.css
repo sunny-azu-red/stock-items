@@ -127,11 +127,14 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .nav-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 11px; margin-bottom: 8px; }
 .nav-vehicles { padding: 0 11px; gap: 6px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
-.sidebar-foot { margin-top: auto; font-size: .75rem; color: var(--muted); padding: 0 11px; }
+.sidebar-foot { margin-top: auto; padding: 0 11px; }
 .sidebar-actions { display: grid; gap: 8px; }
-.shortcuts { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
-.shortcuts li { display: flex; align-items: center; gap: 8px; }
-.shortcuts .kbd { min-width: 1.5em; text-align: center; }
+/* A keyboard shortcut sits on what it does: on the right of its nav row,
+   where a count would be, and of its button. */
+.nav .kbd { margin-left: auto; }
+.sidebar-actions .btn { position: relative; }
+.sidebar-actions .kbd { position: absolute; top: 0; bottom: 0; right: 10px; margin: auto 0; }
+.btn-primary .kbd { color: var(--on-accent); border-color: color-mix(in srgb, var(--on-accent) 35%, transparent); }
 
 .main { padding: 24px clamp(16px, 3vw, 40px) 48px; max-width: 1180px; width: 100%; }
 .tabbar { display: none; }
@@ -733,7 +736,13 @@ a.kit-row.muted:hover { color: var(--muted); }
 .between { justify-content: space-between; }
 .welcome ol { margin: 8px 0 0; padding-left: 19px; display: grid; gap: 6px; }
 .notes { white-space: pre-wrap; margin-bottom: 0; }
-.kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--muted); }
+/* A key: 22px (an 18px line, the 1px top padding evening out the deeper
+   bottom border), so it centres on whole pixels. */
+.kbd {
+  display: inline-block; height: 22px; min-width: 20px; padding: 1px 5px 0; text-align: center;
+  font-family: var(--mono); font-size: .72rem; font-weight: 500; --lh: 1.5;
+  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; color: var(--muted);
+}
 
 .pager { padding: 12px 19px; }
 .card > .pager { border-top: 1px solid var(--border); }

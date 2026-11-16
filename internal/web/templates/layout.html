@@ -25,7 +25,7 @@
     </div>
     <nav class="nav" aria-label="Main">
       {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard") "Tab" true)}}
-      {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock") "Tab" true)}}
+      {{template "nav-link" (dict "Href" "/stock" "Icon" "package" "Label" "Stock" "Active" (eq .Nav "stock") "Tab" true "Key" "/")}}
       {{template "nav-link" (dict "Href" "/services" "Icon" "wrench" "Label" "Services" "Active" (eq .Nav "services") "Tab" true)}}
       {{template "nav-link" (dict "Href" "/shopping" "Icon" "shopping-cart" "Label" "Shopping" "Active" (eq .Nav "shopping") "Count" .ShoppingCount "Tab" true)}}
       {{/* While a vehicle is worked on, its page: the list stays one link
@@ -50,15 +50,12 @@
     </div>
     {{end}}{{end}}
     <div class="sidebar-foot">
+      {{/* Each keyboard shortcut shows on what it does (app.js): "/" on
+           Stock, a and l on these buttons. */}}
       <div class="sidebar-actions">
-        <a class="btn btn-primary btn-block" href="/items/new">{{icon "plus"}} Add item</a>
-        <a class="btn btn-block" href="/services/new">{{icon "wrench"}} Log service</a>
+        <a class="btn btn-primary btn-block" href="/items/new" aria-keyshortcuts="a">{{icon "plus"}} Add item<span class="kbd" aria-hidden="true">a</span></a>
+        <a class="btn btn-block" href="/services/new" aria-keyshortcuts="l">{{icon "wrench"}} Log service<span class="kbd" aria-hidden="true">l</span></a>
       </div>
-      <ul class="shortcuts mt" aria-label="Keyboard shortcuts">
-        <li><span class="kbd">/</span> Search stock</li>
-        <li><span class="kbd">a</span> Add item</li>
-        <li><span class="kbd">l</span> Log service</li>
-      </ul>
     </div>
   </aside>
 
@@ -80,8 +77,9 @@
 </body>
 </html>{{end}}
 
-{{/* Tab: the tabbar has it too, so the phone's sheet leaves it out. */}}
-{{define "nav-link"}}<a href="{{.Href}}" {{if .Tab}}class="tab-dup" {{end}}{{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}</a>{{end}}
+{{/* Tab: the tabbar has it too, so the phone's sheet leaves it out. Key:
+     its keyboard shortcut, shown where a count would be. */}}
+{{define "nav-link"}}<a href="{{.Href}}" {{if .Tab}}class="tab-dup" {{end}}{{with .Key}}aria-keyshortcuts="{{.}}" {{end}}{{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}{{with .Key}}<span class="kbd" aria-hidden="true">{{.}}</span>{{end}}</a>{{end}}
 
 {{/* Both buttons are rendered; CSS shows the one that switches away from the
      current theme, so it also works without JavaScript. Data: extra class. */}}

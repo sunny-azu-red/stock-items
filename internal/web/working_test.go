@@ -72,9 +72,18 @@ func TestWorkingOnSwitch(t *testing.T) {
 		"/services?page=2&v=" + itoa(k1290):              "/services",
 		"/?v=all":                                        "/",
 		"/items/1":                                       "/items/1", // a record stays as it is
+		// A vehicle's page: the one now worked on (the other is out of view).
+		"/vehicles/" + itoa(k390):           "/vehicles/" + itoa(k1290),
+		"/vehicles/" + itoa(k390) + "/edit": "/vehicles/" + itoa(k1290),
+		"/vehicles?archived=1":              "/vehicles/" + itoa(k1290),
 	} {
 		expectRedirect(t, post(itoa(k1290), ref), want)
 	}
+	// Stopping on a vehicle's page lists them all.
+	expectRedirect(t, post("", "/vehicles/"+itoa(k390)), "/vehicles")
+	expectRedirect(t, post("", "/vehicles/"+itoa(k390)+"/edit"), "/vehicles")
+	// A vehicle that isn't there (or archived) can't be worked on: the list.
+	expectRedirect(t, post("99999", "/vehicles/"+itoa(k390)), "/vehicles")
 	// An empty vehicle stops.
 	rec = post("", "/stock?general=1&v="+itoa(k390))
 	expectRedirect(t, rec, "/stock")
@@ -203,10 +212,8 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, a.getWorking("/activity?item="+itoa(itemID(t, a.store, "Hiflofiltro")), w), http.StatusOK, "History of")
 	})
 	t.Run("links to another vehicle's list are hidden", func(t *testing.T) {
-		// They would show the worked-on vehicle's list instead.
-		other := a.getWorking("/vehicles/"+itoa(k1290), w)
-		expect(t, other, http.StatusOK)
-		expectNot(t, other, "Stock list →", `href="/services?v=`+itoa(k1290)+`"`)
+		// They would show the worked-on vehicle's list instead. (Another
+		// vehicle's page is out of view meanwhile; its own links to them.)
 		expect(t, a.getWorking("/vehicles/"+w, w), http.StatusOK, "Stock list →", `href="/services?v=`+w+`"`)
 		expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Stock list →")
 		// The dashboard leaves out its Vehicles panel (and its Stock →).
@@ -227,9 +234,86 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, `title="Show KTM 1290 stock"`)
 	})
 	t.Run("records and global pages are not filtered", func(t *testing.T) {
-		for _, path := range []string{"/shopping", "/vehicles", "/trash", "/items/" + itoa(itemID(t, a.store, "Hiflofiltro")), "/vehicles/" + itoa(k1290)} {
+		for _, path := range []string{"/shopping", "/trash", "/items/" + itoa(itemID(t, a.store, "Hiflofiltro")), "/vehicles/" + w} {
 			expect(t, a.getWorking(path, w), http.StatusOK, workingBar)
 		}
+	})
+	t.Run("another vehicle is out of view", func(t *testing.T) {
+		// What belongs to another vehicle (its page, kits and services, their
+		// edit forms), the vehicles list and Add vehicle wait until you
+		// switch or stop: an old link or bookmark opens the vehicle worked on.
+		kin := stock.KitInput{VehicleID: k1290, Name: "Far kit", Lines: []stock.KitLineInput{{ItemID: ring, Quantity: 1, Unit: stock.UnitPiece}}}
+		kin.Normalize()
+		farKit, err := a.store.CreateKit(ctx, kin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		services, err := a.store.ListServices(ctx, store.ServiceFilter{VehicleID: k1290})
+		if err != nil || len(services) == 0 {
+			t.Fatalf("the KTM 1290's services: %v, %v", services, err)
+		}
+		farService := itoa(services[0].ID)
+		k, own := itoa(k1290), "/vehicles/"+w
+		for path, want := range map[string]string{
+			"/vehicles":                            own,
+			"/vehicles?archived=1":                 own,
+			"/vehicles/new":                        own,
+			"/vehicles/" + k:                       own,
+			"/vehicles/" + k + "/edit":             own,
+			"/kits/" + itoa(farKit):                own,
+			"/kits/" + itoa(farKit) + "/edit":      own,
+			"/kits/" + itoa(farKit) + "?sort=name": own,
+			"/services/" + farService:              "/services",
+			"/services/" + farService + "/edit":    "/services",
+		} {
+			expectRedirect(t, a.getWorking(path, w), want)
+			// Without a vehicle worked on, they open.
+			expect(t, a.get(path), http.StatusOK)
+		}
+		// The vehicle's own pages open.
+		expect(t, a.getWorking(own+"/edit", w), http.StatusOK)
+		// An htmx request (a kit's sort) gets the whole page changed.
+		req := httptest.NewRequest(http.MethodGet, "/kits/"+itoa(farKit)+"?sort=name", nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+		if rec := a.do(req); rec.Header().Get("HX-Redirect") != own {
+			t.Errorf("htmx: HX-Redirect %q", rec.Header().Get("HX-Redirect"))
+		}
+		// Links to them are names: the shared ring's kits and history.
+		rec := a.getWorking("/items/"+itoa(ring), w)
+		expect(t, rec, http.StatusOK, `<span class="title">Far kit</span>`, "Big service")
+		expectNot(t, rec, `href="/kits/`+itoa(farKit)+`"`, `href="/services/`+farService+`"`)
+		rec = a.get("/items/" + itoa(ring))
+		expect(t, rec, http.StatusOK, `href="/kits/`+itoa(farKit)+`"`, `href="/services/`+farService+`"`)
+		// The vehicle's page has no way to the list meanwhile: the bar's ×.
+		expectNot(t, a.getWorking(own, w), `<a class="btn btn-ghost" href="/vehicles">`)
+		expect(t, a.get(own), http.StatusOK, `<a class="btn btn-ghost" href="/vehicles">`)
+		// A save from a page opened before isn't new work: it saves, and
+		// lands on the vehicle worked on.
+		v, err := a.store.GetVehicle(ctx, k1290)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := vehicleFormFrom(v)
+		rec = a.postWorking("/vehicles/"+k, url.Values{"name": {f.Name}, "notes": {"Saved from before"}, "kind": {f.Kind}, "color": {f.Color},
+			"odometer": {f.Odometer}, "odometer_was": {f.OdometerWas}, "version": {itoa(int64(f.Version))}}, w)
+		expectRedirect(t, rec, "/vehicles/"+k)
+		expectRedirect(t, a.getWorking("/vehicles/"+k, w), own)
+		if v, err := a.store.GetVehicle(ctx, k1290); err != nil || v.Notes != "Saved from before" {
+			t.Errorf("the save from before: %q, %v", v.Notes, err)
+		}
+		// Restoring another vehicle's kit shows the trash it came from.
+		fk, err := a.store.GetKit(ctx, farKit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		trashID, err := a.store.DeleteKit(ctx, farKit, fk.Version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req = httptest.NewRequest(http.MethodPost, "/trash/"+itoa(trashID)+"/restore", nil)
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+		expectRedirect(t, a.do(req), "/trash")
 	})
 	t.Run("exports follow their address only", func(t *testing.T) {
 		// No bar on an export: a bookmarked one keeps showing what it
@@ -316,13 +400,7 @@ func TestWorkingOnPages(t *testing.T) {
 			t.Fatal(err)
 		}
 		k := itoa(k1290)
-		// Its pages don't offer it.
-		page := a.getWorking("/kits/"+itoa(kit), w)
-		expect(t, page, http.StatusOK, "Work on KTM 1290 to log this service.", `href="/kits/`+itoa(kit)+`/edit"`)
-		expectNot(t, page, `href="/services/new?kit=`)
-		page = a.getWorking("/vehicles/"+k, w)
-		expect(t, page, http.StatusOK, `href="/vehicles/`+k+`/edit"`, `action="/vehicles/`+k+`/odometer"`)
-		expectNot(t, page, `href="/services/new?vehicle=`+k+`"`, `href="/items/new?vehicle=`+k+`"`, `href="/kits/new?vehicle=`+k+`"`)
+		// Its pages are out of view (above); the vehicle worked on's offer it.
 		expect(t, a.getWorking("/vehicles/"+w, w), http.StatusOK, `href="/services/new?vehicle=`+w+`"`, `href="/kits/new?vehicle=`+w+`"`)
 		expect(t, a.get("/kits/"+itoa(kit)), http.StatusOK, `href="/services/new?kit=`+itoa(kit)+`"`)
 		// Old links open the worked-on vehicle's form.
@@ -385,7 +463,7 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, workingBar)
 	})
 	t.Run("sidebar", func(t *testing.T) {
-		rec := a.getWorking("/vehicles", w)
+		rec := a.getWorking("/shopping", w)
 		expect(t, rec, http.StatusOK, `action="/working-on"`,
 			`name="vehicle" value="" aria-pressed="true"`, `name="vehicle" value="`+itoa(k1290)+`" aria-pressed="false"`)
 		expectNot(t, rec, "Stock by vehicle")
@@ -397,31 +475,31 @@ func TestWorkingOnPages(t *testing.T) {
 		if n := strings.Count(rec.Body.String(), `name="vehicle" value="`+itoa(k1290)+`"`); n != 2 {
 			t.Errorf("the other vehicle is offered %d times, want twice (the sidebar and Switch)", n)
 		}
-		rec = a.get("/vehicles")
+		rec = a.get("/shopping")
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
 		expectNot(t, rec, workingBar, `aria-pressed="true"`)
 	})
 }
 
 // While a vehicle is worked on, the nav's Vehicles is that vehicle's page
-// (Vehicle, its kind icon) and the bar's name opens it; the list stays
-// where it was, one link away on the vehicle's page.
+// (Vehicle, its kind icon) and the bar's name opens it; the list is out of
+// view until you stop.
 func TestWorkingOnNav(t *testing.T) {
 	a := newApp(t)
-	k390, k1290 := a.seed()
+	k390, _ := a.seed()
 	w := itoa(k390)
 	nav := `<a class="nav-vehicle" href="/vehicles/` + w + `"`
 	barLink := `<a class="working-name" href="/vehicles/` + w + `">`
-	for _, path := range []string{"/shopping", "/trash", "/vehicles", "/vehicles/" + itoa(k1290)} {
+	for _, path := range []string{"/shopping", "/trash", "/stock?general=1&v=" + w} {
 		rec := a.getWorking(path, w)
 		expect(t, rec, http.StatusOK, nav, `"></use></svg>Vehicle</a>`, barLink)
 		expectNot(t, rec, `<a href="/vehicles" `)
 	}
-	// The list isn't narrowed, and the vehicle's page leads back to it.
-	expect(t, a.getWorking("/vehicles", w), http.StatusOK, "<h1>Vehicles</h1>", "KTM 1290")
+	// The list opens the vehicle's page, where the bar's name isn't a link.
+	expectRedirect(t, a.getWorking("/vehicles", w), "/vehicles/"+w)
 	own := a.getWorking("/vehicles/"+w, w)
-	expect(t, own, http.StatusOK, `<a class="btn btn-ghost" href="/vehicles">`, `<span class="working-name">`, nav+` aria-current="page"`)
-	expectNot(t, own, barLink)
+	expect(t, own, http.StatusOK, `<span class="working-name">`, nav+` aria-current="page"`)
+	expectNot(t, own, barLink, `<a class="btn btn-ghost" href="/vehicles">`)
 	// Without one: the list, under its own name.
 	rec := a.get("/shopping")
 	expect(t, rec, http.StatusOK, `<a href="/vehicles" >`, `#i-warehouse"></use></svg>Vehicles</a>`)
@@ -431,6 +509,8 @@ func TestWorkingOnNav(t *testing.T) {
 	rec = a.getWorking("/activity?general=1&v="+w, w)
 	expect(t, rec, http.StatusOK, `<aside class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
 	expectNot(t, a.get("/vehicles"), `href="/activity"><svg`, `Trash (`)
+	// The phone's Switch is a popover too: its tray, under the bar.
+	expect(t, rec, http.StatusOK, `popovertarget="switch"`, `<div class="working-pick" id="switch" popover`)
 	expectNot(t, a.get("/shopping"), `popovertarget="more" class="current"`)
 }
 

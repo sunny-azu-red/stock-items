@@ -9,9 +9,6 @@
     <a class="btn btn-primary" href="/items/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "plus"}} Add item</a>
   </div>
 </div>
-{{if and (not .WorkingOn) (gt (len .NavVehicles) 1)}}
-<div class="mobile-only work-on-row mb"><span class="nav-title" id="work-on-row-title">Work on</span>{{template "work-on" (dict "View" . "Label" "work-on-row-title")}}</div>
-{{end}}
 
 {{if not $d.Vehicles}}
 <div class="card card-pad welcome mb">

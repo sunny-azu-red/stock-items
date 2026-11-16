@@ -364,6 +364,10 @@ func (s *Server) kitEdit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// Kits are on their vehicle's page.
+	if done, err := s.elsewhere(w, r, k.VehicleID, vehiclePath); done || err != nil {
+		return err
+	}
 	return s.renderKitForm(w, r, http.StatusOK, kitFormFrom(k), false)
 }
 
@@ -504,6 +508,9 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	k, err := s.store.GetKit(ctx, id)
 	if err != nil {
+		return err
+	}
+	if done, err := s.elsewhere(w, r, k.VehicleID, vehiclePath); done || err != nil {
 		return err
 	}
 	v, err := s.store.GetVehicle(ctx, k.VehicleID)

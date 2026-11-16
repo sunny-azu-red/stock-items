@@ -62,7 +62,7 @@
           {{if $d.HistoryCapped}}<a class="more" href="{{withQuery "/activity" $d.AllEntriesQuery}}">Full history →</a>{{else}}<span>{{plural (len $d.Movements) "entry"}}</span>{{end}}
         </span>
       </div>
-      {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false "Sort" $d.History)}}
+      {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" false "Sort" $d.History "Working" (and $.WorkingOn $.WorkingOn.ID))}}
       {{else}}<div class="card-body muted small">No stock changes yet.</div>{{end}}
     </section>
   </div>
@@ -114,7 +114,9 @@
         {{range $d.Kits}}<li>
           {{template "kit-status-icon" .}}
           <span class="grow">
-            <span class="title-row"><a class="title" href="/kits/{{.Kit.ID}}">{{.Kit.Name}}</a>{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{end}}</span>
+            {{/* While a vehicle is worked on, another one's kit is out of
+                 view (working.go): named, not linked. */}}
+            <span class="title-row">{{if and $.WorkingOn (ne $.WorkingOn.ID .Kit.VehicleID)}}<span class="title">{{.Kit.Name}}</span>{{else}}<a class="title" href="/kits/{{.Kit.ID}}">{{.Kit.Name}}</a>{{end}}{{if .Kit.Archived}}{{template "archived-badge" .Kit.ArchivedAt}}{{end}}</span>
             {{template "kit-meta" .}}
           </span>
           {{if not .HideVehicle}}{{template "chip" .Kit.VehicleChip}}{{end}}

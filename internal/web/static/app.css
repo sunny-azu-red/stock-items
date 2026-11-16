@@ -197,7 +197,19 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
     border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
     box-shadow: 0 -12px 32px light-dark(rgb(0 0 0 / .15), rgb(0 0 0 / .5));
   }
-  .sidebar::backdrop { background: rgb(0 0 0 / .35); }
+  /* Behind the phone's two popovers, the page goes grey; what opened them
+     doesn't: More's grey stops at the tab bar (as Switch's does at the
+     bar, below). */
+  .sidebar::backdrop, .working-pick::backdrop { background: rgb(0 0 0 / .35); }
+  .sidebar::backdrop { inset: 0 0 calc(var(--tabbar, 64px) + env(safe-area-inset-bottom, 0px)); }
+  /* More is current while its sheet is open, as on the pages it leads to. */
+  body:has(#more:popover-open) .tabbar button { color: var(--accent); }
+  /* What is grey looks out of reach, so it is: a tap there only closes the
+     popover (the ::backdrop takes no taps, so they would reach the link
+     under it). Never on the popover's own ancestors: it inherits this. */
+  body:has(#more:popover-open) .main,
+  body:has(#switch:popover-open) .main > :not(.working-on),
+  body:has(#switch:popover-open) .tabbar { pointer-events: none; }
   .sidebar .tab-dup, .sidebar .sidebar-actions, .sidebar .shortcuts { display: none; }
   .tabbar .icon { width: 22px; height: 22px; }
   .tabbar .count { position: absolute; top: 8px; left: calc(50% + 6px); font-size: .65rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 6px; font-weight: 700; }
@@ -478,9 +490,7 @@ a.working-name:hover strong { text-decoration: underline; }
 /* Switch is the phone's: a desktop switches with the sidebar's Work on
    chips, right beside the bar. */
 .working-switch { display: none; }
-.working-switch summary { list-style: none; }
-.working-switch summary::-webkit-details-marker { display: none; }
-.working-switch[open] summary { border-color: var(--muted); }
+body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 /* On a phone: edge to edge at the top, a bottom border only, kept in view.
    (After the rules above, which it overrides.) */
 @media (max-width: 820px) {
@@ -493,23 +503,26 @@ a.working-name:hover strong { text-decoration: underline; }
   .working-name { flex: 1 1 0; min-width: 0; }
   .working-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Switch opens a tray under the bar, as wide and as tinted, past a
-     dashed line; the two cast one shadow. top: 100% is the bar's padding
-     edge, so the tray covers its bottom border and has its own. */
-  .working-switch { display: block; }
+     dashed line; the two cast one shadow. It is a popover (Esc and a tap
+     outside close it), so it undoes the browser's popover box, as the More
+     sheet does. --switch-top is the bar's padding edge (app.js measures
+     it; the bar is 41px with its bottom border, under the notch), so the
+     tray covers the bar's bottom border and has its own. The grey stops
+     there too: the bar and its tray stay bright, as the tab bar and its
+     sheet do. */
+  .working-switch { display: inline-flex; }
   /* Its chips line up on the right, under the buttons that opened it. */
   .working-pick .work-on { justify-content: flex-end; }
-  .working-pick {
-    position: absolute; left: 0; right: 0; top: 100%; z-index: 25;
-    padding: 10px 16px; border-width: 1px 0;
+  .working-pick:popover-open {
+    position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 40px)) 0 auto; width: auto; margin: 0;
+    color: inherit; padding: 10px 16px; border-width: 1px 0;
     border-style: dashed none solid; border-color: color-mix(in srgb, var(--chip) 45%, transparent);
     background: color-mix(in srgb, var(--chip) 12%, var(--surface));
     box-shadow: 0 20px 20px 4px light-dark(rgb(0 0 0 / .15), rgb(0 0 0 / .5));
   }
+  .working-pick::backdrop { inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 40px)) 0 0; }
   html:has(.working-on) { scroll-padding-top: 58px; }
 }
-/* The phone's way in (the sidebar is hidden): the dashboard's Work on row. */
-.work-on-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.work-on-row .nav-title { margin: 0; padding: 0; }
 
 /* ---------- Badges ---------- */
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }

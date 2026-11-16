@@ -348,8 +348,8 @@ test("restore a shopping entry from the trash", async ({ page }) => {
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Remove Zip ties" }).click();
   await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(0);
-  await page.goto("/activity");
-  await page.locator("main").getByRole("link", { name: /^Trash/ }).click();
+  // The sidebar's Trash (on a phone, under More).
+  await (await sidebar(page)).getByRole("link", { name: /^Trash/ }).click();
   const entry = page.locator(".list li").filter({ hasText: "Shopping list: Zip ties" });
   await entry.getByRole("button", { name: "Restore" }).click();
   await expect(page.locator(".flash-success")).toContainText("Restored Zip ties to the shopping list");
@@ -571,17 +571,18 @@ async function sidebar(page: Page) {
   return sheet;
 }
 
-// Taps a vehicle in the Work on chips: the sidebar's on a desktop, the
-// dashboard's row on a phone (the sidebar is hidden there).
+// Taps a vehicle in the sidebar's Work on chips (on a phone, in the More
+// sheet).
 async function workOn(page: Page, name: string) {
   await page.goto("/");
-  const chips = page.locator(".sidebar .work-on:visible, .work-on-row .work-on:visible").first();
-  await chips.getByRole("button", { name }).click();
+  await (await sidebar(page)).locator(".work-on").getByRole("button", { name }).click();
 }
 
 // The vehicle worked on, as the working_on cookie wants it, for tests that
 // look at pages while working on one.
 async function workingCookie(page: Page, baseURL: string, name: string) {
+  // The list is out of view while another vehicle is worked on.
+  await page.context().clearCookies({ name: "working_on" });
   await page.goto("/vehicles");
   const href = (await page.locator("a.vehicle-card").filter({ hasText: name }).first().getAttribute("href")) as string;
   await page.context().addCookies([{ name: "working_on", value: href.split("/").pop() as string, url: baseURL }]);
@@ -637,11 +638,11 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/v=\d+/);
   const k390 = new URL(page.url()).searchParams.get("v");
   if (testInfo.project.name === "mobile") {
-    await bar.locator("summary").click();
-    await expect(bar.locator(".working-pick").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
-    await bar.locator(".working-pick").getByRole("button", { name: "KTM 1290" }).click();
+    await bar.getByRole("button", { name: "Switch" }).click();
+    await expect(page.locator("#switch").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
+    await page.locator("#switch").getByRole("button", { name: "KTM 1290" }).click();
   } else {
-    await expect(bar.locator("summary")).toBeHidden();
+    await expect(bar.getByRole("button", { name: "Switch" })).toBeHidden();
     await page.locator(".sidebar .work-on").getByRole("button", { name: "KTM 1290" }).click();
   }
   await expect(bar).toContainText("Working on KTM 1290");
@@ -722,16 +723,92 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   }
   // On its own page the bar's name is no link.
   await expect(page.locator(".working-on a.working-name")).toHaveCount(0);
-  // The list is one link away, and shows every vehicle.
-  await page.locator(".page-head").getByRole("link", { name: "Vehicles", exact: true }).click();
-  await expect(page).toHaveURL(/\/vehicles$/);
-  await expect(page.locator("a.vehicle-card").filter({ hasText: "KTM 1290" })).toBeVisible();
+  // The list and the other vehicles are out of view meanwhile: no way to
+  // them from its page, and an old link opens the vehicle worked on.
+  await expect(page.locator(".page-head").getByRole("link", { name: "Vehicles", exact: true })).toHaveCount(0);
+  await page.goto("/vehicles");
+  await expect(page).toHaveURL(/\/vehicles\/\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 390");
   // The bar's name opens the vehicle too.
+  await page.goto("/shopping");
   await page.locator(".working-on a.working-name").click();
   await expect(page.locator("main h1")).toHaveText("KTM 390");
+  // Switching on its page opens the one now worked on.
+  if (mobile) {
+    await page.locator(".working-on").getByRole("button", { name: "Switch" }).click();
+    await page.locator("#switch").getByRole("button", { name: "KTM 1290" }).click();
+  } else {
+    await page.locator(".sidebar .work-on").getByRole("button", { name: "KTM 1290" }).click();
+  }
+  await expect(page).toHaveURL(/\/vehicles\/\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 1290");
   // The dashboard leaves out its Vehicles panel meanwhile.
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toHaveCount(0);
+  // Stopping on a vehicle's page lists them all, with the way back.
+  await page.goto("/vehicles");
+  await page.locator(".working-on").getByRole("button", { name: "All vehicles" }).click();
+  await expect(page).toHaveURL(/\/vehicles$/);
+  await expect(page.locator(".working-on")).toHaveCount(0);
+  await expect(page.locator("a.vehicle-card").filter({ hasText: "KTM 390" })).toBeVisible();
+});
+
+test("a phone's More and Switch grey the page, not what opened them", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "More and Switch are a phone's");
+  await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+  await page.goto("/shopping");
+  // Taps in the middle of what a selector finds. The grey (the popover's
+  // ::backdrop) takes a tap and only closes it; what isn't grey works.
+  const tap = async (selector: string) => {
+    const b = (await page.locator(selector).first().boundingBox())!;
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  };
+  const more = page.locator(".tabbar").getByRole("button", { name: "More" });
+  const sheet = page.locator("#more");
+  const bar = page.locator(".working-on");
+  const tray = page.locator("#switch");
+  const stockTab = page.locator(".tabbar a[href='/stock']");
+
+  // More: the bar under the grey only closes it.
+  await more.click();
+  await expect(sheet).toBeVisible();
+  // More is lit while it is open, as the current tab (Shop) is.
+  await expect(more).toHaveCSS("color", await page.locator(".tabbar a[href='/shopping']").evaluate((e) => getComputedStyle(e).color));
+  await tap(".working-on a.working-name");
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/shopping$/);
+  // The tab bar isn't grey: More again closes it, another tab opens.
+  await more.click();
+  await expect(sheet).toBeVisible();
+  await more.click();
+  await expect(sheet).toBeHidden();
+  await more.click();
+  await tap(".tabbar a[href='/stock']");
+  await expect(page).toHaveURL(/\/stock\?/);
+  await page.goto("/shopping");
+  await expect(stockTab).toBeVisible();
+
+  // Switch: the tray hangs from the bar, covering its bottom border.
+  await bar.getByRole("button", { name: "Switch" }).click();
+  await expect(tray).toBeVisible();
+  const b = (await bar.boundingBox())!;
+  const t = (await tray.boundingBox())!;
+  expect(t.y, "the tray's top").toBe(b.y + b.height - 1);
+  expect(t.x === 0 && t.width === b.width, `tray at ${JSON.stringify(t)}, bar ${JSON.stringify(b)}`).toBe(true);
+  // Everything below is grey, the tab bar too: a tap only closes it.
+  await tap(".tabbar a[href='/stock']");
+  await expect(tray).toBeHidden();
+  await expect(page).toHaveURL(/\/shopping$/);
+  // Esc closes it too.
+  await bar.getByRole("button", { name: "Switch" }).click();
+  await expect(tray).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(tray).toBeHidden();
+  // The bar isn't grey: its name opens the vehicle.
+  await bar.getByRole("button", { name: "Switch" }).click();
+  await tap(".working-on a.working-name");
+  await expect(page.locator("main h1")).toHaveText("KTM 390");
+  await expect(tray).toBeHidden();
 });
 
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
@@ -903,8 +980,9 @@ test("no page scrolls sideways", async ({ page }) => {
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 1290");
   for (const p of ["/", "/stock", "/services", "/activity", "/shopping"]) await overflows(p);
   // Switch is a phone's: a desktop switches in the sidebar.
-  if (!(await page.locator(".working-on summary").isVisible())) return;
-  await page.locator(".working-on summary").click();
+  const switchButton = page.locator(".working-on").getByRole("button", { name: "Switch" });
+  if (!(await switchButton.isVisible())) return;
+  await switchButton.click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
   // Nor past the left edge, which scrollWidth doesn't count: the list
@@ -1284,8 +1362,8 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
     await page.goto(p);
     await check(`${p} working on a vehicle`);
   }
-  if (await page.locator(".working-on summary").isVisible()) {
-    await page.locator(".working-on summary").click();
+  if (await page.locator(".working-on").getByRole("button", { name: "Switch" }).isVisible()) {
+    await page.locator(".working-on").getByRole("button", { name: "Switch" }).click();
     await check("the Switch open");
     // A phone's More sheet, working on a vehicle and not.
     await page.goto("/shopping");

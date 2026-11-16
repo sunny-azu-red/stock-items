@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
@@ -15,9 +16,11 @@ import (
 // set, a list page (listPages) whose address asks for anything but that
 // vehicle (with General on Stock and Activity) gets a 303 to the address
 // for it, so the address always says what the page shows, and the bar and
-// the page never disagree. New services and kits are for it (otherWork).
-// Exports follow their address only. See docs/design.md, "Working on a
-// vehicle".
+// the page never disagree. What belongs to another vehicle (its page, kits
+// and services, their edit forms) and the vehicles list and Add vehicle
+// wait until you stop or switch (elsewhere). New services and kits are for
+// it (otherWork). Exports follow their address only. See docs/design.md,
+// "Working on a vehicle".
 const workingCookie = "working_on"
 
 // workingMaxAge is the longest browsers keep a cookie.
@@ -154,6 +157,32 @@ func (s *Server) working(r *http.Request) (int64, error) {
 	return workingOn(r, vehicles), nil
 }
 
+// elsewhere keeps what belongs to another vehicle out of view while one is
+// worked on: a GET of its page, kit or service (vehicleID, its vehicle) gets
+// a 303 to(working), and so do the vehicles list and Add vehicle (vehicleID
+// 0: they are about every vehicle). It reports whether it redirected. Saves
+// from a page opened before aren't refused: they change a record that is
+// there already, which isn't new work (otherWork).
+func (s *Server) elsewhere(w http.ResponseWriter, r *http.Request, vehicleID int64, to func(working int64) string) (bool, error) {
+	working, err := s.working(r)
+	if err != nil || working == 0 || vehicleID == working {
+		return false, err
+	}
+	s.redirect(w, r, to(working), "")
+	return true, nil
+}
+
+// toServices is where another vehicle's service goes: the list, which is
+// the vehicle worked on's.
+func toServices(int64) string { return "/services" }
+
+// onVehiclePages reports whether path is the vehicles list, Add vehicle or
+// one of a vehicle's pages.
+func onVehiclePages(path string) bool {
+	u, err := url.Parse(path)
+	return err == nil && (u.Path == "/vehicles" || strings.HasPrefix(u.Path, "/vehicles/"))
+}
+
 // otherWork is the form error for new work (a service, a kit) for another
 // vehicle than the one worked on, "" when it is fine: while a vehicle is
 // worked on, new work is for it (like "archived means no new work"). A
@@ -196,6 +225,21 @@ func (s *Server) setWorkingOn(w http.ResponseWriter, r *http.Request) error {
 		c.Value, c.MaxAge = strconv.FormatInt(*id, 10), workingMaxAge
 	}
 	http.SetCookie(w, c)
-	http.Redirect(w, r, unaddressed(s.back(r, "/")), http.StatusSeeOther) //nolint:gosec // back returns only local paths
+	to := unaddressed(s.back(r, "/"))
+	if onVehiclePages(to) {
+		// From a vehicle's page: the one now worked on, or, on stopping, the
+		// list (the page was the old one's, and the others were out of view).
+		to = "/vehicles"
+		if id := parseOptID(r.PostFormValue("vehicle")); id != nil {
+			vehicles, err := s.store.ListVehicles(r.Context())
+			if err != nil {
+				return err
+			}
+			if activeVehicle(vehicles, *id) != nil {
+				to = vehiclePath(*id)
+			}
+		}
+	}
+	http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // back returns only local paths
 	return nil
 }

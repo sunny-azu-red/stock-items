@@ -5,7 +5,6 @@
     <div class="sub flex"><span>{{if $d.Item}}Every change to this item's stock{{else if and $d.VehicleName $d.General}}Every change to the stock that fits {{$d.VehicleName}} (General too), except parts other vehicles' services took{{else if $d.VehicleName}}Every change to the items tagged with {{$d.VehicleName}} (shared ones too), except parts other vehicles' services took{{else if $d.General}}Every change to the stock that fits no vehicle{{else}}Every change to your stock{{end}}{{with $d.Year}} in {{.}}{{end}}, {{$d.SortNote}}{{if not $d.Heads.Custom}}.{{end}}</span>{{if $d.Heads.Custom}}<span>·</span><a class="reset-link" href="{{$d.Heads.ResetHref}}" title="Show the newest changes first">Reset order {{icon "x"}}</a>{{end}}</div>
   </div>
   <div class="actions">
-    {{if .TrashCount}}<a class="btn" href="/trash">{{icon "trash-2"}} Trash ({{.TrashCount}})</a>{{end}}
     <a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
   </div>
 </div>
@@ -33,7 +32,7 @@
   </form>{{end}}
 </div>
 <section class="card">
-  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item) "Sort" $d.Heads)}}
+  {{if $d.Movements}}{{template "movement-table" (dict "Movements" $d.Movements "ShowItem" (not $d.Item) "Sort" $d.Heads "Working" (and $.WorkingOn $.WorkingOn.ID))}}
   {{else if gt $d.Page 1}}{{template "empty" (dict "Icon" "history" "Title" "Nothing on this page" "Text" "There are no older stock changes." "Href" (withQuery "/activity" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
   {{else if or $d.Kind $d.Year}}{{template "empty" (dict "Icon" "history" "Title" "Nothing matches these filters" "Href" (withQuery "/activity" $d.AllQuery) "Action" "Clear filters" "ActionIcon" "x")}}
   {{else}}{{template "empty" (dict "Icon" "history" "Title" "No activity yet")}}{{end}}

@@ -254,7 +254,7 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 	var args sqlArgs
 	sql := `
 		SELECT m.id, m.version, m.item_id, i.brand, i.name, i.unit, m.kind, m.delta, m.total_price, m.supplier, m.note,
-		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), m.created_at
+		       m.occurred_on, m.service_record_id, COALESCE(sr.title, ''), COALESCE(sr.vehicle_id, 0), m.created_at
 		FROM stock_movements m
 		JOIN items i ON i.id = m.item_id
 		LEFT JOIN service_records sr ON sr.id = m.service_record_id
@@ -274,7 +274,7 @@ func (s *Store) ListMovements(ctx context.Context, f MovementFilter) ([]stock.Mo
 		var m stock.Movement
 		var brand, name string
 		err := r.Scan(&m.ID, &m.Version, &m.ItemID, &brand, &name, &m.ItemUnit, &m.Kind, &m.Delta, &m.TotalPrice, &m.Supplier,
-			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.CreatedAt)
+			&m.Note, &m.OccurredOn, &m.ServiceRecordID, &m.ServiceTitle, &m.ServiceVehicleID, &m.CreatedAt)
 		m.ItemName = displayName(brand, name)
 		return m, err
 	})

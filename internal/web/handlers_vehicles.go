@@ -129,6 +129,9 @@ type vehiclesPage struct {
 }
 
 func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
+	if done, err := s.elsewhere(w, r, 0, vehiclePath); done || err != nil {
+		return err
+	}
 	ctx := r.Context()
 	all, err := s.store.ListVehicles(ctx)
 	if err != nil {
@@ -172,6 +175,9 @@ func (s *Server) vehicleList(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) vehicleNew(w http.ResponseWriter, r *http.Request) error {
+	if done, err := s.elsewhere(w, r, 0, vehiclePath); done || err != nil {
+		return err
+	}
 	vehicles, err := s.store.ListVehicles(r.Context())
 	if err != nil {
 		return err
@@ -211,6 +217,9 @@ func (s *Server) vehicleEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	v, err := s.store.GetVehicle(r.Context(), id)
 	if err != nil {
+		return err
+	}
+	if done, err := s.elsewhere(w, r, v.ID, vehiclePath); done || err != nil {
 		return err
 	}
 	return s.renderVehicleForm(w, r, http.StatusOK, vehicleFormFrom(v), false)
@@ -387,6 +396,9 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	v, err := s.store.GetVehicle(ctx, id)
 	if err != nil {
+		return err
+	}
+	if done, err := s.elsewhere(w, r, v.ID, vehiclePath); done || err != nil {
 		return err
 	}
 	vehicles, err := s.store.ListVehicles(ctx)

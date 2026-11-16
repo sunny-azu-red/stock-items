@@ -448,7 +448,10 @@ type Movement struct {
 	OccurredOn      time.Time
 	ServiceRecordID *int64
 	ServiceTitle    string
-	CreatedAt       time.Time
+	// ServiceVehicleID is the service's vehicle, 0 for a change that isn't
+	// a service's.
+	ServiceVehicleID int64
+	CreatedAt        time.Time
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an

@@ -345,6 +345,9 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if done, err := s.elsewhere(w, r, rec.VehicleID, toServices); done || err != nil {
+		return err
+	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitIntermediate: rec.KitIntermediate,
 		PerformedOn: rec.PerformedOn.Format("2006-01-02"), Odometer: optIntString(rec.Odometer),
@@ -410,6 +413,9 @@ func (s *Server) serviceShow(w http.ResponseWriter, r *http.Request) error {
 	}
 	rec, err := s.store.GetService(r.Context(), id)
 	if err != nil {
+		return err
+	}
+	if done, err := s.elsewhere(w, r, rec.VehicleID, toServices); done || err != nil {
 		return err
 	}
 	s.render(w, r, http.StatusOK, "service_show", View{Title: rec.Title, Nav: "services", Data: rec})

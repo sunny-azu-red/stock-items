@@ -38,6 +38,39 @@ func (s *Server) trashThumb(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
+// restoredTo is the page that shows what a restore brought back, or the
+// trash when that belongs to another vehicle than the one worked on (its
+// page is out of view meanwhile, elsewhere).
+func (s *Server) restoredTo(r *http.Request, res store.Restored) (string, error) {
+	working, err := s.working(r)
+	if err != nil || working == 0 {
+		return restoredPath(res), err
+	}
+	var vehicleID int64
+	switch res.Kind {
+	case store.TrashVehicle:
+		vehicleID = res.ID
+	case store.TrashKit:
+		k, err := s.store.GetKit(r.Context(), res.ID)
+		if err != nil {
+			return "", err
+		}
+		vehicleID = k.VehicleID
+	case store.TrashService:
+		rec, err := s.store.GetService(r.Context(), res.ID)
+		if err != nil {
+			return "", err
+		}
+		vehicleID = rec.VehicleID
+	default:
+		return restoredPath(res), nil
+	}
+	if vehicleID != working {
+		return "/trash", nil
+	}
+	return restoredPath(res), nil
+}
+
 // restoredPath is the page that shows what a restore brought back.
 func restoredPath(res store.Restored) string {
 	switch res.Kind {
@@ -95,12 +128,16 @@ func (s *Server) trashRestore(w http.ResponseWriter, r *http.Request) error {
 	if res.Dropped > 0 {
 		msg = strings.TrimSuffix(msg, ".") + ". Left out " + plural(res.Dropped, "link") + " to what was permanently deleted."
 	}
+	to, err := s.restoredTo(r, res)
+	if err != nil {
+		return err
+	}
 	if res.Replaced != 0 {
 		// The photo it took the place of went to the trash in turn.
-		s.redirectUndo(w, r, restoredPath(res), strings.TrimSuffix(msg, ".")+". The newer photo is in the trash.", res.Replaced)
+		s.redirectUndo(w, r, to, strings.TrimSuffix(msg, ".")+". The newer photo is in the trash.", res.Replaced)
 		return nil
 	}
-	s.redirect(w, r, restoredPath(res), msg)
+	s.redirect(w, r, to, msg)
 	return nil
 }
 

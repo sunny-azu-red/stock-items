@@ -99,18 +99,18 @@
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so (its name opens the vehicle's page), switches to another (Switch, on a phone; a desktop has the
-     sidebar's Work on chips), or stops (All vehicles, an ×). It is the
-     pages' vehicle control: their vehicle chips are hidden meanwhile. */}}
+     so (its name opens the vehicle's page), switches to another (Switch, on
+     a phone, opens a tray under the bar, a popover: Esc and a tap outside
+     close it; a desktop has the sidebar's Work on chips), or stops (All
+     vehicles, an ×). It is the pages' vehicle control: their vehicle chips
+     are hidden meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
   {{/* The name opens the vehicle's page, except on that page. */}}
   {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
   {{else}}<a class="working-name" href="/vehicles/{{.ID}}">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></a>{{end}}
   <span class="working-actions">
-    <details class="working-switch">
-      <summary class="btn btn-sm" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></summary>
-      <div class="working-pick"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title" "Others" true)}}</div>
-    </details>
+    <button class="btn btn-sm working-switch" type="button" popovertarget="switch" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></button>
+    <div class="working-pick" id="switch" popover aria-label="Switch"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title" "Others" true)}}</div>
     <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>
 </section>{{end}}{{end}}

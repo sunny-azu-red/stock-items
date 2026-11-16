@@ -11,13 +11,12 @@
     </div>
   </div>
   <div class="actions">
-    {{/* The way to the list, which the nav leaves out while a vehicle is
-         worked on (it opens that vehicle's page instead). */}}
-    <a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>
+    {{/* The way to the list. While a vehicle is worked on, the list and the
+         other vehicles are out of view (working.go): this is its page, and
+         the bar's × leads back to them. */}}
+    {{if not .WorkingOn}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>{{end}}
     <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
-    {{/* While another vehicle is worked on, new work is for it (working.go). */}}
-    {{$other := and .WorkingOn (ne .WorkingOn.ID $v.ID)}}
-    {{if not (or $v.Archived $other)}}
+    {{if not $v.Archived}}
     <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
     <a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
     {{end}}
@@ -34,7 +33,7 @@
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not (or $v.Archived $other)}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} Add kit</a>{{end}}</div>
+      <div class="card-head"><h2>{{icon "list-checks"}} Service kits</h2>{{if not $v.Archived}}<a class="btn btn-sm" href="/kits/new?vehicle={{$v.ID}}">{{icon "plus"}} Add kit</a>{{end}}</div>
       {{with $d.MonthsUncounted}}<p class="card-body hint" role="note">{{join . ", "}} {{if eq (len .) 1}}repeats{{else}}repeat{{end}} by months, with nothing to count them from yet. <a href="/vehicles/{{$v.ID}}/edit">Set the purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}
       {{if $d.Kits}}{{range $d.Kits}}{{if not .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}{{range $d.Kits}}{{if .Kit.Archived}}{{template "kit-row" .}}{{end}}{{end}}
       {{else}}<div class="card-body muted small">A kit is the list of parts for a recurring job, like an oil service or brake pads. It shows what you already have and what to buy, and can remind you when the job is due.</div>{{end}}
@@ -44,14 +43,13 @@
       <h2>{{icon "package"}} Stock for {{$v.Name}} <span class="muted small">· {{plural $d.ItemCount "item"}}</span></h2>
       <div class="flex">
         <a class="btn btn-sm" href="{{withQuery "/stock/export.txt" $d.StockQuery}}" data-copy-url="{{withQuery "/stock/export.txt" $d.StockQuery}}">{{icon "copy"}} Copy as text</a>
-        {{/* While another vehicle is worked on, its list would show that one's. */}}
-        {{if or (not .WorkingOn) (eq .WorkingOn.ID $v.ID)}}<a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Stock list →</a>{{end}}
+        <a class="btn btn-sm" href="{{withQuery "/stock" $d.StockQuery}}">Stock list →</a>
       </div>
     </div>
     {{if $d.Sections}}
       {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Here" $v.ID)}}{{end}}
     {{else}}
-      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not (or $v.Archived $other)) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
+      <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
     {{end}}
   </div>
 
@@ -83,7 +81,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2>{{if or (not .WorkingOn) (eq .WorkingOn.ID $v.ID)}}<a class="more" href="/services?v={{$v.ID}}">All services →</a>{{end}}</div>
+      <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><a class="more" href="/services?v={{$v.ID}}">All services →</a></div>
       {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $v.ID)}}{{else}}<div class="card-body muted small">No services logged yet.</div>{{end}}
       {{if $d.Labor}}<div class="card-foot">{{template "labour-total" $d.Labor}}</div>{{end}}
     </section>

@@ -203,7 +203,10 @@
      sortHeads.Col). A plain link, so it works without JavaScript. */}}
 {{define "sort-th"}}<th{{if .Num}} class="num"{{end}} aria-sort="{{.Sort}}">{{if .Href}}<a class="sort-link{{if ne .Sort "none"}} sorted{{end}}" href="{{.Href}}" title="{{.Title}}">{{.Label}}{{if eq .Sort "ascending"}}{{icon "arrow-up"}}{{else if eq .Sort "descending"}}{{icon "arrow-down"}}{{else}}{{icon "arrow-up-down"}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
 
-{{/* Movement history table: dict "Movements" []Movement "ShowItem" bool "Sort" sortHeads */}}
+{{/* Movement history table: dict "Movements" []Movement "ShowItem" bool
+     "Sort" sortHeads "Working" (the vehicle worked on's id, or nil): while
+     one is, another vehicle's service is named, not linked (it is out of
+     view, working.go). */}}
 {{define "movement-table"}}{{$h := .Sort}}
 <div class="table-wrap">
 <table class="table">
@@ -213,11 +216,12 @@
     <tr>
       <td class="nowrap">{{date .OccurredOn}}</td>
       {{if $.ShowItem}}<td><a href="/items/{{.ItemID}}">{{.ItemName}}</a></td>{{end}}
-      <td class="nowrap">{{if .ServiceRecordID}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{.Kind.Label}}{{with .Supplier}} <span class="muted small">· {{.}}</span>{{end}}{{end}}</td>
+      {{$link := or (not $.Working) (eq .ServiceVehicleID $.Working)}}
+      <td class="nowrap">{{if .ServiceRecordID}}{{if $link}}<a href="/services/{{.ServiceRecordID}}">{{icon "wrench"}} {{.ServiceTitle}}</a>{{else}}{{icon "wrench"}} {{.ServiceTitle}}{{end}}{{else}}{{.Kind.Label}}{{with .Supplier}} <span class="muted small">· {{.}}</span>{{end}}{{end}}</td>
       <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
       <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
       <td class="muted small">{{if .ServiceRecordID}}Used in this service{{else}}{{.Note}}{{end}}</td>
-      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if .ServiceRecordID}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
+      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if and .ServiceRecordID $link}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
     </tr>
   {{end}}
   </tbody>

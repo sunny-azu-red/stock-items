@@ -93,7 +93,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
 | All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |
 | Work performed (the service form field) | What was done |
-| Working on KTM 390 (the bar) · Work on (the chips that choose it) · Switch · All vehicles (stops, as it shows every vehicle) · N more in other vehicles · Vehicle (the nav's entry meanwhile, which opens its page) | Focus, Focus mode, My garage, Show all, Stop working on |
+| Working on KTM 390 (the bar) · Work on (the chips that choose it) · Switch · All vehicles (stops, as it shows every vehicle) · N more in other vehicles (a stock search) · N more for other vehicles (the shopping list) · Vehicle (the nav's entry meanwhile, which opens its page) | Focus, Focus mode, My garage, Show all, Stop working on |
 
 - Record actions sit in the page header: Edit first, Archive (plain style, it can be undone), Delete (red, the trash icon), Restore (primary).
 - Nothing that can be undone asks first; only the trash's Delete permanently and Empty trash do (`data-confirm`).

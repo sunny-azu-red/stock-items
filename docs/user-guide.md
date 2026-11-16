@@ -66,7 +66,6 @@ You can also log a service without a kit (Services → Log service), e.g. for a 
 - **Bought** on a free-text entry asks what to do. If an item with that name is already in stock (or archived), it is offered first: **Add to this item** (**Restore and add to it** for an archived item) links the entry to it (restoring it if archived; its text is kept as the note unless it is just the item's name) and opens the usual Bought form. Otherwise:
   - **Add to stock as a new item** opens the new-item form with the name, quantity and note filled in. Add the price and shop under *Bought it just now?*. Saving creates the item with its purchase and removes the entry (Undo puts the entry back; the item stays).
   - **Just tick it off** removes the entry, for things you don't keep in stock.
-- Suggestions keep their reason ("Below the minimum of 2 pcs", "Short for KTM 390: Oil Service") as the entry's note.
 - **Copy as text** gives you the list for the shop.
 
 ## Removing items and vehicles
@@ -104,7 +103,7 @@ When you press a Save button (Save item, Save service, …) or Add to stock, Tak
 - Amounts take at most two decimals of ml or g, and pieces are whole. A finer amount isn't rounded: the form comes back with what you typed and says why. `0.234 g` gets *"use at most two decimals of g"*, and `1.0004` pieces *"pieces must be a whole number"*. In L and kg you can type more decimals, as long as they come to two of ml or g: `1.2345 kg` is 1234.5 g, but `1.234567 kg` gets *"1.234567 kg is 1234.567 g: use at most two decimals of g"*.
 - Photos help to recognise similar parts: open an item → **Add photo**. JPEG, PNG, GIF, WebP and HEIC (iPhone) photos work, up to 15 MB and 100 megapixels. Large photos are shrunk in your browser before they upload ("Preparing photo…"), so a phone sends a few hundred KB; the server rotates them upright and resizes them to 1600 px either way. **Replace photo** and **Remove** are on the same spot; both can be undone.
 - A USB or Bluetooth barcode scanner "types" into the search box. Put barcodes in the SKU list and scanning finds the item.
-- Shortcuts, the same on every page: `/` searches stock, `a` opens Add item, `l` opens Log service.
+- Shortcuts, the same on every page: `/` searches stock, `a` opens Add item, `l` opens Log service. The sidebar shows each key on what it does: `/` on Stock, `a` and `l` on their buttons.
 - The app follows your system's light or dark mode. The sun / moon button (top of the sidebar; on a phone, under **More**) overrides it on that device. Switch back to what your system shows to follow it again.
 - The *Activity* page lists every stock change across all items, 200 per page (**Older** / **Newer**), filtered by type and year if you like. An item's page shows its first 100 changes (the newest, unless you sorted it otherwise); **Full history →** opens its whole history there, in the same order. The CSV button downloads what the page is filtered on.
 - The services list (100 per page) and each vehicle show the labour cost of every service, and the total of all of them in the footer under the list (**Labour in total**). On the services list, **Newer** / **Older** sit in the same footer.

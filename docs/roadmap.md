@@ -30,3 +30,13 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 ## Small things noted on 2 November 2026
 
 - **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
+
+## A vehicle for free-text shopping entries
+
+**Now:** which vehicles a shopping entry is for is worked out from its item's tags and the kits that use it (`stock.ShoppingEntry.For`), never stored. A free-text entry ("Chain lube") has no item, so it is on every vehicle's part of the list, like General stock. Decided on 16 November 2026: storing a vehicle on entries would need a link table (an item has one entry, and a shared item two vehicles need is one line), with its own trash, version and lock rules, and it would go stale when an item is retagged.
+
+**If it is wanted:** a nullable `vehicle_id` on free-text entries only, set when one is added while working on a vehicle, would scope them too. Deleting a vehicle would then set it to null (and restoring the vehicle wouldn't bring the link back), and the Bought flow that turns free text into an item would carry it over as the item's tag.
+
+## Old shopping notes that name a vehicle
+
+Notes saved before 16 November 2026 read "Short for GreyJoy: Air Filter"; new ones say "Short for the Air Filter kit" and leave the vehicle to the chips. Old notes are saved text and were left as they are; rewriting them would be a data migration on user-editable text, for a few entries that go away when bought.

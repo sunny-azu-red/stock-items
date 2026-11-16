@@ -1664,6 +1664,15 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
         }
         if (heights.size > 1) out.push(`${sel} bars of ${[...heights].map(([hh, t]) => `${hh}px ("${t}")`).join(", ")}`);
       }
+      // The theme button is a nav row's box: its hover ends on the same
+      // edge as the nav's, and it is as tall.
+      const theme = [...document.querySelectorAll(".sidebar-head .icon-btn")].find((b) => b.getBoundingClientRect().width > 0);
+      const navLink = document.querySelector(".sidebar .nav a");
+      if (desktop && theme && navLink) {
+        const t = theme.getBoundingClientRect(), n = navLink.getBoundingClientRect();
+        if (Math.round(t.right) !== Math.round(n.right) || Math.round(t.height) !== Math.round(n.height))
+          out.push(`the theme button is ${Math.round(t.height)}px tall ending at ${Math.round(t.right)}px, the nav's rows ${Math.round(n.height)}px ending at ${Math.round(n.right)}px`);
+      }
       // The sidebar's logo is level with the page heading's row.
       const mark = document.querySelector(".sidebar .app-brand-mark");
       const head = document.querySelector(".page-head");

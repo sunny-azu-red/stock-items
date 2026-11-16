@@ -319,9 +319,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .theme-toggle { display: inline-flex; align-items: center; margin: 0; }
 .theme-toggle .icon-btn { border-color: transparent; background: transparent; color: var(--muted); }
 .theme-toggle .icon-btn:hover { background: var(--surface-2); color: var(--accent); }
-/* Only the icon shows, so pull the button out by the space around it: the
-   icon's right edge lines up with the nav's counts, or the page's edge. */
-.sidebar-head .theme-toggle .icon-btn { margin-right: calc((round(1.15em, 2px) - 34px) / 2); }
+/* A nav row's box (40px, its 18px icon 11px in) pulled out by the row's
+   inset: its hover fills the same box as a nav link's, ending on the same
+   edge, and its icon lines up with the nav's counts. It hangs 1px into the
+   38px header row, which keeps the logo level with the page heading. */
+.sidebar-head .theme-toggle .icon-btn { width: 40px; height: 40px; margin: -1px -11px -1px 0; }
 .theme-to-light { display: none !important; }
 :root[data-theme="dark"] .theme-to-dark { display: none !important; }
 :root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }

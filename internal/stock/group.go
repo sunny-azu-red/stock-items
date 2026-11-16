@@ -128,7 +128,12 @@ func ExportText(sections []Section) string {
 }
 
 // ExportShoppingText renders the shopping list in the same plain format.
-func ExportShoppingText(entries []ShoppingEntry) string {
+//
+// names, when given, are the vehicles' names by id: each line then ends
+// with the vehicles it is for ("[GreyJoy, KillJoy]"), which the whole list
+// needs and a vehicle's part doesn't. Vehicles without a name (archived)
+// are left out.
+func ExportShoppingText(entries []ShoppingEntry, names map[int64]string) string {
 	var b strings.Builder
 	writeHeading(&b, "Shopping list")
 	for _, e := range entries {
@@ -141,6 +146,15 @@ func ExportShoppingText(entries []ShoppingEntry) string {
 		b.WriteString(e.Title())
 		if e.Note != "" {
 			b.WriteString(" (" + e.Note + ")")
+		}
+		var whose []string
+		for _, id := range e.VehicleIDs() {
+			if n, ok := names[id]; ok {
+				whose = append(whose, n)
+			}
+		}
+		if len(whose) > 0 {
+			b.WriteString(" [" + strings.Join(whose, ", ") + "]")
 		}
 		b.WriteByte('\n')
 	}

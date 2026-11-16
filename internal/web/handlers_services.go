@@ -273,10 +273,7 @@ func serviceConflict(f *serviceForm, err error) bool {
 			}
 			needed := stock.RoundQty(short.Need - short.Have)
 			if needed > 0 {
-				note := "Short for " + f.Title
-				if f.Title == "" {
-					note = "Short for service"
-				}
+				note := stock.ShortNote(f.Title, "service")
 				f.ShortParts = append(f.ShortParts, shortPart{
 					ItemID: short.ItemID,
 					Qty:    stock.FormatNumber(needed),

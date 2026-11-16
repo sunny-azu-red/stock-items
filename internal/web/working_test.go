@@ -234,7 +234,7 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, `title="Show KTM 1290 stock"`)
 	})
 	t.Run("records and global pages are not filtered", func(t *testing.T) {
-		for _, path := range []string{"/shopping", "/trash", "/items/" + itoa(itemID(t, a.store, "Hiflofiltro")), "/vehicles/" + w} {
+		for _, path := range []string{"/trash", "/items/" + itoa(itemID(t, a.store, "Hiflofiltro")), "/vehicles/" + w} {
 			expect(t, a.getWorking(path, w), http.StatusOK, workingBar)
 		}
 	})
@@ -463,7 +463,7 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, workingBar)
 	})
 	t.Run("sidebar", func(t *testing.T) {
-		rec := a.getWorking("/shopping", w)
+		rec := a.getWorking("/trash", w)
 		expect(t, rec, http.StatusOK, `action="/working-on"`,
 			`name="vehicle" value="" aria-pressed="true"`, `name="vehicle" value="`+itoa(k1290)+`" aria-pressed="false"`)
 		expectNot(t, rec, "Stock by vehicle")
@@ -475,7 +475,7 @@ func TestWorkingOnPages(t *testing.T) {
 		if n := strings.Count(rec.Body.String(), `name="vehicle" value="`+itoa(k1290)+`"`); n != 2 {
 			t.Errorf("the other vehicle is offered %d times, want twice (the sidebar and Switch)", n)
 		}
-		rec = a.get("/shopping")
+		rec = a.get("/trash")
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
 		expectNot(t, rec, workingBar, `aria-pressed="true"`)
 	})
@@ -490,7 +490,7 @@ func TestWorkingOnNav(t *testing.T) {
 	w := itoa(k390)
 	nav := `<a class="nav-vehicle" href="/vehicles/` + w + `"`
 	barLink := `<a class="working-name" href="/vehicles/` + w + `">`
-	for _, path := range []string{"/shopping", "/trash", "/stock?general=1&v=" + w} {
+	for _, path := range []string{"/shopping?v=" + w, "/trash", "/stock?general=1&v=" + w} {
 		rec := a.getWorking(path, w)
 		expect(t, rec, http.StatusOK, nav, `"></use></svg>Vehicle</a>`, barLink)
 		expectNot(t, rec, `<a href="/vehicles" `)
@@ -545,4 +545,143 @@ func TestWorkingCookieValue(t *testing.T) {
 			t.Errorf("cookie %q = %q, want %q", raw, got, want)
 		}
 	}
+}
+
+// While a vehicle is worked on, Shopping is its part of the list: entries
+// for it (tagged with it, or used by its kits), General and free text,
+// its suggestions, and every count. Without one, chips filter it.
+func TestWorkingOnShopping(t *testing.T) {
+	a := newApp(t)
+	ctx := context.Background()
+	vehicle := func(name string) int64 {
+		in := stock.VehicleInput{Name: name}
+		in.Normalize()
+		id, err := a.store.CreateVehicle(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	va, vb := vehicle("Alpha"), vehicle("Bravo")
+	item := func(name string, qty float64, min *float64, unit stock.Unit, vehicles ...int64) int64 {
+		in := stock.ItemInput{Name: name, Unit: unit, Quantity: qty, MinQuantity: min, VehicleIDs: vehicles}
+		in.Normalize()
+		id, err := a.store.CreateItem(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	pads := item("Pads", 0, ptr(2.0), stock.UnitPiece, va)
+	grips := item("Grips", 0, ptr(2.0), stock.UnitPiece, vb)
+	lube := item("Chain lube", 0, ptr(100.0), stock.UnitML)
+	filter := item("Filter", 0, nil, stock.UnitPiece, vb) // Bravo's, but Alpha's kit uses it
+	oil := item("Oil", 500, nil, stock.UnitML, va, vb)
+	kit := func(vehicle int64, name string, line stock.KitLineInput) {
+		in := stock.KitInput{VehicleID: vehicle, Name: name, Lines: []stock.KitLineInput{line}}
+		in.Normalize()
+		if _, err := a.store.CreateKit(ctx, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kit(va, "Air Filter", stock.KitLineInput{ItemID: filter, Quantity: 1, Unit: stock.UnitPiece})
+	kit(vb, "Oil service", stock.KitLineInput{ItemID: oil, Quantity: 3000, Unit: stock.UnitML})
+	for _, id := range []int64{pads, grips, lube} {
+		if _, err := a.store.EnsureShopping(ctx, id, 2, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.store.AddShopping(ctx, stock.ShoppingInput{FreeText: "Rags"}); err != nil {
+		t.Fatal(err)
+	}
+	w, b := itoa(va), itoa(vb)
+	alpha := "/shopping?v=" + w
+	chip := func(name string) string { return `<span class="dot"></span>` + name + `</span>` }
+	// rowChips matches a row's title followed by exactly these chips.
+	rowChips := func(t *testing.T, body, title string, names ...string) {
+		t.Helper()
+		re := `>` + title + `</a>`
+		for _, n := range names {
+			re += `<span class="chip" style="[^"]*"><span class="dot"></span>` + n + `</span>`
+		}
+		re += `</span>`
+		if !regexp.MustCompile(re).MatchString(body) {
+			t.Errorf("%s: want the chips %v", title, names)
+		}
+	}
+
+	t.Run("the address says the vehicle", func(t *testing.T) {
+		for _, path := range []string{"/shopping", "/shopping?v=all", "/shopping?v=" + b, "/shopping?v=99999"} {
+			expectRedirect(t, a.getWorking(path, w), alpha)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/shopping?v="+b, nil)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(&http.Cookie{Name: workingCookie, Value: w})
+		if rec := a.do(req); rec.Header().Get("HX-Redirect") != alpha {
+			t.Errorf("htmx: HX-Redirect %q", rec.Header().Get("HX-Redirect"))
+		}
+	})
+	t.Run("its part", func(t *testing.T) {
+		rec := a.getWorking(alpha, w)
+		// Pads (tagged), lube (General), Rags (free text); not Grips.
+		expect(t, rec, http.StatusOK, "<h1>Shopping</h1>", "<title>Shopping ·", ">Pads</a>", ">Chain lube</a>", ">Rags</span>",
+			"3 entries · 1 more for other vehicles", `href="/shopping/export.txt?v=`+w+`"`,
+			// Alpha's kit is short of Bravo's filter: suggested, said
+			// without a vehicle.
+			">Filter</a>", "Short for the Air Filter kit")
+		expectNot(t, rec, ">Grips</a>", "Short for the Oil service kit", `aria-label="Filter by vehicle"`, chip("Alpha"), chip("Bravo"))
+		// The form adds what shows here: Alpha's and General items.
+		expect(t, rec, http.StatusOK, ">Pads (", ">Chain lube (", ">Oil (")
+		expectNot(t, rec, ">Grips (", ">Filter (")
+		// Every count is the part's: the sidebar, the tab bar, the dashboard.
+		if n := strings.Count(rec.Body.String(), `<span class="count">3</span>`); n != 2 {
+			t.Errorf("the sidebar and the tab bar say 3 %d times, want twice", n)
+		}
+		expect(t, a.getWorking("/?v="+w, w), http.StatusOK,
+			`href="`+strings.ReplaceAll(alpha, "&", "&amp;")+`"><span class="label">`, `Shopping list</span><span class="value">3</span>`,
+			// The filter, and the lube: 2 ml listed of the 100 ml it needs.
+			`2 suggested →`)
+	})
+	t.Run("a kit's shortfall stays once added", func(t *testing.T) {
+		rec := a.postWorking("/shopping/suggestions", url.Values{"item_id": {itoa(filter)}, "qty": {"1"}, "note": {"Short for the Air Filter kit"}}, w)
+		expectRedirect(t, rec, "/shopping")
+		rec = a.getWorking(alpha, w)
+		expect(t, rec, http.StatusOK, "4 entries · 1 more for other vehicles", ">Filter</a>", `<span class="count">4</span>`)
+	})
+	t.Run("export", func(t *testing.T) {
+		rec := a.getWorking("/shopping/export.txt?v="+w, w)
+		expect(t, rec, http.StatusOK, "Pads", "Rags", "Filter")
+		expectNot(t, rec, "Grips", "[")
+		// The whole list says whose each part is; exports follow their
+		// address only, whatever is worked on.
+		expect(t, a.getWorking("/shopping/export.txt", w), http.StatusOK,
+			"2 pcs - Pads [Alpha]\n", "2 pcs - Grips [Bravo]\n", "2 ml - Chain lube\n", "- Rags\n", "1 pcs - Filter (Short for the Air Filter kit) [Alpha, Bravo]\n")
+	})
+	t.Run("without a vehicle worked on", func(t *testing.T) {
+		rec := a.get("/shopping")
+		expect(t, rec, http.StatusOK, `aria-label="Filter by vehicle"`, `href="/shopping?v=`+b+`"`,
+			"5 entries", "Short for the Oil service kit", `<span class="count">5</span>`)
+		expectNot(t, rec, "more for other vehicles")
+		// Each row says whose it is; General and free text say nothing.
+		body := rec.Body.String()
+		rowChips(t, body, "Grips", "Bravo")
+		rowChips(t, body, "Pads", "Alpha")
+		rowChips(t, body, "Filter", "Alpha", "Bravo") // tagged Bravo, Alpha's kit uses it
+		rowChips(t, body, "Chain lube")
+		rowChips(t, body, "Oil", "Bravo") // the suggestion: Bravo's kit
+		// A chip shows a vehicle's part, titled with it.
+		rec = a.get("/shopping?v=" + b)
+		expect(t, rec, http.StatusOK, "<h1>Bravo shopping</h1>", "<title>Bravo shopping ·", "for Bravo (General too)",
+			">Grips</a>", ">Filter</a>", ">Chain lube</a>", ">Rags</span>", "1 more for other vehicles", "Short for the Oil service kit")
+		expectNot(t, rec, ">Pads</a>")
+		// A vehicle that doesn't exist isn't chosen.
+		expect(t, a.get("/shopping?v=99999"), http.StatusOK, "<h1>Shopping</h1>", "5 entries")
+		// The dashboard's vehicle counts its part, and links to it.
+		expect(t, a.get("/?v="+b), http.StatusOK, `href="/shopping?v=`+b+`"><span class="label">`, `Shopping list</span><span class="value">4</span>`)
+	})
+	t.Run("switching shows the next vehicle's part", func(t *testing.T) {
+		rec := a.post("/working-on", url.Values{"vehicle": {b}}, "Referer", "http://example.com"+alpha)
+		expectRedirect(t, rec, "/shopping")
+		expectRedirect(t, a.getWorking("/shopping", b), "/shopping?v="+b)
+	})
 }

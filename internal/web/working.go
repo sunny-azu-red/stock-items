@@ -16,7 +16,8 @@ import (
 // set, a list page (listPages) whose address asks for anything but that
 // vehicle (with General on Stock and Activity) gets a 303 to the address
 // for it, so the address always says what the page shows, and the bar and
-// the page never disagree. What belongs to another vehicle (its page, kits
+// the page never disagree. Shopping is the vehicle's part of the list
+// (stock.ShoppingEntry.For), and the counts with it. What belongs to another vehicle (its page, kits
 // and services, their edit forms) and the vehicles list and Add vehicle
 // wait until you stop or switch (elsewhere). New services and kits are for
 // it (otherWork). Exports follow their address only. See docs/design.md,
@@ -27,7 +28,7 @@ const workingCookie = "working_on"
 const workingMaxAge = 400 * 24 * 60 * 60
 
 // listPages are the pages that follow the vehicle being worked on.
-var listPages = []string{"/", "/stock", "/services", "/activity"}
+var listPages = []string{"/", "/stock", "/services", "/activity", "/shopping"}
 
 // newPages are the add forms that start with the vehicle chosen.
 var newPages = []string{"/items/new", "/services/new", "/kits/new"}

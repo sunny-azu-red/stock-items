@@ -691,6 +691,19 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page.locator("main h1")).toHaveText("Stock");
   await expect(page.locator("#results")).toContainText("Hiflofiltro");
 
+  // Shopping is the vehicle's part of the list, with no chips of its own,
+  // and the Shop count is that part's.
+  const shopCount = async () => {
+    const badge = page.locator('.nav a[href="/shopping"] .count:visible, .tabbar a[href="/shopping"] .count:visible').first();
+    return (await badge.count()) ? Number(await badge.innerText()) : 0;
+  };
+  await page.goto("/shopping");
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  await expect(page.locator("main h1")).toHaveText("Shopping");
+  await expect(page.locator('[aria-label="Filter by vehicle"]')).toHaveCount(0);
+  const entries = Number((await page.locator(".card-head").filter({ hasText: "On the list" }).locator(".muted").innerText()).split(" ")[0]);
+  expect(await shopCount()).toBe(entries);
+
   // All vehicles stops and keeps the search: every vehicle's matches.
   await page.goto("/stock");
   await page.getByPlaceholder(/Search name/).fill("Oil Filter");
@@ -700,23 +713,32 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/\/stock\?q=Oil\+Filter$/);
   await expect(page.locator("#results")).toContainText("Hiflofiltro");
   await expect(page.locator("#filter-all")).toBeVisible();
+  // Without one, Shopping is the whole list, and its chips filter it.
+  await page.goto("/shopping");
+  await expect(page).toHaveURL(/\/shopping$/);
+  const filter = page.locator('[aria-label="Filter by vehicle"]');
+  await filter.getByRole("link", { name: "KTM 1290" }).click();
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  await expect(page.locator("main h1")).toHaveText("KTM 1290 shopping");
+  await filter.getByRole("link", { name: "All vehicles" }).click();
+  await expect(page).toHaveURL(/\/shopping$/);
 });
 
 test("Back after switching vehicles shows the one worked on now", async ({ page, browserName }, testInfo) => {
   // Back may bring a page from before the switch out of the page cache,
   // which the server never sees: app.js compares the cookie with the page
-  // and reloads it. Shopping isn't narrowed, so only the bar tells.
+  // and reloads it. Trash isn't narrowed, so only the bar tells.
   const base = testInfo.project.use.baseURL as string;
   const check = async (p: Page, fromPageCache: boolean) => {
     await p.addInitScript(() => {
       window.addEventListener("pageshow", (e) => { if (e.persisted) sessionStorage.setItem("restored", "1"); });
     });
     await workingCookie(p, base, "KTM 390");
-    await p.goto("/shopping");
+    await p.goto("/trash");
     await expect(p.locator(".working-on")).toContainText("Working on KTM 390");
     await workingCookie(p, base, "KTM 1290"); // another page, then the switch
     await p.goBack();
-    await expect(p).toHaveURL(/\/shopping$/);
+    await expect(p).toHaveURL(/\/trash$/);
     await expect(p.locator(".working-on")).toContainText("Working on KTM 1290");
     if (fromPageCache) expect(await p.evaluate(() => sessionStorage.getItem("restored"))).toBe("1");
   };
@@ -821,7 +843,7 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   await expect(more).toHaveCSS("color", await page.locator(".tabbar a[href='/shopping']").evaluate((e) => getComputedStyle(e).color));
   await tap(".working-on a.working-name");
   await expect(sheet).toBeHidden();
-  await expect(page).toHaveURL(/\/shopping$/);
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
   // The tab bar isn't grey: More again closes it, another tab opens.
   await more.click();
   await expect(sheet).toBeVisible();
@@ -845,7 +867,7 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   // Everything below is grey, the tab bar too: a tap only closes it.
   await tap(".tabbar a[href='/stock']");
   await expect(tray).toBeHidden();
-  await expect(page).toHaveURL(/\/shopping$/);
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
   // Esc closes it too.
   await bar.getByRole("button", { name: "Switch" }).click();
   await expect(tray).toBeVisible();
@@ -1385,8 +1407,8 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   const bought = await link("/shopping", 'a[href$="/bought"]');
   const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", "/stock?sort=expiry&dir=desc", item, "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
-    kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", bought, "/activity", "/activity?sort=price", "/activity?kind=bought&year=2026",
-    movement, "/trash", "/no-such-page"];
+    kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", "/shopping?v=" + vehicle.split("/").pop(), bought, "/activity", "/activity?sort=price",
+    "/activity?kind=bought&year=2026", movement, "/trash", "/no-such-page"];
   for (const p of paths) {
     await page.goto(p);
     await check(p);

@@ -568,15 +568,21 @@ type ServicePart struct {
 // ShoppingEntry is something to buy. It is either linked to an item or is
 // free text.
 type ShoppingEntry struct {
-	ID        int64
-	Version   int // see Item.Version
-	ItemID    *int64
-	ItemName  string
-	ItemUnit  Unit
-	FreeText  string
-	Quantity  *float64
-	Note      string
-	CreatedAt time.Time
+	ID       int64
+	Version  int // see Item.Version
+	ItemID   *int64
+	ItemName string
+	ItemUnit Unit
+	// ItemVehicleIDs are the vehicles the item is tagged with, and
+	// KitVehicleIDs the active vehicles whose active kits use it: together,
+	// the vehicles the entry is for (VehicleIDs). Both are empty for free
+	// text.
+	ItemVehicleIDs []int64
+	KitVehicleIDs  []int64
+	FreeText       string
+	Quantity       *float64
+	Note           string
+	CreatedAt      time.Time
 }
 
 // Title is the item display name or the free text.
@@ -585,6 +591,39 @@ func (e ShoppingEntry) Title() string {
 		return e.ItemName
 	}
 	return e.FreeText
+}
+
+// VehicleIDs are the vehicles the entry is for, in id order: the item's
+// tags and the vehicles whose kits use it. None for free text or a General
+// item that no kit uses.
+func (e ShoppingEntry) VehicleIDs() []int64 {
+	ids := slices.Concat(e.ItemVehicleIDs, e.KitVehicleIDs)
+	slices.Sort(ids)
+	return slices.Compact(ids)
+}
+
+// For reports whether the entry is on the vehicle's part of the shopping
+// list (vehicleID 0: the whole list). Free text and General items belong
+// to no vehicle, so every vehicle's part has them, as its stock has the
+// General items; an item a vehicle's kit uses is on it even when the item
+// isn't tagged with the vehicle, so a kit's shortfall, once added, stays.
+func (e ShoppingEntry) For(vehicleID int64) bool {
+	if vehicleID == 0 || e.ItemID == nil || len(e.ItemVehicleIDs) == 0 {
+		return true
+	}
+	return slices.Contains(e.ItemVehicleIDs, vehicleID) || slices.Contains(e.KitVehicleIDs, vehicleID)
+}
+
+// ShoppingFor is the vehicle's part of the shopping list (vehicleID 0: all
+// of it), and how many entries it leaves out.
+func ShoppingFor(entries []ShoppingEntry, vehicleID int64) (shown []ShoppingEntry, others int) {
+	shown = make([]ShoppingEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.For(vehicleID) {
+			shown = append(shown, e)
+		}
+	}
+	return shown, len(entries) - len(shown)
 }
 
 // DateOnly truncates t to midnight UTC of its calendar date in t's own

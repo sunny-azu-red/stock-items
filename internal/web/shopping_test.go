@@ -141,7 +141,7 @@ func TestShoppingListNeeds(t *testing.T) {
 	// The item page's button lists what the kit is short of.
 	expect(t, a.post("/items/"+itoa(oil)+"/shopping", nil), http.StatusSeeOther)
 	list, _ := a.store.ListShopping(ctx)
-	if len(list) != 1 || *list[0].Quantity != 1175 || !strings.Contains(list[0].Note, "Short for KTM 390") {
+	if len(list) != 1 || *list[0].Quantity != 1175 || !strings.Contains(list[0].Note, "Short for the Oil service kit") {
 		t.Fatalf("shopping = %+v", list)
 	}
 	expectNot(t, a.get("/shopping"), "already listed") // fully covered: no suggestion

@@ -240,7 +240,7 @@ func TestFreeTextShoppingKeepsItsUnit(t *testing.T) {
 	if err != nil || e.ItemUnit != stock.UnitML || *e.Quantity != 4000 {
 		t.Errorf("entry = %+v, %v", e, err)
 	}
-	if got := stock.ExportShoppingText([]stock.ShoppingEntry{e}); !strings.Contains(got, "4 L") {
+	if got := stock.ExportShoppingText([]stock.ShoppingEntry{e}, nil); !strings.Contains(got, "4 L") {
 		t.Errorf("export = %q, want 4 L", got)
 	}
 }
@@ -396,5 +396,70 @@ func TestArchivedItemsShoppingEntryGoesToTheTrash(t *testing.T) {
 	}
 	if trashID, err := s.ArchiveItem(ctx, pads, cur(t, s, store.WhatItem, pads)); err != nil || trashID != 0 {
 		t.Errorf("archive off the list = %d, %v", trashID, err)
+	}
+}
+
+// An entry says which vehicles it is for: its item's tags, and the vehicles
+// whose active kits use the item, not an archived kit's or an archived
+// vehicle's.
+func TestShoppingEntryVehicles(t *testing.T) {
+	s, ctx := newStore(t)
+	a, b, c := mustVehicle(t, s, "A"), mustVehicle(t, s, "B"), mustVehicle(t, s, "C")
+	tagged := mustItem(t, s, stock.ItemInput{Name: "A's pads", Unit: stock.UnitPiece, VehicleIDs: []int64{a}})
+	general := mustItem(t, s, stock.ItemInput{Name: "Chain lube", Unit: stock.UnitML})
+	kitOnly := mustItem(t, s, stock.ItemInput{Name: "B's filter", Unit: stock.UnitPiece, VehicleIDs: []int64{b}})
+	kit := func(vehicle int64, name string) int64 {
+		in := stock.KitInput{VehicleID: vehicle, Name: name, Lines: []stock.KitLineInput{{ItemID: kitOnly, Quantity: 1, Unit: stock.UnitPiece}}}
+		in.Normalize()
+		id, err := s.CreateKit(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	kit(a, "Oil service")
+	archived := kit(b, "Old service")
+	kit(c, "Oil service")
+	k, err := s.GetKit(ctx, archived)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveKit(ctx, archived, k.Version); err != nil {
+		t.Fatal(err)
+	}
+	cv, err := s.GetVehicle(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveVehicle(ctx, c, cv.Version); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{tagged, general, kitOnly} {
+		if _, err := s.EnsureShopping(ctx, id, 1, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Rags"}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.ListShopping(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type want struct{ tags, kits []int64 }
+	wants := map[string]want{
+		"A's pads":   {[]int64{a}, nil},
+		"Chain lube": {nil, nil},
+		"B's filter": {[]int64{b}, []int64{a}}, // B's kit is archived, C is
+		"Rags":       {nil, nil},
+	}
+	for _, e := range list {
+		w, ok := wants[e.Title()]
+		if !ok || !slices.Equal(e.ItemVehicleIDs, w.tags) || !slices.Equal(e.KitVehicleIDs, w.kits) {
+			t.Errorf("%s: tags %v, kits %v, want %+v", e.Title(), e.ItemVehicleIDs, e.KitVehicleIDs, w)
+		}
+	}
+	if len(list) != len(wants) {
+		t.Errorf("%d entries, want %d", len(list), len(wants))
 	}
 }

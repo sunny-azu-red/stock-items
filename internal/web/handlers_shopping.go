@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,15 +20,66 @@ type shoppingForm struct {
 	Errors                         stock.Errors
 }
 
+// shoppingPage is the shopping list, all of it or a vehicle's part
+// (VehicleID): its entries (stock.ShoppingEntry.For) and suggestions, with
+// the vehicle's items to add.
 type shoppingPage struct {
 	Entries     []stock.ShoppingEntry
+	Others      int // entries left out: other vehicles'
 	Suggestions []stock.Suggestion
 	Items       []stock.Item
 	Form        shoppingForm
+	Vehicles    []stock.Vehicle // the filter chips: the active vehicles
+	VehicleID   int64           // the vehicle whose part shows, 0 for all
+	VehicleName string
+	TitleName   string // the vehicle the title names: VehicleName, unless the bar names it (worked on)
 }
 
-func (s *Server) loadShopping(r *http.Request, f shoppingForm) (shoppingPage, error) {
+// VehicleQuery is the address of a vehicle's part (0: the whole list).
+func (p shoppingPage) VehicleQuery(vehicleID int64) string {
+	q := url.Values{}
+	setVehicleParam(q, vehicleID)
+	return q.Encode()
+}
+
+// Chips are the vehicles an entry or a suggestion is for, as the whole
+// list shows them (a vehicle's part says its vehicle once, in the bar or
+// the title, so its rows have none). Archived vehicles are left out.
+func (p shoppingPage) Chips(ids []int64) []stock.Vehicle {
+	if p.VehicleID != 0 {
+		return nil
+	}
+	var out []stock.Vehicle
+	for _, v := range p.Vehicles {
+		if slices.Contains(ids, v.ID) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// shoppingVehicle is the vehicle whose part of the list the request shows:
+// the one worked on, else the address's (?v=) when it names a vehicle, and
+// redirect reports the address to send the request to instead (the one for
+// the vehicle worked on), "" when it is fine.
+func shoppingVehicle(r *http.Request, vehicles []stock.Vehicle) (vid int64, redirect string) {
+	vid = vehicleParam(r.URL.Query())
+	if working := workingOn(r, vehicles); working != 0 && vid != working {
+		return working, joinQuery("/shopping", shoppingPage{}.VehicleQuery(working))
+	}
+	if !slices.ContainsFunc(vehicles, func(v stock.Vehicle) bool { return v.ID == vid }) {
+		vid = 0 // a vehicle that doesn't exist isn't chosen
+	}
+	return vid, ""
+}
+
+// loadShopping reads the shopping list's part for vehicle vid (0: all).
+func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shoppingPage, error) {
 	ctx := r.Context()
+	vehicles, err := s.store.ListVehicles(ctx)
+	if err != nil {
+		return shoppingPage{}, err
+	}
 	entries, err := s.store.ListShopping(ctx)
 	if err != nil {
 		return shoppingPage{}, err
@@ -39,9 +92,25 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm) (shoppingPage, er
 	if err != nil {
 		return shoppingPage{}, err
 	}
-	return shoppingPage{
-		Entries: entries, Items: items, Form: f, Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries), *s.today()),
-	}, nil
+	p := shoppingPage{Items: items, Form: f, Vehicles: activeVehicles(vehicles), VehicleID: vid,
+		// What is listed counts whoever it was added for: a shared item on
+		// the list covers every vehicle's need.
+		Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries), *s.today(), vid)}
+	p.Entries, p.Others = stock.ShoppingFor(entries, vid)
+	if vid != 0 {
+		for _, v := range vehicles {
+			if v.ID == vid {
+				p.VehicleName = v.Name
+			}
+		}
+		if vid != workingOn(r, vehicles) {
+			p.TitleName = p.VehicleName
+		}
+		// What the form adds shows on this part: the vehicle's items and
+		// the General ones (free text always does).
+		p.Items = slices.DeleteFunc(p.Items, func(it stock.Item) bool { return !it.Fits(vid) })
+	}
+	return p, nil
 }
 
 // listedQuantities maps each item on the shopping list to its listed
@@ -57,12 +126,37 @@ func listedQuantities(entries []stock.ShoppingEntry) map[int64]*float64 {
 }
 
 func (s *Server) shoppingList(w http.ResponseWriter, r *http.Request) error {
-	p, err := s.loadShopping(r, shoppingForm{})
+	vehicles, err := s.store.ListVehicles(r.Context())
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, "shopping", View{Title: "Shopping", Nav: "shopping", Data: p})
+	// While a vehicle is worked on, the page shows its part, whatever the
+	// address asks for.
+	vid, to := shoppingVehicle(r, vehicles)
+	if to != "" {
+		if isHTMX(r) {
+			w.Header().Set("HX-Redirect", to)
+			return nil
+		}
+		http.Redirect(w, r, to, http.StatusSeeOther)
+		return nil
+	}
+	p, err := s.loadShopping(r, shoppingForm{}, vid)
+	if err != nil {
+		return err
+	}
+	s.renderShopping(w, r, http.StatusOK, p)
 	return nil
+}
+
+// renderShopping renders the shopping page, titled with the vehicle it
+// shows unless the bar names it.
+func (s *Server) renderShopping(w http.ResponseWriter, r *http.Request, status int, p shoppingPage) {
+	title := "Shopping"
+	if p.TitleName != "" {
+		title = p.TitleName + " shopping"
+	}
+	s.render(w, r, status, "shopping", View{Title: title, Nav: "shopping", Data: p})
 }
 
 func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
@@ -136,11 +230,17 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	p, err := s.loadShopping(r, f)
+	// The form posts to /shopping: it was the part of the vehicle worked
+	// on, if any.
+	working, err := s.working(r)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusUnprocessableEntity, "shopping", View{Title: "Shopping", Nav: "shopping", Data: p})
+	p, err := s.loadShopping(r, f, working)
+	if err != nil {
+		return err
+	}
+	s.renderShopping(w, r, http.StatusUnprocessableEntity, p)
 	return nil
 }
 
@@ -423,13 +523,34 @@ func (s *Server) shoppingGone(w http.ResponseWriter, r *http.Request) {
 	s.redirect(w, r, "/shopping", "")
 }
 
+// shoppingExportText is the list as text: the part its address asks for
+// (?v=), whatever vehicle is worked on, as exports follow their address
+// only. The whole list says whose each entry is.
 func (s *Server) shoppingExportText(w http.ResponseWriter, r *http.Request) error {
-	entries, err := s.store.ListShopping(r.Context())
+	ctx := r.Context()
+	vehicles, err := s.store.ListVehicles(ctx)
 	if err != nil {
 		return err
 	}
+	entries, err := s.store.ListShopping(ctx)
+	if err != nil {
+		return err
+	}
+	// Its address only: shoppingVehicle without the vehicle worked on.
+	vid := vehicleParam(r.URL.Query())
+	if !slices.ContainsFunc(vehicles, func(v stock.Vehicle) bool { return v.ID == vid }) {
+		vid = 0
+	}
+	entries, _ = stock.ShoppingFor(entries, vid)
+	var names map[int64]string
+	if vid == 0 {
+		names = map[int64]string{}
+		for _, v := range activeVehicles(vehicles) {
+			names[v.ID] = v.Name
+		}
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, err = w.Write([]byte(stock.ExportShoppingText(entries)))
+	_, err = w.Write([]byte(stock.ExportShoppingText(entries, names)))
 	return err
 }

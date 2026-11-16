@@ -28,7 +28,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	kitPath := rec.Header().Get("Location")
 	expect(t, a.get(kitPath), http.StatusOK, "1 part short", "1\u202f175 ml", "Not done yet")
 	expect(t, a.get("/"), http.StatusOK, "Oil service", "Upcoming service")
-	expect(t, a.get("/shopping"), http.StatusOK, "Short for KTM 390: Oil service")
+	expect(t, a.get("/shopping"), http.StatusOK, "Short for the Oil service kit")
 
 	// Logging the service fails while oil is short.
 	svc := url.Values{
@@ -513,7 +513,7 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 
 	// Clicking "Add to shopping list" on the washer's item page suggests the 2 pcs needed by the intermediate tier.
 	expect(t, a.post(itemPath(washerID)+"/shopping", nil), http.StatusSeeOther)
-	expect(t, a.get("/shopping"), http.StatusOK, "Intermediate Crush Washer", "2 pcs", "Short for KTM 390: Warranty service")
+	expect(t, a.get("/shopping"), http.StatusOK, "Intermediate Crush Washer", "2 pcs", "Short for the Warranty service kit")
 }
 
 func TestServiceShortPartsShoppingForm(t *testing.T) {
@@ -538,23 +538,23 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 		`id="service-short-form"`,
 		`value="`+itoa(oil)+`"`,
 		`value="1175"`,
-		"Short for Oil service",
+		"Short for the Oil service",
 	)
 
 	// Post the shortfall to /shopping/suggestions as the form button does
 	rec = a.post("/shopping/suggestions", url.Values{
 		"item_id": {itoa(oil)},
 		"qty":     {"1175"},
-		"note":    {"Short for Oil service"},
+		"note":    {"Short for the Oil service"},
 	})
 	expect(t, rec, http.StatusSeeOther)
-	expect(t, a.get("/shopping"), http.StatusOK, "Silkolene", "1\u202f175 ml", "Short for Oil service")
+	expect(t, a.get("/shopping"), http.StatusOK, "Silkolene", "1\u202f175 ml", "Short for the Oil service")
 
 	// The button posts with htmx, so the service form and what was typed
 	// stay: no redirect, the message comes as a toast.
 	expect(t, a.post("/services", svc), http.StatusUnprocessableEntity, `hx-post="/shopping/suggestions"`)
 	rec = a.post("/shopping/suggestions", url.Values{
-		"item_id": {itoa(oil)}, "qty": {"1500"}, "note": {"Short for Oil service"},
+		"item_id": {itoa(oil)}, "qty": {"1500"}, "note": {"Short for the Oil service"},
 	}, "HX-Request", "true")
 	expect(t, rec, http.StatusNoContent)
 	if loc := rec.Header().Get("HX-Redirect") + rec.Header().Get("Location"); loc != "" {

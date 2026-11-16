@@ -1,24 +1,33 @@
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
 <div class="page-head">
   <div class="page-title">
-    <h1>Shopping</h1>
-    <p class="sub">What to buy before the next job. Marking an entry bought adds it to stock.</p>
+    <h1>{{with $d.TitleName}}{{.}} shopping{{else}}Shopping{{end}}</h1>
+    <p class="sub">What to buy{{with $d.VehicleName}} for {{.}} (General too){{end}} before the next job. Marking an entry bought adds it to stock.</p>
   </div>
   <div class="actions">
-    {{if $d.Entries}}<a class="btn" href="/shopping/export.txt" data-copy-url="/shopping/export.txt">{{icon "copy"}} Copy as text</a>{{end}}
+    {{if $d.Entries}}{{$export := withQuery "/shopping/export.txt" ($d.VehicleQuery $d.VehicleID)}}<a class="btn" href="{{$export}}" data-copy-url="{{$export}}">{{icon "copy"}} Copy as text</a>{{end}}
   </div>
 </div>
+{{/* While a vehicle is worked on, the bar is the vehicle control. */}}
+{{if and (gt (len $d.Vehicles) 1) (not .WorkingOn)}}
+<div class="chips mb" role="group" aria-label="Filter by vehicle">
+  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/shopping" ($d.VehicleQuery 0)}}">All vehicles</a>
+  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/shopping" ($d.VehicleQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+</div>
+{{end}}
 
 <div class="split">
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>{{icon "shopping-cart"}} On the list</h2><span class="muted small">{{plural (len $d.Entries) "entry"}}</span></div>
+      {{/* A vehicle's part says what it leaves out: at the shop, the rest
+           of the list is one tap away (All vehicles, or the bar's ×). */}}
+      <div class="card-head"><h2>{{icon "shopping-cart"}} On the list</h2><span class="muted small">{{plural (len $d.Entries) "entry"}}{{with $d.Others}} · {{.}} more for other vehicles{{end}}</span></div>
       {{if $d.Entries}}
       <ul class="list">
         {{range $d.Entries}}{{$entry := .}}
         <li>
           <span class="grow">
-            {{if .ItemID}}<a class="title" href="/items/{{.ItemID}}">{{.Title}}</a>{{else}}<span class="title">{{.Title}}</span>{{end}}
+            <span class="title-row">{{if .ItemID}}<a class="title" href="/items/{{.ItemID}}">{{.Title}}</a>{{else}}<span class="title">{{.Title}}</span>{{end}}{{range $d.Chips .VehicleIDs}}{{template "chip" .}}{{end}}</span>
             {{with .Note}}<span class="meta">{{.}}</span>{{end}}
           </span>
           <span class="end qty">{{with .Quantity}}{{qty . $entry.ItemUnit}}{{end}}</span>
@@ -86,7 +95,7 @@
       {{range $d.Suggestions}}
       <li>
         <span class="grow">
-          <a class="title" href="/items/{{.Item.ID}}">{{.Item.DisplayName}}</a>
+          <span class="title-row"><a class="title" href="/items/{{.Item.ID}}">{{.Item.DisplayName}}</a>{{range $d.Chips .VehicleIDs}}{{template "chip" .}}{{end}}</span>
           <span class="stock-line">{{template "stock-badge" (stockBadge .Item true)}}</span>
           <span class="meta">{{join .Reasons " · "}}{{if .Listed}} · {{qty .Listed .Item.Unit}} already listed{{end}}</span>
         </span>
@@ -99,7 +108,7 @@
       {{end}}
     </ul>
     {{else}}
-    <div class="card-body muted small">Items below their minimum, and parts missing for your service kits, show up here.</div>
+    <div class="card-body muted small">Items below their minimum, and parts missing for {{with $d.VehicleName}}{{.}}'s{{else}}your{{end}} service kits, show up here.</div>
     {{end}}
   </section>
 </div>

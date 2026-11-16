@@ -225,7 +225,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 		v.WorkingCookie = workingCookieValue(r)
 	}
 	if list, err := s.store.ListShopping(r.Context()); err == nil {
-		v.ShoppingCount = len(list)
+		// The vehicle worked on's part, which the Shopping link opens.
+		var working int64
+		if v.WorkingOn != nil {
+			working = v.WorkingOn.ID
+		}
+		part, _ := stock.ShoppingFor(list, working)
+		v.ShoppingCount = len(part)
 	}
 	if n, err := s.store.CountTrash(r.Context()); err == nil {
 		v.TrashCount = n

@@ -11,16 +11,25 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
 
+// shoppingSelect reads an entry with the vehicles it is for: its item's
+// tags, and the active vehicles whose active kits use the item (as ListKits
+// lists them by default). stock.ShoppingEntry.For decides from them.
 const shoppingSelect = `
-SELECT e.id, e.version, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit), e.free_text,
-       e.quantity, e.note, e.created_at
+SELECT e.id, e.version, e.item_id, COALESCE(i.brand, ''), COALESCE(i.name, ''), COALESCE(i.unit, e.unit),
+       ARRAY(SELECT iv.vehicle_id FROM item_vehicles iv WHERE iv.item_id = e.item_id ORDER BY 1),
+       ARRAY(SELECT DISTINCT k.vehicle_id FROM service_kit_lines kl
+             JOIN service_kits k ON k.id = kl.kit_id
+             JOIN vehicles v ON v.id = k.vehicle_id
+             WHERE kl.item_id = e.item_id AND k.archived_at IS NULL AND v.archived_at IS NULL ORDER BY 1),
+       e.free_text, e.quantity, e.note, e.created_at
 FROM shopping_entries e
 LEFT JOIN items i ON i.id = e.item_id`
 
 func scanShopping(row pgx.Row) (stock.ShoppingEntry, error) {
 	var e stock.ShoppingEntry
 	var brand, name string
-	err := row.Scan(&e.ID, &e.Version, &e.ItemID, &brand, &name, &e.ItemUnit, &e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt)
+	err := row.Scan(&e.ID, &e.Version, &e.ItemID, &brand, &name, &e.ItemUnit, &e.ItemVehicleIDs, &e.KitVehicleIDs,
+		&e.FreeText, &e.Quantity, &e.Note, &e.CreatedAt)
 	if name != "" {
 		e.ItemName = displayName(brand, name)
 	}

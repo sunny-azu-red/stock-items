@@ -25,6 +25,7 @@ type dashboardPage struct {
 	Recent          []stock.Movement
 	Stats           store.Stats
 	SuggestionCount int
+	ShoppingCount   int // entries on the vehicle's part of the shopping list
 	// VehicleID is the vehicle the dashboard is about (0 for all), and
 	// VehicleName its name; Working the vehicle being worked on.
 	VehicleID   int64
@@ -38,10 +39,10 @@ type dashboardPage struct {
 // Link is the list a tile or a "more" link opens: path with extra (an
 // encoded query) for the dashboard's vehicle, so the number on the tile is
 // the number of rows it opens. The stock and the activity include General,
-// like the tiles.
+// like the tiles (a vehicle's part of the shopping list always does).
 func (p dashboardPage) Link(path, extra string) template.URL {
 	q, _ := url.ParseQuery(extra)
-	if path != "/services" && p.VehicleID != 0 {
+	if path != "/services" && path != "/shopping" && p.VehicleID != 0 {
 		q.Set("general", "1")
 	}
 	setVehicleParam(q, p.VehicleID)
@@ -96,11 +97,14 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 
 	p := dashboardPage{
 		Vehicles: activeVehicles(vehicles), VehicleMap: vehicleMap(vehicles),
-		Recent: recent, Stats: stats, SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping), *s.today())),
-		VehicleID: vid, Working: working,
+		Recent: recent, Stats: stats, VehicleID: vid, Working: working,
+		// The vehicle's part of the shopping list, as its links open it;
+		// what is listed counts whoever it was added for.
+		SuggestionCount: len(stock.SuggestPurchases(items, kits, listedQuantities(shopping), *s.today(), vid)),
 	}
-	// The suggestions stay the whole shopping list's; the rest is the
-	// vehicle's: what fits it, and its own kits.
+	part, _ := stock.ShoppingFor(shopping, vid)
+	p.ShoppingCount = len(part)
+	// The rest is the vehicle's too: what fits it, and its own kits.
 	if vid != 0 {
 		p.VehicleName = v.Name
 		items = slices.DeleteFunc(items, func(it stock.Item) bool { return !it.Fits(vid) })

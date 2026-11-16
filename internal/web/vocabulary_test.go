@@ -33,6 +33,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `\bService log\b`, use: `"Service history"`},
 		{re: `Running low`, use: `"Low stock"`},
 		{re: `Below minimum of`, use: `"Below the minimum of" (the stock badge's words)`},
+		{re: `"Short for "\s*\+`, use: `stock.ShortNote: "Short for the Air Filter kit" (what needs it; its vehicle is a chip, never text)`},
 		{re: `since you opened this`, use: `"since you opened it"`},
 		{re: `aria-label="Kind"`, use: `"Type"`, uiOnly: true},
 		{re: `Activity log`, use: `"Activity"`},

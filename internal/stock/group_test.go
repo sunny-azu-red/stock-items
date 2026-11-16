@@ -118,14 +118,23 @@ func TestDisplayName(t *testing.T) {
 
 func TestExportShoppingText(t *testing.T) {
 	two, oil := 2.0, 4000.0
-	got := ExportShoppingText([]ShoppingEntry{
-		{ItemName: "OEM Oil Filter", ItemUnit: UnitPiece, Quantity: &two},
-		{ItemName: "Motorex Power Synt", ItemUnit: UnitML, Quantity: &oil, Note: "4 L can"},
+	id := int64(1)
+	entries := []ShoppingEntry{
+		{ItemID: &id, ItemName: "OEM Oil Filter", ItemUnit: UnitPiece, Quantity: &two, ItemVehicleIDs: []int64{2}, KitVehicleIDs: []int64{1, 3}},
+		{ItemID: &id, ItemName: "Motorex Power Synt", ItemUnit: UnitML, Quantity: &oil, Note: "4 L can"},
 		{FreeText: "Chain lube"},
-	})
+	}
+	got := ExportShoppingText(entries, nil)
 	want := "Shopping list\n-------------\n2 pcs - OEM Oil Filter\n4 L - Motorex Power Synt (4 L can)\n- Chain lube\n"
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	// The whole list says whose each part is; an archived vehicle (3, no
+	// name) is left out.
+	got = ExportShoppingText(entries, map[int64]string{1: "GreyJoy", 2: "KillJoy"})
+	want = "Shopping list\n-------------\n2 pcs - OEM Oil Filter [GreyJoy, KillJoy]\n4 L - Motorex Power Synt (4 L can)\n- Chain lube\n"
+	if got != want {
+		t.Errorf("with names, got\n%s\nwant\n%s", got, want)
 	}
 }
 

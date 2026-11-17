@@ -8,6 +8,7 @@
     </div>
   </div>
   <div class="actions">
+    <a class="btn btn-ghost" href="/services">{{icon "arrow-left"}} Services</a>
     <a class="btn" href="/services/{{$s.ID}}/edit">{{icon "pencil"}} Edit</a>
     <form class="inline-form" method="post" action="/services/{{$s.ID}}/delete">
       <input type="hidden" name="version" value="{{$s.Version}}">

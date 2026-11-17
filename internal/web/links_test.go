@@ -100,6 +100,25 @@ func TestChipAndBadgeLinks(t *testing.T) {
 		})
 	}
 
+	// A record's page starts its buttons with the way back to where it
+	// belongs, whichever page it was opened from.
+	for _, c := range []struct{ path, back string }{
+		{"/items/" + itoa(filter), `<a class="btn btn-ghost" href="/stock"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> Stock</a>`},
+		{"/services/" + itoa(svc), `<a class="btn btn-ghost" href="/services"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> Services</a>`},
+		{"/kits/" + itoa(kit), `<a class="btn btn-ghost" href="/vehicles/` + itoa(k390) + `"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> KTM 390</a>`},
+		{"/vehicles/" + itoa(k390), `<a class="btn btn-ghost" href="/vehicles"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> Vehicles</a>`},
+	} {
+		t.Run("back from "+c.path, func(t *testing.T) {
+			rec := a.get(c.path)
+			expect(t, rec, http.StatusOK)
+			body := rec.Body.String()
+			i := strings.Index(body, `<div class="actions">`)
+			if i < 0 || !strings.HasPrefix(strings.TrimSpace(body[i+len(`<div class="actions">`):]), c.back) {
+				t.Errorf("%s: the buttons don't start with %s", c.path, c.back)
+			}
+		})
+	}
+
 	moves, err := a.store.ListMovements(ctx, store.MovementFilter{ItemID: filter, Kind: stock.MoveStarting})
 	if err != nil || len(moves) != 1 {
 		t.Fatalf("starting stock = %v, %v", moves, err)

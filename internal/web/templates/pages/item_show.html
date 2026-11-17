@@ -12,6 +12,7 @@
     </div>
   </div>
   <div class="actions">
+    <a class="btn btn-ghost" href="/stock">{{icon "arrow-left"}} Stock</a>
     <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
     <a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
     {{if $it.Archived}}

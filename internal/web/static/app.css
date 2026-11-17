@@ -247,11 +247,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 14px var(--inset); border-bottom: 1px solid var(--border); }
 .card-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
 .card-head .meta { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
-/* A small button (30px) hangs into the padding, so the bar is as tall as
-   one with text alone (a 20px line). */
-.card-head .btn-sm { margin-block: -5px; }
-.card-head .badge { margin-block: -3px; } /* 26px, in the heading's 20px line: every heading bar one height */
-.card-head .inline-form { display: flex; } /* a button in a form: no line box around it to add height */
+/* A badge (26px, the item page's On shopping list) hangs into the padding,
+   so the bar is as tall as one with text alone (a 20px line). Buttons go in
+   the card's footer (.card-actions), so a heading never wraps for one. */
+.card-head .badge { margin-block: -3px; }
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
 .reset-link, .card-head a.sort-reset { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 600; text-decoration: none; }
@@ -826,6 +825,14 @@ a.kit-row.muted:hover { color: var(--muted); }
 .card-foot .total { flex: 1; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
 .card-foot .pager + .total { flex: none; }
 .card-foot .total strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* What you do with a card's list, under it (Add kit, Add 2 missing, Add
+   all), from the left like the pager, at the footer's height: 7 + 30px
+   button + 7, or 9 + 26px badge + 9. A button in a form is the form's only
+   box, with no line box around it to add height. */
+.card-actions { justify-content: flex-start; }
+.card-foot.card-actions { padding-block: 7px; }
+.card-foot.card-actions:has(> .badge) { padding-block: 9px; }
+.card-actions .inline-form { display: flex; }
 
 .flash { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-weight: 500; }
 .flash-success { background: var(--ok-soft); color: var(--ok); }
@@ -840,7 +847,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
 
 @media print {
-  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-head .btn, .card-head .inline-form, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
+  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-actions, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
   .shell { display: block; }
   .card { box-shadow: none; }
 }

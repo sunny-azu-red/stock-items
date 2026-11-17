@@ -179,7 +179,8 @@ func TestServicesNoLabourNoFooter(t *testing.T) {
 	k390, _ := a.seed()
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
 	expectNot(t, a.get("/services"), "card-foot")
-	expectNot(t, a.get("/vehicles/"+itoa(k390)), "card-foot")
+	// The vehicle page's Service kits keeps its footer for Add kit.
+	expectNot(t, a.get("/vehicles/"+itoa(k390)), `<span class="total">`, "Labour in total")
 }
 
 func TestServicesPaging(t *testing.T) {
@@ -684,6 +685,11 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 	}
 	if n := shortfallForms(page); n != 1 {
 		t.Errorf("the kit page has %d Add missing forms, want the Parts card's only", n)
+	}
+	// It is under the parts, in the card's footer, not in its heading.
+	body := page.Body.String()
+	if foot, form := strings.Index(body, `<div class="card-foot card-actions">`), strings.Index(body, `/shortfall"`); foot < 0 || form < foot {
+		t.Errorf("Add missing isn't in the card's footer")
 	}
 
 	// The oil is listed already: only the pads are left to add.

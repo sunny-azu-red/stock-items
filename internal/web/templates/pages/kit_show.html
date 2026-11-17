@@ -24,24 +24,27 @@
 {{end}}
 {{define "kit-parts-card"}}
 <section class="card">
+  {{$shop := and .CanShop .Readiness.ShortLines}}
   <div class="card-head">
     <h2>{{icon "package"}} {{.Title}}</h2>
-    <span class="flex">
-      {{$shop := and .CanShop .Readiness.ShortLines}}{{$add := toList .Lines .Listed}}
-      {{if and $shop $add}}
-      <form class="inline-form" method="post" action="/kits/{{.KitID}}/shortfall">
-        <input type="hidden" name="intermediate" value="{{.Inter}}">
-        <button class="btn btn-sm" type="submit" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add {{$add}} missing</button>
-      </form>
-      {{else if $shop}}<a class="badge badge-accent" href="/shopping" title="Everything missing is on the shopping list">{{icon "shopping-cart"}} On shopping list</a>
-      {{end}}
-      <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.Ready}} · all in stock{{else if and .Readiness.ShortLines (not $shop)}} · {{.Readiness.ShortLines}} missing{{end}}</span></span>
-    </span>
+    <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.Ready}} · all in stock{{else if and .Readiness.ShortLines (not $shop)}} · {{.Readiness.ShortLines}} missing{{end}}</span></span>
   </div>
   {{if .Lines}}
   {{template "kit-parts-table" (dict "Lines" .Lines "Sort" .Sort "Listed" .Listed)}}
   {{else}}
   <div class="card-body muted small">{{.EmptyText}} <a href="/kits/{{.KitID}}/edit">Add the parts</a> {{.EmptyAdd}}</div>
+  {{end}}
+  {{/* What you do with the parts sits under them (docs/design.md, "Card footer"). */}}
+  {{if $shop}}
+  <div class="card-foot card-actions">
+    {{with toList .Lines .Listed}}
+    <form class="inline-form" method="post" action="/kits/{{$.KitID}}/shortfall">
+      <input type="hidden" name="intermediate" value="{{$.Inter}}">
+      <button class="btn btn-sm" type="submit" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add {{.}} missing</button>
+    </form>
+    {{else}}<a class="badge badge-accent" href="/shopping" title="Everything missing is on the shopping list">{{icon "shopping-cart"}} On shopping list</a>
+    {{end}}
+  </div>
   {{end}}
 </section>
 {{end}}

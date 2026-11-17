@@ -83,15 +83,7 @@
   </div>
 
   <section class="card">
-    <div class="card-head"><h2>{{icon "triangle-alert"}} Suggestions</h2>
-      {{if gt (len $d.Suggestions) 1}}
-      <form class="inline-form" method="post" action="/shopping/suggestions">
-        {{with $d.VehicleID}}<input type="hidden" name="v" value="{{.}}">{{end}}
-        {{range $d.Suggestions}}<input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}"><input type="hidden" name="note" value="{{join .Reasons "; "}}">{{end}}
-        <button class="btn btn-sm" type="submit">Add all</button>
-      </form>
-      {{end}}
-    </div>
+    <div class="card-head"><h2>{{icon "triangle-alert"}} Suggestions</h2></div>
     {{if $d.Suggestions}}
     <ul class="list">
       {{range $d.Suggestions}}
@@ -112,6 +104,15 @@
     </ul>
     {{else}}
     <div class="card-body muted small">Items below their minimum, and parts missing for {{with $d.VehicleName}}{{.}}'s{{else}}your{{end}} service kits, show up here.</div>
+    {{end}}
+    {{if gt (len $d.Suggestions) 1}}
+    <div class="card-foot card-actions">
+      <form class="inline-form" method="post" action="/shopping/suggestions">
+        {{with $d.VehicleID}}<input type="hidden" name="v" value="{{.}}">{{end}}
+        {{range $d.Suggestions}}<input type="hidden" name="item_id" value="{{.Item.ID}}"><input type="hidden" name="qty" value="{{num .Quantity}}"><input type="hidden" name="note" value="{{join .Reasons "; "}}">{{end}}
+        <button class="btn btn-sm" type="submit">Add all</button>
+      </form>
+    </div>
     {{end}}
   </section>
 </div>

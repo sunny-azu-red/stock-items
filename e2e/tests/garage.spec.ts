@@ -221,7 +221,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await expect(page.locator(".page-head")).not.toContainText("Add missing");
   await page.getByRole("button", { name: "Add 1 missing" }).click();
   await expect(page.locator(".flash-success")).toContainText("missing");
-  await expect(page.locator(".card-head").getByRole("link", { name: "On shopping list" })).toBeVisible();
+  await expect(page.locator(".card-actions").getByRole("link", { name: "On shopping list" })).toBeVisible();
   await page.goto("/shopping");
   const entry = page.locator(".list li").filter({ hasText: "Silkolene" }).first();
   await expect(entry).toContainText("175 ml");

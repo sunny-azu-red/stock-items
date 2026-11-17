@@ -38,6 +38,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `aria-label="Kind"`, use: `"Type"`, uiOnly: true},
 		{re: `Activity log`, use: `"Activity"`},
 		{re: `Save changes`, use: `"Save <thing>"`},
+		{re: `\bparts? (is |are )?short\b|\b\d+ short\b|"part"\}\} short`, use: `"missing": "1 part missing", "2 parts are missing from stock" (only a shopping reason says "Short for the Air Filter kit")`},
 		{re: `Add missing to (the )?shopping list`, use: `"Add missing" (a parts card's button, and the service form's; the cart icon and its tooltip say where)`},
 		{re: `\bWhat was done\b`, use: `"Work performed"`},
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},

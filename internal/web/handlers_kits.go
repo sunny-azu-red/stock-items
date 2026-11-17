@@ -494,9 +494,10 @@ type kitPage struct {
 	View         kitView
 	Vehicle      stock.Vehicle
 	Services     []stock.ServiceRecord
-	ServiceCount int             // all services logged with the kit, on any vehicle
-	Lines        []stock.KitLine // the kit's lines in the order asked for
-	InterLines   []stock.KitLine // the kit's intermediate lines in the order asked for
+	ServiceCount int               // all services logged with the kit, on any vehicle
+	Lines        []stock.KitLine   // the kit's lines in the order asked for
+	InterLines   []stock.KitLine   // the kit's intermediate lines in the order asked for
+	Listed       map[int64]float64 // what the shopping list asks for of each item (stock.KitLine.Listed)
 	Sort         sortHeads
 }
 
@@ -531,9 +532,20 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	shopping, err := s.store.ListShopping(ctx)
+	if err != nil {
+		return err
+	}
+	listed := map[int64]float64{}
+	for _, e := range shopping {
+		if e.ItemID != nil && e.Quantity != nil {
+			listed[*e.ItemID] = *e.Quantity
+		}
+	}
 	order := kitSorts.parse(r.URL.Query())
 	p := kitPage{
-		View: s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
+		Listed: listed,
+		View:   s.kitViews([]stock.Kit{k}, []stock.Vehicle{v})[0], Vehicle: v, Services: done, ServiceCount: count,
 		Lines:      stock.SortKitLines(k.Lines, order.Key, order.Desc),
 		InterLines: stock.SortKitLines(k.InterLines, order.Key, order.Desc),
 		Sort:       sortHeads{Order: order, Path: kitPath(id)},

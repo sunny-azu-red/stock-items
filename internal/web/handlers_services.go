@@ -281,7 +281,7 @@ func serviceConflict(f *serviceForm, err error) bool {
 				})
 			}
 		}
-		f.Errors.Add("lines", fmt.Sprintf("%d %s short", len(shorts.Parts), pluralWord(len(shorts.Parts), "part is", "parts are")))
+		f.Errors.Add("lines", fmt.Sprintf("%d %s missing from stock", len(shorts.Parts), pluralWord(len(shorts.Parts), "part is", "parts are")))
 		return true
 	}
 	return formConflict(f.Errors, err)

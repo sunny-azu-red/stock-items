@@ -35,6 +35,31 @@ func ReadinessOf(lines []KitLine) Readiness {
 	return r
 }
 
+// Listed reports whether what the line is missing is on the shopping list:
+// listed holds the amount each item's entry asks for (base units; an entry
+// without an amount isn't in it). Lines that miss nothing, and archived
+// ones, which nothing is added for, are never listed.
+func (l KitLine) Listed(listed map[int64]float64) bool {
+	short := l.Short()
+	if short <= 0 || l.Archived {
+		return false
+	}
+	q, ok := listed[l.ItemID]
+	return ok && q >= short
+}
+
+// ToList counts the lines that miss something not yet on the shopping list
+// (see Listed): what the kit's Add missing would add.
+func ToList(lines []KitLine, listed map[int64]float64) int {
+	n := 0
+	for _, l := range lines {
+		if l.Short() > 0 && !l.Archived && !l.Listed(listed) {
+			n++
+		}
+	}
+	return n
+}
+
 // ActiveLines returns the lines for whichever schedule (Intermediate or
 // Full) is due next.
 func (k Kit) ActiveLines(currentOdo *int, today time.Time) []KitLine {

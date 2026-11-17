@@ -530,3 +530,34 @@ func TestIntermediateScheduleEdges(t *testing.T) {
 		t.Errorf("alternating, intermediate by months only: full due = %+v, want overdue at 10 000 km / 2027-01-01", due)
 	}
 }
+
+// A line is listed when its entry asks for at least what it misses.
+func TestKitLineListed(t *testing.T) {
+	listed := map[int64]float64{1: 2, 2: 1.5, 3: 5}
+	tests := []struct {
+		name string
+		line KitLine
+		want bool
+	}{
+		{"listed more", KitLine{ItemID: 3, Need: 2, Have: 0}, true},
+		{"listed exactly", KitLine{ItemID: 1, Need: 3.5, Have: 1.5}, true},
+		{"listed less", KitLine{ItemID: 2, Need: 3.5, Have: 1.5}, false},
+		{"not on the list", KitLine{ItemID: 4, Need: 1, Have: 0}, false},
+		{"misses nothing", KitLine{ItemID: 3, Need: 1, Have: 1}, false},
+		{"archived", KitLine{ItemID: 3, Need: 2, Have: 0, Archived: true}, false},
+	}
+	lines := make([]KitLine, len(tests))
+	for i, tt := range tests {
+		if got := tt.line.Listed(listed); got != tt.want {
+			t.Errorf("%s: Listed = %v, want %v", tt.name, got, tt.want)
+		}
+		lines[i] = tt.line
+	}
+	// Listed less and not on the list are left to add.
+	if n := ToList(lines, listed); n != 2 {
+		t.Errorf("ToList = %d, want 2", n)
+	}
+	if n := ToList(lines, nil); n != 4 {
+		t.Errorf("ToList with nothing listed = %d, want 4", n)
+	}
+}

@@ -508,7 +508,7 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 		fields := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
 			"part_item": {itoa(oil)}, "part_qty": {"2"}, "part_unit": {"l"}}
 		rec := a.post("/services", with(fields, key, ""))
-		expect(t, rec, http.StatusUnprocessableEntity, "1 part is short")
+		expect(t, rec, http.StatusUnprocessableEntity, "1 part is missing from stock")
 		if keys := keysIn(t, rec.Body.String(), "/services"); len(keys) != 1 || keys[0] != key {
 			t.Errorf("keys after the error = %v, want %s", keys, key)
 		}

@@ -5,7 +5,7 @@
   <tbody>
   {{range .Lines}}
   <tr>
-    <td class="status-col">{{if .Archived}}<span class="status-icon status-muted">{{icon "archive"}}</span>{{else if .Short}}<span class="status-icon status-short">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok">{{icon "check"}}</span>{{end}}</td>
+    <td class="status-col">{{if .Archived}}<span class="status-icon status-muted" role="img" title="Archived item" aria-label="Archived item">{{icon "archive"}}</span>{{else if .Listed $.Listed}}{{$t := print (qty .Short .Unit) " missing, on the shopping list"}}<span class="status-icon status-listed" role="img" title="{{$t}}" aria-label="{{$t}}">{{icon "shopping-cart"}}</span>{{else if .Short}}{{$t := print (qty .Short .Unit) " missing"}}<span class="status-icon status-short" role="img" title="{{$t}}" aria-label="{{$t}}">{{icon "x"}}</span>{{else}}<span class="status-icon status-ok" role="img" title="Enough in stock" aria-label="Enough in stock">{{icon "check"}}</span>{{end}}</td>
     <td>
       <div class="title-row">
         <a href="/items/{{.ItemID}}">{{.ItemName}}</a>
@@ -27,17 +27,19 @@
   <div class="card-head">
     <h2>{{icon "package"}} {{.Title}}</h2>
     <span class="flex">
-      {{if and .CanShop .Readiness.ShortLines}}
+      {{$shop := and .CanShop .Readiness.ShortLines}}{{$add := toList .Lines .Listed}}
+      {{if and $shop $add}}
       <form class="inline-form" method="post" action="/kits/{{.KitID}}/shortfall">
-        {{if .Inter}}<input type="hidden" name="intermediate" value="{{.Inter}}">{{end}}
-        <button class="btn btn-sm" type="submit" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add missing</button>
+        <input type="hidden" name="intermediate" value="{{.Inter}}">
+        <button class="btn btn-sm" type="submit" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add {{$add}} missing</button>
       </form>
+      {{else if $shop}}<a class="badge badge-accent" href="/shopping" title="Everything missing is on the shopping list">{{icon "shopping-cart"}} On shopping list</a>
       {{end}}
-      <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.ShortLines}} · {{.Readiness.ShortLines}} short{{end}}</span></span>
+      <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.Ready}} · all in stock{{else if and .Readiness.ShortLines (not $shop)}} · {{.Readiness.ShortLines}} missing{{end}}</span></span>
     </span>
   </div>
   {{if .Lines}}
-  {{template "kit-parts-table" (dict "Lines" .Lines "Sort" .Sort)}}
+  {{template "kit-parts-table" (dict "Lines" .Lines "Sort" .Sort "Listed" .Listed)}}
   {{else}}
   <div class="card-body muted small">{{.EmptyText}} <a href="/kits/{{.KitID}}/edit">Add the parts</a> {{.EmptyAdd}}</div>
   {{end}}
@@ -47,7 +49,7 @@
 <div class="page-head">
   <div class="page-title">
     <h1>{{$k.Name}}</h1>
-    <div class="sub flex">{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{template "ready-badge" $r}}{{if and $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} short</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} short</span>{{end}}{{end}}{{end}}</div>
+    <div class="sub flex">{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if $k.Archived}}{{else if $d.Vehicle.Archived}}{{template "ready-badge" $r}}{{else}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{if $k.HasIntermediate}}{{template "schedule-ready-badge" (dict "R" $r "Name" (or (and $d.View.NextInter "Intermediate") "Full"))}}{{else}}{{template "ready-badge" $r}}{{end}}{{if and $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} missing</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} missing</span>{{end}}{{end}}{{end}}</div>
   </div>
   <div class="actions">
     <a class="btn btn-ghost" href="/vehicles/{{$d.Vehicle.ID}}">{{icon "arrow-left"}} {{$d.Vehicle.Name}}</a>
@@ -69,9 +71,9 @@
 
 <div class="split">
   <div class="stack">
-    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "0")}}
+    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "0" "Listed" $d.Listed)}}
     {{if $k.HasIntermediate}}
-    {{template "kit-parts-card" (dict "Title" "Intermediate parts" "KitID" $k.ID "Lines" $d.InterLines "Readiness" $ir "Sort" $d.Sort "EmptyText" "No intermediate parts yet." "EmptyAdd" "the intermediate job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "1")}}
+    {{template "kit-parts-card" (dict "Title" "Intermediate parts" "KitID" $k.ID "Lines" $d.InterLines "Readiness" $ir "Sort" $d.Sort "EmptyText" "No intermediate parts yet." "EmptyAdd" "the intermediate job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "1" "Listed" $d.Listed)}}
     {{end}}
   </div>
 

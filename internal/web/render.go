@@ -187,6 +187,8 @@ func (s *Server) funcs() template.FuncMap {
 			return map[string]any{"Bytes": maxPhotoFileBytes, "Message": photoTooLarge, "Side": photoMaxSide}
 		},
 		"subUnits": func() []stock.SubUnit { return stock.SubUnits },
+		// toList counts a kit's lines missing more than the shopping list asks for.
+		"toList": stock.ToList,
 		// step is how much quick -/+ changes an item's stock, e.g. "100 ml".
 		"step":       func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
 		"join":       strings.Join,

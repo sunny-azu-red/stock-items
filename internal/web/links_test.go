@@ -137,4 +137,13 @@ func TestChipAndBadgeLinks(t *testing.T) {
 			}
 		})
 	}
+
+	// An archived item or vehicle leads back to the list that shows it.
+	t.Run("back from archived", func(t *testing.T) {
+		item, vehicle := "/items/"+itoa(filter), "/vehicles/"+itoa(k390)
+		expect(t, a.post(item+"/archive", url.Values{"version": {a.versionOf(item + "/archive")}}), http.StatusSeeOther)
+		expect(t, a.post(vehicle+"/archive", url.Values{"version": {a.versionOf(vehicle + "/archive")}}), http.StatusSeeOther)
+		expect(t, a.get(item), http.StatusOK, `<a class="btn btn-ghost" href="/stock?archived=1">`)
+		expect(t, a.get(vehicle), http.StatusOK, `<a class="btn btn-ghost" href="/vehicles?archived=1">`)
+	})
 }

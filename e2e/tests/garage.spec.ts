@@ -214,13 +214,14 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await page.getByRole("button", { name: "Save kit" }).click();
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
-  await expect(page.locator(".page-head")).toContainText("1 part short");
+  await expect(page.locator(".page-head")).toContainText("1 part missing");
   await expect(page.locator(".page-head")).toContainText("Not done yet");
   await page.screenshot({ path: testInfo.outputPath("kit-short.png"), fullPage: true });
 
   await expect(page.locator(".page-head")).not.toContainText("Add missing");
-  await page.getByRole("button", { name: "Add missing" }).click();
+  await page.getByRole("button", { name: "Add 1 missing" }).click();
   await expect(page.locator(".flash-success")).toContainText("missing");
+  await expect(page.locator(".card-head").getByRole("link", { name: "On shopping list" })).toBeVisible();
   await page.goto("/shopping");
   const entry = page.locator(".list li").filter({ hasText: "Silkolene" }).first();
   await expect(entry).toContainText("175 ml");

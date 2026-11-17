@@ -27,7 +27,11 @@
 
 {{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}
 
-{{define "ready-badge"}}{{if .Ready}}<span class="badge badge-ok">{{icon "check"}} Parts ready</span>{{else if eq .Lines 0}}<span class="badge badge-muted">No parts</span>{{else}}<span class="badge badge-danger">{{icon "x"}} {{plural .ShortLines "part"}} short</span>{{end}}{{end}}
+{{define "ready-badge"}}{{template "schedule-ready-badge" (dict "R" .)}}{{end}}
+
+{{/* A kit's ready badge for one of its schedules: dict "R" Readiness
+     "Name" ("Full", "Intermediate"; none for a kit with one schedule). */}}
+{{define "schedule-ready-badge"}}{{$r := .R}}{{$p := ""}}{{with .Name}}{{$p = print . ": "}}{{end}}{{if $r.Ready}}<span class="badge badge-ok">{{icon "check"}} {{if $p}}{{$p}}parts ready{{else}}Parts ready{{end}}</span>{{else if eq $r.Lines 0}}<span class="badge badge-muted">{{if $p}}{{$p}}no parts{{else}}No parts{{end}}</span>{{else}}<span class="badge badge-danger">{{icon "x"}} {{$p}}{{plural $r.ShortLines "part"}} missing</span>{{end}}{{end}}
 
 {{define "archived-badge"}}<span class="badge badge-muted"{{with .}} title="Archived {{date .}}"{{end}}>{{icon "archive"}} Archived</span>{{end}}
 

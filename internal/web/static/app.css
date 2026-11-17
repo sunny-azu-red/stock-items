@@ -250,6 +250,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 /* A small button (30px) hangs into the padding, so the bar is as tall as
    one with text alone (a 20px line). */
 .card-head .btn-sm { margin-block: -5px; }
+.card-head .badge { margin-block: -3px; } /* 26px, in the heading's 20px line: every heading bar one height */
 .card-head .inline-form { display: flex; } /* a button in a form: no line box around it to add height */
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
@@ -760,6 +761,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .status-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 .status-ok { background: var(--ok-soft); color: var(--ok); }
 .status-short { background: var(--danger-soft); color: var(--danger); }
+.status-listed { background: var(--accent-soft); color: var(--accent-strong); } /* missing, and on the shopping list */
 .status-muted { background: var(--surface-2); color: var(--muted); }
 /* A kit's parts: table cells vertically centered, keeping status icons,
    wrapped item names, and quantity amounts balanced across the row. */
@@ -838,7 +840,7 @@ a.kit-row.muted:hover { color: var(--muted); }
 .htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
 
 @media print {
-  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
+  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-head .btn, .card-head .inline-form, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
   .shell { display: block; }
   .card { box-shadow: none; }
 }

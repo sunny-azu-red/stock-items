@@ -14,7 +14,7 @@
     {{/* The way to the list. While a vehicle is worked on, the list and the
          other vehicles are out of view (working.go): this is its page, and
          the bar's × leads back to them. */}}
-    {{if not .WorkingOn}}<a class="btn btn-ghost" href="/vehicles">{{icon "arrow-left"}} Vehicles</a>{{end}}
+    {{if not .WorkingOn}}<a class="btn btn-ghost" href="/vehicles{{if $v.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Vehicles</a>{{end}}
     <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
     {{if not $v.Archived}}
     <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>

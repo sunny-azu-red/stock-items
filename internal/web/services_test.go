@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,7 +27,7 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
-	expect(t, a.get(kitPath), http.StatusOK, "1 part short", "1\u202f175 ml", "Not done yet")
+	expect(t, a.get(kitPath), http.StatusOK, "1 part missing", "1\u202f175 ml", "Not done yet")
 	expect(t, a.get("/"), http.StatusOK, "Oil service", "Upcoming service")
 	expect(t, a.get("/shopping"), http.StatusOK, "Short for the Oil service kit")
 
@@ -153,7 +154,7 @@ func TestPartRowsHaveUnits(t *testing.T) {
 	// Every short part is marked at once.
 	form := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"2", "3"}, "part_unit": {"l", ""}}
-	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are short",
+	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are missing from stock",
 		shortBadge("525 ml", "2 L"), shortBadge("1 pcs", "3 pcs"))
 }
 
@@ -351,10 +352,10 @@ func TestKitStatusIcons(t *testing.T) {
 	expect(t, svcPage, http.StatusOK,
 		"Brake kit",
 		`<span class="status-icon status-short"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span>`,
-		`<span class="badge badge-danger"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 1 part short</span>`,
+		`<span class="badge badge-danger"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 1 part missing</span>`,
 	)
 	expect(t, a.get(shortPath), http.StatusOK,
-		`<td class="status-col"><span class="status-icon status-short"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span></td>`,
+		`<td class="status-col"><span class="status-icon status-short" role="img" title="`,
 	)
 
 	// 3. Kit with ready parts.
@@ -374,7 +375,7 @@ func TestKitStatusIcons(t *testing.T) {
 		`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg> Parts ready</span>`,
 	)
 	expect(t, a.get(readyPath), http.StatusOK,
-		`<td class="status-col"><span class="status-icon status-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span></td>`,
+		`<td class="status-col"><span class="status-icon status-ok" role="img" title="Enough in stock" aria-label="Enough in stock"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span></td>`,
 		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Parts</h2>`,
 	)
 
@@ -382,7 +383,7 @@ func TestKitStatusIcons(t *testing.T) {
 	// Archive the item used in the ready kit.
 	expect(t, a.postV(fmt.Sprintf("/items/%d/archive", oil), nil), http.StatusSeeOther)
 	expect(t, a.get(readyPath), http.StatusOK,
-		`<td class="status-col"><span class="status-icon status-muted"><svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg></span></td>`,
+		`<td class="status-col"><span class="status-icon status-muted" role="img" title="Archived item" aria-label="Archived item"><svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg></span></td>`,
 	)
 
 	// 5. Item detail page: "Service kits" shows archived badge inline.
@@ -655,24 +656,71 @@ func TestKitPerTierShortfall(t *testing.T) {
 }
 
 // A kit's Add missing is its parts card's, also on a kit without an
-// intermediate schedule; the header has none.
+// intermediate schedule; the header has none. The button counts what isn't
+// on the shopping list yet, and once all is, the card says so instead.
 func TestKitAddMissingInPartsCard(t *testing.T) {
 	a := newApp(t)
 	a.seed()
+	ctx := context.Background()
 	k390 := a.vehicle(t, "KTM 390")
 	oil := itemID(t, a.store, "Silkolene") // 525 ml in stock
-	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil change"},
-		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"}})
+	rec := a.post("/items", url.Values{"name": {"Brake Pads"}, "unit": {"piece"}})
+	expect(t, rec, http.StatusSeeOther)
+	pads := mustID(t, rec.Header().Get("Location"))
+	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil change"},
+		"line_item": {itoa(oil), itoa(pads)}, "line_qty": {"1.7 L", "2"}})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
+	shortfallForms := func(page *httptest.ResponseRecorder) int { return strings.Count(page.Body.String(), `/shortfall"`) }
+	listedRows := func(page *httptest.ResponseRecorder) int {
+		return strings.Count(page.Body.String(), `status-listed`)
+	}
 
 	page := a.get(kitURL)
-	expect(t, page, http.StatusOK, `<input type="hidden" name="intermediate" value="0">`, "Add missing</button>")
-	if n := strings.Count(page.Body.String(), `/shortfall"`); n != 1 {
+	expect(t, page, http.StatusOK, `<input type="hidden" name="intermediate" value="0">`, "Add 2 missing</button>",
+		"title=\"1\u202f175 ml missing\"", `title="2 pcs missing"`, `aria-label="2 pcs missing"`)
+	if !strings.Contains(pageHead(t, page), "2 parts missing") {
+		t.Errorf("the header doesn't say 2 parts missing:\n%s", pageHead(t, page))
+	}
+	if n := shortfallForms(page); n != 1 {
 		t.Errorf("the kit page has %d Add missing forms, want the Parts card's only", n)
+	}
+
+	// The oil is listed already: only the pads are left to add.
+	if _, err := a.store.EnsureShopping(ctx, oil, 1175, ""); err != nil {
+		t.Fatal(err)
+	}
+	page = a.get(kitURL)
+	expect(t, page, http.StatusOK, "Add 1 missing</button>")
+	if n := listedRows(page); n != 1 {
+		t.Errorf("%d rows marked as listed, want the oil's", n)
 	}
 	if f := flashOf(t, a.post(kitURL+"/shortfall", url.Values{"intermediate": {"0"}})); f.Message != "Added 1 missing part to the shopping list" {
 		t.Errorf("Add missing: flash = %+v", f)
+	}
+
+	// All listed: the card links to the list, and both rows say so.
+	page = a.get(kitURL)
+	expect(t, page, http.StatusOK, `<a class="badge badge-accent" href="/shopping"`, "On shopping list</a>")
+	if n := shortfallForms(page); n != 0 {
+		t.Errorf("Add missing still offered with everything listed")
+	}
+	if n := listedRows(page); n != 2 {
+		t.Errorf("%d rows marked as listed, want 2", n)
+	}
+
+	// A kit with two schedules names the one its header counts.
+	rec = a.post("/kits", url.Values{
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"5 L"},
+		"inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"},
+	})
+	expect(t, rec, http.StatusSeeOther)
+	page = a.get(rec.Header().Get("Location"))
+	expect(t, page, http.StatusOK)
+	if head := pageHead(t, page); !strings.Contains(head, "Full: 1 part missing") {
+		t.Errorf("the header doesn't name the schedule:\n%s", head)
 	}
 }
 

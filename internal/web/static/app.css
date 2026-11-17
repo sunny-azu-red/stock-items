@@ -532,9 +532,9 @@ button.chip { font-family: inherit; margin: 0; cursor: pointer; }
 .sidebar .work-on { padding: 0 11px; gap: 6px; }
 /* Chips that stand on their own, with no badge beside them to share a
    baseline with (Work on, here and in the Switch tray, and Stock by
-   vehicle), are easier to read and tap at .86rem: still 26px (a 20px line
+   vehicle), are easier to read and tap at .82rem: still 26px (a 20px line
    in 2px padding) and centred (docs/design.md#text-centred-in-its-box). */
-.work-on .chip, .nav-vehicles .chip { font-size: .86rem; padding-block: 2px; }
+.work-on .chip, .nav-vehicles .chip { font-size: .82rem; padding-block: 2px; }
 /* The bar at the top of every page while a vehicle is worked on: 28px
    buttons in 6px padding and a 1px border, 42px in all. Its buttons show
    their icons only (their names stay for screen readers and as tooltips). */

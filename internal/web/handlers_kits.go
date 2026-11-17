@@ -554,7 +554,9 @@ func (s *Server) kitShow(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// kitShortfall puts every missing part of a kit on the shopping list.
+// kitShortfall puts the missing parts of a kit on the shopping list: of the
+// schedule a parts card posts (intermediate 0 or 1), or, from a page opened
+// before the cards had the button, of the schedule due next.
 func (s *Server) kitShortfall(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")
 	if err != nil {

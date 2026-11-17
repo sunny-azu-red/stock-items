@@ -60,7 +60,7 @@ The partials take the scope as `"Here"` (a vehicle id, 0 for none): `stock-secti
 Stock section headings (`stock-section`) answer one question, which vehicles the items fit, each with an icon and a word up front: `warehouse` **Only** + chip, `tag` **Shared** + chips, `package` **General** (not tied to a vehicle). Inside a scope they read `warehouse` **Only this vehicle** and `tag` **Shared with** + the other vehicles' chips.
 
 ### Status & State Badges (`.badge`, `a.badge`)
-* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART SHORT`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).
+* **Purpose**: Identifies states, statuses, quantities, kit tags, or categories (e.g. `1 PART MISSING`, `INTERMEDIATE: 1 PART MISSING`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).
 * **Category Badge**: Item categories are standard badges (`.badge.badge-muted` with the tag icon). On an item page they sit right after the vehicle chips in the header's `.sub.flex` row, as a plain label; on a stock row they link to the stock filtered by that category (see "When a chip or badge is a link").
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
@@ -111,7 +111,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 * **Flex alignment**: All heading containers (`.card-head h2`, `.results-head h2`, `.section-head h2`) must use `display: flex; align-items: center; gap: 8px;` so icons, heading text, delimiters, and count badges center on the exact same vertical line.
 * **Delimiters**: Separate a title from its item counter or secondary info using the middle dot ` · ` (e.g. `Stock for KillJoy · 0 items`).
 * **Card Head Meta (`.card-head .meta`) & Results Count (`.results-head .count`)**: Sort-reset links, bullet delimiters, and count texts must be wrapped in an inline-flex container (`display: inline-flex; align-items: center; gap: 6px; color: var(--muted);`, at `.85rem` in a card head and `.9rem` in a results head).
-* **One height** ([§11](#11-spacing)): every card head (`.card-head`) and stock section heading (`.section-head`) is 49px tall (a 20px line, or a 26px chip, in its padding, and the 1px border), whatever it holds. A section heading without chips (General) is as tall as one with them (`min-height`), and a small button in a card head (the vehicle page's **Add kit**, 30px) hangs into the padding (`margin-block: -5px`), as the pager does in a footer. Only a head whose links wrap under the title on a narrow screen grows.
+* **One height** ([§11](#11-spacing)): every card head (`.card-head`) and stock section heading (`.section-head`) is 49px tall (a 20px line, or a 26px chip, in its padding, and the 1px border), whatever it holds. A section heading without chips (General) is as tall as one with them (`min-height`), a small button in a card head (the vehicle page's **Add kit**, a kit card's **Add 2 missing**, 30px) hangs into the padding (`margin-block: -5px`), as the pager does in a footer, and so does a 26px badge (**On shopping list**, `margin-block: -3px`). A button in a form is the form's only box (`.card-head .inline-form` is a flex box), so no line box adds height around it. Only a head whose links wrap under the title on a narrow screen grows.
 * **Card footer (`.card-foot`)**: A total that sums the card's list (Service history's "Labour in total") goes in a footer band under the list, not in the header, which keeps only the title, a count and its link. The label is on the left and the amount on the right; when the list has pages, Newer / Older take the left of the same row and the total sits together on the right.
 
 ---
@@ -183,9 +183,10 @@ Kit lines and tables use vertical centering (`vertical-align: middle` via standa
 Circular 30px indicators (`width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none;`) provide consistent visual anchors and state communication on list rows:
 * **Service Kits** (`kit-row`, item page "Service kits"): Readiness disc communicating stock status:
   * `.status-ok` with `icon "check"`: All parts for the kit are in stock.
-  * `.status-short` with `icon "x"`: One or more parts are missing/short.
+  * `.status-short` with `icon "x"`: One or more parts are missing.
   * `.status-muted` with `icon "minus"`: Kit has 0 part lines.
   * `.status-muted` with `icon "archive"`: Kit is archived.
+* **A kit's parts** (`kit-parts-table`, a disc per row): `.status-ok` `check` (enough in stock), `.status-short` `x` (missing), `.status-listed` `shopping-cart` in the accent (missing, and the shopping list asks for at least that much: `stock.KitLine.Listed`), `.status-muted` `archive` (an archived item). Each disc says what it means in its `title` and `aria-label` ("175 ml missing, on the shopping list"), as a disc alone could pass for a button.
 
 ---
 
@@ -214,7 +215,7 @@ Pitbox maintains a strict distinction in text capitalization:
 * **Catalog Entities & Products (Title Case)**: Part names, brands, categories, services, vehicle names, and service kits use Title Case because they represent named catalog entities:
   * e.g. `Hiflofiltro Oil Filter`, `Oil Service (Intermediate)`, `Air Filter`, `Brake Pads (Rear)`, `Oil & Fluids`, `Gaskets & O-Rings`.
 * **System Actions, Filters & Statuses (Sentence Case / Status Case)**: Actions, status indicators, notes, and filter options use sentence case or uppercase status:
-  * e.g. `Starting stock`, `All types`, `All vehicles`, `Out of stock`, `Clear filters`, `Used in this service`, `1 PART SHORT`, `PARTS READY`.
+  * e.g. `Starting stock`, `All types`, `All vehicles`, `Out of stock`, `Clear filters`, `Used in this service`, `1 PART MISSING`, `PARTS READY`.
 
 
 

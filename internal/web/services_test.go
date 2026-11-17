@@ -724,9 +724,106 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 	}
 }
 
-// A post without a schedule (no button sends one now) adds the parts of the schedule due next. When
-// those are missing but already on the list, it says so, rather than
-// quietly adding the other schedule's parts.
+// A kit page in each state Add missing can meet: an entry without an
+// amount or with less than the kit misses, while working on the vehicle,
+// a kit with two schedules, an archived kit, a kit of an archived vehicle.
+func TestKitMissingStates(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	ctx := context.Background()
+	oil := itemID(t, a.store, "Silkolene") // 525 ml in stock
+	rec := a.post("/items", url.Values{"name": {"Brake Pads"}, "unit": {"piece"}, "vehicle": {itoa(k390)}})
+	expect(t, rec, http.StatusSeeOther)
+	pads := mustID(t, rec.Header().Get("Location"))
+	kitOf := func(form url.Values) (string, int64) {
+		t.Helper()
+		rec := a.post("/kits", form)
+		expect(t, rec, http.StatusSeeOther)
+		return rec.Header().Get("Location"), mustID(t, rec.Header().Get("Location"))
+	}
+	count := func(page *httptest.ResponseRecorder, s string) int { return strings.Count(page.Body.String(), s) }
+
+	kitURL, kitID := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil change"},
+		"line_item": {itoa(oil), itoa(pads)}, "line_qty": {"1.7 L", "2"}})
+
+	// The pads are listed without an amount, the oil with less than missing:
+	// neither covers its line.
+	if _, err := a.store.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Unit: stock.UnitPiece}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.store.EnsureShopping(ctx, oil, 500, ""); err != nil {
+		t.Fatal(err)
+	}
+	page := a.get(kitURL)
+	expect(t, page, http.StatusOK, "Add 2 missing</button>")
+	if n := count(page, "status-listed"); n != 0 {
+		t.Errorf("%d rows listed, want none", n)
+	}
+	if f := flashOf(t, a.post(kitURL+"/shortfall", url.Values{"intermediate": {"0"}})); f.Message != "Added 2 missing parts to the shopping list" {
+		t.Errorf("Add missing: flash = %+v", f)
+	}
+
+	// Working on the vehicle: the badge's list is its part, with both.
+	cookie := itoa(k390)
+	page = a.getWorking(kitURL, cookie)
+	expect(t, page, http.StatusOK, `<a class="badge badge-accent" href="/shopping"`)
+	if n := count(page, "status-listed"); n != 2 {
+		t.Errorf("%d rows listed, want 2", n)
+	}
+	rec = a.getWorking("/shopping", cookie)
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.getWorking(rec.Header().Get("Location"), cookie), http.StatusOK, "Brake Pads", "Silkolene")
+
+	// Two schedules: the full one is next and ready, the intermediate one
+	// misses 2 pads (the list asks for 2 of the 4).
+	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"100 ml"}, "inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"}})
+	page = a.get(interURL)
+	expect(t, page, http.StatusOK, "1 part · all in stock", "Add 1 missing</button>", `name="intermediate" value="1"`)
+	head := pageHead(t, page)
+	for _, s := range []string{"Next: Full", "Full: parts ready", "Intermediate: 1 part missing"} {
+		if !strings.Contains(head, s) {
+			t.Errorf("the header has no %q:\n%s", s, head)
+		}
+	}
+
+	// Archived: nothing to add, the count says what is missing, the rows
+	// still what is listed.
+	k, err := a.store.GetKit(ctx, kitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.ArchiveKit(ctx, kitID, k.Version); err != nil {
+		t.Fatal(err)
+	}
+	page = a.get(kitURL)
+	expect(t, page, http.StatusOK, "2 parts · 2 missing")
+	expectNot(t, page, `/shortfall"`, `badge badge-accent" href="/shopping"`)
+	if n := count(page, "status-listed"); n != 2 {
+		t.Errorf("archived kit: %d rows listed, want 2", n)
+	}
+
+	// A kit of an archived vehicle: no new work, its way back still leads
+	// to the vehicle.
+	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
+		"line_item": {itoa(oil)}, "line_qty": {"2 L"}})
+	v, err := a.store.GetVehicle(ctx, k1290)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.ArchiveVehicle(ctx, k1290, v.Version); err != nil {
+		t.Fatal(err)
+	}
+	page = a.get(otherURL)
+	expect(t, page, http.StatusOK, "1 part · 1 missing", `<a class="btn btn-ghost" href="/vehicles/`+itoa(k1290)+`">`, "Restore KTM 1290 to log this service.")
+	expectNot(t, page, `/shortfall"`)
+}
+
+// A post without a schedule (from a kit page opened before each parts card
+// had its button) adds the parts of the schedule due next. When those are
+// missing but already on the list, it says so, rather than quietly adding
+// the other schedule's parts.
 func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
 	a := newApp(t)
 	a.seed()

@@ -124,17 +124,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .app-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; }
 .app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
-/* A 24px line in 8px padding: 40px rows. */
+/* A 24px line in 8px padding: 40px rows. At the body's 15px the capitals
+   would sit nearer the top (docs/design.md#text-centred-in-its-box). */
 .nav a {
   display: flex; align-items: center; gap: 12px; padding: 8px 11px; border-radius: var(--radius-sm);
-  --lh: 1.6; text-decoration: none; color: var(--muted); font-weight: 500;
+  font-size: .9rem; --lh: 1.6; text-decoration: none; color: var(--muted); font-weight: 500;
 }
 .nav a .icon { width: 18px; height: 18px; }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
 /* The vehicle worked on: its kind icon in its colour, as on its page. */
 .nav a.nav-vehicle .icon { color: var(--chip); }
-.nav .count { margin-left: auto; font-size: .75rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 7px; font-weight: 700; }
+.nav .count { margin-left: auto; font-size: .72rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 7px; font-weight: 700; }
 /* A count that needs no action, such as what is in the trash. */
 .nav .count-muted { background: var(--surface-2); color: var(--muted); }
 .nav-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 11px; margin-bottom: 8px; }
@@ -233,7 +234,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   body:has(#switch:popover-open) .tabbar { pointer-events: none; }
   .sidebar .tab-dup, .sidebar .sidebar-foot { display: none; }
   .tabbar .icon { width: 22px; height: 22px; }
-  .tabbar .count { position: absolute; top: 8px; left: calc(50% + 6px); font-size: .65rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 6px; font-weight: 700; }
+  .tabbar .count { position: absolute; top: 8px; left: calc(50% + 6px); font-size: .68rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 6px; font-weight: 700; }
   h1 { font-size: 1.35rem; }
 }
 
@@ -273,7 +274,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
 .tile { padding: 14px; text-decoration: none; display: flex; flex-direction: column; gap: 6px; }
 .tile:hover { border-color: var(--accent); color: inherit; }
-.tile .label { color: var(--muted); font-size: .8rem; display: flex; align-items: center; gap: 6px; }
+.tile .label { color: var(--muted); font-size: .82rem; display: flex; align-items: center; gap: 6px; }
 /* At the tile's foot, in a line no taller than its font: no empty line
    below the digits, and counts and the smaller money figures end level. */
 .tile .value { margin-top: auto; font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; --lh: 1; }
@@ -492,10 +493,14 @@ legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }
 }
 
 /* ---------- Chips ---------- */
+/* 26px wherever it is, a heading too (its own --lh), and the badges' size:
+   at .78rem its capitals stood 1px nearer the top, whatever the padding
+   (docs/design.md#text-centred-in-its-box), and the same size keeps a chip
+   and a badge side by side on one baseline. */
 .chip {
   --chip: var(--muted);
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px;
-  font-size: .78rem; font-weight: 600; text-decoration: none; white-space: nowrap;
+  font-size: .72rem; --lh: 1.5; font-weight: 600; text-decoration: none; white-space: nowrap;
   background: color-mix(in srgb, var(--chip) 14%, transparent); color: color-mix(in srgb, var(--chip) 75%, var(--text));
   border: 1px solid color-mix(in srgb, var(--chip) 35%, transparent);
 }
@@ -581,7 +586,7 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 }
 
 /* ---------- Badges ---------- */
-.badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; --lh: 1.5; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .badge-ok { background: var(--ok-soft); color: var(--ok); }
 .badge-warn { background: var(--warn-soft); color: var(--warn); }
 .badge-danger { background: var(--danger-soft); color: var(--danger); }
@@ -617,7 +622,7 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 
 /* As tall with chips as without: a 26px chip in 11px padding. */
 .section-head { display: flex; align-items: center; gap: 10px; min-height: 49px; padding: 11px var(--inset); border-bottom: 1px solid var(--border); }
-.section-head h2 { font-size: .95rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.section-head h2 { font-size: 1rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .section-head .n { margin-left: auto; color: var(--muted); font-size: .8rem; white-space: nowrap; }
 .section-shared .section-head { background: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
 
@@ -651,7 +656,7 @@ body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
 /* Separate: collapsed, a cell owns half of each border, and rows end on
    half pixels. */
 table.table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .9rem; }
-.table th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
 /* 24px between columns, and the card's inset at its edges, so the first
    column lines up with the card's heading. */

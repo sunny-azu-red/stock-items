@@ -32,7 +32,7 @@ Chips and badges serve two completely different purposes and have distinct visua
 * **Purpose**: Identifies a vehicle or vehicle set.
 * **Shape**: Full pill (`border-radius: 99px`), 1px translucent border (`border: 1px solid color-mix(...)`), soft tinted background.
 * **Dot**: Contains a `.dot` colored with the vehicle's theme color.
-* **Dimensions**: Height **26px** (`font-size: .78rem`, `padding: 3px 9px`, line-height `18px`).
+* **Dimensions**: Height **26px** (`font-size: .72rem`, the badges' size, `padding: 3px 9px`, `--lh: 1.5` set on the chip itself so a chip in a heading is 26px too). At `.78rem` its capitals stood 1px nearer the top ([text centred in its box](#text-centred-in-its-box)); the badges' size also keeps a chip and a badge side by side on one baseline.
 * **Hover (as link)**: The 1px border illuminates with the vehicle's color (`border-color: var(--chip)`). **No text underline.**
 * **Placement in Rows**: In compound item rows (e.g. `.kit-row`), the vehicle `.chip` sits on Line 1 next to the record title (`.title-row`), leaving Line 2 (`.meta`) as clean, unobstructed metadata text. Inside a vehicle's scope (below), a row leaves out that vehicle's chip.
 * **Sidebar Navigation & Filters**: Vehicles in the sidebar (`.nav-vehicles`), filter bars, and tag lists are standard `.chip` / `chip-link` pills, standardizing vehicle tags everywhere.
@@ -64,7 +64,7 @@ Stock section headings (`stock-section`) answer one question, which vehicles the
 * **Category Badge**: Item categories are standard badges (`.badge.badge-muted` with the tag icon). On an item page they sit right after the vehicle chips in the header's `.sub.flex` row, as a plain label; on a stock row they link to the stock filtered by that category (see "When a chip or badge is a link").
 * **Shape**: Rounded rectangle (`border-radius: 6px`).
 * **Typography**: Bold uppercase text (`font-size: .72rem`, `font-weight: 700`, `letter-spacing: .03em`).
-* **Dimensions**: Height **26px** (`padding: 4px 8px`, line-height `18px`).
+* **Dimensions**: Height **26px** (`padding: 4px 8px`, `--lh: 1.5` on the badge itself: 18px).
 * **Hover (as link)**: Container background color transition (e.g. `.badge-muted:hover { background: var(--surface-3); }`, `.badge-accent:hover { background: var(--accent); color: var(--on-accent); }`). **Never use a text underline on badges.**
 * **A status that belongs to a button is part of it**, never a badge beside it: beside it, the badge is as far from its button as from the next one, and a wrapped row pairs them wrong. Log service's "Start from a kit" buttons (`.kit-start`) end in the kit's due badge, flush to the button's border behind a 1px divider (the way the sort pill's two halves share an edge), with `Due.Summary` as the button's title. Its text stands on the name's baseline, not centred (`padding-block: 5px 3px`): centred, the smaller uppercase text sits 1px higher, and side by side that reads as crooked. Every kit with a schedule ends in its status, On track too, as everywhere else a kit shows: a plain button then means only "no schedule", and the red and amber ones stand out against the green. A kit without a schedule is just its name.
 
@@ -152,6 +152,20 @@ Adhere to the existing whole-pixel constraints from [conventions.md](conventions
 * Lengths in `px`, not `rem`.
 * Centered-against heights must be even (icons, badges, chips, buttons).
 * Never rely on browser default baselines for mixed-font or icon-containing inline elements; use flex containers with `align-items: center`.
+
+### Text centred in its box
+
+Chrome rounds the font's ascent and descent to whole pixels and puts the baseline on a whole pixel, so where Inter's capitals (.727em tall) land in a line is fixed by the font size. In a box of even height, only some sizes leave the same space above the capitals as below; the others leave a whole pixel more above, whatever the padding (a pixel of padding moves the text to a pixel low instead). With the root at 16px:
+
+| Font size | In an even box |
+|---|---|
+| .68–.73rem (10.9–11.7px) | centred within .25px (badges, chips, table headers, nav counts: .72rem) |
+| .74–.81rem (11.8–13px) | **1px nearer the top**: don't use in a box |
+| .82–.90rem (13.1–14.4px) | centred within .25px (buttons .9rem, small buttons .82rem, chip toggles .88rem) |
+| .91–.98rem (14.6–15.7px, the body's 15px) | **1px nearer the top**: don't use in a box |
+| 1rem (16px) | centred within .2px (card and section headings) |
+
+A box here is anything with its text centred in a background, a border or a bar: buttons, chips, badges, nav links, counts, table headers, heading bars. Text that isn't in a box (meta lines, hints) may use any size. The e2e test "every box sits on whole pixels and its text lines up" fails on a box's capitals more than .3px off its middle, and on a chip or badge that isn't 26px. The one exception is a kit start's status, which stands on the button name's baseline instead (above).
 
 ---
 

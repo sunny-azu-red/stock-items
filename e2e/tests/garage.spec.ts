@@ -1279,11 +1279,15 @@ async function offGrid(page: Page) {
   });
 }
 
-// Text that doesn't line up, by more than 1px: an icon against the
-// capitals of the text beside it; the capitals against the middle of their
-// button, chip, badge or nav link; and the capitals of things side by side
-// in a centred row (a table row, a list row, a toolbar), on the same line
-// and one line tall each. The capitals' middle is the baseline (the text
+// Text that doesn't line up: an icon against the capitals of the text
+// beside it, and the capitals of things side by side in a centred row (a
+// table row, a list row, a toolbar), on the same line and one line tall
+// each, by more than 1px; the capitals against the middle of their own box
+// (a button, chip, badge, nav link, table header or heading bar) by more
+// than .3px, since past that the space above them is a whole pixel more
+// than below (Chrome puts the baseline on a whole pixel, so only some font
+// sizes can be centred: docs/design.md#text-centred-in-its-box). Chips and
+// badges are 26px tall. The capitals' middle is the baseline (the text
 // box's top plus Inter's ascent, .96875em, rounded) less half their height
 // (.727em). Monospace text (SKUs) is left out.
 async function misaligned(page: Page) {
@@ -1343,12 +1347,31 @@ async function misaligned(page: Page) {
       const r = svg.getBoundingClientRect(), d = r.top + r.height / 2 - caps(t);
       if (Math.abs(d) > 1) out.push(`icon in ${name(el)} ${d.toFixed(2)}px off its text`);
     }
-    for (const el of document.querySelectorAll(".btn, .chip, .badge, .nav a, .toggle, .segmented label, .kbd, .count, .flash, .sort-link, .tile .label")) {
-      const t = ownText(el)[0];
-      if (!vis(el) || !t || lines(el) !== 1) continue;
+    const middle = (el: Element) => {
       const cs = getComputedStyle(el), r = el.getBoundingClientRect();
-      const d = caps(t) - (r.top + parseFloat(cs.borderTopWidth) + r.bottom - parseFloat(cs.borderBottomWidth)) / 2;
-      if (Math.abs(d) > 1) out.push(`text of ${name(el)} ${d.toFixed(2)}px off its middle`);
+      return (r.top + parseFloat(cs.borderTopWidth) + r.bottom - parseFloat(cs.borderBottomWidth)) / 2;
+    };
+    // A kit start's status stands on the button name's baseline instead,
+    // on purpose (docs/design.md, Status & State Badges).
+    for (const el of document.querySelectorAll(".btn, .chip, .badge:not(.kit-start .badge), .nav a, .toggle, .segmented label, .kbd, .count, .flash, .sort-link, .tile .label, .table th")) {
+      const t = ownText(el)[0];
+      if (!vis(el) || !t || mono(el) || lines(el) !== 1) continue;
+      const d = caps(t) - middle(el);
+      if (Math.abs(d) > 0.3) out.push(`text of ${name(el)} ${d.toFixed(2)}px off its middle`);
+    }
+    // A heading bar's heading, while the bar is one row.
+    for (const bar of document.querySelectorAll(".card-head, .section-head")) {
+      const h = bar.querySelector(":scope > h2");
+      const t = h && ownText(h)[0];
+      if (!h || !t || !vis(bar) || lines(h) !== 1) continue;
+      const hr = h.getBoundingClientRect();
+      if ([...bar.children].some((k) => vis(k) && k.getBoundingClientRect().top >= hr.bottom)) continue;
+      const d = caps(t) - middle(bar);
+      if (Math.abs(d) > 0.3) out.push(`heading of ${name(bar)} ${d.toFixed(2)}px off its middle`);
+    }
+    for (const el of document.querySelectorAll(".chip:not(.chip-toggle), .badge:not(.kit-start .badge)")) {
+      const h = el.getBoundingClientRect().height;
+      if (vis(el) && h !== 26) out.push(`${name(el)} ${h}px tall, not 26px`);
     }
     for (const el of document.querySelectorAll("body *")) {
       if (!vis(el) || el instanceof SVGElement) continue;

@@ -390,7 +390,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	kit := rec.Header().Get("Location")
 	kitPage := a.get(kit)
 	expect(t, kitPage, http.StatusOK, "Parts ready")
-	expectNot(t, kitPage, "Add missing to shopping list")
+	expectNot(t, kitPage, `/shortfall"`)
 	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
 	ring := itoa(itemID(t, a.store, "O-Ring"))
 	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6 pcs" data-have-base="6" data-placeholder="e.g. 2" data-unit="piece" selected>`)

@@ -38,6 +38,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `aria-label="Kind"`, use: `"Type"`, uiOnly: true},
 		{re: `Activity log`, use: `"Activity"`},
 		{re: `Save changes`, use: `"Save <thing>"`},
+		{re: `Add missing to (the )?shopping list`, use: `"Add missing" (a parts card's button, and the service form's; the cart icon and its tooltip say where)`},
 		{re: `\bWhat was done\b`, use: `"Work performed"`},
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},

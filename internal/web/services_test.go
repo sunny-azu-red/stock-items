@@ -508,7 +508,7 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
 
-	// kit_show offers the "Add missing to shopping list" button even though the active Full tier is ready.
+	// The Intermediate parts card offers Add missing even though the active Full tier is ready.
 	expect(t, a.get(kitURL), http.StatusOK, `action="`+kitURL+`/shortfall"`)
 
 	// Clicking "Add to shopping list" on the washer's item page suggests the 2 pcs needed by the intermediate tier.
@@ -534,7 +534,7 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 	expect(t, rec, http.StatusUnprocessableEntity,
 		shortBadge("525 ml", "1.7 L"),
 		`form="service-short-form"`,
-		"Add missing to shopping list",
+		"Add missing</button>",
 		`id="service-short-form"`,
 		`value="`+itoa(oil)+`"`,
 		`value="1175"`,
@@ -654,7 +654,29 @@ func TestKitPerTierShortfall(t *testing.T) {
 	}
 }
 
-// The kit page's "Add missing" adds the parts of the schedule due next. When
+// A kit's Add missing is its parts card's, also on a kit without an
+// intermediate schedule; the header has none.
+func TestKitAddMissingInPartsCard(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	k390 := a.vehicle(t, "KTM 390")
+	oil := itemID(t, a.store, "Silkolene") // 525 ml in stock
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil change"},
+		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"}})
+	expect(t, rec, http.StatusSeeOther)
+	kitURL := rec.Header().Get("Location")
+
+	page := a.get(kitURL)
+	expect(t, page, http.StatusOK, `<input type="hidden" name="intermediate" value="0">`, "Add missing</button>")
+	if n := strings.Count(page.Body.String(), `/shortfall"`); n != 1 {
+		t.Errorf("the kit page has %d Add missing forms, want the Parts card's only", n)
+	}
+	if f := flashOf(t, a.post(kitURL+"/shortfall", url.Values{"intermediate": {"0"}})); f.Message != "Added 1 missing part to the shopping list" {
+		t.Errorf("Add missing: flash = %+v", f)
+	}
+}
+
+// A post without a schedule (no button sends one now) adds the parts of the schedule due next. When
 // those are missing but already on the list, it says so, rather than
 // quietly adding the other schedule's parts.
 func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {

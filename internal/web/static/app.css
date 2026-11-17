@@ -249,6 +249,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 /* A small button (30px) hangs into the padding, so the bar is as tall as
    one with text alone (a 20px line). */
 .card-head .btn-sm { margin-block: -5px; }
+.card-head .inline-form { display: flex; } /* a button in a form: no line box around it to add height */
 .card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .card-head a.more:hover { color: var(--accent); }
 .reset-link, .card-head a.sort-reset { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 600; text-decoration: none; }

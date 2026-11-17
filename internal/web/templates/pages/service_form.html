@@ -101,7 +101,7 @@
     <div class="flex between">
       <h2>Parts used</h2>
       {{if $f.ShortParts}}
-      <button class="btn btn-sm" type="submit" form="service-short-form">{{icon "shopping-cart"}} Add missing to shopping list</button>
+      <button class="btn btn-sm" type="submit" form="service-short-form" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add missing</button>
       {{end}}
     </div>
     {{template "err" (index $e "lines")}}

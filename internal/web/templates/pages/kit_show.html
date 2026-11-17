@@ -30,7 +30,7 @@
       {{if and .CanShop .Readiness.ShortLines}}
       <form class="inline-form" method="post" action="/kits/{{.KitID}}/shortfall">
         {{if .Inter}}<input type="hidden" name="intermediate" value="{{.Inter}}">{{end}}
-        <button class="btn btn-sm" type="submit">{{icon "shopping-cart"}} Add missing</button>
+        <button class="btn btn-sm" type="submit" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add missing</button>
       </form>
       {{end}}
       <span class="meta">{{if .Sort.Custom}}<a class="more sort-reset" href="{{.Sort.ResetHref}}" title="Show the parts in the order of the kit">{{icon "x"}} Reset order</a><span>·</span>{{end}}<span>{{plural .Readiness.Lines "part"}}{{if .Readiness.ShortLines}} · {{.Readiness.ShortLines}} short{{end}}</span></span>
@@ -57,7 +57,6 @@
     {{else if $d.Vehicle.Archived}}
     <span class="muted small">Restore {{$d.Vehicle.Name}} to log this service.</span>
     {{else}}
-    {{if or (and (not $fr.Ready) $fr.Lines) (and (not $ir.Ready) $ir.Lines)}}<form class="inline-form" method="post" action="/kits/{{$k.ID}}/shortfall"><button class="btn" type="submit">{{icon "shopping-cart"}} Add missing to shopping list</button></form>{{end}}
     <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Log service</a>
     {{end}}
     {{if $k.Archived}}{{else if $d.ServiceCount}}
@@ -70,7 +69,7 @@
 
 <div class="split">
   <div class="stack">
-    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived) $k.HasIntermediate) "Inter" "0")}}
+    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "0")}}
     {{if $k.HasIntermediate}}
     {{template "kit-parts-card" (dict "Title" "Intermediate parts" "KitID" $k.ID "Lines" $d.InterLines "Readiness" $ir "Sort" $d.Sort "EmptyText" "No intermediate parts yet." "EmptyAdd" "the intermediate job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "1")}}
     {{end}}

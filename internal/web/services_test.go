@@ -814,6 +814,9 @@ func TestKitMissingStates(t *testing.T) {
 	// to the vehicle.
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
 		"line_item": {itoa(oil)}, "line_qty": {"2 L"}})
+	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"100 ml"}})
 	v, err := a.store.GetVehicle(ctx, k1290)
 	if err != nil {
 		t.Fatal(err)
@@ -824,6 +827,13 @@ func TestKitMissingStates(t *testing.T) {
 	page = a.get(otherURL)
 	expect(t, page, http.StatusOK, "1 part · 1 missing", `<a class="btn btn-ghost" href="/vehicles/`+itoa(k1290)+`">`, "Restore KTM 1290 to log this service.")
 	expectNot(t, page, `/shortfall"`)
+	// Its readiness names its schedule, as on an active vehicle's kit; with
+	// no reminders, there is no Next.
+	page = a.get(twoURL)
+	expect(t, page, http.StatusOK)
+	if head := pageHead(t, page); !strings.Contains(head, "Full: 1 part missing") || strings.Contains(head, "Next:") {
+		t.Errorf("archived vehicle's kit with two schedules: header\n%s", head)
+	}
 }
 
 // A post without a schedule (from a kit page opened before each parts card

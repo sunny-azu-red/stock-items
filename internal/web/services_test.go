@@ -195,7 +195,7 @@ func TestServicesPaging(t *testing.T) {
 	}
 	// No labour: the footer holds only the pager.
 	page1 := a.get("/services")
-	expect(t, page1, http.StatusOK, `<span class="muted small">101 services</span>`, `href="/services?page=2"`, "Check 100",
+	expect(t, page1, http.StatusOK, `<span class="meta">101 services</span>`, `href="/services?page=2"`, "Check 100",
 		`<div class="card-foot">`+"\n"+`<div class="pager flex">`)
 	expectNot(t, page1, "Labour in total")
 	page2 := a.get("/services?page=2")
@@ -335,7 +335,7 @@ func TestKitStatusIcons(t *testing.T) {
 	svcPage := a.get("/services")
 	expect(t, svcPage, http.StatusOK,
 		"Valve check",
-		`<span class="status-icon status-muted"><svg class="icon" aria-hidden="true"><use href="#i-minus"></use></svg></span>`,
+		`<span class="status-icon status-muted" role="img" aria-label="No parts"><svg class="icon" aria-hidden="true"><use href="#i-minus"></use></svg></span>`,
 		`<span class="badge badge-muted">No parts</span>`,
 	)
 
@@ -352,7 +352,7 @@ func TestKitStatusIcons(t *testing.T) {
 	svcPage = a.get("/services")
 	expect(t, svcPage, http.StatusOK,
 		"Brake kit",
-		`<span class="status-icon status-short"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span>`,
+		`<span class="status-icon status-short" role="img" aria-label="Parts missing"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></span>`,
 		`<span class="badge badge-danger"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 1 part missing</span>`,
 	)
 	expect(t, a.get(shortPath), http.StatusOK,
@@ -372,7 +372,7 @@ func TestKitStatusIcons(t *testing.T) {
 	svcPage = a.get("/services")
 	expect(t, svcPage, http.StatusOK,
 		"Oil service",
-		`<span class="status-icon status-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>`,
+		`<span class="status-icon status-ok" role="img" aria-label="Parts ready"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>`,
 		`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg> Parts ready</span>`,
 	)
 	expect(t, a.get(readyPath), http.StatusOK,

@@ -19,17 +19,17 @@
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus>
-        {{template "err" (index $e "name")}}
+        <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus {{invalid (index $e "name") "name"}}>
+        {{template "field-err" (fieldErr (index $e "name") "name")}}
       </div>
       <div class="field">
         <label for="brand">Brand</label>
-        <input class="input" id="brand" name="brand" value="{{$f.Brand}}" placeholder="e.g. KTM, Motorex, Hiflofiltro" list="brands">
+        <input class="input" id="brand" name="brand" value="{{$f.Brand}}" placeholder="e.g. KTM, Motorex, Hiflofiltro" list="brands" autocomplete="off">
         {{template "datalist" (dict "ID" "brands" "Options" $d.Brands)}}
       </div>
       <div class="field">
         <label for="category">Category</label>
-        <input class="input" id="category" name="category" value="{{$f.Category}}" list="categories" placeholder="e.g. Filters">
+        <input class="input" id="category" name="category" value="{{$f.Category}}" list="categories" autocomplete="off" placeholder="e.g. Filters">
         {{template "datalist" (dict "ID" "categories" "Options" $d.Categories)}}
       </div>
     </div>
@@ -52,43 +52,43 @@
   <div class="form-section">
     <h2>Quantity</h2>
     <div class="form-grid">
-      <fieldset class="field{{if index $e "unit"}} has-error{{end}}">
+      <fieldset class="field{{if index $e "unit"}} has-error{{end}}"{{with index $e "unit"}} aria-describedby="unit-err"{{end}}>
         <legend>Counted in</legend>
         <span class="segmented">
           {{range $d.Units}}<label><input type="radio" name="unit" value="{{.}}" {{if eq (print .) $f.Unit}}checked{{end}}>{{.Label}}</label>{{end}}
         </span>
-        {{template "err" (index $e "unit")}}
+        {{template "field-err" (fieldErr (index $e "unit") "unit")}}
       </fieldset>
     </div>
     <div class="form-grid mt">
       <div class="field{{if index $e "quantity"}} has-error{{end}}">
         <label for="quantity">In stock</label>
         <div class="qty-input">
-          <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" inputmode="decimal" placeholder="0">
+          <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" inputmode="decimal" placeholder="0" {{invalid (index $e "quantity") "quantity"}}>
           <select class="input" name="quantity_unit" data-subunit aria-label="Unit">
             {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.QuantityUnit}}selected{{end}}>{{.Label}}</option>{{end}}
           </select>
         </div>
-        {{template "err" (index $e "quantity")}}
+        {{template "field-err" (fieldErr (index $e "quantity") "quantity")}}
       </div>
       <div class="field{{if index $e "min_quantity"}} has-error{{end}}">
-        <div class="label-row"><label for="min_quantity">Keep at least</label>{{template "tip" (dict "ID" "min-tip" "Text" "You get a low-stock warning below this.")}}</div>
+        <div class="label-row"><label for="min_quantity">Keep at least</label>{{template "tip" (dict "For" "Keep at least" "ID" "min-tip" "Text" "You get a low-stock warning below this.")}}</div>
         <div class="qty-input">
-          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="e.g. 1" aria-describedby="min-tip">
+          <input class="input" id="min_quantity" name="min_quantity" value="{{$f.MinQuantity}}" inputmode="decimal" placeholder="e.g. 1" {{invalid (index $e "min_quantity") "min_quantity" "min-tip"}}>
           <select class="input" name="min_unit" data-subunit aria-label="Unit">
             {{range $d.SubUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.MinUnit}}selected{{end}}>{{.Label}}</option>{{end}}
           </select>
         </div>
-        {{template "err" (index $e "min_quantity")}}
+        {{template "field-err" (fieldErr (index $e "min_quantity") "min_quantity")}}
       </div>
       <div class="field{{if index $e "expires_on"}} has-error{{end}}">
         <label for="expires_on">Best before</label>
-        <input class="input" type="date" id="expires_on" name="expires_on" value="{{$f.ExpiresOn}}">
-        {{template "err" (index $e "expires_on")}}
+        <input class="input" type="date" id="expires_on" name="expires_on" value="{{$f.ExpiresOn}}" {{invalid (index $e "expires_on") "expires_on"}}>
+        {{template "field-err" (fieldErr (index $e "expires_on") "expires_on")}}
       </div>
       <div class="field">
         <label for="location">Location</label>
-        <input class="input" id="location" name="location" value="{{$f.Location}}" list="locations" placeholder="e.g. Garage shelf 2">
+        <input class="input" id="location" name="location" value="{{$f.Location}}" list="locations" autocomplete="off" placeholder="e.g. Garage shelf 2">
         {{template "datalist" (dict "ID" "locations" "Options" $d.Locations)}}
       </div>
     </div>
@@ -100,19 +100,19 @@
     <p class="hint mb">With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
-        <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label><span class="pieces-only">{{template "tip" (dict "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</span></div>
-        <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="e.g. 24.90"{{if eq $f.Unit "piece"}} aria-describedby="price-tip"{{end}}>
-        {{template "err" (index $e "total_price")}}
+        <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label><span class="pieces-only">{{template "tip" (dict "For" "Total price" "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</span></div>
+        <input class="input" id="total_price" name="total_price" value="{{$f.TotalPrice}}" inputmode="decimal" placeholder="e.g. 24.90" {{invalid (index $e "total_price") "total_price" (and (eq $f.Unit "piece") "price-tip")}}>
+        {{template "field-err" (fieldErr (index $e "total_price") "total_price")}}
       </div>
       <div class="field">
         <label for="supplier">Shop</label>
-        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer" list="suppliers">
+        <input class="input" id="supplier" name="supplier" value="{{$f.Supplier}}" placeholder="e.g. Louis or the dealer" list="suppliers" autocomplete="off">
         {{template "datalist" (dict "ID" "suppliers" "Options" $d.Suppliers)}}
       </div>
       <div class="field{{if index $e "bought_on"}} has-error{{end}}">
         <label for="bought_on">Bought on</label>
-        <input class="input" type="date" id="bought_on" name="bought_on" value="{{$f.BoughtOn}}">
-        {{template "err" (index $e "bought_on")}}
+        <input class="input" type="date" id="bought_on" name="bought_on" value="{{$f.BoughtOn}}" {{invalid (index $e "bought_on") "bought_on"}}>
+        {{template "field-err" (fieldErr (index $e "bought_on") "bought_on")}}
       </div>
       <div class="field">
         <label for="bought_note">Note</label>
@@ -153,13 +153,13 @@
 {{define "sku-row"}}{{$r := .Row}}
 <div class="row-line sku-line{{if and $r $r.Error}} has-error{{end}}">
   <div class="field">
-    <input class="input mono" name="sku_code" value="{{if $r}}{{$r.Code}}{{end}}" placeholder="e.g. 77038005044" aria-label="SKU code" autocomplete="off">
+    <input class="input mono" name="sku_code" value="{{if $r}}{{$r.Code}}{{end}}" placeholder="e.g. 77038005044" aria-label="SKU code" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
     {{if $r}}{{template "err" $r.Error}}{{end}}
   </div>
   <select class="input" name="sku_kind" aria-label="SKU type">
     {{range .Kinds}}<option value="{{.}}" {{if and $r (eq (print .) $r.Kind)}}selected{{end}}>{{.Label}}</option>{{end}}
   </select>
-  <input class="input" name="sku_brand" value="{{if $r}}{{$r.Brand}}{{end}}" placeholder="Brand (e.g. KTM, Motorex)" list="brands" aria-label="SKU brand">
+  <input class="input" name="sku_brand" value="{{if $r}}{{$r.Brand}}{{end}}" placeholder="Brand (e.g. KTM, Motorex)" list="brands" autocomplete="off" aria-label="SKU brand">
   <div class="qty-input">
     <input class="input" name="sku_pack" value="{{if $r}}{{$r.Pack}}{{end}}" inputmode="decimal" placeholder="e.g. 1" aria-label="Pack size">
     <select class="input" name="sku_pack_unit" data-subunit aria-label="Pack unit">

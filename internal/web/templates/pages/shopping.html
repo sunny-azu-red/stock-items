@@ -11,8 +11,8 @@
 {{/* While a vehicle is worked on, the bar is the vehicle control. */}}
 {{if and (gt (len $d.Vehicles) 1) (not .WorkingOn)}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
-  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/shopping" ($d.VehicleQuery 0)}}">All vehicles</a>
-  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/shopping" ($d.VehicleQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  {{template "filter-chip" (dict "Href" (withQuery "/shopping" ($d.VehicleQuery 0)) "Active" (not $d.VehicleID) "Label" "All vehicles")}}
+  {{range $d.Vehicles}}{{template "filter-chip" (dict "Href" (withQuery "/shopping" ($d.VehicleQuery .ID)) "Active" (eq .ID $d.VehicleID) "Vehicle" .)}}{{end}}
 </div>
 {{end}}
 
@@ -21,7 +21,7 @@
     <section class="card">
       {{/* A vehicle's part says what it leaves out: at the shop, the rest
            of the list is one tap away (All vehicles, or the bar's ×). */}}
-      <div class="card-head"><h2>{{icon "shopping-cart"}} On the list</h2><span class="muted small">{{plural (len $d.Entries) "entry"}}{{with $d.Others}} · {{.}} more for other vehicles{{end}}</span></div>
+      <div class="card-head"><h2>{{icon "shopping-cart"}} On the list</h2><span class="meta">{{plural (len $d.Entries) "entry"}}{{with $d.Others}} · {{.}} more for other vehicles{{end}}</span></div>
       {{if $d.Entries}}
       <ul class="list">
         {{range $d.Entries}}{{$entry := .}}
@@ -37,7 +37,7 @@
         {{end}}
       </ul>
       {{else}}
-      {{template "empty" (dict "Icon" "shopping-cart" "Title" "Nothing to buy" "Text" "Add items below, or use the suggestions.")}}
+      {{template "empty" (dict "Sub" true "Icon" "shopping-cart" "Title" "Nothing to buy" "Text" "Add items below, or use the suggestions.")}}
       {{end}}
     </section>
 
@@ -50,27 +50,27 @@
         <div class="form-grid">
           <div class="field{{if index $e "item_id"}} has-error{{end}}">
             <label for="item_id">Item in stock</label>
-            <select class="input" id="item_id" name="item_id" data-unit-source>
+            <select class="input" id="item_id" name="item_id" data-unit-source {{invalid (index $e "item_id") "item_id"}}>
               <option value="">— or describe it below —</option>
               {{range $d.Items}}<option value="{{.ID}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" {{if eq .ID $f.ItemID}}selected{{end}}>{{.DisplayName}} ({{qty .Quantity .Unit}})</option>{{end}}
             </select>
-            {{template "err" (index $e "item_id")}}
+            {{template "field-err" (fieldErr (index $e "item_id") "item_id")}}
           </div>
           <div class="field{{if index $e "free_text"}} has-error{{end}}">
             <label for="free_text">Something new</label>
-            <input class="input" id="free_text" name="free_text" value="{{$f.FreeText}}" placeholder="e.g. Chain lube">
-            {{template "err" (index $e "free_text")}}
+            <input class="input" id="free_text" name="free_text" value="{{$f.FreeText}}" placeholder="e.g. Chain lube" {{invalid (index $e "free_text") "free_text"}}>
+            {{template "field-err" (fieldErr (index $e "free_text") "free_text")}}
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">
             <div class="label-row"><label for="quantity">Quantity</label>{{template "req"}}</div>
             <div class="qty-input">
-              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" aria-required="true" placeholder="e.g. 2 or 4 L" data-part-qty>
+              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" required placeholder="e.g. 2 or 4 L" data-part-qty {{invalid (index $e "quantity") "quantity"}}>
               <select class="input" name="quantity_unit" aria-label="Unit" data-part-unit>
                 <option value="" data-base="">unit</option>
                 {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.Unit}}selected{{end}}>{{.Label}}</option>{{end}}
               </select>
             </div>
-            {{template "err" (index $e "quantity")}}
+            {{template "field-err" (fieldErr (index $e "quantity") "quantity")}}
           </div>
           <div class="field">
             <label for="note">Note</label>

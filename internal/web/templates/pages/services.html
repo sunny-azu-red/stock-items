@@ -14,19 +14,19 @@
 
 {{if and $d.Vehicles (not .WorkingOn)}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
-  <a class="chip chip-toggle{{if not $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery 0)}}">All vehicles</a>
-  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/services" ($d.VehicleFilterQuery .ID)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
+  {{template "filter-chip" (dict "Href" (withQuery "/services" ($d.VehicleFilterQuery 0)) "Active" (not $d.VehicleID) "Label" "All vehicles")}}
+  {{range $d.Vehicles}}{{template "filter-chip" (dict "Href" (withQuery "/services" ($d.VehicleFilterQuery .ID)) "Active" (eq .ID $d.VehicleID) "Vehicle" .)}}{{end}}
 </div>
 {{end}}
 
 <div class="split">
   <section class="card">
-    <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="muted small">{{plural $d.Total "service"}}</span></div>
+    <div class="card-head"><h2>{{icon "wrench"}} Service history</h2><span class="meta">{{plural $d.Total "service"}}</span></div>
     {{if $d.Services}}{{template "service-list" (dict "Services" $d.Services "Here" $d.Scope)}}
-    {{else if gt $d.Total 0}}{{template "empty" (dict "Icon" "wrench" "Title" "Nothing on this page" "Text" "There are no older services." "Href" (withQuery "/services" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
-    {{else if $d.Archived}}{{template "empty" (dict "Icon" "wrench" "Title" "No services for this vehicle" "Text" "It is archived; restore it to log services.")}}
-    {{else if $d.VehicleID}}{{template "empty" (dict "Icon" "wrench" "Title" "No services for this vehicle yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" (print "/services/new?vehicle=" $d.VehicleID) "Action" "Log service")}}
-    {{else}}{{template "empty" (dict "Icon" "wrench" "Title" "No services yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log service")}}{{end}}
+    {{else if gt $d.Total 0}}{{template "empty" (dict "Sub" true "Icon" "wrench" "Title" "Nothing on this page" "Text" "There are no older services." "Href" (withQuery "/services" ($d.PageQuery 1)) "Action" "Back to the newest" "ActionIcon" "arrow-left")}}
+    {{else if $d.Archived}}{{template "empty" (dict "Sub" true "Icon" "wrench" "Title" "No services for this vehicle" "Text" "It is archived; restore it to log services.")}}
+    {{else if $d.VehicleID}}{{template "empty" (dict "Sub" true "Icon" "wrench" "Title" "No services for this vehicle yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" (print "/services/new?vehicle=" $d.VehicleID) "Action" "Log service")}}
+    {{else}}{{template "empty" (dict "Sub" true "Icon" "wrench" "Title" "No services yet" "Text" "Log a service to keep the history and take the parts from stock." "Href" "/services/new" "Action" "Log service")}}{{end}}
     {{if and $d.Services (or $d.Labor $d.More (gt $d.Page 1))}}
     <div class="card-foot">
       {{- template "pager" (dict "Prev" (and (gt $d.Page 1) (withQuery "/services" ($d.PageQuery (add $d.Page -1)))) "Next" (and $d.More (withQuery "/services" ($d.PageQuery (add $d.Page 1)))))}}

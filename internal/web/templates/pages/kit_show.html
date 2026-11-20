@@ -81,8 +81,9 @@
   </div>
 
   <div class="stack">
-    <section class="card card-pad">
-      <h2 class="mb">{{icon "clock"}} Schedule</h2>
+    <section class="card">
+      <div class="card-head"><h2>{{icon "clock"}} Schedule</h2></div>
+      <div class="card-body">
       <dl class="facts">
         {{if $k.HasIntermediate}}
         <div><dt>Full every</dt><dd>{{template "kit-interval" (dict "Distance" $k.IntervalDistance "Months" $k.IntervalMonths)}}</dd></div>
@@ -101,6 +102,7 @@
       </dl>
       {{if and $d.View.MonthsUncounted (not $d.Vehicle.Archived)}}<p class="hint mt" role="note">Nothing to count the {{plural $k.IntervalMonths "month"}} from yet. <a href="/vehicles/{{$k.VehicleID}}/edit">Set the vehicle's purchase date</a>, or log the last full service, so a warranty's yearly service isn't missed.</p>{{end}}
       {{with $k.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
+      </div>
     </section>
 
     <section class="card">

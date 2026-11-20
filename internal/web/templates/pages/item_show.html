@@ -89,6 +89,7 @@
       <div class="card-head"><h2>{{icon "tag"}} SKUs</h2>{{if $it.SKUs}}<span class="meta">{{len $it.SKUs}}</span>{{end}}</div>
       {{if $it.SKUs}}
       <table class="table sku-table">
+        <thead><tr><th>Part number</th><th>Type</th><th class="num">Pack</th></tr></thead>
         <tbody>
         {{range $it.DisplaySKUs}}<tr><td><a class="sku-link" href="{{skuSearch .Code .Brand}}" target="_blank" rel="noopener noreferrer" title="{{skuSearchTitle}}">{{.Code}}</a></td><td>{{.Kind.Label}}{{with .Brand}} · {{.}}{{end}}</td><td class="num">{{with .PackSize}}{{qty . $it.Unit}}{{end}}</td></tr>{{end}}
         </tbody>
@@ -130,7 +131,7 @@
 {{end}}
 
 {{define "move-form"}}{{$m := .Move}}{{$e := $m.Errors}}{{$active := eq $m.Kind .Kind}}
-<form class="card-body form" id="panel-{{.Kind}}" role="tabpanel" aria-labelledby="tab-{{.Kind}}" method="post" action="/items/{{.Item.ID}}/movements" {{if .Hidden}}hidden{{end}}>
+<form class="card-body form" id="panel-{{.Kind}}" role="tabpanel" aria-labelledby="tab-{{.Kind}}" method="post" action="/items/{{.Item.ID}}/movements" novalidate {{if .Hidden}}hidden{{end}}>
   <input type="hidden" name="kind" value="{{.Kind}}">
   {{/* Only the form that came back with errors keeps its key. */}}
   {{template "form-key" (and $active $m.FormKey)}}
@@ -142,16 +143,16 @@
     <div class="field{{if and $active (index $e "amount")}} has-error{{end}}">
       <div class="label-row"><label for="amount-{{.Kind}}">{{if eq .Kind "used"}}Amount used{{else}}In stock now{{end}}</label>{{template "req"}}</div>
       <div class="qty-input">
-        <input class="input" id="amount-{{.Kind}}" name="amount" value="{{if $active}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Item.Unit}}" aria-required="true">
+        <input class="input" id="amount-{{.Kind}}" name="amount" value="{{if $active}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Item.Unit}}" required {{invalid (index $e "amount") (print "amount-" .Kind)}}>
         <select class="input" name="amount_unit" aria-label="Unit">{{range .Units}}<option value="{{.Value}}" {{if eq .Value $m.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
       </div>
-      {{if $active}}{{template "err" (index $e "amount")}}{{end}}
+      {{if $active}}{{template "field-err" (fieldErr (index $e "amount") (print "amount-" .Kind))}}{{end}}
     </div>
     {{if eq .Kind "used"}}
     <div class="field{{if and $active (index $e "occurred_on")}} has-error{{end}}">
       <label for="date-{{.Kind}}">Used on</label>
-      <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{if $active}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}">
-      {{if $active}}{{template "err" (index $e "occurred_on")}}{{end}}
+      <input class="input" type="date" id="date-{{.Kind}}" name="occurred_on" value="{{if $active}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}" {{invalid (index $e "occurred_on") (print "date-" .Kind)}}>
+      {{if $active}}{{template "field-err" (fieldErr (index $e "occurred_on") (print "date-" .Kind))}}{{end}}
     </div>
     {{end}}
     <div class="field">

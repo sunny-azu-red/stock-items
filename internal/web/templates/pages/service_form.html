@@ -57,11 +57,11 @@
       {{if not (or $f.KitID $f.ID $byBar)}}
       <div class="field{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
+        <select class="input" id="vehicle_id" name="vehicle_id" required {{invalid (index $e "vehicle_id") "vehicle_id"}}>
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
-        {{template "err" (index $e "vehicle_id")}}
+        {{template "field-err" (fieldErr (index $e "vehicle_id") "vehicle_id")}}
         {{template "err" (index $e "kit_id")}}
       </div>
       {{end}}
@@ -76,24 +76,24 @@
       {{end}}
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <div class="label-row"><label for="title">Work performed</label>{{template "req"}}</div>
-        <input class="input" id="title" name="title" value="{{$f.Title}}" aria-required="true" placeholder="e.g. Oil Service" list="service-titles">
+        <input class="input" id="title" name="title" value="{{$f.Title}}" required placeholder="e.g. Oil Service" list="service-titles" autocomplete="off" {{invalid (index $e "title") "title"}}>
         {{template "datalist" (dict "ID" "service-titles" "Options" $d.ServiceTitles)}}
-        {{template "err" (index $e "title")}}
+        {{template "field-err" (fieldErr (index $e "title") "title")}}
       </div>
       <div class="field{{if index $e "performed_on"}} has-error{{end}}">
         <div class="label-row"><label for="performed_on">Date</label>{{template "req"}}</div>
-        <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}" aria-required="true">
-        {{template "err" (index $e "performed_on")}}
+        <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}" required {{invalid (index $e "performed_on") "performed_on"}}>
+        {{template "field-err" (fieldErr (index $e "performed_on") "performed_on")}}
       </div>
       <div class="field{{if index $e "odometer"}} has-error{{end}}">
         <label for="odometer">Odometer ({{distUnit}})</label>
-        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle $d.Vehicle.Odometer}}Last reading {{distance $d.Vehicle.Odometer}}{{else}}e.g. 15000{{end}}">
-        {{template "err" (index $e "odometer")}}
+        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle $d.Vehicle.Odometer}}Last reading {{distance $d.Vehicle.Odometer}}{{else}}e.g. 15000{{end}}" {{invalid (index $e "odometer") "odometer"}}>
+        {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}
       </div>
       <div class="field{{if index $e "labor_cost"}} has-error{{end}}">
         <label for="labor_cost">Labour cost ({{.Currency}})</label>
-        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal" placeholder="e.g. 80">
-        {{template "err" (index $e "labor_cost")}}
+        <input class="input" id="labor_cost" name="labor_cost" value="{{$f.LaborCost}}" inputmode="decimal" placeholder="e.g. 80" {{invalid (index $e "labor_cost") "labor_cost"}}>
+        {{template "field-err" (fieldErr (index $e "labor_cost") "labor_cost")}}
       </div>
     </div>
   </div>

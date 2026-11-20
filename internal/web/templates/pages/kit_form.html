@@ -23,18 +23,18 @@
       {{if not $byBar}}
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" aria-required="true">
+        <select class="input" id="vehicle_id" name="vehicle_id" required {{invalid (index $e "vehicle_id") "vehicle_id"}}>
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
-        {{template "err" (index $e "vehicle_id")}}
+        {{template "field-err" (fieldErr (index $e "vehicle_id") "vehicle_id")}}
       </div>
       {{end}}
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" aria-required="true" placeholder="e.g. Oil Service" list="kit-names" {{if not $f.Name}}autofocus{{end}}>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" required placeholder="e.g. Oil Service" list="kit-names" autocomplete="off" {{if not $f.Name}}autofocus{{end}} {{invalid (index $e "name") "name"}}>
         {{template "datalist" (dict "ID" "kit-names" "Options" $d.KitNames)}}
-        {{template "err" (index $e "name")}}
+        {{template "field-err" (fieldErr (index $e "name") "name")}}
       </div>
     </div>
   </div>
@@ -43,13 +43,13 @@
     <div class="form-grid">
       <div class="field{{if index $e "interval_distance"}} has-error{{end}}">
         <label for="interval_distance">Distance ({{distUnit}})</label>
-        <input class="input" id="interval_distance" name="interval_distance" value="{{$f.IntervalDistance}}" inputmode="numeric" placeholder="e.g. 7500">
-        {{template "err" (index $e "interval_distance")}}
+        <input class="input" id="interval_distance" name="interval_distance" value="{{$f.IntervalDistance}}" inputmode="numeric" placeholder="e.g. 7500" {{invalid (index $e "interval_distance") "interval_distance"}}>
+        {{template "field-err" (fieldErr (index $e "interval_distance") "interval_distance")}}
       </div>
       <div class="field{{if index $e "interval_months"}} has-error{{end}}">
         <label for="interval_months">Months</label>
-        <input class="input" id="interval_months" name="interval_months" value="{{$f.IntervalMonths}}" inputmode="numeric" placeholder="e.g. 12">
-        {{template "err" (index $e "interval_months")}}
+        <input class="input" id="interval_months" name="interval_months" value="{{$f.IntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" {{invalid (index $e "interval_months") "interval_months"}}>
+        {{template "field-err" (fieldErr (index $e "interval_months") "interval_months")}}
       </div>
     </div>
     <p class="hint mt">Whichever comes first. You get a reminder on the dashboard when the job is due.</p>
@@ -76,17 +76,17 @@
     <div class="form-grid">
       <div class="field{{if index $e "inter_interval_distance"}} has-error{{end}}">
         <label for="inter_interval_distance">Intermediate distance ({{distUnit}})</label>
-        <input class="input" id="inter_interval_distance" name="inter_interval_distance" value="{{$f.InterIntervalDistance}}" inputmode="numeric" placeholder="e.g. 3500">
-        {{template "err" (index $e "inter_interval_distance")}}
+        <input class="input" id="inter_interval_distance" name="inter_interval_distance" value="{{$f.InterIntervalDistance}}" inputmode="numeric" placeholder="e.g. 3500" {{invalid (index $e "inter_interval_distance") "inter_interval_distance"}}>
+        {{template "field-err" (fieldErr (index $e "inter_interval_distance") "inter_interval_distance")}}
       </div>
       <div class="field{{if index $e "inter_interval_months"}} has-error{{end}}">
-        <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "ID" "inter-months-tip" "Text" "Leave empty under warranty so intermediate services never push back the full service's date. Set months (e.g. 12) when an intermediate service should also reset the time clock.")}}</div>
-        <input class="input" id="inter_interval_months" name="inter_interval_months" value="{{$f.InterIntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" aria-describedby="inter-months-tip">
-        {{template "err" (index $e "inter_interval_months")}}
+        <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "For" "Intermediate months" "ID" "inter-months-tip" "Text" "Leave empty under warranty so intermediate services never push back the full service's date. Set months (e.g. 12) when an intermediate service should also reset the time clock.")}}</div>
+        <input class="input" id="inter_interval_months" name="inter_interval_months" value="{{$f.InterIntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" {{invalid (index $e "inter_interval_months") "inter_interval_months" "inter-months-tip"}}>
+        {{template "field-err" (fieldErr (index $e "inter_interval_months") "inter_interval_months")}}
       </div>
     </div>
     <p class="hint mt">Alternates with the full schedule above. Leave months empty when the full service has a strict calendar deadline (like a dealer warranty).</p>
-    <h2 class="mt">Intermediate parts</h2>
+    <h3 class="mt">Intermediate parts</h3>
     {{template "err" (index $e "inter_lines")}}
     <div class="rows" id="inter-lines">
       {{template "part-line-head"}}

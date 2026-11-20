@@ -702,7 +702,7 @@ func TestAccessibilityDetails(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	pads := itemID(t, a.store, "Rear Brake")
-	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip"`)
+	expect(t, a.get("/items/new"), http.StatusOK, `name="total_price" value="" inputmode="decimal" placeholder="e.g. 24.90" aria-invalid="false" aria-describedby="price-tip"`)
 	// Only the selected tab is in the tab order; the price label names the currency.
 	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-bought" aria-controls="panel-bought" aria-selected="true">`,
 		`id="tab-used" aria-controls="panel-used" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
@@ -716,6 +716,28 @@ func TestAccessibilityDetails(t *testing.T) {
 	expect(t, a.post("/shopping", url.Values{"item_id": {"999999"}}), http.StatusUnprocessableEntity,
 		`<div class="field has-error">
             <label for="item_id">`)
+	// A field's error is tied to it: the field says it is invalid and points
+	// at the message, beside its hint; a field without one says it is valid.
+	rec = a.post("/items", url.Values{"name": {""}, "unit": {"piece"}, "min_quantity": {"x"}})
+	expect(t, rec, http.StatusUnprocessableEntity,
+		`required maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus aria-invalid="true" aria-describedby="name-err">`,
+		`<p class="field-error" id="name-err">`,
+		`aria-invalid="true" aria-describedby="min_quantity-err min-tip">`, `<p class="field-error" id="min_quantity-err">`,
+		`id="quantity" name="quantity" value="" inputmode="decimal" placeholder="0" aria-invalid="false">`,
+		"Fix the fields marked below.")
+	expectNot(t, rec, "Please")
+	// Required fields say so natively; forms validate on the server only.
+	expect(t, a.get("/items/new"), http.StatusOK, `name="name" value="" required`, `novalidate`)
+	// A "?" is named after its field.
+	expect(t, a.get("/items/new"), http.StatusOK, `aria-label="More about Keep at least" aria-describedby="min-tip"`)
+	// The keyboard can skip the sidebar; the stock's filters are a search.
+	stockPage := a.get("/stock")
+	expect(t, stockPage, http.StatusOK, `<a class="skip-link" href="#main">Skip to content</a>`, `<main class="main" id="main" tabindex="-1">`,
+		"<search>\n<form id=\"filters\"", `<nav class="tabbar" aria-label="Tabs">`, `<div id="toasts" class="toasts" role="status">`)
+	expectNot(t, stockPage, "<aside")
+	// A filter that is a link says which one is shown.
+	expect(t, a.get("/services?v="+itoa(k390)), http.StatusOK, `class="chip chip-toggle active" href="/services?v=`+itoa(k390)+`" aria-current="page"`)
+
 	// Error messages are announced at once.
 	page := httptest.NewRequest(http.MethodGet, "/trash", nil)
 	for _, c := range a.post("/trash/999/restore", nil).Result().Cookies() {

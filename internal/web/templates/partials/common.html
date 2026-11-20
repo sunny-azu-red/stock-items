@@ -2,17 +2,30 @@
 
 {{define "chip"}}<span class="chip" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</span>{{end}}
 
+{{/* A filter that is a link (Activity, Services, Shopping): dict "Href"
+     "Active" bool, and "Vehicle" (its chip's colour and name) or "Label"
+     (All vehicles; "Dot" for General). The active one is the page shown. */}}
+{{define "filter-chip"}}<a class="chip chip-toggle{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Active}} aria-current="page"{{end}}{{with .Vehicle}} style="{{chipStyle .Color}}"{{end}}>{{if or .Vehicle .Dot}}<span class="dot"></span>{{end}}{{with .Vehicle}}{{.Name}}{{else}}{{.Label}}{{end}}</a>{{end}}
+
 {{define "chip-link"}}<a class="chip" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle, and "Link" true on a stock row: each chip then shows that vehicle's stock */}}
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}{{$link := .Link}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{if $link}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}" title="Show {{.Name}} stock"><span class="dot"></span>{{.Name}}</a>{{else}}{{template "chip" .}}{{end}}{{end}}{{else}}{{if $link}}<a class="chip" href="/stock?general=1" title="Show General stock">General</a>{{else}}<span class="chip">General</span>{{end}}{{end}}</span>{{end}}
 
-{{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string.
+{{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string,
+   and "For" the field's name, which names the button ("More about Keep at least").
    Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
-{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="Help" aria-describedby="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}">{{.Text}}</span></span>{{end}}
+{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="{{with .For}}More about {{.}}{{else}}Help{{end}}" aria-describedby="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}">{{.Text}}</span></span>{{end}}
 
+{{/* A message that belongs to no one field (a list's, a row's). */}}
 {{define "err"}}{{with .}}<p class="field-error">{{.}}</p>{{end}}{{end}}
 
-{{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} Please fix the highlighted fields.{{with index . "form"}} {{.}}{{end}}</div>{{end}}{{end}}
+{{/* A field's error: (fieldErr message id), where id is its control's.
+     The control carries {{invalid message id}}, which points
+     aria-describedby here and sets aria-invalid, so a screen reader reads
+     the message with the field. */}}
+{{define "field-err"}}{{with .Msg}}<p class="field-error" id="{{$.ID}}">{{.}}</p>{{end}}{{end}}
+
+{{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}} Fix the fields marked below.{{with index . "form"}} {{.}}{{end}}</div>{{end}}{{end}}
 
 {{/* The banner of an edit form refused because its record changed or was
      deleted since it was opened: *staleNote, or nil for none. */}}
@@ -23,7 +36,9 @@
      errors, else a new one. */}}
 {{define "form-key"}}<input type="hidden" name="form_key" value="{{or . newFormKey}}">{{end}}
 
-{{define "empty"}}<div class="empty">{{icon .Icon}}<h2>{{.Title}}</h2>{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
+{{/* An empty state: dict "Icon" "Title" "Text" "Href" "Action" "ActionIcon",
+     and "Sub" true under a card's own heading (its title is then an h3). */}}
+{{define "empty"}}<div class="empty">{{icon .Icon}}{{if .Sub}}<h3>{{.Title}}</h3>{{else}}<h2>{{.Title}}</h2>{{end}}{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
 
 {{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}
 
@@ -64,13 +79,15 @@
 {{end}}
 {{end}}
 
+{{/* A kit's readiness as a disc, which says it in words too. Where the
+     row's badges say it already (kit-row), it is hidden from screen readers. */}}
 {{define "kit-status-icon"}}
-<span class="status-icon {{if .Kit.Archived}}status-muted{{else if .Readiness.Ready}}status-ok{{else if eq .Readiness.Lines 0}}status-muted{{else}}status-short{{end}}">{{if .Kit.Archived}}{{icon "archive"}}{{else if .Readiness.Ready}}{{icon "check"}}{{else if eq .Readiness.Lines 0}}{{icon "minus"}}{{else}}{{icon "x"}}{{end}}</span>
+<span class="status-icon {{if .Kit.Archived}}status-muted{{else if .Readiness.Ready}}status-ok{{else if eq .Readiness.Lines 0}}status-muted{{else}}status-short{{end}}" role="img" aria-label="{{if .Kit.Archived}}Archived{{else if .Readiness.Ready}}Parts ready{{else if eq .Readiness.Lines 0}}No parts{{else}}Parts missing{{end}}">{{if .Kit.Archived}}{{icon "archive"}}{{else if .Readiness.Ready}}{{icon "check"}}{{else if eq .Readiness.Lines 0}}{{icon "minus"}}{{else}}{{icon "x"}}{{end}}</span>
 {{end}}
 
 {{define "kit-row"}}
 <a class="kit-row{{if .Kit.Archived}} muted{{end}}" href="/kits/{{.Kit.ID}}">
-  {{template "kit-status-icon" .}}
+  <span aria-hidden="true">{{template "kit-status-icon" .}}</span>
   <span class="grow">
     <span class="title-row">
       <span class="title">{{.Kit.Name}}</span>
@@ -83,7 +100,7 @@
 {{end}}
 
 {{/* Beside a required field's label, in its .label-row (the label stays
-     just the field's name; the input says aria-required). The form says
+     just the field's name; the input says required). The form says
      once what it means. */}}
 {{define "req"}}<span class="req" aria-hidden="true">*</span>{{end}}
 {{define "req-note"}}<p class="hint req-note"><span class="req" aria-hidden="true">*</span> required</p>{{end}}
@@ -97,40 +114,42 @@
   <div class="field{{if and $s (index $e "amount")}} has-error{{end}}">
     <div class="label-row"><label for="amount{{$id}}">Amount bought</label>{{template "req"}}</div>
     <div class="qty-input">
-      <input class="input" id="amount{{$id}}" name="amount" value="{{if $s}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Unit}}" aria-required="true"{{if .Autofocus}} autofocus{{end}}>
+      <input class="input" id="amount{{$id}}" name="amount" value="{{if $s}}{{$m.Amount}}{{end}}" inputmode="decimal" placeholder="{{placeholderFor .Unit}}" required{{if .Autofocus}} autofocus{{end}} {{invalid (and $s (index $e "amount")) (print "amount" $id)}}>
       <select class="input" name="amount_unit" aria-label="Unit">{{range .Units}}<option value="{{.Value}}" {{if eq .Value $m.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
     </div>
-    {{if $s}}{{template "err" (index $e "amount")}}{{end}}
+    {{if $s}}{{template "field-err" (fieldErr (index $e "amount") (print "amount" $id))}}{{end}}
   </div>
-  <div class="field{{if and $s (index $e "total_price")}} has-error{{end}}">
-    {{if eq .Unit "piece"}}
-    <div class="label-row"><label for="price{{$id}}">Total price ({{.Currency}})</label>{{template "tip" (dict "ID" (print "price-tip" $id) "Text" "For all the pieces together, not the price of one.")}}</div>
-    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="e.g. 24.90" aria-describedby="price-tip{{$id}}">
-    {{else}}
-    <label for="price{{$id}}">Total price ({{.Currency}})</label>
-    <input class="input" id="price{{$id}}" name="total_price" value="{{if $s}}{{$m.TotalPrice}}{{end}}" inputmode="decimal" placeholder="e.g. 24.90">
-    {{end}}
-    {{if $s}}{{template "err" (index $e "total_price")}}{{end}}
-  </div>
+  {{template "price-field" (dict "ID" (print "price" $id) "TipID" (print "price-tip" $id) "Value" (and $s $m.TotalPrice) "Error" (and $s (index $e "total_price")) "Currency" .Currency "Tip" (and (eq .Unit "piece") "For all the pieces together, not the price of one."))}}
   <div class="field">
     <label for="supplier{{$id}}">Shop</label>
-    <input class="input" id="supplier{{$id}}" name="supplier" value="{{if $s}}{{$m.Supplier}}{{end}}" placeholder="e.g. Louis or the dealer" list="suppliers{{$id}}">
+    <input class="input" id="supplier{{$id}}" name="supplier" value="{{if $s}}{{$m.Supplier}}{{end}}" placeholder="e.g. Louis or the dealer" list="suppliers{{$id}}" autocomplete="off">
     {{template "datalist" (dict "ID" (print "suppliers" $id) "Options" .Suppliers)}}
   </div>
   <div class="field{{if and $s (index $e "occurred_on")}} has-error{{end}}">
     <label for="date{{$id}}">Bought on</label>
-    <input class="input" type="date" id="date{{$id}}" name="occurred_on" value="{{if $s}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}">
-    {{if $s}}{{template "err" (index $e "occurred_on")}}{{end}}
+    <input class="input" type="date" id="date{{$id}}" name="occurred_on" value="{{if $s}}{{$m.OccurredOn}}{{else}}{{.Today}}{{end}}" {{invalid (and $s (index $e "occurred_on")) (print "date" $id)}}>
+    {{if $s}}{{template "field-err" (fieldErr (index $e "occurred_on") (print "date" $id))}}{{end}}
   </div>
   <div class="field{{if and $s (index $e "expires_on")}} has-error{{end}}">
-    <div class="label-row"><label for="expires{{$id}}">Best before</label>{{template "tip" (dict "ID" (print "expires-tip" $id) "Text" "Replaces the item's date; leave it empty to keep that.")}}</div>
-    <input class="input" type="date" id="expires{{$id}}" name="expires_on" value="{{if $s}}{{$m.ExpiresOn}}{{end}}" aria-describedby="expires-tip{{$id}}">
-    {{if $s}}{{template "err" (index $e "expires_on")}}{{end}}
+    <div class="label-row"><label for="expires{{$id}}">Best before</label>{{template "tip" (dict "For" "Best before" "ID" (print "expires-tip" $id) "Text" "Replaces the item's date; leave it empty to keep that.")}}</div>
+    <input class="input" type="date" id="expires{{$id}}" name="expires_on" value="{{if $s}}{{$m.ExpiresOn}}{{end}}" {{invalid (and $s (index $e "expires_on")) (print "expires" $id) (print "expires-tip" $id)}}>
+    {{if $s}}{{template "field-err" (fieldErr (index $e "expires_on") (print "expires" $id))}}{{end}}
   </div>
   <div class="field">
     <label for="note{{$id}}">Note</label>
     <input class="input" id="note{{$id}}" name="note" value="{{if $s}}{{$m.Note}}{{end}}" placeholder="e.g. on sale, 2 for 1">
   </div>
+</div>{{end}}
+
+{{/* A purchase's total price: dict "ID" (the input's) "TipID" "Value"
+     "Error" "Currency", and "Tip" the "?" text ("" or false for none).
+     The item form has its own, whose hint shows only for pieces. */}}
+{{define "price-field"}}
+<div class="field{{if .Error}} has-error{{end}}">
+  {{if .Tip}}<div class="label-row"><label for="{{.ID}}">Total price ({{.Currency}})</label>{{template "tip" (dict "For" "Total price" "ID" .TipID "Text" .Tip)}}</div>
+  {{else}}<label for="{{.ID}}">Total price ({{.Currency}})</label>{{end}}
+  <input class="input" id="{{.ID}}" name="total_price" value="{{or .Value ""}}" inputmode="decimal" placeholder="e.g. 24.90" {{invalid .Error .ID (and .Tip .TipID)}}>
+  {{template "field-err" (fieldErr .Error .ID)}}
 </div>{{end}}
 
 {{/* An item's stock badge: out of stock, short (a service row asks for
@@ -179,7 +198,8 @@
 </li>
 {{end}}
 
-{{/* A group of item rows: dict "Section" Section "Vehicles" map, and
+{{/* A group of item rows: dict "Section" Section "Vehicles" map, "Sub"
+     true under the page's own heading for the stock (a vehicle's page), and
      "Here" the one vehicle the page is about (a vehicle's page, the stock
      filtered to it). Each heading says which vehicles the items fit: Only
      one, Shared by several, General for none. The page names Here once at
@@ -189,13 +209,13 @@
 {{/* A section for one vehicle is tinted with its colour. */}}
 <section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}"{{if not (or $sec.General $sec.Shared)}}{{with index $sec.Vehicles 0}} style="{{chipStyle .Color}}"{{end}}{{end}}>
   <div class="section-head">
-    <h2>
+    {{if $.Sub}}<h3>{{else}}<h2>{{end}}
       {{if $sec.General}}{{icon "package"}} General <span class="muted small">(not tied to a vehicle)</span>
       {{else if and $sec.Shared $here}}{{icon "tag"}} Shared with {{range $sec.Vehicles}}{{if ne .ID $here}}{{template "chip" .}}{{end}}{{end}}
       {{else if $sec.Shared}}{{icon "tag"}} Shared {{range $sec.Vehicles}}{{template "chip" .}}{{end}}
       {{else if $here}}{{icon "warehouse"}} Only this vehicle
       {{else}}{{icon "warehouse"}} Only {{with index $sec.Vehicles 0}}{{template "chip" .}}{{end}}{{end}}
-    </h2>
+    {{if $.Sub}}</h3>{{else}}</h2>{{end}}
     <span class="n">{{plural (len $sec.Items) "item"}}</span>
   </div>
   <ul class="item-list">
@@ -205,8 +225,9 @@
 {{end}}
 
 {{/* A column header that sorts the table when clicked: sortCol (from
-     sortHeads.Col). A plain link, so it works without JavaScript. */}}
-{{define "sort-th"}}<th{{if .Num}} class="num"{{end}} aria-sort="{{.Sort}}">{{if .Href}}<a class="sort-link{{if ne .Sort "none"}} sorted{{end}}" href="{{.Href}}" title="{{.Title}}">{{.Label}}{{if eq .Sort "ascending"}}{{icon "arrow-up"}}{{else if eq .Sort "descending"}}{{icon "arrow-down"}}{{else}}{{icon "arrow-up-down"}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
+     sortHeads.Col). A plain link, so it works without JavaScript. Only the
+     column sorted by says aria-sort. */}}
+{{define "sort-th"}}<th{{if .Num}} class="num"{{end}}{{if ne .Sort "none"}} aria-sort="{{.Sort}}"{{end}}>{{if .Href}}<a class="sort-link{{if ne .Sort "none"}} sorted{{end}}" href="{{.Href}}" title="{{.Title}}">{{.Label}}{{if eq .Sort "ascending"}}{{icon "arrow-up"}}{{else if eq .Sort "descending"}}{{icon "arrow-down"}}{{else}}{{icon "arrow-up-down"}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
 
 {{/* Movement history table: dict "Movements" []Movement "ShowItem" bool
      "Sort" sortHeads "Working" (the vehicle worked on's id, or nil): while

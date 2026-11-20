@@ -509,7 +509,7 @@ func TestWorkingOnNav(t *testing.T) {
 	// The phone's More opens the sidebar, which leaves out what the
 	// tabbar has; Activity and Trash moved off the vehicles list into it.
 	rec = a.getWorking("/activity?general=1&v="+w, w)
-	expect(t, rec, http.StatusOK, `<aside class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
+	expect(t, rec, http.StatusOK, `<div class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
 	expectNot(t, a.get("/vehicles"), `href="/activity"><svg`, `Trash (`)
 	// The phone's Switch is a popover too: its tray, under the bar.
 	expect(t, rec, http.StatusOK, `popovertarget="switch"`, `<div class="working-pick" id="switch" popover`)

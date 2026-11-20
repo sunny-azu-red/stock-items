@@ -41,7 +41,7 @@
       {{else if $d.KitCount}}
         <div class="card-body muted small">None of your service kits has an interval yet. Set "every X {{distUnit}} / months" on a kit to get reminders.</div>
       {{else}}
-        {{template "empty" (dict "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles (print "/kits/new" (or (and $d.VehicleID (print "?vehicle=" $d.VehicleID)) ""))) "") "Action" "Add kit")}}
+        {{template "empty" (dict "Sub" true "Icon" "list-checks" "Title" "No service kits yet" "Text" "A kit lists the parts a job needs (e.g. an oil service). You see right away what is missing, and when the job is due again." "Href" (or (and $d.Vehicles (print "/kits/new" (or (and $d.VehicleID (print "?vehicle=" $d.VehicleID)) ""))) "") "Action" "Add kit")}}
       {{end}}
     </section>
 

@@ -10,7 +10,6 @@
     if (!box || !message) return;
     var el = document.createElement("div");
     el.className = "toast" + (kind === "error" ? " error" : "");
-    el.setAttribute("role", "status");
     el.textContent = message;
     box.appendChild(el);
     setTimeout(function () { el.remove(); }, kind === "error" ? 6000 : 3000);

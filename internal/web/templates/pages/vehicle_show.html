@@ -48,15 +48,16 @@
       </div>
     </div>
     {{if $d.Sections}}
-      {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Here" $v.ID)}}{{end}}
+      {{range $d.Sections}}{{template "stock-section" (dict "Section" . "Vehicles" $d.VehicleMap "Here" $v.ID "Sub" true)}}{{end}}
     {{else}}
       <div class="card">{{template "empty" (dict "Icon" "package" "Title" "Nothing in stock for this vehicle" "Href" (or (and (not $v.Archived) (print "/items/new?vehicle=" $v.ID)) "") "Action" "Add item")}}</div>
     {{end}}
   </div>
 
   <div class="stack">
-    <section class="card card-pad">
-      <h2 class="mb">{{icon "gauge"}} Odometer</h2>
+    <section class="card">
+      <div class="card-head"><h2>{{icon "gauge"}} Odometer</h2></div>
+      <div class="card-body">
       {{if $v.Archived}}
       <p>{{distance $v.Odometer}}</p>
       <p class="hint mt">Restore this vehicle to log services or add kits.</p>
@@ -67,6 +68,7 @@
       </form>
       <p class="hint mt">Used for distance-based service reminders. Logging a service also updates it.</p>
       {{end}}
+      </div>
     </section>
 
     <section class="card card-pad">

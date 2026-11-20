@@ -197,6 +197,8 @@ func (s *Server) funcs() template.FuncMap {
 		"plural":        plural,
 		"pluralOnly":    pluralOnly,
 		"accentPresets": accentPresets,
+		"fieldErr":      fieldErr,
+		"invalid":       invalidAttrs,
 		"chipStyle": func(color string) template.CSS {
 			if !stock.IsColor(color) {
 				color = "#888888"
@@ -531,4 +533,54 @@ func pluralWord(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// isMessage reports whether a template value is an error message to show:
+// a non-empty string (a missing map key is ""; "and" with a false
+// condition is false).
+func isMessage(v any) bool {
+	switch m := v.(type) {
+	case string:
+		return m != ""
+	case template.HTML:
+		return m != ""
+	default:
+		return false
+	}
+}
+
+// fieldErr is a field's error message for the "field-err" partial, with
+// the id its control's aria-describedby points to: the control's id and
+// "-err".
+func fieldErr(msg any, id string) map[string]any {
+	if !isMessage(msg) {
+		return map[string]any{"Msg": "", "ID": ""}
+	}
+	return map[string]any{"Msg": msg, "ID": id + "-err"}
+}
+
+// invalidAttrs are a form control's aria-invalid and aria-describedby: its
+// error message (see fieldErr) when there is one, then its hints (ids; a
+// false or empty one is left out, so a hint can depend on the form).
+// aria-invalid is always said, "false" too: Firefox treats an empty
+// required field as invalid from the start otherwise.
+func invalidAttrs(msg any, id string, hints ...any) template.HTMLAttr {
+	var ids []string
+	bad := isMessage(msg)
+	if bad {
+		ids = append(ids, id+"-err")
+	}
+	for _, h := range hints {
+		if s, ok := h.(string); ok && s != "" {
+			ids = append(ids, s)
+		}
+	}
+	a := `aria-invalid="false"`
+	if bad {
+		a = `aria-invalid="true"`
+	}
+	if len(ids) > 0 {
+		a += ` aria-describedby="` + template.HTMLEscapeString(strings.Join(ids, " ")) + `"`
+	}
+	return template.HTMLAttr(a) //nolint:gosec // fixed names, and escaped ids
 }

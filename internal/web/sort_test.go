@@ -140,10 +140,10 @@ func TestActivitySortHeaders(t *testing.T) {
 	rec := a.get("/activity")
 	expect(t, rec, http.StatusOK,
 		`<th aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc" title="Sort by Date, ascending">Date`,
-		`<th aria-sort="none"><a class="sort-link" href="/activity?sort=item"`,
-		`<th aria-sort="none"><a class="sort-link" href="/activity?sort=kind"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="/activity?sort=change"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="/activity?sort=price"`,
+		`<th><a class="sort-link" href="/activity?sort=item"`,
+		`<th><a class="sort-link" href="/activity?sort=kind"`,
+		`<th class="num"><a class="sort-link" href="/activity?sort=change"`,
+		`<th class="num"><a class="sort-link" href="/activity?sort=price"`,
 		"Every change to your stock, newest first.")
 	if strings.Contains(rec.Body.String(), "Reset order") {
 		t.Error(`"Reset order" on activity default sort`)
@@ -154,7 +154,7 @@ func TestActivitySortHeaders(t *testing.T) {
 	rec = a.get("/activity?sort=price&kind=bought")
 	expect(t, rec, http.StatusOK,
 		`<th class="num" aria-sort="descending"><a class="sort-link sorted" href="/activity?dir=asc&amp;kind=bought&amp;sort=price"`,
-		`<th aria-sort="none"><a class="sort-link" href="/activity?kind=bought" title="Sort by Date, descending">`,
+		`<th><a class="sort-link" href="/activity?kind=bought" title="Sort by Date, descending">`,
 		`href="/activity?sort=price">All types</a>`,
 		`href="/activity?kind=used&amp;sort=price">Used</a>`,
 		`href="/activity/export.csv?kind=bought&amp;sort=price"`,
@@ -208,7 +208,7 @@ func TestItemHistorySort(t *testing.T) {
 	rec := a.get(path)
 	expect(t, rec, http.StatusOK, `id="history"`,
 		`<th aria-sort="descending"><a class="sort-link sorted" href="`+path+`?dir=asc#history"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=price#history"`)
+		`<th class="num"><a class="sort-link" href="`+path+`?sort=price#history"`)
 	if strings.Contains(rec.Body.String(), "sort=item") {
 		t.Error("an item's history offers to sort by item")
 	}
@@ -258,10 +258,10 @@ func TestKitPartsSort(t *testing.T) {
 	// The kit's own order, with every column ready to sort.
 	rec := a.get(path)
 	expect(t, rec, http.StatusOK,
-		`<th aria-sort="none"><a class="sort-link" href="`+path+`?sort=item"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=need"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=have"`,
-		`<th class="num" aria-sort="none"><a class="sort-link" href="`+path+`?sort=missing"`)
+		`<th><a class="sort-link" href="`+path+`?sort=item"`,
+		`<th class="num"><a class="sort-link" href="`+path+`?sort=need"`,
+		`<th class="num"><a class="sort-link" href="`+path+`?sort=have"`,
+		`<th class="num"><a class="sort-link" href="`+path+`?sort=missing"`)
 	if strings.Contains(rec.Body.String(), "Reset order") {
 		t.Error(`"Reset order" link on the kit's own order`)
 	}
@@ -298,7 +298,7 @@ func TestStockSortBy(t *testing.T) {
 		`<input type="hidden" name="was_sort" value="expiry"><input type="hidden" name="was_dir" value="desc">`,
 		"Soonest first", "Latest first",
 		`href="/stock?dir=desc&amp;sort=expiry">Grouped</a>`,
-		`href="/stock?dir=desc&amp;sort=expiry&amp;view=list">List</a>`,
+		`href="/stock?dir=desc&amp;sort=expiry&amp;view=list" aria-current="page">List</a>`,
 		`href="/stock/export.txt?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`href="/stock/export.csv?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`id="filter-all" href="/stock?dir=desc&amp;sort=expiry&amp;view=list"`)

@@ -12,9 +12,9 @@
      control (its stock with General). */}}
 {{if and (not $d.Item) $d.Vehicles (not .WorkingOn)}}
 <div class="chips mb" role="group" aria-label="Filter by vehicle">
-  <a class="chip chip-toggle{{if not (or $d.VehicleID $d.General)}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery 0 false)}}">All vehicles</a>
-  {{range $d.Vehicles}}<a class="chip chip-toggle{{if eq .ID $d.VehicleID}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery .ID $d.General)}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</a>{{end}}
-  <a class="chip chip-toggle{{if $d.General}} active{{end}}" href="{{withQuery "/activity" ($d.ChipQuery $d.VehicleID (not $d.General))}}"><span class="dot"></span>General</a>
+  {{template "filter-chip" (dict "Href" (withQuery "/activity" ($d.ChipQuery 0 false)) "Active" (not (or $d.VehicleID $d.General)) "Label" "All vehicles")}}
+  {{range $d.Vehicles}}{{template "filter-chip" (dict "Href" (withQuery "/activity" ($d.ChipQuery .ID $d.General)) "Active" (eq .ID $d.VehicleID) "Vehicle" .)}}{{end}}
+  {{template "filter-chip" (dict "Href" (withQuery "/activity" ($d.ChipQuery $d.VehicleID (not $d.General))) "Active" $d.General "Label" "General" "Dot" true)}}
 </div>
 {{end}}
 <div class="filters-row mb">

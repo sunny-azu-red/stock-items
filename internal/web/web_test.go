@@ -335,6 +335,67 @@ func TestTheme(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{Name: themeCookie, Value: `"><script>`})
 	expect(t, a.do(req), http.StatusOK, `<html lang="en">`)
+
+	// The Appearance panel says which theme is in use.
+	expect(t, a.get("/"), http.StatusOK, `value="system" aria-pressed="true"`, `value="dark" aria-pressed="false"`)
+}
+
+// The accent colour: a cookie, like the theme, rendered on <html> as the
+// two numbers app.css works every accent tone out from.
+func TestAccent(t *testing.T) {
+	a := newApp(t)
+	// The default (Indigo) needs nothing on <html>; its preset is pressed.
+	rec := a.get("/")
+	expect(t, rec, http.StatusOK, `<html lang="en">`, `aria-label="Indigo" aria-pressed="true"`, `name="hue" min="0" max="359" value="280"`)
+	expectNot(t, rec, "--accent-h")
+
+	// The sliders' plain form post stores "hue-intensity" and goes back.
+	req := httptest.NewRequest(http.MethodPost, "/accent", strings.NewReader("hue=332&intensity=74"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "http://example.com/stock?low=1")
+	rec = a.do(req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/stock?low=1" {
+		t.Fatalf("accent redirect = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != accentCookie || cookies[0].Value != "332-74" || cookies[0].MaxAge <= 0 {
+		t.Fatalf("accent cookie = %+v", cookies)
+	}
+	if cookies[0].HttpOnly {
+		t.Error("accent cookie is HttpOnly: app.js can't re-apply it on a page Back restores")
+	}
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(cookies[0])
+	expect(t, a.do(req), http.StatusOK, `<html lang="en" style="--accent-h: 332; --accent-i: 74">`,
+		`aria-label="Plum" aria-pressed="true"`, `name="intensity" min="0" max="100" value="74"`)
+
+	// A preset posts one value; app.js gets a bare 204. Leading zeros are
+	// dropped, so the cookie and the page agree.
+	rec = a.post("/accent", url.Values{"accent": {"058-087"}}, "HX-Request", "true")
+	expect(t, rec, http.StatusNoContent)
+	if c := rec.Result().Cookies(); len(c) != 1 || c[0].Value != "58-87" {
+		t.Errorf("preset cookie = %+v", c)
+	}
+
+	// Back to Indigo, the default itself, and values out of range forget
+	// the choice.
+	for _, v := range []url.Values{{"reset": {"1"}, "hue": {"10"}, "intensity": {"50"}}, {"hue": {"280"}, "intensity": {"100"}},
+		{"hue": {"360"}, "intensity": {"50"}}, {"hue": {"10"}, "intensity": {"101"}}, {"hue": {"-1"}, "intensity": {"5"}}, {"accent": {"red"}}} {
+		rec = a.post("/accent", v, "HX-Request", "true")
+		if c := rec.Result().Cookies(); len(c) != 1 || c[0].MaxAge >= 0 {
+			t.Errorf("accent %v: cookie not cleared: %+v", v, c)
+		}
+	}
+
+	// A cookie that isn't the plain "hue-intensity" the server writes is
+	// ignored, never written into the page.
+	for _, v := range []string{`"><script>`, "280-100; color: red", "400-50", "12-300", "1-2-3"} {
+		req = httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: accentCookie, Value: v})
+		rec = a.do(req)
+		expect(t, rec, http.StatusOK, `<html lang="en">`)
+		expectNot(t, rec, "--accent-h:")
+	}
 }
 
 // TestHostileInput posts values people (or scripts) might send by accident

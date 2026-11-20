@@ -1563,7 +1563,7 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
 });
 
 test("every page's spacing follows the scale", async ({ page }, testInfo) => {
-  // docs/design.md#11-spacing. The page had twice the space under it as
+  // docs/design.md#5-spacing. The page had twice the space under it as
   // above (and a section's margin on top of that), stock sections were 20px
   // apart and tiles 12px while other cards were 16px, card parts sat 18 or
   // 19px in (13px for a phone's stock rows), the item's History table was

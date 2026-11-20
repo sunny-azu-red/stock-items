@@ -186,7 +186,8 @@
      the top, so its headings leave out its chip ("Only this vehicle",
      "Shared with" the others). */}}
 {{define "stock-section"}}{{$vs := .Vehicles}}{{$sec := .Section}}{{$here := or .Here 0}}
-<section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}">
+{{/* A section for one vehicle is tinted with its colour. */}}
+<section class="card section{{if $sec.Shared}} section-shared{{end}}" aria-label="{{$sec.Title}}"{{if not (or $sec.General $sec.Shared)}}{{with index $sec.Vehicles 0}} style="{{chipStyle .Color}}"{{end}}{{end}}>
   <div class="section-head">
     <h2>
       {{if $sec.General}}{{icon "package"}} General <span class="muted small">(not tied to a vehicle)</span>

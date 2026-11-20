@@ -478,7 +478,8 @@ func TestWorkingOnPages(t *testing.T) {
 		}
 		rec = a.get("/trash")
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
-		expectNot(t, rec, workingBar, `aria-pressed="true"`)
+		// No Work on button is pressed (the Appearance panel presses its own).
+		expectNot(t, rec, workingBar, `value="" aria-pressed="true"`)
 	})
 }
 

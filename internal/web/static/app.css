@@ -1,11 +1,32 @@
-/* Pitbox — hand written, no build step.
-   Design tokens first, then layout, then components. */
+/* Pitbox — hand written, no build step. docs/design.md is the spec.
 
-/* Inter (static/vendor, SIL OFL), Google Fonts' v20 build in its two
+   Baseline 2025 (current Chrome and Firefox; AGENTS.md): no fallbacks for
+   what is in it. A few Chrome-only touches (customizable select, page
+   transitions, text-wrap: pretty) are enhancements Firefox goes without.
+
+   One cascade, in layers: what a later layer says wins, whatever the
+   selectors. Inside a layer, one block per component holds its variants,
+   states, :has() forms and @container rules (native nesting; never nested
+   under a selector list, whose :is() takes the list's highest specificity). */
+@layer reset, tokens, base, shell, components, pages, utilities;
+
+/* Registered, so a vehicle card's wash can fade on hover. */
+@property --rim-fade { syntax: "<color>"; inherits: false; initial-value: transparent; }
+
+/* Manrope (static/vendor, SIL OFL), Google Fonts' v23 build in its two
    Latin subsets: the second loads only for a page that has its letters
-   (ă, ș, ț, …). Its capitals sit in the middle of the line, and its tabular
-   figures are drawn for it. The ?v= gets it cached for good: change it with
-   the files. */
+   (ă, ș, ț, …). Inter stays as the fallback for anything Manrope lacks.
+   The ?v= gets them cached for good: change it with the files. */
+@font-face {
+  font-family: "Manrope"; font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url("vendor/manrope-latin.woff2?v=23") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Manrope"; font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url("vendor/manrope-latin-ext.woff2?v=23") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 @font-face {
   font-family: "Inter"; font-style: normal; font-weight: 400 800; font-display: swap;
   src: url("vendor/inter-latin.woff2?v=20") format("woff2");
@@ -17,837 +38,1144 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-:root {
-  /* Colours are light-dark(light, dark). Which one applies follows
-     color-scheme: the system setting, unless data-theme on <html> (from the
-     theme cookie) forces one. */
-  color-scheme: light dark;
-  --bg: light-dark(#f5f4f1, #0f1013);
-  --surface: light-dark(#ffffff, #17191e);
-  --surface-2: light-dark(#f0eeea, #1f2228);
-  --surface-3: light-dark(#e6e3dd, #252932);
-  --border: light-dark(#e3e0da, #2b2f37);
-  --text: light-dark(#1c1b19, #ecebe8);
-  --muted: light-dark(#6b6760, #9b9a96);
-  --accent: light-dark(#77498a, #c39bd3);
-  --accent-strong: light-dark(#613a72, #d5b5e1);
-  --accent-soft: light-dark(#efe6f3, #2c2132);
-  --on-accent: light-dark(#ffffff, #1a0f1f);
-  --ok: light-dark(#15803d, #4ade80);
-  --ok-soft: light-dark(#dcfce7, #12301d);
-  --warn: light-dark(#b45309, #fbbf24);
-  --warn-soft: light-dark(#fef3c7, #362a0d);
-  --danger: light-dark(#c2261d, #f87171);
-  --danger-soft: light-dark(#fee2e2, #3b1515);
-  --info: light-dark(#1d4ed8, #93c5fd);
-  --info-soft: light-dark(#dbeafe, #172544);
-  --shadow: 0 1px 2px light-dark(rgb(0 0 0 / .05), rgb(0 0 0 / .4)), 0 2px 8px light-dark(rgb(0 0 0 / .04), transparent);
-  --shadow-pop: 0 8px 24px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .5));
-  --radius: 12px;
-  --radius-sm: 8px;
-  --control-h: 42px;
-  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --sidebar: 236px;
-  --tabbar: 64px;
-  /* The spacing scale (docs/design.md#11-spacing): --gap between cards,
-     sections and tiles; --inset inside a card, from its border to its
-     text, left and right (15px on a phone: with the border, as far in as
-     the page's 16px margin is out). */
-  --gap: 16px;
-  --inset: 19px;
-  /* A page that is a form: four 220px fields a row, and no wider. */
-  --form-width: 1000px;
-  /* The phone's popovers (More, Switch): rounded on the edge that is free,
-     square along the seam where they meet their bar. */
-  --sheet-radius: 16px;
-  /* Line height as a factor of the font size, like a unitless line-height:
-     set --lh, not line-height. See the rule below. */
-  --lh: 1.5;
-}
-:root[data-theme="light"] { color-scheme: light; }
-:root[data-theme="dark"] { color-scheme: dark; }
-
-*, *::before, *::after { box-sizing: border-box; }
-/* Whole pixels. Every box starts and ends on a whole CSS pixel, so text,
-   which the browser snaps to whole pixels, sits the same against its icons
-   and borders in every row, and no border is drawn across two pixels (see
-   docs/conventions.md). Each element's line is --lh times its own font
-   size, rounded to an even number of pixels, and icons are even too: with
-   borders in pairs, every height is even, and centring one thing in another
-   lands on a whole pixel. Lengths are px, not rem. e2e/tests/pixels.spec.ts
-   checks every page. */
-*, *::before, *::after { line-height: round(var(--lh) * 1em, 2px); }
-input[type="checkbox"], input[type="radio"] { width: 14px; height: 14px; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0;
-  font-size: 15px; font-family: var(--font);
-  /* Every digit the same width, so figures line up in columns and don't
-     shift when they change. */
-  font-variant-numeric: tabular-nums;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-}
-a { color: inherit; text-decoration: none; }
-img { max-width: 100%; display: block; }
-h1, h2, h3 { --lh: 1.25; margin: 0; }
-h1 { font-size: 1.6rem; letter-spacing: -.01em; }
-h2 { font-size: 1.1rem; }
-h3 { font-size: 1rem; }
-p { margin: 0 0 12px; }
-code, .mono { font-family: var(--mono); }
-hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
-[hidden] { display: none !important; }
-
-.icon { width: round(1.15em, 2px); height: round(1.15em, 2px); flex: none; vertical-align: -.2em; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
-/* ---------- Shell ---------- */
-.shell {
-  display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100vh;
-  /* paint the sidebar column all the way down, also below the sticky sidebar */
-  background: linear-gradient(90deg, var(--surface) calc(var(--sidebar) - 1px), var(--border) calc(var(--sidebar) - 1px), var(--border) var(--sidebar), transparent var(--sidebar));
-}
-/* It is a popover (the phone's More sheet), so it undoes the browser's
-   popover box here: centred, fit to its content, bordered, Canvas colours. */
-.sidebar {
-  position: sticky; inset: 0 auto auto; height: 100vh; width: auto; margin: 0; overflow-y: auto;
-  color: inherit; background: var(--surface); border: 0; border-right: 1px solid var(--border);
-  padding: 24px 13px; display: flex; flex-direction: column; gap: 20px;
-}
-/* The nav links' inset, so the logo lines up with their icons. As tall as
-   the page's heading row (38px), and as far down as the page's top (24px),
-   so the logo is level with the heading. */
-.sidebar-head { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; }
-.app-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; text-decoration: none; font-weight: 700; font-size: 1.05rem; }
-.app-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: var(--on-accent); }
-.nav { display: flex; flex-direction: column; gap: 2px; }
-/* A 24px line in 8px padding: 40px rows. At the body's 15px the capitals
-   would sit nearer the top (docs/design.md#text-centred-in-its-box). */
-.nav a {
-  display: flex; align-items: center; gap: 12px; padding: 8px 11px; border-radius: var(--radius-sm);
-  font-size: .9rem; --lh: 1.6; text-decoration: none; color: var(--muted); font-weight: 500;
-}
-.nav a .icon { width: 18px; height: 18px; }
-.nav a:hover { background: var(--surface-2); color: var(--text); }
-.nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-strong); }
-/* The vehicle worked on: its kind icon in its colour, as on its page. */
-.nav a.nav-vehicle .icon { color: var(--chip); }
-.nav .count { margin-left: auto; font-size: .72rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 7px; font-weight: 700; }
-/* A count that needs no action, such as what is in the trash. */
-.nav .count-muted { background: var(--surface-2); color: var(--muted); }
-.nav-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 11px; margin-bottom: 8px; }
-.nav-vehicles { padding: 0 11px; gap: 6px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
-.sidebar-foot { margin-top: auto; padding: 0 11px; }
-.sidebar-actions { display: grid; gap: 8px; }
-/* A keyboard shortcut sits on what it does: on the right of its nav row,
-   where a count would be, and of its button. */
-.nav .kbd { margin-left: auto; }
-.sidebar-actions .btn { position: relative; }
-.sidebar-actions .kbd { position: absolute; top: 0; bottom: 0; right: 10px; margin: auto 0; }
-.btn-primary .kbd { color: var(--on-accent); border-color: color-mix(in srgb, var(--on-accent) 35%, transparent); }
-
-.main { padding: 24px; width: 100%; }
-/* The same space on all four sides; nothing at the end adds a margin of
-   its own. */
-.main > :last-child { margin-bottom: 0; }
-.tabbar { display: none; }
-
-/* Page header, on every page: the heading and the record's buttons share
-   the first row, at least a button tall (38px) with the heading centred in
-   it, so a heading sits in the same place with or without buttons. The
-   line under it (Archived, chips, badges, then text) runs the full width,
-   under the buttons too. .page-title and .vehicle-hero only group the
-   markup: their children are the grid's items. */
-.page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(38px, auto); column-gap: 16px; row-gap: 6px; align-items: center; margin-bottom: 20px; }
-.page-title, .vehicle-hero { display: contents; }
-.page-head h1 { grid-row: 1; grid-column: 1; }
-.page-head .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.page-head .sub { grid-column: 1 / -1; color: var(--muted); margin: 0; }
-.page-head .sub.flex { gap: 6px; }
-/* The vehicle page: the avatar spans the heading row and the line, top to
-   bottom (38 + 6 + 26); a text-only line is as tall as a badge line. */
-.page-head:has(.vehicle-hero) { grid-template-columns: auto minmax(0, 1fr) auto; }
-.page-head .vehicle-hero .avatar { grid-row: 1 / span 2; grid-column: 1; align-self: start; }
-.page-head:has(.vehicle-hero) h1 { grid-column: 2; }
-.page-head:has(.vehicle-hero) .actions { grid-column: 3; }
-.page-head:has(.vehicle-hero) .sub { grid-column: 2 / -1; min-height: 26px; }
-/* Narrow content (under about 780px: phones, and windows up to 1060px wide
-   with the sidebar): the heading at the top, the line 6px below, then the
-   buttons on their own row. */
-@media (max-width: 1060px) {
-  .page-head { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
-  .page-head .actions { grid-row: auto; grid-column: 1 / -1; order: 1; justify-content: flex-start; margin-top: 6px; }
-  .page-head:has(.vehicle-hero) { grid-template-columns: auto minmax(0, 1fr); }
-  .page-head:has(.vehicle-hero) .actions { grid-column: 1 / -1; }
-  .page-head:has(.vehicle-hero) .sub { min-height: 0; }
-  .page-head .vehicle-hero .avatar { width: 56px; height: 56px; align-self: center; }
-  .page-head .vehicle-hero .avatar .icon { width: 30px; height: 30px; }
+/* Page transitions: Chrome cross-fades from page to page; Firefox just
+   loads the next one. Never for those who ask for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
 }
 
-
-/* ---------- Mobile ---------- */
-@media (max-width: 820px) {
-  :root { --inset: 15px; }
-  html { scroll-padding-bottom: calc(var(--tabbar) + 16px); }
-  .shell { grid-template-columns: minmax(0, 1fr); background: none; }
-  .sidebar { display: none; }
-  .main { padding: 16px 16px calc(var(--tabbar) + 16px + env(safe-area-inset-bottom)); }
-  .tabbar {
-    display: grid; grid-template-columns: repeat(5, 1fr);
-    position: fixed; inset: auto 0 0 0; z-index: 30;
-    height: calc(var(--tabbar) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
-    background: var(--surface); border-top: 1px solid var(--border);
+/* ======================================================================
+   reset
+   ====================================================================== */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  /* Whole pixels (docs/design.md#16-whole-pixels--alignment-rules). Every box starts and ends on
+     a whole CSS pixel, so text, which the browser snaps to whole pixels,
+     sits the same against its icons and borders in every row, and no
+     border is drawn across two pixels. Each element's line is --lh times
+     its own font size, rounded to an even number of pixels, and icons are
+     even too: with borders in pairs, every height is even, and centring one
+     thing in another lands on a whole pixel. Set --lh, never line-height. */
+  *, *::before, *::after { line-height: round(var(--lh) * 1em, 2px); }
+  body, h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; }
+  ul[class], ol[class] { list-style: none; padding: 0; }
+  img { display: block; max-width: 100%; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  /* A layer's !important beats every later layer's: [hidden] always hides. */
+  [hidden]:not([hidden="until-found"]) { display: none !important; }
+  /* Less motion for those who ask for it: transitions end at once. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important; scroll-behavior: auto !important;
+    }
   }
-  .tabbar a, .tabbar button {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    text-decoration: none; color: var(--muted); font-size: .7rem; font-weight: 500; position: relative;
+}
+
+/* ======================================================================
+   tokens
+   ====================================================================== */
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* The accent: a hue on the colour wheel and an intensity (0 grey, 100
+       full), Indigo unless this device chose another in the Appearance
+       panel (theme.go renders them on <html>; app.js previews them). Every
+       accent tone below is worked out from these two, at lightnesses that
+       keep white text on the accent, and the accent on the page, at 4.5:1
+       or better whatever they are. The greys lean towards the hue too, as
+       much as the intensity says. */
+    --accent-h: 280;
+    --accent-i: 100;
+    --h: var(--accent-h);
+    --ac: calc(.19 * var(--accent-i) / 100);
+    --tint: calc(var(--accent-i) / 100);
+
+    /* Colours are light-dark(light, dark): color-scheme picks, the system
+       setting unless data-theme on <html> (the theme cookie) forces one. */
+    --bg:            light-dark(oklch(96.6% calc(.011 * var(--tint)) var(--h)), oklch(16.5% calc(.013 * var(--tint)) var(--h)));
+    --surface:       light-dark(oklch(99.8% calc(.003 * var(--tint)) var(--h)), oklch(21% calc(.015 * var(--tint)) var(--h)));
+    --surface-2:     light-dark(oklch(94.8% calc(.013 * var(--tint)) var(--h)), oklch(25% calc(.018 * var(--tint)) var(--h)));
+    --surface-3:     light-dark(oklch(91.5% calc(.016 * var(--tint)) var(--h)), oklch(29.5% calc(.02 * var(--tint)) var(--h)));
+    --border:        light-dark(oklch(90.5% calc(.013 * var(--tint)) var(--h)), oklch(30% calc(.018 * var(--tint)) var(--h)));
+    /* Field borders: 3:1 against the field, so a field reads as one. */
+    --field-border:  light-dark(oklch(64% calc(.025 * var(--tint)) var(--h)),   oklch(52% calc(.025 * var(--tint)) var(--h)));
+    --text:          light-dark(oklch(24% calc(.025 * var(--tint)) var(--h)),   oklch(95% calc(.007 * var(--tint)) var(--h)));
+    --muted:         light-dark(oklch(48% calc(.025 * var(--tint)) var(--h)),   oklch(73% calc(.018 * var(--tint)) var(--h)));
+    /* Grey accents (low intensity) go darker in light and lighter in dark,
+       so a graphite button still stands out. */
+    --accent:        light-dark(oklch(calc(34% + 15% * var(--tint)) var(--ac) var(--h)), oklch(calc(90% - 15% * var(--tint)) calc(var(--ac) * .68) var(--h)));
+    --accent-strong: light-dark(oklch(calc(27% + 15% * var(--tint)) var(--ac) var(--h)), oklch(calc(95% - 12% * var(--tint)) calc(var(--ac) * .55) var(--h)));
+    --accent-soft:   light-dark(oklch(94.5% calc(var(--ac) * .22) var(--h)), oklch(29% calc(var(--ac) * .45) var(--h)));
+    --on-accent:     light-dark(oklch(99% 0 0), oklch(19% calc(var(--ac) * .4) var(--h)));
+    --ok:            light-dark(oklch(50% .13 155),   oklch(81% .15 155));
+    --ok-soft:       light-dark(oklch(94.5% .05 155), oklch(29% .06 155));
+    --warn:          light-dark(oklch(53% .14 55),    oklch(84% .13 75));
+    --warn-soft:     light-dark(oklch(95% .05 75),    oklch(30% .06 70));
+    --danger:        light-dark(oklch(52% .18 22),    oklch(76% .15 20));
+    --danger-soft:   light-dark(oklch(95% .03 20),    oklch(30% .07 20));
+    /* Info (dates, expiry) keeps away from the accent's hue, so it never
+       reads as a button. */
+    --info:          light-dark(oklch(50% .14 calc(var(--h) - 45)), oklch(80% .1 calc(var(--h) - 45)));
+    --info-soft:     light-dark(oklch(95% .03 calc(var(--h) - 45)), oklch(29% .06 calc(var(--h) - 45)));
+    --scrim:         light-dark(oklch(20% .02 var(--h) / .38), oklch(5% 0 0 / .6));
+    --lift: 0 1px 2px color-mix(in oklab, var(--text) 7%, transparent);
+    --shadow-pop: 0 1px 2px color-mix(in oklab, var(--text) 8%, transparent),
+                  0 12px 32px light-dark(oklch(25% .03 var(--h) / .16), oklch(0% 0 0 / .55));
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23807b88' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+
+    /* Type: Manrope. Sizes in rem, so the browser's text size scales them.
+       Text centred in a box uses a size that centres in Manrope
+       (design.md#text-centred-in-its-box): .63-.73rem, .80-.90rem,
+       .97-1.07rem or 1.14-1.24rem. */
+    --font: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --text-xs: .72rem;    /* chips, badges, table headers, counts, keys */
+    --text-sm: .8125rem;  /* buttons, toggles, labels, meta */
+    --text-md: .875rem;   /* body, fields, nav */
+    --lh: 1.45;
+
+    /* Shape and size. Controls 36px, small ones 30px, chips and badges
+       24px: every one even, so what sits beside it centres on whole pixels. */
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-xs: 4px;
+    --control-h: 36px;
+    --control-sm: 30px;
+    --sidebar: 220px;
+    --tabbar: 58px;
+
+    /* Spacing (design.md#5-spacing): --gap between cards, sections, tiles and
+       columns; --inset inside a card, left and right, for every part of it;
+       --page around the page. */
+    --gap: 12px;
+    --inset: 16px;
+    --page: 20px;
+    /* A page that is a form: four 200px fields a row, and no wider. */
+    --form-width: 980px;
   }
-  .tabbar button { font-family: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: pointer; }
-  /* More is current on the pages its sheet leads to. */
-  .tabbar a[aria-current="page"], .tabbar .current { color: var(--accent); }
-  /* More opens the sidebar as a sheet over the tabbar, without what the
-     tabbar has already, or what needs a keyboard or is on every page. It
-     covers the tabbar's top border with a dashed one of its own, the seam
-     between the two, as the Switch tray does under the bar. No shadow:
-     the grey behind sets it apart (a shadow would fall on the tabbar). */
-  .sidebar:popover-open {
-    display: flex; position: fixed; inset: auto 0 calc(var(--tabbar) + env(safe-area-inset-bottom) - 1px);
-    height: auto; max-height: calc(100dvh - var(--tabbar) - env(safe-area-inset-bottom) - 64px);
-    border: 0; border-top: 1px solid var(--border); border-bottom: 1px dashed var(--border); border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  @media (width <= 820px) {
+    /* The tab bar floats 10px above the screen's bottom edge. */
+    :root { --inset: 14px; --page: 14px; --tabbar-space: calc(var(--tabbar) + 10px + env(safe-area-inset-bottom)); }
   }
-  /* Behind the phone's two popovers, the page goes grey; what opened them
-     doesn't: More's grey stops at the tab bar (as Switch's does at the
-     bar, below). */
-  .sidebar::backdrop, .working-pick::backdrop { background: rgb(0 0 0 / .35); }
-  .sidebar::backdrop { inset: 0 0 calc(var(--tabbar, 64px) + env(safe-area-inset-bottom, 0px)); }
-  /* More is current while its sheet is open, as on the pages it leads to. */
-  body:has(#more:popover-open) .tabbar button { color: var(--accent); }
-  /* What is grey looks out of reach, so it is: a tap there only closes the
-     popover (the ::backdrop takes no taps, so they would reach the link
-     under it). Never on the popover's own ancestors: it inherits this. */
-  body:has(#more:popover-open) .main,
-  body:has(#switch:popover-open) .main > :not(.working-on),
-  body:has(#switch:popover-open) .tabbar { pointer-events: none; }
-  .sidebar .tab-dup, .sidebar .sidebar-foot { display: none; }
-  .tabbar .icon { width: 22px; height: 22px; }
-  .tabbar .count { position: absolute; top: 8px; left: calc(50% + 6px); font-size: .68rem; background: var(--accent); color: var(--on-accent); border-radius: 99px; padding: 0 6px; font-weight: 700; }
-  h1 { font-size: 1.35rem; }
 }
 
-/* ---------- Cards & grids ---------- */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: clip; }
-.card-pad { padding: 18px var(--inset); }
-.card-pad > h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
-/* Its links and counts go under the heading when both don't fit, so the
-   heading never squeezes onto two lines. */
-.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 14px var(--inset); border-bottom: 1px solid var(--border); }
-.card-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
-.card-head .meta { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
-/* A badge (26px, the item page's On shopping list) hangs into the padding,
-   so the bar is as tall as one with text alone (a 20px line). Buttons go in
-   the card's footer (.card-actions), so a heading never wraps for one. */
-.card-head .badge { margin-block: -3px; }
-.card-head a.more { font-size: .85rem; color: var(--muted); text-decoration: none; }
-.card-head a.more:hover { color: var(--accent); }
-.reset-link, .card-head a.sort-reset { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 600; text-decoration: none; }
-.reset-link:hover, .card-head a.sort-reset:hover { color: var(--accent); }
-.reset-link .icon, .card-head a.sort-reset .icon { width: 14px; height: 14px; }
-.card-body { padding: 16px var(--inset); }
-/* What ends a card's padding adds no margin to it. */
-.card-pad > :last-child, .card-body > :last-child, .empty > :last-child { margin-bottom: 0; }
-.card + .card, .stack > * + * { margin-top: var(--gap); }
-.grid { display: grid; gap: var(--gap); }
-/* auto-fill, not auto-fit: two cards keep a card's width on a wide window
-   instead of taking half of it each. */
-.grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); }
-.grid > .card + .card, .tiles > .card + .card, .split > .card + .card { margin-top: 0; }
-/* The page's main column and a side column of details. The main column
-   takes what a wide window adds: the side one stays 280-440px (its photo,
-   facts and short lists don't get better wider). */
-.split { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, round(38%, 1px), 440px); gap: var(--gap); align-items: start; }
-@media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
-
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
-.tile { padding: 14px; text-decoration: none; display: flex; flex-direction: column; gap: 6px; }
-.tile:hover { border-color: var(--accent); color: inherit; }
-.tile .label { color: var(--muted); font-size: .82rem; display: flex; align-items: center; gap: 6px; }
-/* At the tile's foot, in a line no taller than its font: no empty line
-   below the digits, and counts and the smaller money figures end level. */
-.tile .value { margin-top: auto; font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; --lh: 1; }
-/* Where the browser can, the value's box is just its capitals: the space
-   below the digits is then the padding alone, in every tile. That padding
-   matches the space above the label's icon, and the gap keeps the label as
-   far from the figures as the line did. */
-@supports (text-box: trim-both cap alphabetic) {
-  .tile { gap: 10px; padding-bottom: 18px; }
-  /* The capitals' height, rounded up to whole pixels. */
-  .tile .value { text-box: trim-both cap alphabetic; height: round(up, 1cap, 1px); }
-}
-.tile .value.money { font-size: 1.2rem; white-space: nowrap; }
-.tile.warn .value { color: var(--warn); }
-.tile.danger .value { color: var(--danger); }
-
-/* ---------- Buttons ---------- */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  /* line-height: the icons' height (.icon), so a button without one is as
-     tall as one with one. */
-  font: inherit; font-weight: 600; font-size: .9rem; --lh: 1.15; line-height: round(var(--lh) * 1em, 2px);
-  padding: 10px 15px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-  background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; white-space: nowrap;
-  transition: background .12s, border-color .12s, color .12s;
-}
-.btn:hover, a.btn:hover { border-color: var(--muted); color: var(--text); text-decoration: none; }
-.btn:focus-visible, .btn:has(input:focus-visible), .input:focus-visible, .chip:focus-within, .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn-primary:hover, a.btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--on-accent); text-decoration: none; }
-.btn-danger { color: var(--danger); }
-.btn-danger:hover, a.btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); text-decoration: none; }
-.btn-ghost { background: transparent; border-color: transparent; }
-.btn-ghost:hover, a.btn-ghost:hover { background: var(--surface-2); border-color: transparent; color: var(--text); text-decoration: none; }
-.btn-sm { padding: 6px 10px; font-size: .82rem; }
-/* Log service's kit starts: the kit's status is the button's end, a badge
-   flush to its border (the button's inside, 28px) behind a divider,
-   10px from the name as the icon is from the left edge (6px gap + 4px).
-   Centred, its smaller text would stand on a baseline 1px above the name's,
-   and side by side the eye reads the baseline: 5px over it, 3px under, puts
-   them on one line. */
-.kit-start { overflow: hidden; }
-.kit-start .badge { align-self: stretch; margin: -6px -10px -6px 4px; padding-block: 5px 3px; border-radius: 0; border-left: 1px solid var(--border); }
-.kit-start:hover .badge { border-left-color: var(--muted); }
-.btn-block { width: 100%; }
-.btn[disabled] { opacity: .5; cursor: not-allowed; }
-.icon-btn {
-  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; padding: 0;
-}
-.icon-btn:hover { border-color: var(--accent); color: var(--accent); }
-.icon-btn[disabled] { opacity: .4; cursor: not-allowed; border-color: var(--border); color: var(--muted); }
-.inline-form { display: inline; margin: 0; }
-
-/* Theme toggle: show the button that switches away from the current theme. */
-.theme-toggle { display: inline-flex; align-items: center; margin: 0; }
-.theme-toggle .icon-btn { border-color: transparent; background: transparent; color: var(--muted); }
-.theme-toggle .icon-btn:hover { background: var(--surface-2); color: var(--accent); }
-/* A nav row's box (40px, its 18px icon 11px in) pulled out by the row's
-   inset: its hover fills the same box as a nav link's, ending on the same
-   edge, and its icon lines up with the nav's counts. It hangs 1px into the
-   38px header row, which keeps the logo level with the page heading. */
-.sidebar-head .theme-toggle .icon-btn { width: 40px; height: 40px; margin: -1px -11px -1px 0; }
-.theme-to-light { display: none !important; }
-:root[data-theme="dark"] .theme-to-dark { display: none !important; }
-:root[data-theme="dark"] .theme-to-light { display: inline-grid !important; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-to-dark { display: none !important; }
-  :root:not([data-theme="light"]) .theme-to-light { display: inline-grid !important; }
-}
-
-/* ---------- Forms ---------- */
-.form { display: grid; gap: 16px; }
-/* At most four fields a row: no lone field on a second row of a wide one. */
-.form-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(max(min(220px, 100%), round(down, (100% - 48px) / 4, 1px)), 1fr)); }
-/* A page that is a form (Add item, Edit service, …) is as wide as four
-   fields: fields don't stretch with a wide window. Lists and tables do. */
-.page-form { max-width: var(--form-width); }
-/* Its header and flash end with it, so a Delete sits over the form. */
-.main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
-.field { display: grid; gap: 6px; align-content: start; min-width: 0; }
-.field > label, .label-row > label, .label { font-weight: 600; font-size: .85rem; }
-/* A field label followed by a "?" hint; the hint opens below the label. */
-.label-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
-.tip { display: inline-flex; }
-.tip-btn { display: inline-flex; margin: -5px 0; padding: 2px; border: 0; border-radius: 99px; background: none; color: var(--muted); cursor: help; }
-.tip-btn .icon { width: 16px; height: 16px; vertical-align: 0; }
-.tip-btn:hover, .tip.open .tip-btn { color: var(--accent); }
-.tip-text {
-  display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(352px, 100%);
-  padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-pop);
-  color: var(--text); font-size: .8rem; font-weight: 400; --lh: 1.45; letter-spacing: 0; text-transform: none;
-}
-.tip-text code { font-size: .95em; }
-.tip-btn:hover + .tip-text, .tip-btn:focus-visible + .tip-text, .tip.open .tip-text { display: block; }
-.tip.dismissed .tip-text { display: none; }
-/* Hints that only apply while the form's "Counted in" is pieces. */
-.pieces-only { display: inline-flex; }
-form:not(:has(input[name="unit"][value="piece"]:checked)) .pieces-only { display: none; }
-.hint { color: var(--muted); font-size: .8rem; margin: 0; }
-.field-error { color: var(--danger); font-size: .8rem; margin: 0; }
-.input, select.input, textarea.input {
-  width: 100%; font: inherit; line-height: round(var(--lh) * 1em, 2px); color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; min-height: var(--control-h);
-  --ring: var(--accent); --ring-soft: var(--accent-soft);
-}
-/* Single-line controls share one exact height, whatever the browser adds inside. */
-input.input, select.input { height: var(--control-h); }
-textarea.input { min-height: 80px; resize: vertical; }
-/* A field's focus ring (docs/design.md#10-focus-rings): its border and a 1px
-   shadow make 2px solid, then a pale glow. Red in a field with an error. */
-.input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
-.has-error .input { border-color: var(--danger); --ring: var(--danger); --ring-soft: var(--danger-soft); }
-input[type="color"].input { padding: 3px; width: 64px; }
-/* Dates: Chromium pads the inner fields, and its calendar icon ignores the
-   theme. Strip the padding and draw the icon in the selects' chevron grey,
-   at the same spot as the chevron. */
-input[type="date"].input { padding-right: 10px; }
-.input::-webkit-datetime-edit, .input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
-.input::-webkit-datetime-edit-text { color: var(--muted); padding: 0 .1em; }
-.input::-webkit-datetime-edit-month-field:focus,
-.input::-webkit-datetime-edit-day-field:focus,
-.input::-webkit-datetime-edit-year-field:focus { background: var(--accent-soft); color: var(--accent-strong); border-radius: 4px; }
-.input::-webkit-date-and-time-value { text-align: left; }
-.input::-webkit-calendar-picker-indicator {
-  width: 16px; height: 16px; margin: 0; padding: 0; opacity: 1; cursor: pointer; color: transparent;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") center / 16px no-repeat;
-}
-.input:hover::-webkit-calendar-picker-indicator { filter: brightness(1.35); }
-.input-icon { position: relative; display: block; }
-.input-icon .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
-.input-icon .input { padding-left: 35px; }
-.qty-input { display: flex; gap: 6px; }
-.qty-input .input:first-child { flex: 1; min-width: 0; }
-.qty-input select.input { width: auto; min-width: 72px; }
-
-/* Selects and suggestion inputs share one chevron. Its grey reads on both
-   themes, so a single image will do. */
-select.input, .combo .input {
-  appearance: none; padding-right: 32px;
-  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%238a8782' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
-}
-select.input { cursor: pointer; }
-/* Where the browser allows it, the select's own list matches the theme too.
-   Elsewhere it keeps the native popup. */
-@supports (appearance: base-select) {
-  select.input, select.input::picker(select) { appearance: base-select; }
-  /* It lays out as a flex box: centre the line, or it sits at the top
-     wherever the box is taller (the sort select). */
-  select.input { align-items: center; }
-  select.input::picker-icon { display: none; }
-  /* Open, focus moves onto an option in the list (not :focus, nor
-     :focus-within): keep the select's focus ring (as .input:focus) while it is open. */
-  select.input:open { border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
-  select.input::picker(select) {
-    margin-top: 4px; padding: 4px; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);
+/* ======================================================================
+   base
+   ====================================================================== */
+@layer base {
+  html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--surface-3) transparent; }
+  body {
+    font-family: var(--font); font-size: var(--text-md); font-weight: 500;
+    /* Manrope's word space is tight at small sizes: "13 items" ran together. */
+    word-spacing: .05em;
+    /* Every digit the same width: figures line up and don't shift. */
+    font-variant-numeric: tabular-nums;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
-  select.input option { padding: 7px 10px; border-radius: 6px; gap: 6px; }
-  select.input option:hover, select.input option:focus-visible { background: var(--surface-2); outline: none; }
-  select.input option:checked { color: var(--accent-strong); font-weight: 600; }
-}
-/* <input list> enhanced by app.js: a dropdown like the selects' instead of
-   the browser's datalist popup. */
-.combo { position: relative; }
-.combo-toggle { position: absolute; top: 0; right: 0; bottom: 0; width: 35px; border: 0; padding: 0; background: none; cursor: pointer; }
-.combo-list {
-  position: fixed; inset: auto; margin: 0; padding: 4px; list-style: none; overflow-y: auto;
-  color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop);
-}
-.combo-list li { padding: 7px 10px; border-radius: 6px; cursor: pointer; }
-.combo-list li:hover, .combo-list li[aria-selected="true"] { background: var(--surface-2); }
-.form-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding-top: 4px; }
-.form-actions .spacer { margin-right: auto; }
-/* "* required" at the start, the buttons at the end. */
-.form-actions .req-note { align-self: center; margin-right: auto; }
-.form-actions .req-note ~ .spacer { margin-right: 0; }
-/* The label's size, so a label row with a star is as tall as a plain label. */
-.req { color: var(--danger); font-size: .85rem; }
-.req-note .req { font-size: inherit; }
-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-legend { font-weight: 600; font-size: .85rem; margin-bottom: 6px; padding: 0; }
-.form-section { padding: 18px var(--inset); }
-.form-section + .form-section { border-top: 1px solid var(--border); }
-.form-section h2 { font-size: .95rem; margin-bottom: 13px; }
-.error-summary { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-sm); padding: 11px 14px; font-weight: 500; }
-.error-summary a { color: inherit; font-weight: 600; text-decoration: underline; }
+  ::selection { background: color-mix(in oklab, var(--accent) 25%, transparent); }
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3 { --lh: 1.25; text-wrap: balance; }
+  h1 { font-size: 1.625rem; font-weight: 800; letter-spacing: -.02em; }
+  h2 { font-size: 1rem; font-weight: 800; }
+  h3 { font-size: 1rem; font-weight: 700; }
+  p { margin-bottom: 12px; text-wrap: pretty; }
+  strong, b { font-weight: 700; }
+  code, .mono { font-family: var(--mono); font-size: .92em; font-weight: 400; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: var(--gap) 0; }
+  input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  legend { padding: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.segmented { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.segmented label {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 7px 13px;
-  border: 1px solid var(--border); border-radius: 99px; font-size: .88rem; font-weight: 500; background: var(--surface);
-}
-.segmented input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
-.segmented label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
-.segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .icon { width: round(1.15em, 2px); height: round(1.15em, 2px); flex: none; vertical-align: -.2em; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
 
-/* Repeating rows (SKUs, kit lines) */
-.rows { display: grid; gap: 8px; }
-.row-line { display: grid; gap: 8px; align-items: start; }
-.sku-line { grid-template-columns: minmax(120px, 1.3fr) minmax(110px, .9fr) minmax(100px, 1fr) minmax(80px, .7fr) 34px; }
-.part-line { grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr) 168px 34px; }
-.row-head { font-size: .85rem; font-weight: 600; margin-bottom: -2px; }
-.row-line .icon-btn { margin-top: 4px; }
-/* The stock badge (26px), centred against the 42px inputs. */
-.part-stock { display: flex; min-width: 0; margin-top: 8px; }
-@media (max-width: 640px) {
-  .sku-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .sku-line .row-remove { justify-self: end; }
-  .part-line { grid-template-columns: minmax(0, 1fr) 34px; }
-  .part-line .qty-input { grid-column: 1; grid-row: 2; }
-  .part-line .row-remove { grid-column: 2; grid-row: 1; }
-  .part-line .part-stock { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
-  .row-head { display: none; }
+  /* Links in running text say they are links; component links (buttons,
+     chips, badges, rows) style themselves. */
+  :is(p, .hint, .card-body, .welcome, .empty) a:not([class]) {
+    text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+    text-underline-offset: 3px;
+    &:hover { color: var(--accent-strong); text-decoration-color: currentColor; }
+  }
+
+  /* Utilities, low in the cascade: a component may refine them. */
+  .muted { color: var(--muted); }
+  .small { font-size: var(--text-sm); }
+  .nowrap { white-space: nowrap; }
+  .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .between { justify-content: space-between; }
+  .grow { flex: 1; min-width: 0; }
+  .notes { white-space: pre-wrap; }
 }
 
-/* ---------- Chips ---------- */
-/* 26px wherever it is, a heading too (its own --lh), and the badges' size:
-   at .78rem its capitals stood 1px nearer the top, whatever the padding
-   (docs/design.md#text-centred-in-its-box), and the same size keeps a chip
-   and a badge side by side on one baseline. */
-.chip {
-  --chip: var(--muted);
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px;
-  font-size: .72rem; --lh: 1.5; font-weight: 600; text-decoration: none; white-space: nowrap;
-  background: color-mix(in srgb, var(--chip) 14%, transparent); color: color-mix(in srgb, var(--chip) 75%, var(--text));
-  border: 1px solid color-mix(in srgb, var(--chip) 35%, transparent);
-}
-.chip .dot { width: 8px; height: 8px; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+/* ======================================================================
+   shell: sidebar, tab bar, the page around the content
+   ====================================================================== */
+@layer shell {
+  .shell { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100dvh; }
 
-.chip-toggle { position: relative; cursor: pointer; font-size: .88rem; padding: 6px 13px; background: var(--surface); color: var(--text); border-color: var(--border); }
-.chip-toggle input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
-.chip-toggle:hover { border-color: var(--chip); color: var(--text); }
-a.chip:hover { border-color: var(--chip); color: color-mix(in srgb, var(--chip) 75%, var(--text)); }
-a.badge { text-decoration: none; cursor: pointer; transition: background .12s, color .12s; }
-a.badge:hover { text-decoration: none; }
-a.badge-muted:hover { background: var(--surface-3); color: var(--text); }
-a.badge-accent:hover { background: var(--accent); color: var(--on-accent); }
-.chip-toggle:has(input:checked), a.chip-toggle.active {
-  background: color-mix(in srgb, var(--chip) 18%, var(--surface)); border-color: var(--chip);
-  color: color-mix(in srgb, var(--chip) 70%, var(--text));
+  /* The sidebar sits on the page's background, no edge: the panels are
+     what stand out. On a phone it is the More sheet (a popover), so it
+     undoes the browser's popover box here. */
+  .sidebar {
+    position: sticky; inset: 0 auto auto; height: 100dvh; width: auto; margin: 0; overflow-y: auto;
+    color: inherit; background: var(--bg); border: 0;
+    padding: var(--page) 10px; display: flex; flex-direction: column; gap: 20px;
+  }
+  /* As tall as the page's heading row and as far down, so the logo is
+     level with the heading. */
+  .sidebar-head { min-height: var(--control-h); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 10px; }
+  .app-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; font-weight: 800; font-size: 1rem; letter-spacing: -.01em; }
+  .app-brand-mark {
+    display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: var(--on-accent);
+    & .icon { width: 16px; height: 16px; }
+  }
+
+  .nav {
+    display: flex; flex-direction: column; gap: 2px;
+    /* 36px rows: a 20px line in 8px padding, at a size that centres. */
+    & a {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+      font-size: var(--text-md); font-weight: 600; color: var(--muted);
+      transition: background-color .15s, color .15s, box-shadow .15s;
+      &:hover { background: var(--surface-2); color: var(--text); }
+      &[aria-current="page"] { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: var(--lift); }
+      &[aria-current="page"] .icon { color: var(--accent); }
+      & .icon { width: 18px; height: 18px; }
+      /* The vehicle worked on: its kind icon in its colour, as on its page. */
+      &.nav-vehicle .icon, &.nav-vehicle[aria-current="page"] .icon { color: var(--chip); }
+    }
+    & .kbd { margin-left: auto; }
+  }
+  .count {
+    margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 99px; text-align: center;
+    font-size: var(--text-xs); --lh: 1.5; font-weight: 800; background: var(--accent); color: var(--on-accent);
+    /* A count that needs no action, such as what is in the trash. */
+    &.count-muted { background: var(--surface-3); color: var(--muted); }
+  }
+  .nav-title { font-size: var(--text-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 10px; margin-bottom: 8px; }
+  .nav-vehicles, .sidebar .work-on { padding: 0 10px; gap: 6px; }
+  .sidebar-foot { margin-top: auto; }
+  .sidebar-actions {
+    display: grid; gap: 6px;
+    /* A keyboard shortcut sits on what it does, at the button's end. */
+    & .btn { position: relative; }
+    & .kbd { position: absolute; inset: 0 8px 0 auto; margin: auto 0; }
+  }
+
+  .main { container: main / inline-size; padding: var(--page); min-width: 0; }
+  /* The same space on all four sides; nothing at the end adds a margin. */
+  .main > :last-child { margin-bottom: 0; }
+  .tabbar { display: none; }
+
+  /* ---- Phone: the sidebar becomes the tab bar and its More sheet ---- */
+  @media (width <= 820px) {
+    html { scroll-padding-bottom: calc(var(--tabbar-space) + 12px); }
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .sidebar { display: none; }
+    .main { padding-bottom: calc(var(--tabbar-space) + var(--page)); }
+    h1 { font-size: 1.4375rem; }
+
+    .tabbar {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      position: fixed; z-index: 30; left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right));
+      bottom: calc(10px + env(safe-area-inset-bottom)); height: var(--tabbar);
+      background: var(--surface); border: 1px solid transparent; border-radius: 14px; box-shadow: var(--shadow-pop);
+      & :is(a, button) {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        position: relative; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
+        color: var(--muted); font-size: .6875rem; font-weight: 700;
+      }
+      /* The current tab's icon sits in a soft box (More while its sheet is
+         open, or on the pages it leads to). */
+      & .icon {
+        box-sizing: content-box; width: 20px; height: 20px; padding: 3px 14px; border-radius: 8px;
+        transition: background-color .2s, color .2s;
+      }
+      & :is(a[aria-current="page"], .current) { color: var(--text); }
+      & :is(a[aria-current="page"], .current) .icon { background: var(--accent-soft); color: var(--accent-strong); }
+      & .count { position: absolute; top: 4px; left: calc(50% + 8px); margin: 0; font-size: .6875rem; padding: 0 5px; }
+    }
+    body:has(#more:popover-open) .tabbar button { color: var(--text); }
+    body:has(#more:popover-open) .tabbar button .icon { background: var(--accent-soft); color: var(--accent-strong); }
+
+    /* More opens the sidebar as a sheet that floats just above the tab
+       bar, without what the tab bar has already or what needs a keyboard. */
+    .sidebar:popover-open {
+      display: flex; position: fixed; inset: auto calc(10px + env(safe-area-inset-right)) calc(var(--tabbar-space) + 8px) calc(10px + env(safe-area-inset-left));
+      height: auto; max-height: calc(100dvh - var(--tabbar-space) - 72px);
+      padding: 16px 10px; background: var(--surface); border: 1px solid transparent; border-radius: 14px; box-shadow: var(--shadow-pop);
+      transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
+      @starting-style { translate: 0 16px; opacity: 0; }
+    }
+    .sidebar .tab-dup, .sidebar .sidebar-foot { display: none; }
+    /* Behind the phone's popovers the page goes grey. */
+    :is(.sidebar, .working-pick)::backdrop {
+      background: var(--scrim);
+      transition: opacity .25s, display .25s allow-discrete, overlay .25s allow-discrete;
+    }
+    .sidebar:popover-open::backdrop { @starting-style { opacity: 0; } }
+    /* What is grey is out of reach: a tap there only closes the popover
+       (the ::backdrop takes no taps, so they would reach the link under it).
+       Never on the popover's own ancestors: it inherits this. */
+    body:has(#more:popover-open) .main,
+    body:has(#switch:popover-open) .main > :not(.working-on),
+    body:has(#switch:popover-open) .tabbar { pointer-events: none; }
+  }
 }
 
-/* ---------- Working on a vehicle (working.go) ---------- */
-/* The Work on chips are buttons: tapping one works on it. The one worked
-   on is pressed (tapping it stops); the bar's Switch lists the others. */
-button.chip { font-family: inherit; margin: 0; cursor: pointer; }
-.work-on .chip:hover { border-color: var(--chip); }
-.work-on .chip[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--chip) 30%, var(--surface)); border-color: var(--chip);
-  box-shadow: 0 0 0 1px var(--chip);
-}
-.sidebar .work-on { padding: 0 11px; gap: 6px; }
-/* Chips that stand on their own, with no badge beside them to share a
-   baseline with (Work on, here and in the Switch tray, and Stock by
-   vehicle), are easier to read and tap at .82rem: still 26px (a 20px line
-   in 2px padding) and centred (docs/design.md#text-centred-in-its-box). */
-.work-on .chip, .nav-vehicles .chip { font-size: .82rem; padding-block: 2px; }
-/* The bar at the top of every page while a vehicle is worked on: 28px
-   buttons in 6px padding and a 1px border, 42px in all. Its buttons show
-   their icons only (their names stay for screen readers and as tooltips). */
-.working-on {
-  position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
-  margin-bottom: 20px; padding: 6px 6px 6px 14px; border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--chip) 45%, transparent);
-  background: color-mix(in srgb, var(--chip) 12%, var(--surface));
-}
-.working-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; }
-.working-name .icon { color: var(--chip); }
-/* The name opens the vehicle's page: plain, and on hover in the vehicle's
-   colour, like a vehicle title in a list (never underlined). */
-a.working-name { color: inherit; text-decoration: none; }
-a.working-name:hover strong { color: var(--chip); }
-.working-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.working-actions .btn { padding-left: 8px; padding-right: 8px; }
-.working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-/* Switch is the phone's: a desktop switches with the sidebar's Work on
-   chips, right beside the bar. */
-.working-switch { display: none; }
-body:has(#switch:popover-open) .working-switch { border-color: var(--muted); }
-/* On a phone: edge to edge at the top, a bottom border only, kept in view.
-   (After the rules above, which it overrides.) */
-@media (max-width: 820px) {
+/* ======================================================================
+   components
+   ====================================================================== */
+@layer components {
+
+  /* ---- Page header ------------------------------------------------- */
+  /* The heading and the record's buttons share the first row, at least a
+     button tall, with the heading centred in it; the line under it
+     (Archived, chips, badges, then text) runs the full width. .page-title
+     and .vehicle-hero only group the markup: their children are the grid's
+     items. */
+  .page-head {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(var(--control-h), auto);
+    column-gap: var(--gap); row-gap: 4px; align-items: center; margin-bottom: 18px;
+    & h1 { grid-row: 1; grid-column: 1; }
+    & .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    & .sub { grid-column: 1 / -1; color: var(--muted); }
+    & .sub.flex { gap: 6px; }
+    &:has(.vehicle-hero) {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      & h1 { grid-column: 2; }
+      & .actions { grid-column: 3; }
+      & .sub { grid-column: 2 / -1; min-height: 24px; }
+    }
+    /* Narrow content: the heading, the line, then the buttons. */
+    @container main (width < 680px) {
+      grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
+      & .actions { grid-row: auto; grid-column: 1 / -1; order: 1; justify-content: flex-start; margin-top: 8px; }
+      &:has(.vehicle-hero) {
+        grid-template-columns: auto minmax(0, 1fr);
+        & .actions { grid-column: 1 / -1; }
+        & .sub { min-height: 0; }
+      }
+    }
+  }
+  .page-title, .vehicle-hero { display: contents; }
+  /* The vehicle page: its kind icon in a tile of its colour, spanning the
+     heading row and the line. */
+  .vehicle-hero {
+    --chip: var(--accent);
+    & .avatar {
+      grid-row: 1 / span 2; grid-column: 1; align-self: start;
+      width: 64px; height: 64px; border-radius: 12px; display: grid; place-items: center;
+      background: color-mix(in oklab, var(--chip) 16%, var(--surface)); color: var(--chip);
+      & .icon { width: 34px; height: 34px; }
+    }
+    @container main (width < 680px) {
+      & .avatar { width: 52px; height: 52px; align-self: center; border-radius: 10px; }
+      & .avatar .icon { width: 28px; height: 28px; }
+    }
+  }
+
+  /* ---- Panels (cards) and page layout ------------------------------ */
+  /* Lifted by tint and a faint shadow, not boxed in by a border (the
+     transparent one shows in forced colours). Each card is a container,
+     so what is in it follows the card's width, not the window's. */
+  .card {
+    container-type: inline-size;
+    background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--lift); overflow: clip;
+  }
+  .card + .card, .stack > * + * { margin-top: var(--gap); }
+  .card-pad {
+    padding: 16px var(--inset);
+    & > h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  }
+  .card-body { padding: 14px var(--inset); }
+  /* What ends a card's padding adds no margin to it. */
+  :is(.card-pad, .card-body, .empty) > :last-child { margin-bottom: 0; }
+
+  /* A heading bar: 45px whatever it holds (a 20px line or a 24px chip in
+     10px padding, and the rule under it). Its links and counts go under
+     the title when both don't fit. */
+  .card-head {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
+    min-height: 45px; padding: 10px var(--inset); border-bottom: 1px solid var(--surface-2);
+    & h2 { display: flex; align-items: center; gap: 8px; }
+    & h2 .icon { color: var(--muted); }
+    & .meta { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--muted); font-weight: 600; }
+    & a.more { font-size: var(--text-sm); font-weight: 600; color: var(--muted); &:hover { color: var(--accent-strong); } }
+  }
+  .reset-link, .card-head a.sort-reset {
+    display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 700;
+    &:hover { color: var(--accent-strong); }
+    & .icon { width: 14px; height: 14px; }
+  }
+
+  /* A card's footer: a total under its list, the list's pager, or what you
+     do with the list (Add kit, Add 2 missing, Add all), from the left. */
+  .card-foot {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
+    min-height: 47px; padding: 8px var(--inset); border-top: 1px solid var(--surface-2);
+    background: color-mix(in oklab, var(--surface-2) 50%, var(--surface)); font-size: var(--text-sm);
+    & .pager { padding: 0; margin-left: -11px; }
+    & .total { flex: 1; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+    & .pager + .total { flex: none; }
+    & .total strong { color: var(--text); font-weight: 800; }
+  }
+  .card-actions { justify-content: flex-start; & .inline-form { display: flex; } }
+  .pager { padding: 8px var(--inset); }
+  .card > .pager { border-top: 1px solid var(--surface-2); }
+
+  .grid { display: grid; gap: var(--gap); }
+  /* auto-fill, not auto-fit: two cards keep a card's width on a wide window. */
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
+  :is(.grid, .tiles, .split) > .card + .card { margin-top: 0; }
+  /* The page's main column and a side column of details: the side one
+     stays 280-400px; under 680px of content, one column. */
+  .split {
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, round(34%, 1px), 400px); gap: var(--gap); align-items: start;
+    @container main (width < 680px) { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ---- Dashboard figures ------------------------------------------- */
+  /* Each figure on a tint of its own colour (--t), so they tell apart at a
+     glance; Low stock and Expiring turn amber and red when they count. */
+  .tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--gap); margin-bottom: var(--gap);
+    @container main (width < 520px) { grid-template-columns: 1fr 1fr; }
+  }
+  .tile {
+    --t: var(--accent);
+    container-type: normal; box-shadow: none;
+    display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;
+    background: color-mix(in oklab, var(--t) 13%, var(--surface));
+    transition: background-color .15s;
+    &:hover { background: color-mix(in oklab, var(--t) 20%, var(--surface)); }
+    & .label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 700; color: color-mix(in oklab, var(--t) 60%, var(--text)); }
+    & .label .icon { width: 14px; height: 14px; }
+    & .value { margin-top: auto; font-size: 1.75rem; font-weight: 800; letter-spacing: -.02em; --lh: 1; white-space: nowrap; color: color-mix(in oklab, var(--t) 40%, var(--text)); }
+    & .value.money { font-size: 1.3125rem; }
+    &.warn .value { color: var(--warn); }
+    &.danger .value { color: var(--danger); }
+  }
+  .tile-items    { --t: oklch(60% .12 200); }
+  .tile-low      { --t: oklch(70% .15 70); }
+  .tile-expiring { --t: oklch(60% .13 300); }
+  .tile-shopping { --t: oklch(60% .14 150); }
+  .tile-value    { --t: oklch(60% .12 250); }
+  .tile-spent    { --t: oklch(62% .14 20); }
+
+  /* ---- Buttons ----------------------------------------------------- */
+  /* 36px: a 16px line in 9px padding and the border. Small: 30px. */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: var(--text-sm); font-weight: 700; --lh: 1.25;
+    padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--field-border);
+    background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap;
+    transition: background-color .15s, border-color .15s, color .15s, scale .1s;
+    &:hover { background: var(--surface-2); }
+    &:active:not([disabled]) { scale: .98; }
+    &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    &[disabled] { opacity: .5; cursor: not-allowed; }
+    & .icon { width: 16px; height: 16px; }
+  }
+  .btn-primary {
+    background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+    &:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+    & .kbd { color: var(--on-accent); border-color: color-mix(in oklab, var(--on-accent) 40%, transparent); background: transparent; }
+  }
+  .btn-danger {
+    color: var(--danger); border-color: color-mix(in oklab, var(--danger) 50%, var(--field-border));
+    &:hover { background: var(--danger-soft); border-color: var(--danger); }
+  }
+  .btn-ghost {
+    background: transparent; border-color: transparent;
+    &:hover { background: var(--surface-2); }
+  }
+  .btn-sm { padding: 6px 10px; }
+  .btn-block { width: 100%; }
+  /* Log service's kit starts: the kit's status is the button's end, flush to
+     its border behind a divider, standing on the name's baseline. */
+  .kit-start {
+    overflow: hidden;
+    & .badge { align-self: stretch; margin: -9px -14px -9px 4px; padding: 10px 10px 8px; height: auto; border-radius: 0; border-left: 1px solid var(--border); }
+  }
+  .icon-btn {
+    display: inline-grid; place-items: center; width: var(--control-sm); height: var(--control-sm); padding: 0;
+    border-radius: var(--radius-sm); border: 1px solid transparent; background: var(--surface-2); color: var(--text); cursor: pointer;
+    transition: background-color .15s, color .15s;
+    &:hover { background: var(--accent-soft); color: var(--accent-strong); }
+    &[disabled] { opacity: .4; cursor: not-allowed; background: var(--surface-2); color: var(--muted); }
+  }
+  .inline-form { display: inline; margin: 0; }
+
+  /* A key, beside what it does: 22px. */
+  .kbd {
+    display: inline-block; height: 22px; min-width: 22px; padding: 1px 5px 0; text-align: center;
+    font-family: var(--mono); font-size: var(--text-xs); font-weight: 500; --lh: 1.5;
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; color: var(--muted); background: var(--surface);
+  }
+
+  /* ---- Appearance (theme and accent, theme.go) --------------------- */
+  /* The sidebar's palette button opens it: theme, then the accent's hue
+     and intensity, with presets. A popover: Esc and a tap outside close
+     it. On a desktop it opens under the button; on a phone, from inside
+     the More sheet, it takes the sheet's place above the tab bar. */
+  .appearance-btn {
+    width: var(--control-h); height: var(--control-h); background: transparent; color: var(--muted);
+    &:hover { background: var(--surface-2); color: var(--text); }
+  }
+  .appearance {
+    position: fixed; inset: calc(var(--page) + var(--control-h) + 6px) auto auto 10px; margin: 0; width: min(320px, calc(100vw - 20px));
+    padding: 16px; flex-direction: column; gap: 16px;
+    color: var(--text); background: var(--surface); border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow-pop);
+    transition: translate .2s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete;
+    &:popover-open { display: flex; @starting-style { translate: 0 -8px; opacity: 0; } }
+    & h2 { font-size: 1rem; }
+    & legend { font-size: var(--text-sm); font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+    & fieldset { display: grid; gap: 12px; }
+    @media (width <= 820px) {
+      inset: auto calc(10px + env(safe-area-inset-right)) calc(var(--tabbar-space) + 8px) calc(10px + env(safe-area-inset-left)); width: auto;
+      &:popover-open { @starting-style { translate: 0 16px; opacity: 0; } }
+    }
+  }
+  /* System / Light / Dark: one pressed, like a segmented control. */
+  .theme-pick .pick {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border-radius: var(--radius-sm); background: var(--surface-2);
+    & button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 8px; --lh: 1.25;
+      border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--muted); font-size: var(--text-sm); font-weight: 700; cursor: pointer;
+      &:hover { color: var(--text); }
+      &[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--lift); }
+      & .icon { width: 14px; height: 14px; }
+    }
+  }
+  /* A preset swatch draws its own accent from its hue and intensity, the
+     way the tokens above do. */
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch {
+    --sw-i: calc(var(--swatch-i) / 100);
+    width: 28px; height: 28px; padding: 0; border-radius: 50%; cursor: pointer;
+    border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
+    background: light-dark(oklch(calc(34% + 15% * var(--sw-i)) calc(.19 * var(--sw-i)) var(--swatch-h)), oklch(calc(90% - 15% * var(--sw-i)) calc(.13 * var(--sw-i)) var(--swatch-h)));
+    &[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--text); }
+  }
+  /* The sliders show what they pick: the whole colour wheel, and the
+     current hue from grey to full colour. */
+  .slider {
+    display: grid; gap: 6px; font-size: var(--text-sm); font-weight: 700; color: var(--muted);
+    & input {
+      appearance: none; width: 100%; height: 22px; margin: 0; border-radius: 99px; cursor: pointer;
+      border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+    }
+    & input::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text); box-shadow: var(--lift); }
+    & input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text); box-shadow: var(--lift); }
+    & input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  }
+  .hue-range { background: linear-gradient(to right in oklch longer hue, oklch(62% .17 0), oklch(62% .17 359.9)); }
+  .intensity-range { background: linear-gradient(to right, oklch(55% 0 0), oklch(55% .19 var(--accent-h))); }
+  .accent-actions { display: flex; justify-content: space-between; gap: 8px; }
+
+  /* ---- Forms ------------------------------------------------------- */
+  .form { display: grid; gap: var(--gap); }
+  /* At most four fields a row: no lone field on a second row of a wide one. */
+  .form-grid { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(max(min(200px, 100%), round(down, (100% - 3 * var(--gap)) / 4, 1px)), 1fr)); }
+  /* A page that is a form stops at four fields, its header and flash too. */
+  .page-form { max-width: var(--form-width); }
+  .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
+  .form-section {
+    padding: 16px var(--inset);
+    & + .form-section { border-top: 1px solid var(--surface-2); }
+    & h2 { margin-bottom: 12px; }
+  }
+
+  .field { display: grid; gap: 5px; align-content: start; min-width: 0; }
+  :is(.field > label, .label-row > label, .label, legend) { font-weight: 700; font-size: var(--text-sm); }
+  legend { margin-bottom: 6px; }
+  /* A field label followed by a "?" hint; the hint opens below the label. */
+  .label-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .hint { color: var(--muted); font-size: .8125rem; margin: 0; }
+  .field-error { display: flex; gap: 4px; align-items: center; margin: 0; color: var(--danger); font-size: .8125rem; font-weight: 700; }
+  .req { color: var(--danger); font-size: var(--text-sm); }
+  .req-note .req { font-size: inherit; }
+  /* Hints that apply only while the form's "Counted in" is pieces. */
+  .pieces-only { display: inline-flex; }
+  form:not(:has(input[name="unit"][value="piece"]:checked)) .pieces-only { display: none; }
+
+  /* "?" hints: shown on hover and focus, kept open by a click (app.js). */
+  .tip { display: inline-flex; }
+  .tip-btn {
+    display: inline-flex; margin: -6px 0; padding: 4px; border: 0; border-radius: 99px; background: none; color: var(--muted); cursor: help;
+    & .icon { width: 16px; height: 16px; }
+    &:hover { color: var(--accent-strong); }
+  }
+  .tip.open .tip-btn { color: var(--accent-strong); }
+  .tip-text {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(340px, 100%);
+    padding: 10px 12px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-pop);
+    color: var(--text); font-size: .8125rem; font-weight: 500; --lh: 1.5; letter-spacing: 0; text-transform: none;
+  }
+  :is(.tip-btn:hover, .tip-btn:focus-visible) + .tip-text, .tip.open .tip-text { display: block; }
+  .tip.dismissed .tip-text { display: none; }
+
+  /* Fields: 36px, a 3:1 border, the ring on any focus (design.md#14-focus-rings):
+     the border and a 1px shadow make 2px solid, then a soft glow. In
+     forced colours (Windows contrast themes) shadows are dropped, so the
+     transparent outline becomes the ring. */
+  .input {
+    width: 100%; color: var(--text); background: var(--surface); font-weight: 500;
+    border: 1px solid var(--field-border); border-radius: var(--radius-sm); padding: 7px 10px; min-height: var(--control-h);
+    --ring: var(--accent); --ring-soft: color-mix(in oklab, var(--accent) 22%, transparent);
+    transition: border-color .15s, box-shadow .15s;
+    &:hover { border-color: color-mix(in oklab, var(--field-border) 60%, var(--text)); }
+    &:focus, &:focus-visible { border-color: var(--ring); outline: 2px solid transparent; outline-offset: 0; box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
+    &::placeholder { color: color-mix(in oklab, var(--muted) 80%, transparent); font-weight: 500; }
+  }
+  input.input, select.input { height: var(--control-h); }
+  textarea.input { min-height: 80px; resize: vertical; field-sizing: content; max-height: 320px; }
+  input[type="color"].input { padding: 3px; width: 60px; }
+  .has-error .input, .input:user-invalid {
+    border-color: var(--danger); --ring: var(--danger); --ring-soft: color-mix(in oklab, var(--danger) 22%, transparent);
+  }
+  /* Dates: Chromium pads the inner fields and draws its calendar icon in
+     black whatever the theme: strip the padding, lighten it in dark. */
+  input[type="date"].input {
+    padding-right: 10px;
+    &::-webkit-datetime-edit, &::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+    &::-webkit-datetime-edit-text { color: var(--muted); padding: 0 .1em; }
+    &::-webkit-calendar-picker-indicator {
+      width: 16px; height: 16px; margin: 0; padding: 0; opacity: .7; cursor: pointer;
+      filter: light-dark(none, invert(1));
+    }
+  }
+  .input-icon {
+    position: relative; display: block;
+    & .icon { position: absolute; left: 11px; top: 50%; translate: 0 -50%; color: var(--muted); pointer-events: none; }
+    & .input { padding-left: 34px; }
+  }
+  .qty-input {
+    display: flex; gap: 6px;
+    & .input:first-child { flex: 1; min-width: 0; }
+    & select.input { width: auto; min-width: 72px; }
+  }
+
+  /* Selects and suggestion inputs share one chevron. */
+  :is(select.input, .combo .input) {
+    appearance: none; padding-right: 32px;
+    background: var(--surface) var(--chevron) no-repeat right 9px center / 16px;
+  }
+  select.input {
+    cursor: pointer;
+    /* Chrome: the select's own list matches the theme. Firefox keeps its
+       native popup. */
+    &, &::picker(select) { appearance: base-select; }
+    align-items: center;
+    &::picker-icon { display: none; }
+    /* Open, focus moves onto an option: keep the select's ring meanwhile. */
+    &:open { border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
+    &::picker(select) {
+      margin-top: 4px; padding: 4px; color: var(--text); background: var(--surface);
+      border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-pop);
+    }
+    & option { padding: 7px 10px; border-radius: var(--radius-xs); gap: 6px; }
+    & option:is(:hover, :focus-visible) { background: var(--surface-2); outline: none; }
+    & option:checked { color: var(--accent-strong); font-weight: 700; }
+  }
+  /* <input list> enhanced by app.js: a dropdown like the selects', in a
+     popover so a card's overflow doesn't cut it off. */
+  .combo { position: relative; }
+  .combo-toggle { position: absolute; inset: 0 0 0 auto; width: 34px; border: 0; padding: 0; background: none; cursor: pointer; }
+  .combo-list {
+    position: fixed; inset: auto; margin: 0; padding: 4px; overflow-y: auto;
+    color: var(--text); background: var(--surface);
+    border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-pop);
+    & li { padding: 7px 10px; border-radius: var(--radius-xs); cursor: pointer; }
+    & li:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
+  }
+
+  .form-actions {
+    display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; align-items: center;
+    & .spacer { margin-right: auto; }
+    /* "* required" at the start, the buttons at the end. */
+    & .req-note { margin-right: auto; }
+    & .req-note ~ .spacer { margin-right: 0; }
+    /* A narrow form: the buttons share the width, the main one last. */
+    @container (width < 520px) {
+      & .btn { flex: 1 1 auto; }
+      & .req-note { flex-basis: 100%; }
+    }
+  }
+  .error-summary {
+    display: flex; gap: 10px; align-items: center;
+    background: var(--danger-soft); color: var(--danger); border-radius: var(--radius); padding: 10px 14px; font-weight: 700;
+    & a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+  }
+
+  /* Pick one (Counted in, Grouped/List): 36px, or 30px in a bar. */
+  .segmented {
+    display: inline-flex; flex-wrap: wrap; gap: 6px;
+    & label {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 9px 14px; --lh: 1.25;
+      border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 600; background: var(--surface);
+      transition: background-color .15s, border-color .15s, color .15s;
+      &:hover { background: var(--surface-2); }
+      &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
+      &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    }
+    & input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
+  }
+
+  /* Repeating rows (SKUs, kit and service parts). */
+  .rows { display: grid; gap: 8px; }
+  .row-line {
+    display: grid; gap: 8px; align-items: start;
+    & .icon-btn { margin-top: 3px; }
+  }
+  .row-head { font-size: var(--text-sm); font-weight: 700; margin-bottom: -2px; }
+  .sku-line { grid-template-columns: minmax(120px, 1.3fr) minmax(110px, .9fr) minmax(100px, 1fr) minmax(80px, .7fr) var(--control-sm); }
+  .part-line { grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr) 160px var(--control-sm); }
+  /* The stock badge (24px), centred against the 36px fields. */
+  .part-stock { display: flex; min-width: 0; margin-top: 6px; }
+  @container (width < 620px) {
+    .sku-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .sku-line .row-remove { grid-column: 2; justify-self: end; }
+    .part-line { grid-template-columns: minmax(0, 1fr) var(--control-sm); }
+    .part-line .qty-input { grid-column: 1; grid-row: 2; }
+    .part-line .row-remove { grid-column: 2; grid-row: 1; }
+    .part-line .part-stock { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
+    .row-head { display: none; }
+  }
+
+  /* ---- Chips (vehicles) ------------------------------------------- */
+  /* Pills, 24px wherever they are, at the badges' size, so a chip and a
+     badge share a baseline: an 18px line in 2px padding and the border. */
+  .chip {
+    --chip: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 99px;
+    font-size: var(--text-xs); --lh: 1.5; font-weight: 700; white-space: nowrap;
+    background: color-mix(in oklab, var(--chip) 13%, transparent);
+    color: color-mix(in oklab, var(--chip) 70%, var(--text));
+    border: 1px solid color-mix(in oklab, var(--chip) 35%, transparent);
+    transition: background-color .15s, border-color .15s;
+    &:is(a, button):hover { border-color: var(--chip); }
+    &:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    & .dot { width: 8px; height: 8px; }
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* Chips you pick (filters) and chips that stand on their own (Work on,
+     Stock by vehicle): 30px, a small button's height, easier to tap. */
+  .chip-toggle, .work-on .chip, .nav-vehicles .chip {
+    font-size: var(--text-sm); --lh: 1.25; padding: 6px 12px; gap: 8px;
+  }
+  .chip-toggle {
+    position: relative; cursor: pointer; border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text); border-color: var(--field-border);
+    &:hover { border-color: var(--chip); background: var(--surface-2); }
+    & input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
+    &:has(input:checked), &.active {
+      background: color-mix(in oklab, var(--chip) 16%, var(--surface)); border-color: var(--chip);
+      color: color-mix(in oklab, var(--chip) 65%, var(--text));
+    }
+  }
+  button.chip { margin: 0; cursor: pointer; }
+
+  /* ---- Badges (states) -------------------------------------------- */
+  /* 24px: an 18px line in 3px padding. Capitals, tracked out a little. */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: var(--radius-xs);
+    font-size: var(--text-xs); --lh: 1.5; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+    & .icon { width: 12px; height: 12px; }
+  }
+  .badge-ok { background: var(--ok-soft); color: var(--ok); }
+  .badge-warn { background: var(--warn-soft); color: var(--warn); }
+  .badge-danger { background: var(--danger-soft); color: var(--danger); }
+  .badge-info { background: var(--info-soft); color: var(--info); }
+  .badge-muted { background: var(--surface-2); color: var(--muted); }
+  .badge-accent { background: var(--accent-soft); color: var(--accent-strong); }
+  a.badge {
+    cursor: pointer; transition: background-color .15s, color .15s;
+    &.badge-muted:hover { background: var(--surface-3); color: var(--text); }
+    &.badge-accent:hover { background: var(--accent); color: var(--on-accent); }
+  }
+  /* A badge in a heading bar hangs into its padding. */
+  .card-head .badge { margin-block: -2px; }
+
+  /* ---- Status discs ----------------------------------------------- */
+  .status-icon { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; & .icon { width: 14px; height: 14px; } }
+  .status-ok { background: var(--ok-soft); color: var(--ok); }
+  .status-short { background: var(--danger-soft); color: var(--danger); }
+  .status-listed { background: var(--accent-soft); color: var(--accent-strong); }
+  .status-muted { background: var(--surface-2); color: var(--muted); }
+
+  /* ---- Working on a vehicle (working.go) --------------------------- */
+  /* The bar at the top of every page while a vehicle is worked on, washed
+     in its colour: 30px buttons in 5px padding and the border, 42px. On a
+     phone it runs edge to edge at the top and stays in view. */
   .working-on {
-    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
-    margin: -16px -16px 16px; padding: 6px 16px; border-radius: 0; border-width: 0 0 1px;
+    position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+    margin-bottom: 18px; padding: 5px 5px 5px 14px; border-radius: var(--radius);
+    border: 1px solid color-mix(in oklab, var(--chip) 35%, transparent);
+    background: color-mix(in oklab, var(--chip) 12%, var(--surface));
+    & .btn { background: color-mix(in oklab, var(--surface) 70%, transparent); border-color: transparent; }
+    & .btn:hover { background: var(--surface); }
+    @media (width <= 820px) {
+      position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+      margin: calc(-1 * var(--page)) calc(-1 * var(--page)) var(--page); padding: 5px var(--page);
+      border-radius: 0; border-width: 0 0 1px;
+    }
   }
-  /* One row: the name takes what the buttons leave, cut short with "…" if
-     it must. */
-  .working-name { flex: 1 1 0; min-width: 0; }
-  .working-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Switch opens a tray under the bar, as wide and as tinted, past a
-     dashed line. No shadow: the grey below sets it apart (a shadow would
-     fall on the bar). It is a popover (Esc and a tap
-     outside close it), so it undoes the browser's popover box, as the More
-     sheet does. --switch-top is the bar's padding edge (app.js measures
-     it; the bar is 41px with its bottom border, under the notch), so the
-     tray covers the bar's bottom border and has its own. The grey stops
-     there too: the bar and its tray stay bright, as the tab bar and its
-     sheet do. Its free edge, the bottom, is rounded as the sheet's top is. */
-  .working-switch { display: inline-flex; }
-  /* Its chips line up on the right, under the buttons that opened it. */
-  .working-pick .work-on { justify-content: flex-end; }
-  .working-pick:popover-open {
-    position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 40px)) 0 auto; width: auto; margin: 0;
-    color: inherit; padding: 10px 16px; border-width: 1px 0; border-radius: 0 0 var(--sheet-radius) var(--sheet-radius);
-    border-style: dashed none solid; border-color: color-mix(in srgb, var(--chip) 45%, transparent);
-    background: color-mix(in srgb, var(--chip) 12%, var(--surface));
+  .working-name {
+    display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-md);
+    & .icon { color: var(--chip); }
+    @media (width <= 820px) {
+      flex: 1 1 0; min-width: 0;
+      & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
   }
-  .working-pick::backdrop { inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 40px)) 0 0; }
-  html:has(.working-on) { scroll-padding-top: 58px; }
+  /* The name opens the vehicle's page: plain, on hover in its colour. */
+  a.working-name:hover strong { color: var(--chip); }
+  .working-actions {
+    margin-left: auto; display: flex; align-items: center; gap: 4px;
+    & .btn { padding-inline: 8px; }
+  }
+  .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Switch is the phone's: a desktop switches with the sidebar's chips. */
+  .working-switch { display: none; }
+  body:has(#switch:popover-open) .working-switch { background: var(--surface); }
+  @media (width <= 820px) {
+    .working-switch { display: inline-flex; }
+    html:has(.working-on) { scroll-padding-top: 56px; }
+    /* Switch opens a tray under the bar, as wide and as tinted, rounded at
+       the bottom. --switch-top is the bar's bottom edge (app.js measures it). */
+    .working-pick .work-on { justify-content: flex-end; }
+    .working-pick:popover-open {
+      position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 42px)) 0 auto; width: auto; margin: 0;
+      color: inherit; padding: 12px var(--page); border: 0; border-radius: 0 0 14px 14px;
+      background: color-mix(in oklab, var(--chip) 12%, var(--surface)); box-shadow: var(--shadow-pop);
+      transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
+      @starting-style { translate: 0 -12px; opacity: 0; }
+    }
+    .working-pick::backdrop { inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 42px)) 0 0; }
+    .working-pick:popover-open::backdrop { @starting-style { opacity: 0; } }
+  }
+  .work-on .chip[aria-pressed="true"] {
+    background: color-mix(in oklab, var(--chip) 26%, var(--surface)); border-color: var(--chip);
+    box-shadow: inset 0 0 0 1px var(--chip);
+  }
+  /* In the sidebar (and the More sheet), Work on and Stock by vehicle are a
+     list like the nav above them: 36px rows (a 20px line in 7px padding and
+     the border), the dot where the nav has its icon; the vehicle worked on
+     is lit in its colour. The phone's Switch tray keeps the chips. */
+  .sidebar :is(.work-on, .nav-vehicles) {
+    flex-direction: column; align-items: stretch; gap: 2px; padding: 0;
+    & .chip {
+      /* The dot centred under the nav's 18px icons, the name where their
+         labels start. */
+      justify-content: flex-start; gap: 10px; padding: 7px 9px; border-radius: var(--radius-sm);
+      font-size: var(--text-md); --lh: 1.45; font-weight: 600; color: var(--muted);
+      background: transparent; border-color: transparent; box-shadow: none;
+      &:hover { background: var(--surface-2); color: var(--text); border-color: transparent; }
+      & .dot { width: 10px; height: 10px; margin-inline: 4px; }
+    }
+    & .chip[aria-pressed="true"] {
+      color: var(--text); font-weight: 700;
+      background: color-mix(in oklab, var(--chip) 14%, var(--surface));
+      border-color: color-mix(in oklab, var(--chip) 45%, transparent);
+    }
+  }
+
+  /* ---- Filters and results (stock, services, activity, shopping) --- */
+  .filters { display: grid; gap: 10px; padding: 12px var(--inset); }
+  .filters-row {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    & .input-icon { flex: 1 1 260px; }
+    & select.input { width: auto; flex: 0 1 200px; }
+    & .sort-by select.input { flex: 0 1 auto; height: var(--control-sm); min-height: var(--control-sm); padding-block: 4px; font-size: var(--text-sm); }
+  }
+  /* A check that filters: 30px. */
+  .toggle {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; --lh: 1.25;
+    padding: 6px 11px; font-size: var(--text-sm); font-weight: 600;
+    border: 1px solid var(--field-border); border-radius: var(--radius-sm); background: var(--surface);
+    transition: background-color .15s, border-color .15s;
+    &:hover { background: var(--surface-2); }
+    &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+    &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    & input { width: 14px; height: 14px; }
+  }
+  /* Sort by, at the end of the toggles: on its own line once they wrap. */
+  .sort-by {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto;
+    @container (width < 620px) { margin-left: 0; }
+    & .segmented { gap: 0; }
+    & .segmented label { padding: 6px 11px; white-space: nowrap; }
+    & .segmented label:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    & .segmented label:last-of-type { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
+    & .segmented label:has(input:checked) { position: relative; z-index: 1; }
+    & .segmented .icon { width: 16px; height: 16px; }
+  }
+  .sort-label { font-size: var(--text-sm); color: var(--muted); font-weight: 600; }
+  /* Closer to what it heads than to what is above it. */
+  .results-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px;
+    & + * { margin-top: 0; }
+    & h2 { display: flex; align-items: center; gap: 8px; }
+    & .count { margin: 0; padding: 0; min-width: 0; background: none; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-sm); font-weight: 700; }
+  }
+
+  /* A stock section's heading, washed in its vehicle's colour (--chip, set
+     by the "stock-section" partial; the accent when shared): as tall with
+     chips as without. */
+  .section-head {
+    display: flex; align-items: center; gap: 10px; min-height: 45px; padding: 10px var(--inset);
+    background: color-mix(in oklab, var(--chip, var(--muted)) 11%, var(--surface));
+    & h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    & h2 .icon { color: color-mix(in oklab, var(--chip, var(--muted)) 70%, var(--text)); }
+    & .n { margin-left: auto; color: var(--muted); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+  }
+  .section-shared { --chip: var(--accent); }
+
+  /* ---- Stock rows -------------------------------------------------- */
+  .item-list { margin: 0; }
+  .item-row {
+    display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 14px; align-items: center;
+    padding: 10px var(--inset); border-top: 1px solid var(--surface-2);
+    transition: background-color .15s;
+    .item-list > &:first-child { border-top: 0; }
+    &:hover { background: color-mix(in oklab, var(--surface-2) 50%, var(--surface)); }
+    &.htmx-swapping { opacity: .5; transition: opacity .2s; }
+    &.flash-ok { animation: row-flash 1s ease-out; }
+    @container (width < 540px) {
+      grid-template-columns: 60px minmax(0, 1fr) auto; gap: 10px; padding-block: 9px;
+      & .item-actions { gap: 4px; }
+    }
+  }
+  @keyframes row-flash { from { background: var(--accent-soft); } }
+  .qty {
+    font-weight: 800; font-size: .9375rem; text-align: right; white-space: nowrap;
+    &.zero { color: var(--danger); }
+    &.low { color: var(--warn); }
+  }
+  .item-main { min-width: 0; }
+  .item-name {
+    font-weight: 700; display: inline-flex; align-items: center; gap: 10px;
+    &:hover { color: var(--accent-strong); }
+    & .brand { color: var(--muted); font-weight: 600; }
+  }
+  .item-meta {
+    display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 3px; color: var(--muted); font-size: .75rem;
+    & .sku { font-family: var(--mono); }
+  }
+  .item-actions { display: flex; gap: 4px; align-items: center; }
+  .thumb { width: 32px; height: 32px; border-radius: var(--radius-sm); object-fit: cover; }
+
+  /* ---- Tables ------------------------------------------------------ */
+  /* On a narrow card a wide table keeps its columns and scrolls inside the
+     card, rather than squeezing names to a word a line. */
+  .table-wrap {
+    overflow-x: auto; position: relative;
+    @container (width < 660px) { & > table.table { min-width: 640px; } }
+  }
+  /* Separate: collapsed, a cell owns half of each border, and rows end on
+     half pixels. 24px between columns, the card's inset at its edges. */
+  table.table {
+    width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-md);
+    & th {
+      text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 800;
+      padding: 8px 12px; white-space: nowrap; background: color-mix(in oklab, var(--surface-2) 70%, var(--surface));
+    }
+    & td { padding: 10px 12px; border-top: 1px solid var(--surface-2); vertical-align: middle; }
+    & tbody tr:first-child td { border-top: 0; }
+    & :is(th, td):first-child { padding-left: var(--inset); }
+    & :is(th, td):last-child { padding-right: var(--inset); }
+    & tbody tr { transition: background-color .15s; }
+    & tbody tr:hover { background: color-mix(in oklab, var(--surface-2) 50%, var(--surface)); }
+    & .num { text-align: right; white-space: nowrap; }
+    & .nowrap { white-space: nowrap; }
+    & a:not([class]) { font-weight: 700; &:hover { color: var(--accent-strong); } }
+    & .qty-col { width: 104px; }
+  }
+  /* Sortable column headers (the "sort-th" partial): the arrows show the
+     order and stay faint on the other columns. Baseline, not centre, so
+     the label lines up with the plain headers. */
+  .sort-link {
+    display: inline-flex; align-items: baseline; gap: 4px; color: inherit; margin: -4px -6px; padding: 4px 6px; border-radius: var(--radius-xs);
+    font-weight: 800;
+    &:hover { color: var(--text); background: var(--surface-3); }
+    &:focus-visible { outline-offset: 1px; }
+    & .icon { align-self: center; width: 12px; height: 12px; opacity: .4; transition: opacity .15s; }
+    &:is(:hover, :focus-visible, .sorted) .icon { opacity: 1; }
+    &.sorted { color: var(--accent-strong); }
+    .num & { flex-direction: row-reverse; }
+  }
+  .delta-pos { color: var(--ok); font-weight: 800; }
+  .delta-neg { color: var(--danger); font-weight: 800; }
+
+  /* ---- Lists (dashboard and detail pages) ------------------------- */
+  .list {
+    margin: 0;
+    & > li { display: flex; align-items: center; gap: 12px; padding: 10px var(--inset); border-top: 1px solid var(--surface-2); }
+    & > li:first-child { border-top: 0; }
+    & .title { font-weight: 700; display: block; overflow: hidden; text-overflow: ellipsis; }
+    & a.title:hover { color: var(--accent-strong); }
+    & .title.vehicle-title {
+      display: flex; align-items: center; gap: 8px;
+      & .icon { color: var(--chip); }
+      &:hover { color: var(--chip, var(--accent)); }
+      & span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
+    & .meta { color: var(--muted); font-size: .75rem; margin-top: 1px; }
+    /* A list row's stock badge, on its own line under the title. */
+    & .stock-line { display: flex; margin-block: 4px; }
+    & .end { text-align: right; white-space: nowrap; font-weight: 700; }
+  }
+
+  /* ---- Kits -------------------------------------------------------- */
+  .kit-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px var(--inset); border-top: 1px solid var(--surface-2);
+    transition: background-color .15s;
+    &:first-child, .card-head + & { border-top: 0; }
+    &:is(a):hover { background: color-mix(in oklab, var(--surface-2) 50%, var(--surface)); }
+    & .grow { flex: 1; min-width: 0; }
+    & .title { font-weight: 700; }
+    /* Its parts are spans with their own " · ": the gap is a space wide. */
+    & .meta { color: var(--muted); font-size: .75rem; display: flex; gap: 2px .3em; flex-wrap: wrap; align-items: center; }
+    & .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    /* Narrow: the badges go under the name instead of squeezing it. */
+    @container (width < 500px) {
+      flex-wrap: wrap; align-items: flex-start;
+      & .grow { flex-basis: calc(100% - 40px); }
+      & .badges { flex-direction: row; flex-wrap: wrap; align-items: center; margin-left: 40px; }
+    }
+  }
+  .title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; & + .meta { margin-top: 3px; } }
+  .kit-lines .status-col { width: 40px; }
+  .kit-lines .status-icon { margin: 0; }
+  .meter {
+    margin-top: 6px; height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden;
+    & > span { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
+    &.short > span { background: var(--danger); }
+  }
+
+  /* ---- Vehicles ---------------------------------------------------- */
+  /* Washed in the vehicle's colour at the top, fading into the panel. */
+  .vehicle-card {
+    --chip: var(--accent); --rim-fade: var(--surface);
+    display: flex; flex-direction: column;
+    background: linear-gradient(to bottom, color-mix(in oklab, var(--chip) 14%, var(--surface)), var(--rim-fade) 70%);
+    border-top: 3px solid var(--chip);
+    transition: --rim-fade .2s;
+    &:is(a):hover { --rim-fade: color-mix(in oklab, var(--chip) 6%, var(--surface)); }
+    & .body { padding: 14px var(--inset); display: grid; gap: 8px; }
+    & .name { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.125rem; }
+    & .name .icon { color: var(--chip); }
+    & .stats { display: flex; gap: 18px; color: var(--muted); font-size: var(--text-sm); flex-wrap: wrap; }
+    & .stats strong { color: var(--text); font-weight: 800; }
+  }
+
+  /* Facts: a record's figures in label / value pairs. */
+  .facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px 16px; margin: 0;
+    & dt { color: var(--muted); font-size: .75rem; font-weight: 600; }
+    & dd { font-weight: 700; overflow-wrap: anywhere; margin-top: 1px; }
+    & dd .muted { font-weight: 500; }
+    & a { text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 3px; &:hover { color: var(--accent-strong); } }
+  }
+
+  /* ---- Item page --------------------------------------------------- */
+  /* 4:3-ish, in whole pixels: the card is a container, its width known. */
+  .photo-card { container-type: inline-size; }
+  .photo {
+    height: round(78cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden;
+    display: grid; place-items: center; color: var(--muted);
+    &:has(> a) { grid-template: 100% / 100%; }
+    & > a, & img { width: 100%; height: 100%; }
+    & img { object-fit: cover; }
+    & .icon { width: 36px; height: 36px; }
+  }
+  .big-qty {
+    font-size: 2.125rem; font-weight: 800; letter-spacing: -.03em; --lh: 1.1;
+    &.zero { color: var(--danger); }
+    &.low { color: var(--warn); }
+  }
+  .sku-table td:first-child { font-family: var(--mono); }
+  /* Part numbers, and only they, have the dotted underline. */
+  .sku-link, .table a.sku-link {
+    font-family: var(--mono); font-weight: 500; text-decoration: underline dotted; text-underline-offset: 3px;
+    &:hover { color: var(--accent-strong); text-decoration-style: solid; }
+  }
+  .sku-more { color: var(--muted); font-weight: 700; white-space: nowrap; &:hover { color: var(--accent-strong); } }
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid var(--surface-2); padding: 0 var(--inset);
+    & button {
+      display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: var(--text-md);
+      background: none; border: 0; padding: 12px 8px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+      &:hover { color: var(--text); }
+      &[aria-selected="true"] { color: var(--accent-strong); border-bottom-color: var(--accent); }
+    }
+  }
+
+  /* ---- Empty states ------------------------------------------------ */
+  .empty {
+    text-align: center; padding: 36px var(--inset); color: var(--muted);
+    & > .icon { width: 36px; height: 36px; color: var(--surface-3); margin: 0 auto 10px; display: block; }
+    & h2, & h3 { color: var(--text); margin-bottom: 6px; }
+    & .btn { margin-top: 12px; }
+  }
+  .welcome ol { margin: 8px 0 0; padding-left: var(--inset); display: grid; gap: 6px; }
+
+  /* ---- Messages ---------------------------------------------------- */
+  .flash {
+    display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; min-height: 46px;
+    border-radius: var(--radius); margin-bottom: var(--gap); font-weight: 700;
+    animation: flash-in .3s ease-out;
+  }
+  .flash-success { background: var(--ok-soft); color: var(--ok); }
+  .flash-error { background: var(--danger-soft); color: var(--danger); }
+  .flash-undo { margin-left: auto; }
+  @keyframes flash-in { from { opacity: 0; translate: 0 -4px; } }
+
+  .toasts {
+    position: fixed; z-index: 50; right: var(--page); bottom: var(--page); display: grid; gap: 8px; max-width: min(380px, calc(100vw - 2 * var(--page)));
+    @media (width <= 820px) { bottom: calc(var(--tabbar-space) + 10px); left: var(--page); right: var(--page); }
+  }
+  .toast {
+    display: flex; gap: 8px; align-items: center; padding: 11px 14px; border-radius: var(--radius);
+    background: var(--text); color: var(--bg); box-shadow: var(--shadow-pop); font-weight: 700;
+    animation: toast-in .25s cubic-bezier(.2, .8, .2, 1);
+    &.error { background: var(--danger); color: var(--on-accent); }
+  }
+  @keyframes toast-in { from { translate: 0 12px; opacity: 0; } }
+
+  .htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
 }
 
-/* ---------- Badges ---------- */
-.badge { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; --lh: 1.5; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
-.badge-ok { background: var(--ok-soft); color: var(--ok); }
-.badge-warn { background: var(--warn-soft); color: var(--warn); }
-.badge-danger { background: var(--danger-soft); color: var(--danger); }
-.badge-info { background: var(--info-soft); color: var(--info); }
-.badge-muted { background: var(--surface-2); color: var(--muted); }
-.badge-accent { background: var(--accent-soft); color: var(--accent-strong); }
-
-/* ---------- Stock list ---------- */
-.filters { display: grid; gap: 12px; padding: 16px var(--inset); }
-.filters-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.filters-row .input-icon { flex: 1 1 260px; }
-.filters-row select.input { width: auto; flex: 0 1 200px; }
-.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; cursor: pointer; padding: 6px 11px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); }
-.toggle:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
-.toggle input { accent-color: var(--accent); margin: 0; }
-/* Sort by, at the end of the toggles: on its own line once they wrap. */
-.sort-by { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.sort-label { font-size: .88rem; color: var(--muted); }
-.filters-row .sort-by select.input { flex: 0 1 auto; width: auto; height: 36px; min-height: 36px; padding-top: 5px; padding-bottom: 5px; font-size: .88rem; }
-.sort-by .segmented { gap: 0; }
-.sort-by .segmented label { padding: 6px 11px; font-size: .85rem; white-space: nowrap; }
-.sort-by .segmented label:first-of-type { border-radius: 99px 0 0 99px; }
-.sort-by .segmented label:last-of-type { border-radius: 0 99px 99px 0; margin-left: -1px; }
-.sort-by .segmented label:has(input:checked) { position: relative; z-index: 1; }
-.sort-by .segmented .icon { width: 16px; height: 16px; }
-@media (max-width: 640px) { .sort-by { margin-left: 0; } }
-.results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 20px 0 12px; }
-/* Closer to what it heads than to what is above it: 12px, also in a
-   .stack, whose 16px would otherwise win. */
-.results-head + * { margin-top: 0; }
-.results-head h2 { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; }
-.results-head .count { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .9rem; }
-
-/* As tall with chips as without: a 26px chip in 11px padding. */
-.section-head { display: flex; align-items: center; gap: 10px; min-height: 49px; padding: 11px var(--inset); border-bottom: 1px solid var(--border); }
-.section-head h2 { font-size: 1rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.section-head .n { margin-left: auto; color: var(--muted); font-size: .8rem; white-space: nowrap; }
-.section-shared .section-head { background: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
-
-.item-list { list-style: none; margin: 0; padding: 0; }
-.item-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 11px var(--inset); border-top: 1px solid var(--border); }
-.item-list > .item-row:first-child { border-top: 0; }
-.item-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
-.qty { font-weight: 700; font-size: 1rem; text-align: right; white-space: nowrap; }
-.qty.zero, .big-qty.zero { color: var(--danger); }
-.qty.low, .big-qty.low { color: var(--warn); }
-.item-main { min-width: 0; }
-.item-name { font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-.item-name:hover { color: var(--accent); }
-.item-name .brand { color: var(--muted); font-weight: 500; }
-.item-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: .8rem; margin-top: 2px; align-items: center; }
-.item-meta .sku { font-family: var(--mono); }
-.item-actions { display: flex; gap: 6px; align-items: center; }
-.thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); }
-@media (max-width: 640px) {
-  .item-row { grid-template-columns: 66px minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; }
-  .item-actions { gap: 4px; }
-  .item-actions .icon-btn { width: 32px; height: 32px; }
-  .qty { font-size: .92rem; }
-}
-.item-row.htmx-swapping { opacity: .5; transition: opacity .2s; }
-.item-row.flash-ok { animation: flash 1s ease-out; }
-@keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
-
-/* ---------- Tables ---------- */
-.table-wrap { overflow-x: auto; position: relative; } /* contains .sr-only labels */
-/* Separate: collapsed, a cell owns half of each border, and rows end on
-   half pixels. */
-table.table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .9rem; }
-.table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
-/* 24px between columns, and the card's inset at its edges, so the first
-   column lines up with the card's heading. */
-.table :is(th, td):first-child { padding-left: var(--inset); }
-.table :is(th, td):last-child { padding-right: var(--inset); }
-.table tr:first-child td { border-top: 0; }
-.table .num { text-align: right; white-space: nowrap; }
-.table .nowrap { white-space: nowrap; }
-.table a { text-decoration: none; font-weight: 600; }
-.table a:hover { color: var(--accent); }
-/* Sortable column headers (the "sort-th" partial): the arrows show the
-   order, and stay faint on the columns not sorted by. */
-/* Baseline, not center: the header lines up with the plain ones by its
-   baseline, and only the label has one. With center, a number column (arrow
-   first, row-reverse) took the arrow's bottom edge and sat 1px high. */
-.sort-link { display: inline-flex; align-items: baseline; gap: 4px; color: inherit; margin: -4px -6px; padding: 4px 6px; border-radius: 6px; }
-.table .sort-link { font-weight: 600; }
-.table .sort-link:hover { color: var(--text); background: var(--surface-2); }
-/* Even, like the headers' 18px line, so the arrow sits on whole pixels. */
-.sort-link .icon { align-self: center; width: 12px; height: 12px; opacity: .4; transition: opacity .15s; }
-.sort-link:hover .icon, .sort-link:focus-visible .icon, .sort-link.sorted .icon { opacity: 1; }
-.table .sort-link.sorted { color: var(--accent-strong); }
-.sort-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.num .sort-link { flex-direction: row-reverse; }
-.delta-pos { color: var(--ok); font-weight: 700; }
-.delta-neg { color: var(--danger); font-weight: 700; }
-
-/* Simple list rows used on dashboard and detail pages */
-.list { list-style: none; margin: 0; padding: 0; }
-.list > li { display: flex; align-items: center; gap: 12px; padding: 10px var(--inset); border-top: 1px solid var(--border); }
-.list > li:first-child { border-top: 0; }
-.list .grow { flex: 1; min-width: 0; }
-.list .title { font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
-a.title:hover { color: var(--accent); }
-.list .title.vehicle-title { display: flex; align-items: center; gap: 8px; }
-.list .title.vehicle-title .icon { color: var(--chip); flex: none; }
-.list .title.vehicle-title:hover { color: var(--chip, var(--accent)); }
-.list .title.vehicle-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list .meta { color: var(--muted); font-size: .8rem; }
-/* A list row's stock badge, on its own line under the title. */
-.list .stock-line { display: flex; margin-block: 4px; }
-.list .end { text-align: right; white-space: nowrap; }
-
-/* ---------- Vehicles ---------- */
-/* The border carries the vehicle colour: thick at the top, held round the
-   corners, then fading into the normal border down the sides. */
-.vehicle-card {
-  --chip: var(--accent); --rim-fade: var(--border);
-  overflow: hidden; display: flex; flex-direction: column; text-decoration: none;
-  border-radius: 18px; border-width: 3px 1px 1px; border-color: transparent;
-  background:
-    linear-gradient(var(--surface), var(--surface)) padding-box,
-    linear-gradient(to bottom, var(--chip) 18px, var(--rim-fade) 60%) border-box;
-}
-.vehicle-card .body { padding: 16px var(--inset); display: grid; gap: 10px; }
-.vehicle-card .name { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
-.vehicle-card .name .icon { color: var(--chip); }
-.vehicle-card .stats { display: flex; gap: 20px; color: var(--muted); font-size: .85rem; flex-wrap: wrap; }
-.vehicle-card .stats strong { color: var(--text); }
-a.vehicle-card:hover { --rim-fade: color-mix(in srgb, var(--chip) 45%, var(--border)); color: inherit; }
-.vehicle-hero { --chip: var(--accent); } /* laid out by .page-head */
-.vehicle-hero .avatar { width: 70px; height: 70px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--chip) 18%, var(--surface)); color: var(--chip); }
-.vehicle-hero .avatar .icon { width: 38px; height: 38px; } /* 30 in 56, scaled; even, so it centres on whole pixels */
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 16px; margin: 0; }
-.facts dt { color: var(--muted); font-size: .78rem; }
-.facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-.facts dd .muted { font-weight: 500; }
-.facts a { text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
-.facts a:hover { color: var(--accent); }
-p a:not(.btn):not(.chip):not(.badge),
-.hint a:not(.btn):not(.chip):not(.badge),
-.card-body > a:not(.btn):not(.chip):not(.badge),
-.welcome ol a:not(.btn):not(.chip):not(.badge) {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-p a:not(.btn):not(.chip):not(.badge):hover,
-.hint a:not(.btn):not(.chip):not(.badge):hover,
-.card-body > a:not(.btn):not(.chip):not(.badge):hover,
-.welcome ol a:not(.btn):not(.chip):not(.badge):hover {
-  color: var(--accent);
+/* ======================================================================
+   utilities: spacing asked for in the markup wins over a component's own.
+   Only spacing: a utility that set more (.flex's gap) would override the
+   components that refine it.
+   ====================================================================== */
+@layer utilities {
+  .mt { margin-top: var(--gap); }
+  .mb { margin-bottom: var(--gap); }
 }
 
-/* ---------- Kits ---------- */
-.kit-row { display: flex; align-items: center; gap: 14px; padding: 13px var(--inset); border-top: 1px solid var(--border); text-decoration: none; }
-.kit-row:first-child, .card-head + .kit-row { border-top: 0; }
-a.kit-row:hover { background: color-mix(in srgb, var(--surface-2) 50%, transparent); color: inherit; }
-a.kit-row.muted:hover { color: var(--muted); }
-.kit-row .grow { flex: 1; min-width: 0; }
-.title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.title-row + .meta { margin-top: 4px; }
-.meta:empty { display: none; }
-.kit-row .title { font-weight: 600; }
-.kit-row .meta { color: var(--muted); font-size: .8rem; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.kit-row .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.status-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
-.status-ok { background: var(--ok-soft); color: var(--ok); }
-.status-short { background: var(--danger-soft); color: var(--danger); }
-.status-listed { background: var(--accent-soft); color: var(--accent-strong); } /* missing, and on the shopping list */
-.status-muted { background: var(--surface-2); color: var(--muted); }
-/* A kit's parts: table cells vertically centered, keeping status icons,
-   wrapped item names, and quantity amounts balanced across the row. */
-.kit-lines .status-col { width: 40px; }
-.kit-lines .status-icon { margin: 0; }
-.table .qty-col { width: 110px; }
-.meter { margin-top: 6px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
-.meter > span { display: block; height: 100%; background: var(--ok); }
-.meter.short > span { background: var(--danger); }
-
-/* ---------- Item detail ---------- */
-/* 4:3, in whole pixels: the card is a container, so its width is known. */
-.photo-card { container-type: inline-size; }
-.photo { height: round(85cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; color: var(--muted); }
-/* One cell the photo's size, so the link and image can fill it. */
-.photo:has(> a) { grid-template: 100% / 100%; }
-.photo > a, .photo img { width: 100%; height: 100%; }
-.photo img { object-fit: cover; }
-.photo .icon { width: 40px; height: 40px; }
-.big-qty { font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em; --lh: 1.1; text-align: left; }
-.sku-table td:first-child { font-family: var(--mono); }
-.sku-link, .table a.sku-link { font-family: var(--mono); text-decoration: underline dotted; text-underline-offset: 3px; }
-.sku-link:hover, .table a.sku-link:hover { color: var(--accent); text-decoration-style: solid; }
-.sku-more { color: var(--muted); font-weight: 600; text-decoration: none; white-space: nowrap; }
-.sku-more:hover { color: var(--accent); }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 var(--inset); }
-.tabs button { display: flex; align-items: center; gap: 8px; font: inherit; line-height: round(var(--lh) * 1em, 2px); font-weight: 600; font-size: .9rem; background: none; border: 0; padding: 13px 10px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
-.tabs button[aria-selected="true"] { color: var(--accent-strong); border-bottom-color: var(--accent); }
-
-/* ---------- Misc ---------- */
-.empty { text-align: center; padding: 40px 20px; color: var(--muted); }
-.empty > .icon { width: 42px; height: 42px; color: var(--border); margin: 0 auto 12px; display: block; }
-.empty h2 { color: var(--text); margin-bottom: 6px; }
-.empty .btn { margin-top: 12px; }
-.muted { color: var(--muted); }
-.small { font-size: .85rem; }
-.nowrap { white-space: nowrap; }
-.mt { margin-top: var(--gap); }
-.mb { margin-bottom: var(--gap); }
-.flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.between { justify-content: space-between; }
-.welcome ol { margin: 8px 0 0; padding-left: 19px; display: grid; gap: 6px; }
-.notes { white-space: pre-wrap; margin-bottom: 0; }
-/* A key: 22px (an 18px line, the 1px top padding evening out the deeper
-   bottom border), so it centres on whole pixels. */
-.kbd {
-  display: inline-block; height: 22px; min-width: 20px; padding: 1px 5px 0; text-align: center;
-  font-family: var(--mono); font-size: .72rem; font-weight: 500; --lh: 1.5;
-  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; color: var(--muted);
-}
-
-.pager { padding: 12px var(--inset); }
-.card > .pager { border-top: 1px solid var(--border); }
-/* A card's footer: a total under its list (Service history's labour), with
-   the list's pager on the same row when it has pages. */
-.card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 12px var(--inset); border-top: 1px solid var(--border); background: var(--surface-2); font-size: .85rem; }
-/* The pager's ghost buttons line their icon up with the list's text (their
-   padding and border, 11px, hang into the gutter), and the row keeps the
-   height of a footer with only text: 7 + 30px button + 7. */
-.card-foot:has(.pager) { padding-block: 7px; }
-.card-foot .pager { padding: 0; margin-left: -11px; }
-.card-foot .total { flex: 1; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
-.card-foot .pager + .total { flex: none; }
-.card-foot .total strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-/* What you do with a card's list, under it (Add kit, Add 2 missing, Add
-   all), from the left like the pager, at the footer's height: 7 + 30px
-   button + 7, or 9 + 26px badge + 9. A button in a form is the form's only
-   box, with no line box around it to add height. */
-.card-actions { justify-content: flex-start; }
-.card-foot.card-actions { padding-block: 7px; }
-.card-foot.card-actions:has(> .badge) { padding-block: 9px; }
-.card-actions .inline-form { display: flex; }
-
-.flash { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-weight: 500; }
-.flash-success { background: var(--ok-soft); color: var(--ok); }
-.flash-error { background: var(--danger-soft); color: var(--danger); }
-.flash-undo { margin-left: auto; }
-.toasts { position: fixed; z-index: 50; right: 16px; bottom: 16px; display: grid; gap: 8px; max-width: min(380px, calc(100vw - 32px)); }
-@media (max-width: 820px) { .toasts { bottom: calc(var(--tabbar) + 16px); left: 16px; right: 16px; } }
-.toast { background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgb(0 0 0 / .2); font-weight: 500; display: flex; gap: 8px; align-items: center; animation: toast-in .2s ease-out; }
-.toast.error { background: var(--danger); color: #fff; }
-@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
-
-.htmx-request.loading-dim, .htmx-request .loading-dim { opacity: .55; transition: opacity .15s; }
-
+/* ======================================================================
+   print: the records, without what you click
+   ====================================================================== */
 @media print {
-  .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-actions, .flash, .toasts, .reset-link, .sort-reset { display: none !important; }
-  .shell { display: block; }
-  .card { box-shadow: none; }
+  @layer pages {
+    .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-actions, .flash, .toasts, .reset-link, .sort-reset, .appearance { display: none; }
+    .shell { display: block; }
+    .card { break-inside: avoid; box-shadow: none; border-color: var(--border); }
+  }
 }

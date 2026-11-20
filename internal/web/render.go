@@ -42,6 +42,8 @@ type View struct {
 	Today    time.Time
 	// Theme is "light", "dark" or "" to follow the system.
 	Theme string
+	// Accent is the accent colour chosen on this device (nil: the default).
+	Accent *Accent
 	// NavVehicles, ShoppingCount and TrashCount feed the sidebar.
 	TrashCount    int
 	NavVehicles   []stock.Vehicle
@@ -190,10 +192,11 @@ func (s *Server) funcs() template.FuncMap {
 		// toList counts a kit's lines missing more than the shopping list asks for.
 		"toList": stock.ToList,
 		// step is how much quick -/+ changes an item's stock, e.g. "100 ml".
-		"step":       func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
-		"join":       strings.Join,
-		"plural":     plural,
-		"pluralOnly": pluralOnly,
+		"step":          func(u stock.Unit) string { return stock.FormatQuantity(stock.DefaultStep(u), u) },
+		"join":          strings.Join,
+		"plural":        plural,
+		"pluralOnly":    pluralOnly,
+		"accentPresets": accentPresets,
 		"chipStyle": func(color string) template.CSS {
 			if !stock.IsColor(color) {
 				color = "#888888"
@@ -214,6 +217,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	v.Version = s.version
 	v.Today = s.now()
 	v.Theme = themeFrom(r)
+	v.Accent = accentFrom(r)
 	v.Path = r.URL.Path
 	if v.Flash == nil {
 		v.Flash = s.popFlash(w, r)

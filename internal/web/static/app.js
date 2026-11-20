@@ -90,7 +90,7 @@
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (e.defaultPrevented || form.method !== "post" || form.hasAttribute("hx-post") ||
-        form.classList.contains("theme-toggle")) return;
+        form.closest(".appearance")) return;
     if (form.dataset.submitting) {
       e.preventDefault();
       return;
@@ -125,7 +125,8 @@
   // having unsaved changes, so the "a" and "l" shortcuts ask before leaving.
   var dirty = false;
   document.addEventListener("input", function (e) {
-    if (e.target.form && e.target.form.method === "post") dirty = true;
+    // The Appearance panel saves as it goes: trying a colour isn't typing.
+    if (e.target.form && e.target.form.method === "post" && !e.target.closest(".appearance")) dirty = true;
     if (e.target.matches("input[data-part-qty]")) updateStockBadges(e.target);
   });
   // A form sent back with errors still holds what was typed, unsaved.
@@ -779,10 +780,18 @@
   var firstError = document.querySelector(".has-error input:not([type=hidden]), .has-error select, .has-error textarea");
   if (firstError) firstError.focus();
 
-  // ---- Theme --------------------------------------------------------------
-  // Switch without a reload, then let the server remember it. Picking what
-  // the system already shows clears the choice, so the app follows the
-  // system again.
+  // ---- Appearance: theme and accent (theme.go) ---------------------------
+  // Both forms work without this (they post and come back); here a change
+  // shows on the spot and is saved in the background, so trying colours is
+  // instant and the panel stays open.
+  function save(url, body, what) {
+    return fetch(url, {
+      method: "POST",
+      headers: { "HX-Request": "true", "Content-Type": "application/x-www-form-urlencoded" },
+      body: body
+    }).then(function (r) { if (!r.ok) throw new Error(r.status); })
+      .catch(function () { toast("The " + what + " changed here but couldn't be saved.", "error"); });
+  }
   // applyTheme shows "light", "dark" or "system" (no choice).
   function applyTheme(theme) {
     var root = document.documentElement;
@@ -794,34 +803,86 @@
       root.setAttribute("data-theme", theme);
       if (meta) meta.content = theme;
     }
+    document.querySelectorAll(".theme-pick button[name=theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.value === theme));
+    });
+    syncThemeColor();
+  }
+  // The browser's own bar takes the accent too (Chrome on Android).
+  function syncThemeColor() {
+    var mark = document.querySelector(".app-brand-mark");
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (mark && meta) meta.content = getComputedStyle(mark).backgroundColor;
+  }
+  // applyAccent shows hue and intensity, or the default (Indigo) for null,
+  // and moves the panel's sliders and swatches to match.
+  var DEFAULT_ACCENT = "280-100";
+  function applyAccent(value) {
+    var root = document.documentElement;
+    var v = value || DEFAULT_ACCENT;
+    var hi = v.split("-");
+    if (value && value !== DEFAULT_ACCENT) {
+      root.style.setProperty("--accent-h", hi[0]);
+      root.style.setProperty("--accent-i", hi[1]);
+    } else {
+      root.style.removeProperty("--accent-h");
+      root.style.removeProperty("--accent-i");
+      if (!root.getAttribute("style")) root.removeAttribute("style");
+    }
+    document.querySelectorAll(".accent-pick").forEach(function (f) {
+      f.elements.hue.value = hi[0];
+      f.elements.intensity.value = hi[1];
+      f.querySelectorAll(".swatch").forEach(function (b) { b.setAttribute("aria-pressed", String(b.value === v)); });
+    });
+    syncThemeColor();
   }
   document.addEventListener("submit", function (e) {
     var form = e.target;
-    if (!form.classList || !form.classList.contains("theme-toggle")) return;
-    e.preventDefault();
-    var theme = e.submitter && e.submitter.value;
-    if (theme !== "light" && theme !== "dark") return;
-    var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    if ((theme === "dark") === systemDark) theme = "system";
-    applyTheme(theme);
-    // The button that was clicked is now hidden; keep focus on the toggle.
-    form.querySelectorAll("button").forEach(function (b) {
-      if (b.offsetParent !== null) b.focus();
-    });
-    fetch(form.action, {
-      method: "POST",
-      headers: { "HX-Request": "true", "Content-Type": "application/x-www-form-urlencoded" },
-      body: "theme=" + theme
-    }).catch(function () { toast("The theme changed here but couldn't be saved.", "error"); });
+    if (!form.classList) return;
+    if (form.classList.contains("theme-pick")) {
+      e.preventDefault();
+      var theme = e.submitter && e.submitter.value;
+      if (theme !== "light" && theme !== "dark") theme = "system";
+      applyTheme(theme);
+      save(form.action, "theme=" + theme, "theme");
+    } else if (form.classList.contains("accent-pick")) {
+      e.preventDefault();
+      var s = e.submitter;
+      if (s && s.name === "reset") {
+        applyAccent(null);
+        save(form.action, "reset=1", "accent");
+      } else {
+        var v = s && s.name === "accent" ? s.value : form.elements.hue.value + "-" + form.elements.intensity.value;
+        applyAccent(v);
+        save(form.action, "accent=" + encodeURIComponent(v), "accent");
+      }
+    }
   });
+  // The sliders recolour the page as they move, and save once let go.
+  document.querySelectorAll(".accent-pick").forEach(function (f) {
+    var saveButton = f.querySelector(".accent-save");
+    if (saveButton) saveButton.hidden = true;
+    f.addEventListener("input", function (e) {
+      if (e.target.type !== "range") return;
+      applyAccent(f.elements.hue.value + "-" + f.elements.intensity.value);
+    });
+    f.addEventListener("change", function (e) {
+      if (e.target.type === "range") f.requestSubmit();
+    });
+  });
+  syncThemeColor();
   // A page that Back restores from the browser's page cache (pageshow with
-  // persisted) or reloads from its HTTP cache shows the theme it had when
-  // it was left; the choice may have changed on another page since. The
-  // cookie the server renders from says what it is now.
+  // persisted) or reloads from its HTTP cache shows the theme and accent it
+  // had when it was left; the choice may have changed on another page
+  // since. The cookies the server renders from say what they are now.
   window.addEventListener("pageshow", function () {
     var m = document.cookie.match(/(?:^|;\s*)theme=(light|dark)(?:;|$)/);
     var theme = m ? m[1] : "system";
     if (theme !== (document.documentElement.getAttribute("data-theme") || "system")) applyTheme(theme);
+    var a = document.cookie.match(/(?:^|;\s*)accent=(\d{1,3}-\d{1,3})(?:;|$)/);
+    var root = document.documentElement.style;
+    var shown = root.getPropertyValue("--accent-h") ? root.getPropertyValue("--accent-h").trim() + "-" + root.getPropertyValue("--accent-i").trim() : null;
+    if ((a ? a[1] : null) !== shown) applyAccent(a ? a[1] : null);
   });
   // The same for the vehicle worked on (working.go): it decides what the
   // list pages show, and the bar says so. A page from before a switch

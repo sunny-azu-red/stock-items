@@ -34,9 +34,17 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | All checks (fmt, tidy, vet, lint, tests with -race and coverage) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests | `cd e2e && npx playwright test` |
+| Web platform guidance (CSS, HTML, browser JS) | `npx -y modern-web-guidance@latest search "<query>"`, then `retrieve "<id>"` |
 | Docker image | `docker build -t pitbox .` |
 | Screenshots (docs/screenshots, README) | `scripts/screenshots.sh` ([docs/development.md](docs/development.md#screenshots)) |
 | Deploy | push to `master`; once CI is green, Portainer's re-pull gets `latest` ([docs/deployment.md](docs/deployment.md#updates-and-versions)) |
+
+## Browser support and the web platform
+
+- **This project's Baseline target is Baseline 2025.** Pitbox is used in current Chrome and Firefox, on desktop and Android; Safari is not a target. A feature in Baseline 2025 needs no fallback and no `@supports` guard.
+- A feature newer than that may be used when it has shipped in the current stable Chrome **and** Firefox. Where one of them lacks it, the browser's plain behaviour is the fallback; write no fallback code or polyfill for it.
+- **Native first.** Reach for HTML and CSS (`<dialog>`, popover, invoker commands, `<details>`, `<meter>`, `:has()`, `:user-invalid`, container queries, view transitions) before JavaScript.
+- **Use the [Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance) skill** (Claude Code plugin `modern-web-guidance@googlechrome`, or `npx -y modern-web-guidance@latest search "<2–5 words>"` then `retrieve "<id>"`) before writing CSS, HTML or browser JavaScript. Where a guide and a hard rule below disagree, the hard rule wins; raise the conflict instead of working around it.
 
 ## Hard rules
 

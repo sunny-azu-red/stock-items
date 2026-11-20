@@ -11,7 +11,7 @@
         <a href="/items/{{.ItemID}}">{{.ItemName}}</a>
         {{if .Archived}}<span class="badge badge-muted" title="Archived {{date .ArchivedAt}}. Edit the kit to replace or remove it.">{{icon "archive"}} Archived</span>{{end}}
       </div>
-      <div class="meter{{if .Short}} short{{end}}"><span style="width:{{pct .Have .Need}}%"></span></div>
+      {{/* What is in stock against what the kit needs; the row says it in words. */}}<meter class="meter{{if .Short}} short{{end}}" min="0" max="{{if gt .Need 0.0}}{{num .Need}}{{else}}1{{end}}" value="{{if gt .Need 0.0}}{{num .Have}}{{else}}1{{end}}" aria-hidden="true"></meter>
     </td>
     <td class="num">{{qty .Need .Unit}}</td>
     <td class="num">{{qty .Have .Unit}}</td>

@@ -1,6 +1,10 @@
-// Pitbox — small progressive enhancements. Every page works without
-// this file; it only adds convenience (confirmations, dynamic form rows,
-// suggestion dropdowns, clipboard, toasts and keyboard shortcuts).
+// Pitbox — the behaviour HTML and CSS can't give on their own (Baseline
+// 2025; see AGENTS.md): repeating form rows, unit pickers and stock badges,
+// suggestion dropdowns, photo shrinking, clipboard, toasts, the "?" hints'
+// hover and placement, tabs, the Appearance panel without a reload, the
+// double-submit guard and keyboard shortcuts. Dialogs, popovers and the
+// kit form's intermediate schedule need none of it. JavaScript is assumed
+// (docs/conventions.md); the server never relies on what it did.
 (function () {
   "use strict";
 
@@ -43,17 +47,6 @@
       focusedSortDir = null;
     }
   });
-
-  // ---- Confirmations ------------------------------------------------------
-  // <form data-confirm="Delete this?"> asks before submitting (also for htmx).
-  document.addEventListener("submit", function (e) {
-    var form = e.target;
-    var msg = form.getAttribute && form.getAttribute("data-confirm");
-    if (msg && !window.confirm(msg)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }
-  }, true);
 
   // ---- Double submits ---------------------------------------------------
   // A double click on "Save" must not log a service (and take its parts from
@@ -174,41 +167,6 @@
         if (container) updateStockBadges(container);
       }
       return;
-    }
-    var showInter = e.target.closest("[data-show-inter]");
-    if (showInter) {
-      e.preventDefault();
-      dirty = true;
-      var sec = document.getElementById("inter-section");
-      var prompt = document.getElementById("inter-prompt");
-      var flag = document.getElementById("has_inter");
-      if (sec) sec.hidden = false;
-      if (prompt) prompt.hidden = true;
-      if (flag) flag.value = "1";
-      var dist = document.getElementById("inter_interval_distance");
-      if (dist) dist.focus();
-      return;
-    }
-    var hideInter = e.target.closest("[data-hide-inter]");
-    if (hideInter) {
-      e.preventDefault();
-      dirty = true;
-      var sec2 = document.getElementById("inter-section");
-      var prompt2 = document.getElementById("inter-prompt");
-      var flag2 = document.getElementById("has_inter");
-      if (sec2) {
-        sec2.hidden = true;
-        var interRows = sec2.querySelectorAll("#inter-lines .row-line:not(.row-head)");
-        for (var k = 1; k < interRows.length; k++) interRows[k].remove();
-        sec2.querySelectorAll("input").forEach(function (i) { i.value = ""; });
-        sec2.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
-        sec2.querySelectorAll("[data-stock-badge]").forEach(function (n) { n.textContent = ""; });
-        sec2.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
-        sec2.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
-        sec2.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
-      }
-      if (prompt2) prompt2.hidden = false;
-      if (flag2) flag2.value = "0";
     }
   });
 
@@ -530,13 +488,13 @@
   // ---- Suggestion lists ---------------------------------------------------
   // <input list="…"> gets a dropdown styled like the selects. The browser's
   // datalist popup cannot be styled and mixes in autofill history. Without
-  // JS (or popover support) the plain datalist still works. The list is a
+  // JS the plain datalist still works. The list is a
   // popover so cards with overflow: clip do not cut it off.
   var placeOpenCombo = null;
   var comboSeed = 0;
   function enhanceCombo(input) {
     var list = document.getElementById(input.getAttribute("list"));
-    if (!list || !HTMLElement.prototype.showPopover) return;
+    if (!list) return;
     if (input.closest(".combo")) return;
     if (!input.id) input.id = "combo-" + (++comboSeed);
     var values = Array.prototype.map.call(list.options, function (o) { return o.value; });
@@ -719,34 +677,63 @@
   });
 
   // ---- Hints --------------------------------------------------------------
-  // A "?" shows its hint on hover and keyboard focus (CSS only). A click or
-  // tap keeps it open until the next click elsewhere or Escape. Escape also
-  // hides a hint shown by hover or focus, until the pointer or focus leaves.
-  function closeTips(except) {
-    document.querySelectorAll(".tip.open").forEach(function (t) {
-      if (t !== except) t.classList.remove("open");
-    });
+  // A "?" opens its hint, a popover="hint" (the tip partial): Esc and a
+  // click elsewhere close it on their own. Hover and keyboard focus show it
+  // for as long as they last; a click or tap keeps it open. The hint sits
+  // just under its "?", placed here: Firefox has no anchor positioning.
+  function placeTip(tip, btn) {
+    var r = btn.getBoundingClientRect();
+    tip.style.top = Math.round(r.bottom + 6) + "px";
+    tip.style.left = Math.round(Math.max(8, Math.min(r.left - 4, window.innerWidth - tip.offsetWidth - 8))) + "px";
+  }
+  function tipOf(btn) { return document.getElementById(btn.getAttribute("popovertarget")); }
+  function showTip(btn) {
+    var tip = tipOf(btn);
+    if (!tip || tip.matches(":popover-open")) return;
+    tip.showPopover();
+    placeTip(tip, btn);
+  }
+  function hideTip(btn) {
+    var tip = tipOf(btn);
+    if (tip && tip.matches(":popover-open") && !tip.dataset.pinned) tip.hidePopover();
   }
   document.addEventListener("click", function (e) {
     var btn = e.target.closest(".tip-btn");
-    closeTips(btn && btn.parentNode);
     if (!btn) return;
-    btn.parentNode.classList.remove("dismissed");
-    btn.parentNode.classList.toggle("open");
+    var tip = tipOf(btn);
+    if (!tip) return;
+    e.preventDefault(); // the popover is toggled here, pinned or not
+    if (tip.matches(":popover-open") && tip.dataset.pinned) {
+      tip.hidePopover();
+    } else {
+      showTip(btn);
+      tip.dataset.pinned = "1";
+    }
   });
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    closeTips();
-    document.querySelectorAll(".tip-btn:hover, .tip-btn:focus").forEach(function (b) {
-      b.parentNode.classList.add("dismissed");
+  document.addEventListener("toggle", function (e) {
+    if (e.target.classList && e.target.classList.contains("tip-text") && e.newState === "closed") delete e.target.dataset.pinned;
+  }, true);
+  document.addEventListener("mouseover", function (e) {
+    var btn = e.target.closest && e.target.closest(".tip-btn");
+    if (btn && !btn.contains(e.relatedTarget)) showTip(btn);
+  });
+  document.addEventListener("mouseout", function (e) {
+    var btn = e.target.closest && e.target.closest(".tip-btn");
+    if (btn && !btn.contains(e.relatedTarget)) hideTip(btn);
+  });
+  document.addEventListener("focusin", function (e) {
+    if (e.target.matches && e.target.matches(".tip-btn:focus-visible")) showTip(e.target);
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.matches && e.target.matches(".tip-btn")) hideTip(e.target);
+  });
+  // An open hint follows its "?" when the page scrolls.
+  window.addEventListener("scroll", function () {
+    document.querySelectorAll(".tip-text:popover-open").forEach(function (tip) {
+      var btn = document.querySelector('.tip-btn[popovertarget="' + tip.id + '"]');
+      if (btn) placeTip(tip, btn);
     });
-  });
-  ["mouseout", "focusout"].forEach(function (type) {
-    document.addEventListener(type, function (e) {
-      var tip = e.target.closest && e.target.closest(".tip");
-      if (tip && !tip.contains(e.relatedTarget)) tip.classList.remove("dismissed");
-    });
-  });
+  }, { passive: true, capture: true });
 
   // ---- Tabs ---------------------------------------------------------------
   function selectTab(tab) {

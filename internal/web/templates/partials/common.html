@@ -12,9 +12,10 @@
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}{{$link := .Link}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{if $link}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}" title="Show {{.Name}} stock"><span class="dot"></span>{{.Name}}</a>{{else}}{{template "chip" .}}{{end}}{{end}}{{else}}{{if $link}}<a class="chip" href="/stock?general=1" title="Show General stock">General</a>{{else}}<span class="chip">General</span>{{end}}{{end}}</span>{{end}}
 
 {{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string,
+   The hint is a popover (popover="hint"): Esc and a click outside close it, and no card clips it.
    and "For" the field's name, which names the button ("More about Keep at least").
    Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
-{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="{{with .For}}More about {{.}}{{else}}Help{{end}}" aria-describedby="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}">{{.Text}}</span></span>{{end}}
+{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="{{with .For}}More about {{.}}{{else}}Help{{end}}" aria-describedby="{{.ID}}" popovertarget="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}" popover="hint">{{.Text}}</span></span>{{end}}
 
 {{/* A message that belongs to no one field (a list's, a row's). */}}
 {{define "err"}}{{with .}}<p class="field-error">{{.}}</p>{{end}}{{end}}
@@ -38,6 +39,20 @@
 
 {{/* An empty state: dict "Icon" "Title" "Text" "Href" "Action" "ActionIcon",
      and "Sub" true under a card's own heading (its title is then an h3). */}}
+{{/* Asks before a permanent delete (only those ask: everything else can be
+     undone). A <dialog> its button opens itself (commandfor, no script),
+     holding the real form; Cancel, Esc or a click outside closes it, and
+     Cancel has the focus first. dict "ID" "Title" "Text" "Action" (the
+     form's) "Button" (the delete's words). */}}
+{{define "confirm-dialog"}}<dialog class="confirm" id="{{.ID}}" closedby="any" aria-labelledby="{{.ID}}-title" aria-describedby="{{.ID}}-text">
+  <h2 id="{{.ID}}-title">{{.Title}}</h2>
+  <p id="{{.ID}}-text">{{.Text}}</p>
+  <form class="form-actions" method="post" action="{{.Action}}">
+    <button class="btn btn-ghost" type="button" commandfor="{{.ID}}" command="close" autofocus>Cancel</button>
+    <button class="btn btn-danger" type="submit">{{icon "trash-2"}} {{.Button}}</button>
+  </form>
+</dialog>{{end}}
+
 {{define "empty"}}<div class="empty">{{icon .Icon}}{{if .Sub}}<h3>{{.Title}}</h3>{{else}}<h2>{{.Title}}</h2>{{end}}{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
 
 {{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}

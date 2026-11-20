@@ -109,3 +109,23 @@ func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 		t.Errorf("flash = %q", msg)
 	}
 }
+
+// Only permanent deletes ask, in a <dialog> their button opens itself
+// (commandfor, no script), holding the real form; Cancel has the focus
+// first, so Enter doesn't delete.
+func TestPermanentDeletesAskInADialog(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(flashOf(t, a.postV(rec.Header().Get("Location")+"/delete", nil)).Undo)
+	page := a.get("/trash")
+	expect(t, page, http.StatusOK,
+		`type="button" commandfor="confirm-`+id+`" command="show-modal" aria-label="Delete Service: Top up`,
+		`<dialog class="confirm" id="confirm-`+id+`" closedby="any" aria-labelledby="confirm-`+id+`-title"`,
+		`<form class="form-actions" method="post" action="/trash/`+id+`/purge">`,
+		`command="close" autofocus>Cancel</button>`,
+		`commandfor="confirm-empty" command="show-modal"`, `action="/trash/empty"`,
+		"It can&#39;t be restored after that.")
+	expectNot(t, page, "data-confirm", "after that.false")
+}

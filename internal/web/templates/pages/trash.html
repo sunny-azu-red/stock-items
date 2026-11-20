@@ -6,9 +6,8 @@
   </div>
   {{if $entries}}
   <div class="actions">
-    <form class="inline-form" method="post" action="/trash/empty" data-confirm="Permanently delete everything here? It can't be restored after that.">
-      <button class="btn btn-danger" type="submit">{{icon "trash-2"}} Empty trash</button>
-    </form>
+    <button class="btn btn-danger" type="button" commandfor="confirm-empty" command="show-modal">{{icon "trash-2"}} Empty trash</button>
+    {{template "confirm-dialog" (dict "ID" "confirm-empty" "Title" "Empty the trash?" "Text" "Everything here is deleted permanently. It can't be restored after that." "Action" "/trash/empty" "Button" "Empty trash")}}
   </div>
   {{end}}
 </div>
@@ -23,7 +22,9 @@
         <span class="meta">Deleted {{ago .DeletedAt}}</span>
       </span>
       <form class="inline-form" method="post" action="/trash/{{.ID}}/restore"><button class="btn btn-sm btn-primary" type="submit">{{icon "undo-2"}} Restore</button></form>
-      <form class="inline-form" method="post" action="/trash/{{.ID}}/purge" data-confirm="Delete this permanently?{{if eq .Kind "item"}} Deleted stock changes, services, photos and list entries that used it go too.{{else if eq .Kind "vehicle"}} Its deleted services and kits go too.{{end}}"><button class="icon-btn" type="submit" aria-label="Delete {{.Label}} permanently" title="Delete permanently">{{icon "x"}}</button></form>
+      <button class="icon-btn" type="button" commandfor="confirm-{{.ID}}" command="show-modal" aria-label="Delete {{.Label}} permanently" title="Delete permanently">{{icon "x"}}</button>
+      {{$also := ""}}{{if eq .Kind "item"}}{{$also = " Deleted stock changes, services, photos and list entries that used it go too."}}{{else if eq .Kind "vehicle"}}{{$also = " Its deleted services and kits go too."}}{{end}}
+      {{template "confirm-dialog" (dict "ID" (print "confirm-" .ID) "Title" (print "Delete " .Label " permanently?") "Text" (print "It can't be restored after that." $also) "Action" (print "/trash/" .ID "/purge") "Button" "Delete permanently")}}
     </li>
     {{end}}
   </ul>

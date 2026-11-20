@@ -728,8 +728,9 @@ func TestAccessibilityDetails(t *testing.T) {
 	expectNot(t, rec, "Please")
 	// Required fields say so natively; forms validate on the server only.
 	expect(t, a.get("/items/new"), http.StatusOK, `name="name" value="" required`, `novalidate`)
-	// A "?" is named after its field.
-	expect(t, a.get("/items/new"), http.StatusOK, `aria-label="More about Keep at least" aria-describedby="min-tip"`)
+	// A "?" is named after its field, and its hint is a popover it opens.
+	expect(t, a.get("/items/new"), http.StatusOK, `aria-label="More about Keep at least" aria-describedby="min-tip" popovertarget="min-tip"`,
+		`<span class="tip-text" role="tooltip" id="min-tip" popover="hint">`)
 	// The keyboard can skip the sidebar; the stock's filters are a search.
 	stockPage := a.get("/stock")
 	expect(t, stockPage, http.StatusOK, `<a class="skip-link" href="#main">Skip to content</a>`, `<main class="main" id="main" tabindex="-1">`,
@@ -776,8 +777,12 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	kitPath := rec.Header().Get("Location")
 	kitID := strings.TrimPrefix(kitPath, "/kits/")
 
-	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule.
-	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "Leave empty under warranty", `value="2000"`)
+	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule,
+	// its box ticked (CSS shows the fields while it is); a new kit's box is not.
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "Leave empty under warranty", `value="2000"`,
+		`<input type="checkbox" id="has_inter" name="has_inter" value="1" checked> Use an intermediate schedule`)
+	expect(t, a.get("/kits/new"), http.StatusOK, `<input type="checkbox" id="has_inter" name="has_inter" value="1"> Use an intermediate schedule`)
+	expectNot(t, a.get("/kits/new"), "data-show-inter", "data-hide-inter")
 
 	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts with package icon.
 	expect(t, a.get(kitPath), http.StatusOK,
@@ -785,6 +790,8 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Full parts</h2>`,
 		`<h2><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg> Intermediate parts</h2>`,
 		stock.FormatDistance(4000)+" or 12 months", stock.FormatDistance(2000),
+		// Each part's stock against what the kit needs is a <meter>.
+		`<meter class="meter" min="0" max="3600" value="`,
 	)
 
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.

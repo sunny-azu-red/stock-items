@@ -167,7 +167,7 @@
    base
    ====================================================================== */
 @layer base {
-  html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--surface-3) transparent; }
+  html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--surface-3) transparent; background: var(--bg); }
   body {
     font-family: var(--font); font-size: var(--text-md); font-weight: 500;
     /* Manrope's word space is tight at small sizes: "13 items" ran together. */
@@ -604,6 +604,11 @@
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
   .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
+  /* A kit's intermediate schedule: its fields show while its box is ticked. */
+  .inter-schedule {
+    & .inter-fields { margin-top: var(--gap); }
+    &:not(:has(#has_inter:checked)) .inter-fields { display: none; }
+  }
   .form-section {
     padding: 16px var(--inset);
     & + .form-section { border-top: 1px solid var(--surface-2); }
@@ -630,14 +635,16 @@
     & .icon { width: 16px; height: 16px; }
     &:hover { color: var(--accent-strong); }
   }
-  .tip.open .tip-btn { color: var(--accent-strong); }
+  .tip:has(.tip-text:popover-open) .tip-btn { color: var(--accent-strong); }
+  /* The hint: a popover in the top layer (no card clips it), placed under
+     its "?" by app.js. The browser hides it while closed: no display here. */
   .tip-text {
-    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(340px, 100%);
-    padding: 10px 12px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-pop);
+    position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(340px, calc(100vw - 16px));
+    padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-pop);
     color: var(--text); font-size: .8125rem; font-weight: 500; --lh: 1.5; letter-spacing: 0; text-transform: none;
+    transition: opacity .15s, display .15s allow-discrete, overlay .15s allow-discrete;
+    &:popover-open { @starting-style { opacity: 0; } }
   }
-  :is(.tip-btn:hover, .tip-btn:focus-visible) + .tip-text, .tip.open .tip-text { display: block; }
-  .tip.dismissed .tip-text { display: none; }
 
   /* Fields: 36px, a 3:1 border, the ring on any focus (design.md#14-focus-rings):
      the border and a 1px shadow make 2px solid, then a soft glow. In
@@ -1073,10 +1080,20 @@
   .title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; & + .meta { margin-top: 3px; } }
   .kit-lines .status-col { width: 40px; }
   .kit-lines .status-icon { margin: 0; }
+  /* A kit part's <meter>: in stock against what the kit needs, green, red
+     when short. Chrome and Firefox style its bar through their own
+     pseudo-elements, each in a rule of its own (a list with the other's
+     would be dropped whole). */
   .meter {
-    margin-top: 6px; height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden;
-    & > span { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
-    &.short > span { background: var(--danger); }
+    --bar: var(--ok);
+    appearance: none; display: block; width: 100%; height: 6px; margin-top: 6px;
+    border: 0; border-radius: 99px; background: var(--surface-3); overflow: hidden;
+    &.short { --bar: var(--danger); }
+    &::-webkit-meter-bar { height: 6px; border: 0; border-radius: 99px; background: transparent; }
+    &::-webkit-meter-optimum-value { background: var(--bar); border-radius: 99px; }
+    &::-webkit-meter-suboptimum-value { background: var(--bar); border-radius: 99px; }
+    &::-webkit-meter-even-less-good-value { background: var(--bar); border-radius: 99px; }
+    &::-moz-meter-bar { background: var(--bar); border-radius: 99px; }
   }
 
   /* ---- Vehicles ---------------------------------------------------- */
@@ -1146,6 +1163,23 @@
     & .btn { margin-top: 12px; }
   }
   .welcome ol { margin: 8px 0 0; padding-left: var(--inset); display: grid; gap: 6px; }
+
+  /* ---- Dialogs (confirm-dialog) ------------------------------------- */
+  /* A modal <dialog>: centred, a panel lifted off a grey page, fading and
+     growing in (and out, in Chrome). The page behind doesn't scroll. */
+  .confirm {
+    width: min(420px, calc(100vw - 2 * var(--page))); padding: 20px; margin: auto;
+    color: var(--text); background: var(--surface); border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow-pop);
+    opacity: 0; scale: .96;
+    transition: opacity .2s, scale .2s cubic-bezier(.2, .8, .2, 1), display .2s allow-discrete, overlay .2s allow-discrete;
+    &[open] { opacity: 1; scale: 1; @starting-style { opacity: 0; scale: .96; } }
+    &::backdrop { background: var(--scrim); opacity: 0; transition: opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete; }
+    &[open]::backdrop { opacity: 1; @starting-style { opacity: 0; } }
+    & h2 { margin-bottom: 8px; }
+    & p { color: var(--muted); }
+    & .form-actions { margin-top: 18px; }
+  }
+  :root:has(dialog:modal) { overflow: hidden; }
 
   /* ---- Messages ---------------------------------------------------- */
   .flash {

@@ -43,7 +43,8 @@ func TestVocabulary(t *testing.T) {
 		{re: `\bWhat was done\b`, use: `"Work performed"`},
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},
-		{re: `data-confirm`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html"},
+		{re: `data-confirm`, use: `the "confirm-dialog" partial (a <dialog> opened with commandfor)`, uiOnly: true},
+		{re: `command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html"},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},
 		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}

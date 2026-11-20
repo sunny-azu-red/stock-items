@@ -139,12 +139,6 @@ func (s *Server) funcs() template.FuncMap {
 		"expiryState": func(it stock.Item) string { return it.ExpiryState(s.now(), store.ExpiringDays) },
 		"dict":        dict,
 		"add":         func(a, b int) int { return a + b },
-		"pct": func(have, need float64) int {
-			if need <= 0 {
-				return 100
-			}
-			return int(min(100, have/need*100))
-		},
 		"hasID": func(ids []int64, id int64) bool {
 			for _, v := range ids {
 				if v == id {

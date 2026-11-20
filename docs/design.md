@@ -146,6 +146,8 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | A table keeps 640px and scrolls inside its card | 660px | the card |
 
   Only the shell (tab bar, More sheet, Switch tray, the sticky Working on bar, toasts) follows the window, at 820px.
+* **Confirmations** (only the trash's permanent deletes ask) are a modal `<dialog>`, the `confirm-dialog` partial: centred, 420px at most, on the grey `--scrim`; its button opens it itself (`commandfor`), Cancel has the focus first, and Esc or a click outside closes it. The page behind doesn't scroll while it is open.
+* **Hints** (the "?" after a label, the `tip` partial) are `popover="hint"`s in the top layer, so no card clips them: hover and keyboard focus show one for as long as they last, a click keeps it open, Esc or a click elsewhere closes it. `app.js` places it 6px under its "?" (Firefox has no anchor positioning).
 * **Popovers and sheets** (More, Switch, Appearance, suggestion lists) are `popover`s: Esc and a tap outside close them, without JavaScript. On a phone the page behind goes grey (`--scrim`); what is grey is out of reach (a tap there only closes the popover). More and Appearance float just above the tab bar, rounded on all corners; the Switch tray hangs under the Working on bar, as wide and as tinted, rounded at the bottom.
 
 ---
@@ -299,6 +301,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 * **Narrow cards**: below 660px of card, a table in a `.table-wrap` keeps 640px and scrolls inside its card; the page itself never scrolls sideways.
 * **Status discs (`.status-icon`)**, 28px circles with a 14px icon:
   * **Service kits** (`kit-row`, the item page's "Service kits"): `.status-ok` `check` (all parts in stock), `.status-short` `x` (missing), `.status-muted` `minus` (no part lines), `.status-muted` `archive` (archived).
+  * **A kit's parts** also show what is in stock against what the kit needs as a `<meter>` under the item's name (6px, green, red when short; `aria-hidden`, as the row's figures say it).
   * **A kit's parts** (`kit-parts-table`, a disc per row): `.status-ok` `check`, `.status-short` `x` (missing), `.status-listed` `shopping-cart` in the accent (missing, and the shopping list asks for at least that much: `stock.KitLine.Listed`), `.status-muted` `archive` (an archived item). Each disc says what it means in its `title` and `aria-label`, as a disc alone could pass for a button.
 
 ---
@@ -346,7 +349,7 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 ## 15. Motion
 
 * **Page changes cross-fade** in Chrome (`@view-transition { navigation: auto; }`); Firefox loads the next page without one.
-* **Popovers come in**: More, Appearance and the Switch tray slide a few pixels and fade (`@starting-style`); in Chrome they also go out that way (`overlay`, `display` with `allow-discrete`), in Firefox they close at once. Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
+* **Popovers and dialogs come in**: More, Appearance and the Switch tray slide a few pixels and fade, a confirmation and a hint fade (and grow) in (`@starting-style`); in Chrome they also go out that way (`overlay`, `display` with `allow-discrete`), in Firefox they close at once. Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
 * **Short and quiet**: .15–.3s, ease-out. Hover states fade in .15s.
 * **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once, and pages don't cross-fade.
 

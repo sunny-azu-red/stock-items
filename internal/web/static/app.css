@@ -496,11 +496,12 @@
     &[disabled] { opacity: .5; cursor: not-allowed; }
     & .icon { width: 16px; height: 16px; }
   }
-  /* The main action: a tint of the accent with accent text, not a solid
-     block, so it leads without shouting. */
+  /* The main action: a tint of the accent with accent text and an accent
+     edge, like the picked option of a .segmented, not a solid block, so it
+     leads without shouting. */
   .btn-primary {
-    background: var(--accent-soft); border-color: transparent; color: var(--accent-strong);
-    &:hover { background: color-mix(in oklab, var(--accent-soft), var(--accent) 16%); border-color: transparent; }
+    background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong);
+    &:hover { background: color-mix(in oklab, var(--accent-soft), var(--accent) 16%); }
     & .kbd { color: inherit; border-color: color-mix(in oklab, currentColor 40%, transparent); background: transparent; }
   }
   .btn-danger {

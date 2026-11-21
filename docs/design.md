@@ -33,7 +33,7 @@ The accent is worked out from two numbers, so it can change without touching a t
 
 ### Contrast
 
-The palette is mellow on purpose ("Mist"): text is a soft grey-blue rather than near black (near white in dark), the dark theme is a lighter slate, the accent is muted, and outlines are faint. This deliberately sits below the usual contrast advice (4.5:1 for text, 3:1 for field borders), Modern Web Guidance's included; the owner chose the calmer look over it. Don't raise colours back to meet those ratios. Where something must stand out, it does so through its own colour, not through more contrast everywhere: badges get livelier status colours (`--badge-*`), and the main button is a tint of the accent with accent text (`.btn-primary`), not a solid block.
+The palette is mellow on purpose ("Mist"): text is a soft grey-blue rather than near black (near white in dark), the dark theme is a lighter slate, the accent is muted, and outlines are faint. This deliberately sits below the usual contrast advice (4.5:1 for text, 3:1 for field borders), Modern Web Guidance's included; the owner chose the calmer look over it. Don't raise colours back to meet those ratios. Where something must stand out, it does so through its own colour, not through more contrast everywhere: badges get livelier status colours (`--badge-*`), and the main button is a tint of the accent with accent text and an accent edge (`.btn-primary`, the same as a picked `.segmented` option), not a solid block.
 
 ### Appearance (theme.go)
 

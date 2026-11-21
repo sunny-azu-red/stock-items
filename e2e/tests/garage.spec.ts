@@ -1601,7 +1601,7 @@ async function misaligned(page: Page) {
     };
     // A kit start's status stands on the button name's baseline instead,
     // on purpose (docs/design.md, Status & State Badges).
-    for (const el of document.querySelectorAll(".btn, .chip, .badge:not(.kit-start .badge), .nav a, .toggle, .segmented label, .kbd, .count, .flash, .sort-link, .tile .label, .table th")) {
+    for (const el of document.querySelectorAll(".btn, .chip, .badge:not(.kit-start .badge), .nav a, .toggle, .segmented :is(label, a), .kbd, .count, .flash, .sort-link, .tile .label, .table th")) {
       const t = ownText(el)[0];
       if (!vis(el) || !t || mono(el) || lines(el) !== 1) continue;
       const d = caps(t) - middle(el);

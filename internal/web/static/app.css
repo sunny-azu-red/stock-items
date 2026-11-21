@@ -767,18 +767,33 @@
     .tabs ~ .card-body > & { border-top: 1px solid var(--band-line); border-bottom: 0; }
   }
 
-  /* Pick one (Counted in, Grouped/List): 36px, or 30px in a bar. */
+  /* Pick one: one joined control, 36px (Type, Counted in, Schedule, the
+     adjustment); 30px in a bar (Fits any/all, sort direction, Grouped/List).
+     The options are radio labels, or links where the choice is in the
+     address (aria-current). -of-type: the sort direction starts with
+     hidden inputs. */
   .segmented {
-    display: inline-flex; flex-wrap: wrap; gap: 6px;
-    & label {
+    display: inline-flex; max-width: 100%;
+    & :is(label, a) {
       display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 9px 14px; --lh: 1.25;
-      border: 1px solid var(--field-border); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 500; background: var(--surface);
+      border: 1px solid var(--field-border); border-radius: 0; font-size: var(--text-sm); font-weight: 500; background: var(--surface);
+      color: inherit; text-decoration: none; white-space: nowrap;
       transition: background-color .15s, border-color .15s, color .15s;
+      &:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+      &:last-of-type { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+      &:not(:first-of-type) { margin-left: -1px; }
       &:hover { background: var(--surface-2); }
-      &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
-      &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+      &:has(input:checked), &[aria-current="page"] {
+        position: relative; z-index: 1;
+        border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); font-weight: 600;
+      }
+      &:has(input:focus-visible), &:focus-visible { position: relative; z-index: 2; outline: 2px solid var(--accent); outline-offset: 2px; }
     }
+    & .icon { width: 16px; height: 16px; }
     & input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
+    :is(.filters-row, .results-head) & :is(label, a) { padding: 6px 11px; }
+    /* Apart from the actions beside it: 12px with the bar's 8px gap. */
+    .results-head & { margin-right: 4px; }
   }
 
   /* Repeating rows (SKUs, kit and service parts). */
@@ -948,14 +963,6 @@
     & .input-icon { flex: 1 1 260px; }
     & select.input { width: auto; flex: 0 1 200px; }
     & .sort-by select.input { flex: 0 1 auto; height: var(--control-sm); min-height: var(--control-sm); padding-block: 4px; font-size: var(--text-sm); }
-    /* Pick one in a bar (Fits any/all, sort direction): one joined control,
-       30px, like the chips and toggles beside it. */
-    & .segmented { gap: 0; }
-    & .segmented label { padding: 6px 11px; white-space: nowrap; }
-    & .segmented label:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
-    & .segmented label:last-of-type { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
-    & .segmented label:has(input:checked) { position: relative; z-index: 1; }
-    & .segmented .icon { width: 16px; height: 16px; }
   }
   /* A check that filters: 30px. */
   .toggle {
@@ -1280,7 +1287,7 @@
    ====================================================================== */
 @media print {
   @layer pages {
-    .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .card-actions, .flash, .toasts, .reset-link, .sort-reset, .appearance { display: none; }
+    .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .results-head .segmented, .card-actions, .flash, .toasts, .reset-link, .sort-reset, .appearance { display: none; }
     .shell { display: block; }
     .card { break-inside: avoid; box-shadow: none; border-color: var(--border); }
   }

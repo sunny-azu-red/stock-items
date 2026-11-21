@@ -297,8 +297,8 @@ func TestStockSortBy(t *testing.T) {
 		`<input type="radio" id="dir-desc" name="dir" value="desc" checked>`,
 		`<input type="hidden" name="was_sort" value="expiry"><input type="hidden" name="was_dir" value="desc">`,
 		"Soonest first", "Latest first",
-		`href="/stock?dir=desc&amp;sort=expiry">Grouped</a>`,
-		`href="/stock?dir=desc&amp;sort=expiry&amp;view=list" aria-current="page">List</a>`,
+		`href="/stock?dir=desc&amp;sort=expiry"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg>Grouped</a>`,
+		`href="/stock?dir=desc&amp;sort=expiry&amp;view=list" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>List</a>`,
 		`href="/stock/export.txt?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`href="/stock/export.csv?dir=desc&amp;sort=expiry&amp;view=list"`,
 		`id="filter-all" href="/stock?dir=desc&amp;sort=expiry&amp;view=list"`)

@@ -8,10 +8,11 @@ This is the spec for how Pitbox looks and behaves on screen: tokens, components,
 
 Calm, friendly and dense enough for a garage full of parts:
 
-* **Panels, not boxes.** Cards sit on a lightly tinted page, lifted by a faint shadow and their own surface, never framed by a hard border. Inside a card, rules between rows are the page's tint, not grey lines.
+* **Mellow, not stark.** Soft text, a muted accent, faint outlines and medium weights: nothing on the page shouts (see [Contrast](#contrast)).
+* **Panels, outlined.** Cards sit on a lightly tinted page, set off by their own surface and a hairline in `--border`, with no shadow. Inside a card, rules between rows are the same hairline.
 * **Colour means something.** The accent marks what you can do (the main button, the current page, focus). Status colours say how things are (green on track, amber low or due, red missing or out of stock). Each dashboard figure has a colour of its own, and a vehicle's colour washes what belongs to it (its stock section, its page's avatar, the Working on bar).
 * **Tight corners.** Cards 8px, buttons and fields 6px, badges 4px. Only vehicle chips, counts and avatars' discs are round.
-* **One typeface:** Manrope, heavy for headings and figures, medium for text.
+* **One typeface:** Manrope, semi-bold for headings and figures, medium for text.
 
 ---
 
@@ -28,7 +29,11 @@ The accent is worked out from two numbers, so it can change without touching a t
 | `--accent-h` | 280 (Indigo) | 0–359 | the hue on the colour wheel |
 | `--accent-i` | 100 | 0–100 | intensity: 0 is grey (Graphite), 100 full colour |
 
-`--accent`, `--accent-strong` (hover, text on soft fills), `--accent-soft` (selected fills) and `--on-accent` (text on the accent) come from these at fixed lightnesses, so whatever the hue, white on the accent and the accent on the page stay at 4.5:1 or better. The neutrals (`--bg`, `--surface*`, `--border`, `--text`, `--muted`) lean towards the hue as much as the intensity says, so a grey accent gives true greys. `--info` (dates, expiry) sits 45° away from the accent, so it never reads as a button.
+`--accent`, `--accent-strong` (hover, text on soft fills), `--accent-soft` (selected fills) and `--on-accent` (text on the accent) come from these at fixed lightnesses, so every hue looks equally calm. The neutrals (`--bg`, `--surface*`, `--border`, `--text`, `--muted`) lean towards the hue as much as the intensity says, so a grey accent gives true greys. `--info` (dates, expiry) sits 45° away from the accent, so it never reads as a button.
+
+### Contrast
+
+The palette is mellow on purpose ("Mist"): text is a soft grey-blue rather than near black (near white in dark), the dark theme is a lighter slate, the accent is muted, and outlines are faint. This deliberately sits below the usual contrast advice (4.5:1 for text, 3:1 for field borders), Modern Web Guidance's included; the owner chose the calmer look over it. Don't raise colours back to meet those ratios. Where something must stand out, it does so through its own colour, not through more contrast everywhere: badges get livelier status colours (`--badge-*`), and the main button is a tint of the accent with accent text (`.btn-primary`), not a solid block.
 
 ### Appearance (theme.go)
 
@@ -42,7 +47,9 @@ The sidebar's palette button opens **Appearance** (on a phone, from the More she
 | `--warn`, `--warn-soft` | low stock, due soon |
 | `--danger`, `--danger-soft` | missing, out of stock, overdue, a stock change out, errors |
 | `--info`, `--info-soft` | dates: best before, expiring |
-| `--field-border` | fields' and outlined buttons' borders: 3:1 against the field |
+| `--badge-ok`, `--badge-warn`, `--badge-danger`, `--badge-info` (and `-soft`) | the same states on badges, at 1.35 times the chroma, so a badge reads at a glance on a quiet page |
+| `--border` | card outlines and the rules between rows and under table headers |
+| `--field-border` | fields' and outlined buttons' borders: a light line, not a hard edge |
 
 Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `.tile-expiring`, `.tile-shopping`, `.tile-value`, `.tile-spent`); Low stock and Expiring turn amber and red while they count something.
 
@@ -60,7 +67,7 @@ Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `
 | h2, h3 | 1rem | card and section headings |
 | h1 | 1.625rem (1.4375rem on a phone) | the page heading |
 
-Weights: 800 for headings, figures and badges; 700 for names, labels and buttons; 600 for secondary links and nav; 500 for text. Headings balance their lines (`text-wrap: balance`); paragraphs avoid a lone last word (`text-wrap: pretty`).
+Weights: 650 for headings, figures and badges; 600 for names, labels and buttons; 500 for secondary links, nav and text. (Manrope is a variable font, so 650 is a real weight.) Headings balance their lines (`text-wrap: balance`); paragraphs avoid a lone last word (`text-wrap: pretty`).
 
 ### Text centred in its box
 
@@ -200,7 +207,7 @@ Links say they are links without the browser's default blue. Six tiers:
 | **SKU / Part Numbers (`.sku-link`)** | `font-family: var(--mono); text-decoration: underline dotted; text-underline-offset: 3px;` | `color: var(--accent-strong); text-decoration-style: solid;` | **Exclusively** for part numbers and SKUs. Signals an external part number lookup. |
 | **Data & Fact Links (`.facts a`)** | bold, underlined (40% of the text colour), offset 3px | `color: var(--accent-strong);` | Clickable values in a facts list (e.g. "Last done"). |
 | **Inline Paragraph Links** | underlined (40% of the text colour), offset 3px | `color: var(--accent-strong);` and a full underline | Links in body text, empty states and hints. |
-| **Contextual & Content Links** | `color: inherit; font-weight: 700;` | `color: var(--accent-strong);` | Titles in lists (`.list .title`), table items (`.table a`), card links (`.more`, muted). Row context already says they are clickable. |
+| **Contextual & Content Links** | `color: inherit; font-weight: 600;` | `color: var(--accent-strong);` | Titles in lists (`.list .title`), table items (`.table a`), card links (`.more`, muted). Row context already says they are clickable. |
 | **Reset & Filter Actions** | muted, bold | `color: var(--accent-strong);` | `✕ Reset order` (icon on the left when right-aligned), `Clear filters ✕` (`.reset-link`, `.sort-reset`). |
 | **Metadata Actions** | muted, bold | `color: var(--accent-strong);` | `+N more` SKUs (`.sku-more`). |
 
@@ -216,9 +223,9 @@ Chips and badges do different jobs and look different, but are both **24px** tal
 
 ### Vehicle Chips (`.chip`, `a.chip`)
 * **Purpose**: names a vehicle or a set of vehicles.
-* **Shape**: a pill, a 1px border of the vehicle's colour at 35%, a 13% tint behind, text 70% of the colour into the text colour.
+* **Shape**: a pill, a 1px border of the vehicle's colour at 35%, a 13% tint behind, text 55% of the colour into the text colour.
 * **Dot**: an 8px `.dot` in the vehicle's colour (`--chip`, from `chipStyle`).
-* **Size**: 24px (`--text-xs`, weight 700, an 18px line in 2px padding and the border).
+* **Size**: 24px (`--text-xs`, weight 600, an 18px line in 2px padding and the border).
 * **Hover (as a link)**: the border takes the full colour. **No underline.**
 * **Chips you pick** (`.chip-toggle`: the filter bars, Fits these vehicles) are 30px, `--text-sm`, with a 6px radius like the other toggles; picked, they take the vehicle's colour.
 * **In the sidebar** (and the More sheet), **Work on** and **Stock by vehicle** are a list like the nav above them: 36px rows, the vehicle's dot where the nav has its icon, the name where its labels start; the one worked on is lit in its colour. The phone's Switch tray keeps them as 30px chips.
@@ -249,8 +256,8 @@ Stock section headings (`stock-section`) answer one question, which vehicles the
 ### Status & State Badges (`.badge`, `a.badge`)
 * **Purpose**: states, statuses, quantities, kit tags and categories (`1 PART MISSING`, `PARTS READY`, `ARCHIVED`, `OVERDUE`, `ON SHOPPING LIST`, `OUT OF STOCK`, `525 ML IN STOCK`).
 * **Category badge**: item categories are `.badge.badge-muted` with the tag icon. On an item page they sit after the vehicle chips on the header's line, as a plain label; on a stock row they link to the stock filtered by that category.
-* **Shape**: 4px radius, a soft fill of the status colour, the status colour for its text.
-* **Typography**: capitals (`text-transform: uppercase`), `--text-xs`, weight 800, tracked out `.04em`; a 12px icon.
+* **Shape**: 4px radius, a soft fill of the badge's status colour (`--badge-*-soft`), that colour (`--badge-*`) for its text.
+* **Typography**: capitals (`text-transform: uppercase`), `--text-xs`, weight 650, tracked out `.04em`; a 12px icon.
 * **Size**: 24px (an 18px line in 3px padding).
 * **Hover (as a link)**: the fill deepens (`.badge-muted:hover`), or turns into the accent (`.badge-accent:hover`). **Never an underline.**
 * **A status that belongs to a button is part of it**, never a badge beside it. Log service's "Start from a kit" buttons (`.kit-start`) end in the kit's due badge, flush to the button's border behind a 1px divider, with `Due.Summary` as the button's title. Its text stands on the name's baseline, not centred. Every kit with a schedule ends in its status, On track too; a kit without a schedule is just its name.
@@ -296,7 +303,7 @@ Only links that leave the app open a new tab (`target="_blank" rel="noopener nor
 ## 11. Tables and Status Discs
 
 * **Rows are centred vertically** (`vertical-align: middle`), so status discs, wrapped names and quantities stay balanced.
-* **Columns**: cells have 12px on each side (24px between columns), and the first and last cell the card's `--inset`, so the first column lines up with the card's heading. Headers are `--text-xs` capitals on a light band of the page's tint.
+* **Columns**: cells have 12px on each side (24px between columns), and the first and last cell the card's `--inset`, so the first column lines up with the card's heading. Headers are `--text-xs` capitals on the card's surface, a hairline (`--border`) under them.
 * **Narrow cards**: below 660px of card, a table in a `.table-wrap` keeps 640px and scrolls inside its card; the page itself never scrolls sideways.
 * **Status discs (`.status-icon`)**, 28px circles with a 14px icon:
   * **Service kits** (`kit-row`, the item page's "Service kits"): `.status-ok` `check` (all parts in stock), `.status-short` `x` (missing), `.status-muted` `minus` (no part lines), `.status-muted` `archive` (archived).
@@ -338,8 +345,8 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 
 * **Fields show it on any focus**, click or keyboard: anything you type into or choose from (`.input` on an input, select, textarea, suggestion, date or search field). You type next where the ring is. The ring is the field's own 1px border plus a 1px box-shadow in `--ring` (2px solid), then a 3px `--ring-soft` glow. `--ring` is the accent, or `--danger` in a field with an error (`.has-error`, or `:user-invalid` once you have left a required field empty), so a field never mixes a red border with an accent ring. An open select keeps it (`select.input:open`), as its list takes the focus from it.
 * **Buttons and other clickables show it from the keyboard only** (`:focus-visible`): a 2px solid `--accent` outline, 2px off the control (1px for sort links), so it shows on a filled button too. A mouse click leaves no ring.
-* **Forced colours.** Windows contrast themes drop box-shadows, so a field's focus also sets `outline: 2px solid transparent`, which the system paints as a real ring there. Cards keep a transparent 1px border for the same reason: the system draws it.
-* **Strong enough for WCAG.** Both rings are visible on focus (2.4.7, AA) and at least 2px with 3:1 against the unfocused state (2.4.13, AAA). The glow alone counts for neither.
+* **Forced colours.** Windows contrast themes drop box-shadows, so a field's focus also sets `outline: 2px solid transparent`, which the system paints as a real ring there. Cards' 1px `--border` outline is a real border for the same reason: the system draws it.
+* **Always there, 2px.** Both rings show on focus (2.4.7) and are 2px of the accent; the glow alone isn't the ring. With the mellow palette the accent is softer than the 3:1 of 2.4.13 asks (see [Contrast](#contrast)).
 * **Nothing moves.** A ring is a box-shadow or an outline, never a thicker border.
 * **For a new control:** use `.input` for a field and `.btn` or `.icon-btn` for a button, and the ring comes with the class. Never `outline: none` without a ring in its place.
 

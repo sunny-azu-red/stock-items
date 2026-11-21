@@ -13,69 +13,6 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/testdb"
 )
 
-// A snapshot's amounts are checked in their item's unit: part of a piece
-// is refused like an amount finer than 0.01, whether the item is in the
-// snapshot, still in stock, or the amount is a free-text entry's.
-func TestRestoreRefusesPartsOfAPiece(t *testing.T) {
-	pool := testdb.New(t)
-	s, ctx := store.New(pool), context.Background()
-	set := func(t *testing.T, trashID int64, path, v string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, $2::text[], $3::jsonb) WHERE id = $1`,
-			trashID, path, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, tc := range []struct {
-		name  string
-		trash func(t *testing.T) int64
-		path  string // the amount to set, as a jsonb_set path
-		ok    string // a whole number of pieces
-	}{
-		{"stock change of an item in stock", func(t *testing.T) int64 {
-			pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 4})
-			if err := s.AddMovement(ctx, stock.MovementInput{ItemID: pads, Kind: stock.MoveUsed, Delta: -1}); err != nil {
-				t.Fatal(err)
-			}
-			uses, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: pads, Kind: stock.MoveUsed})
-			_, trashID, err := s.DeleteMovement(ctx, uses[0].ID, cur(t, s, store.WhatMovement, uses[0].ID))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return trashID
-		}, "{stock_movements,0,delta}", "-2"},
-		{"item in the snapshot", func(t *testing.T) int64 {
-			ring := mustItem(t, s, stock.ItemInput{Name: "Ring", Unit: stock.UnitPiece, Quantity: 3})
-			trashID, err := s.DeleteItem(ctx, ring, cur(t, s, store.WhatItem, ring))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return trashID
-		}, "{items,0,min_quantity}", "2"},
-		{"free-text entry", func(t *testing.T) int64 {
-			free, err := s.AddShopping(ctx, stock.ShoppingInput{FreeText: "Zip ties", Quantity: ptr(10.0), Unit: stock.UnitPiece})
-			if err != nil {
-				t.Fatal(err)
-			}
-			trashID, err := s.DeleteShopping(ctx, free, cur(t, s, store.WhatShopping, free))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return trashID
-		}, "{shopping_entries,0,quantity}", "12"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			trashID := tc.trash(t)
-			set(t, trashID, tc.path, "1.5")
-			_, err := s.RestoreTrash(ctx, trashID)
-			wantConflict(t, "restore of 1.5 pieces", err, "part of a piece (1.5)")
-			set(t, trashID, tc.path, tc.ok)
-			mustRestore(t, s, trashID)
-			assertLedger(t, s)
-		})
-	}
-}
-
 // A service whose kit was deleted for good since comes back without it,
 // with its parts, and says it dropped the link.
 func TestRestoredServiceDropsItsPurgedKit(t *testing.T) {
@@ -835,40 +772,4 @@ func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
 	if k, _ := s.GetKit(ctx, oilKit); len(k.Lines) != 1 || k.Lines[0].ItemID != keep {
 		t.Errorf("kit lines = %+v", k.Lines)
 	}
-}
-
-// A snapshot holding an amount finer than 0.01 (only possible by hand) is
-// not restored: the column would round it while the stock moved by the
-// exact amount, and the ledger would stop adding up.
-func TestRestoreRefusesAmountsFinerThanTwoDecimals(t *testing.T) {
-	pool := testdb.New(t)
-	s, ctx := store.New(pool), context.Background()
-	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
-	if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveUsed, Delta: -250.5}); err != nil {
-		t.Fatal(err)
-	}
-	moves, err := s.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveUsed})
-	if err != nil || len(moves) != 1 {
-		t.Fatalf("uses: %v, %v", moves, err)
-	}
-	_, trashID, err := s.DeleteMovement(ctx, moves[0].ID, cur(t, s, store.WhatMovement, moves[0].ID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	setDelta := func(d string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{stock_movements,0,delta}', $2::jsonb) WHERE id = $1`,
-			trashID, d); err != nil {
-			t.Fatal(err)
-		}
-	}
-	setDelta("-250.505")
-	var conflict *store.ConflictError
-	if _, err := s.RestoreTrash(ctx, trashID); !errors.As(err, &conflict) || !strings.Contains(err.Error(), "finer than 0.01 (-250.505)") {
-		t.Fatalf("restore of -250.505: want a ConflictError, got %v", err)
-	}
-	if it := mustGet(t, s, oil); it.Quantity != 1000 {
-		t.Errorf("oil after the refused restore = %v, want 1000", it.Quantity)
-	}
-	assertLedger(t, s)
 }

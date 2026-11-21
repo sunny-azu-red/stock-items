@@ -69,7 +69,7 @@
   </div>
 
   <div class="stack">
-    <section class="card card-pad photo-card">
+    <section class="card photo-card">
       <div class="photo">
         {{if $it.HasPhoto}}<button class="photo-open" type="button" commandfor="photo-view" command="show-modal" aria-label="Show the photo larger"><img src="/items/{{$it.ID}}/photo" alt="Photo of {{$it.DisplayName}}"></button>{{else}}{{icon "image"}}{{end}}
       </div>
@@ -80,7 +80,7 @@
       </dialog>
       {{end}}
       {{if not $it.Archived}}
-      <div class="flex mt">
+      <div class="card-body flex">
         <form method="post" action="/items/{{$it.ID}}/photo" enctype="multipart/form-data" class="flex">
           <label class="btn btn-sm">{{icon "camera"}} <span data-photo-label>{{if $it.HasPhoto}}Replace photo{{else}}Add photo{{end}}</span>
             {{with photoLimit}}<input class="sr-only" type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif" data-autosubmit data-shrink="{{.Side}}" data-max-bytes="{{.Bytes}}" data-too-large="{{.Message}}">{{end}}

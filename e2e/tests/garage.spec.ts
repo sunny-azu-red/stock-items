@@ -1908,6 +1908,13 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
         const rr = Math.round(rc.right - px(card, "border-right-width") - (r.right - px(el, "padding-right") - px(el, "border-right-width")));
         if (l !== inset || rr !== inset) out.push(`${name(el)} is ${l}px in on the left and ${rr}px on the right, not ${inset}`);
       }
+      // Except the item's photo, which fills its card's top edge to edge.
+      for (const el of document.querySelectorAll(".card > .photo")) {
+        const card = el.parentElement!, rc = card.getBoundingClientRect(), r = el.getBoundingClientRect();
+        const l = Math.round(r.left - rc.left - px(card, "border-left-width")), t = Math.round(r.top - rc.top - px(card, "border-top-width"));
+        const rr = Math.round(rc.right - px(card, "border-right-width") - r.right);
+        if (l !== 0 || rr !== 0 || t !== 0) out.push(`the photo is ${l}px in on the left, ${rr}px on the right and ${t}px from the top, not edge to edge`);
+      }
       for (const table of document.querySelectorAll(".card .table")) {
         const card = table.closest(".card")!;
         const wrap = table.closest(".table-wrap") ?? table;

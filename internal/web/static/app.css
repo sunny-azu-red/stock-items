@@ -1154,10 +1154,13 @@
   }
 
   /* ---- Item page --------------------------------------------------- */
-  /* 4:3-ish, in whole pixels: the card is a container, its width known. */
+  /* The photo fills the card's top, edge to edge (the card's corners trim
+     it), a hairline above the buttons: one frame, not a photo inset in a
+     card. 4:3-ish, in whole pixels: the card is a container, its width known. */
   .photo-card { container-type: inline-size; }
   .photo {
-    height: round(78cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden;
+    height: round(78cqw, 2px); background: var(--surface-2); overflow: hidden;
+    &:has(~ .card-body) { border-bottom: 1px solid var(--border); }
     display: grid; place-items: center; color: var(--muted);
     &:has(> button) { grid-template: 100% / 100%; }
     & > button, & img { width: 100%; height: 100%; }

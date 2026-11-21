@@ -1328,9 +1328,13 @@ test("sort the stock with Sort by and its direction", async ({ page }) => {
 
 // Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test (see docs/development.md)
 // Every page and form, in both themes: <dir>/<desktop|mobile>/<light|dark>/<name>.png.
+// The desktop shots come from "mid" (1360px): a 2K page is too wide to read
+// in the README.
 test("screenshots", async ({ page }, testInfo) => {
   const dir = process.env.SCREENSHOT_DIR;
   test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
+  test.skip(!["mid", "mobile"].includes(testInfo.project.name), "the docs' screenshots are the laptop's and the phone's");
+  const device = phone(testInfo) ? "mobile" : "desktop";
   test.setTimeout(180_000);
   // The first link on a page that matches, for the pages of one record.
   const link = async (url: string, selector: string) => {
@@ -1392,7 +1396,7 @@ test("screenshots", async ({ page }, testInfo) => {
       await page.addStyleTag({
         content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
       });
-      await page.screenshot({ path: `${dir}/${testInfo.project.name}/${scheme}/${name}.png`, fullPage: true });
+      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
     }
   }
   // Working on a vehicle: its dashboard and its stock, with the bar.
@@ -1404,7 +1408,7 @@ test("screenshots", async ({ page }, testInfo) => {
       await page.addStyleTag({
         content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
       });
-      await page.screenshot({ path: `${dir}/${testInfo.project.name}/${scheme}/${name}.png`, fullPage: true });
+      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
     }
   }
 });

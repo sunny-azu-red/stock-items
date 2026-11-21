@@ -33,7 +33,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | Run the app | `go run ./cmd/pitbox` |
 | All checks (fmt, tidy, vet, lint, tests with -race and coverage) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
-| E2E tests | `cd e2e && npx playwright test` |
+| E2E tests (Chrome and Firefox; desktop, laptop, phone) | `cd e2e && npx playwright test` |
 | Web platform guidance (CSS, HTML, browser JS) | `npx -y modern-web-guidance@latest search "<query>"`, then `retrieve "<id>"` |
 | Docker image | `docker build -t pitbox .` |
 | Screenshots (docs/screenshots, README) | `scripts/screenshots.sh` ([docs/development.md](docs/development.md#screenshots)) |
@@ -45,6 +45,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - A feature newer than that may be used when it has shipped in the current stable Chrome **and** Firefox. A Chrome-only feature may be used as an enhancement whose absence costs nothing (the page cross-fade, the customizable `<select>`, `text-wrap: pretty`, exit transitions): Firefox gets the browser's plain behaviour. Write no fallback code or polyfill for either.
 - **Native first.** Reach for HTML and CSS (`<dialog>`, popover, invoker commands, `<details>`, `<meter>`, `:has()`, `:user-invalid`, container queries, view transitions) before JavaScript.
 - **Use the [Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance) skill** (Claude Code plugin `modern-web-guidance@googlechrome`, or `npx -y modern-web-guidance@latest search "<2–5 words>"` then `retrieve "<id>"`) before writing CSS, HTML or browser JavaScript. Where a guide and a hard rule below disagree, the hard rule wins; raise the conflict instead of working around it.
+- **One way to write each thing.** `app.css` is cascade layers (`reset, tokens, base, shell, components, pages, utilities`) with one nested block per component and container queries for components; templates use the shared partials (`empty`, `filter-chip`, `price-field`, `tip`, `field-err` with `invalid`, `confirm-dialog`, …) instead of writing a piece again ([docs/conventions.md](docs/conventions.md#web)).
 
 ## Hard rules
 

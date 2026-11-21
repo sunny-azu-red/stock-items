@@ -7,6 +7,8 @@
 3. `cp .env.example .env` and point it at a Postgres database. The user needs to be able to create schemas in that database. It does not need to create databases. Change `DB_SCHEMA` to `dev`: the example's `public` is for deploying (the real app's data), and a development build refuses to start on it (see below).
 4. Optional: [golangci-lint](https://golangci-lint.run/) v2 (the version CI pins in `ci.yml`), which `scripts/check.sh` runs when it is on `PATH` (otherwise it runs staticcheck), and gcc, which the race detector needs (`sudo apt install gcc`; without it `check.sh` runs the tests without `-race`).
 5. `go run ./cmd/pitbox` starts the app on `http://localhost:8080`.
+6. For the browser tests: Node, then `cd e2e && npm ci && npx playwright install chromium firefox`.
+7. For CSS, HTML and browser JavaScript: the [Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance) skill. In Claude Code it is the plugin `modern-web-guidance@googlechrome` (`claude plugin marketplace add GoogleChrome/modern-web-guidance`, then `claude plugin install modern-web-guidance@googlechrome`); any agent or person can use its CLI instead (below).
 
 Useful flags:
 
@@ -63,15 +65,27 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 
 Actions are pinned to commit SHAs and the base images to digests; [Dependabot](../.github/dependabot.yml) proposes monthly updates for them, Go modules and the e2e's npm packages.
 
+## The web platform: Modern Web Guidance
+
+Pitbox targets Baseline 2025 in current Chrome and Firefox ([AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform)): no fallbacks, and HTML and CSS before JavaScript. Before writing CSS, HTML or browser JavaScript, look up the current way to do it:
+
+```bash
+npx -y modern-web-guidance@latest search "popover sheet"       # 2–5 words; lists guide ids
+npx -y modern-web-guidance@latest retrieve "precise-text-alignment"
+npx -y modern-web-guidance@latest legacy-scan internal/web    # old patterns the guides replace
+```
+
+A guide's browser support notes can lag the browsers (it called `text-box` unsupported in Firefox, which has it): check a feature in both before relying on it, and check the result with the e2e tests in both. Where a guide and a hard rule in AGENTS.md disagree, the rule wins. `legacy-scan` is not part of `check.sh` or CI, since `@latest` over the network would make them change on their own.
+
 ## Adding a feature (checklist)
 
 1. **Schema change?** Add a new migration file. Don't edit old ones.
 2. **Rules** go in `internal/stock` with table-driven tests.
 3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx` (`inFormTx` for a form's save), and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.
-5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed. Use the existing partials (`bought-fields`, `expiry-badge`, `stock-badge`, `req`, …), the [words](conventions.md#words), [Design](design.md), and the [whole-pixel rule](conventions.md) for any CSS (`--lh`, px, even sizes); a new page goes in the e2e pixel test's list and the screenshots' `shots`.
+5. **Template:** a page in `templates/pages`, plus a reusable block in `templates/partials` if needed. Use the existing partials (`page-head` markup, `empty`, `filter-chip`, `price-field`, `bought-fields`, `tip`, `field-err` with `invalid`, `expiry-badge`, `stock-badge`, `req`, …), native elements before JavaScript (popover, `<dialog>`, `<details>`, `<meter>`), the [words](conventions.md#words), [Design](design.md), and the [whole-pixel rule](conventions.md) for any CSS (`--lh`, px, even sizes, font sizes from the bands both browsers centre); a new page goes in the e2e pixel, header and spacing tests' lists and the screenshots' `shots`.
 6. Test it over HTTP in the feature's test file in `internal/web` (and in `versions_test.go` and `formkeys_test.go` for a new form or button, and in `trash_matrix_test.go` for a new kind of trash entry), and in the e2e spec for anything interactive.
-7. Run `scripts/check.sh` and `npx playwright test`.
+7. Run `scripts/check.sh` and `npx playwright test` (all four projects: Chrome and Firefox, desktop, laptop and phone).
 
 ## Screenshots
 
@@ -79,4 +93,4 @@ Actions are pinned to commit SHAs and the base images to digests; [Dependabot](.
 scripts/screenshots.sh
 ```
 
-This retakes `docs/screenshots`: every page and form, on desktop and phone, in light and dark (`docs/screenshots/<desktop|mobile>/<light|dark>/<page>.png`). It runs the whole e2e suite; the screenshot test comes late in it, so the pages have photos, history and trash to show. Then it recompresses the PNGs losslessly (about a third smaller) and lists what changed. It refuses to run with uncommitted changes (other than `docs/screenshots`), so the screenshots show committed code. The screenshots use a pinned version (`6b1ea22`, shown in the sidebar) and date (`2026-11-02T16:00:00+02:00`) that look like a commit and a real day, but aren't the latest ones, so a re-run only changes the pages that changed. The script passes them as `SCREENSHOT_VERSION` and `SCREENSHOT_DATE` to `e2e/playwright.config.ts`, which builds the app with `-ldflags "-X main.version=… -X main.date=…"`. The pinned clock then runs on from that moment, and the app makes the e2e schema's own timestamps follow it (column defaults and update triggers, `cmd/pitbox/simdate.go`); such a build refuses to start on anything but an `e2e_*` schema. Chromium's anti-aliasing varies by a colour level or two between runs; a screenshot within that of the committed one keeps the committed file. The README shows four of them by path, so it stays up to date; the rest are there to browse. A new page goes in the `shots` list of the `screenshots` test in `e2e/tests/garage.spec.ts`.
+This retakes `docs/screenshots`: every page and form, on desktop and phone, in light and dark (`docs/screenshots/<desktop|mobile>/<light|dark>/<page>.png`). It runs the e2e suite on two of its projects, `mid` (a 1360px window: the desktop shots, as a 2K page is too wide to read in the README) and `mobile`; the screenshot test comes late in it, so the pages have photos, history and trash to show. Then it recompresses the PNGs losslessly (about a third smaller) and lists what changed. It refuses to run with uncommitted changes (other than `docs/screenshots`), so the screenshots show committed code. The screenshots use a pinned version (`6b1ea22`, shown in the sidebar) and date (`2026-11-02T16:00:00+02:00`) that look like a commit and a real day, but aren't the latest ones, so a re-run only changes the pages that changed. The script passes them as `SCREENSHOT_VERSION` and `SCREENSHOT_DATE` to `e2e/playwright.config.ts`, which builds the app with `-ldflags "-X main.version=… -X main.date=…"`. The pinned clock then runs on from that moment, and the app makes the e2e schema's own timestamps follow it (column defaults and update triggers, `cmd/pitbox/simdate.go`); such a build refuses to start on anything but an `e2e_*` schema. Chromium's anti-aliasing varies by a colour level or two between runs; a screenshot within that of the committed one keeps the committed file. The README shows four of them by path, so it stays up to date; the rest are there to browse. A new page goes in the `shots` list of the `screenshots` test in `e2e/tests/garage.spec.ts`.

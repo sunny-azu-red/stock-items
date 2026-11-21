@@ -4,7 +4,8 @@
 # The README shows four of them by path, so it follows along.
 # Usage: scripts/screenshots.sh     (needs what the e2e tests need: DB_* or
 # .env, Node with e2e/node_modules, and vips to recompress the PNGs)
-# It runs the whole e2e suite; the screenshot test comes late in it, so the
+# It runs the e2e suite on the laptop-sized window ("mid", 1360px: the
+# desktop shots) and the phone; the screenshot test comes late in it, so the
 # pages have photos, history and trash to show.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -27,7 +28,7 @@ trap 'rm -rf "$shots"' EXIT
 version=6b1ea22
 date="2026-11-02T16:00:00+02:00"
 echo "==> e2e tests with screenshots (version $version, date $date)"
-(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" SCREENSHOT_DATE="$date" npx playwright test)
+(cd e2e && SCREENSHOT_DIR="$shots" SCREENSHOT_VERSION="$version" SCREENSHOT_DATE="$date" npx playwright test --project=mid --project=mobile)
 
 for d in desktop/light desktop/dark mobile/light mobile/dark; do
   [ -n "$(ls "$shots/$d" 2>/dev/null)" ] || { echo "No screenshots in $d"; exit 1; }

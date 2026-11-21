@@ -31,14 +31,18 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 ## Templates
 
 - `templates/layout.html` is the page shell: sidebar on desktop, tab bar on phones, whose More opens the same sidebar as a sheet (a popover), and the Working on bar, whose Switch tray on a phone is a popover too. `web/working.go` holds the working-on rules: which list pages follow the vehicle, and what of other vehicles' is out of view meanwhile.
-- `templates/partials/*.html` are shared blocks such as the stock row (`item-row`), stock sections, kit rows, chips, badges (among them the stock badge, `stock-badge`), and the movement table.
+- `templates/partials/*.html` are shared blocks such as the stock row (`item-row`), stock sections, kit rows, chips, badges (among them the stock badge, `stock-badge`), and the movement table. Every piece of a page is written one way: the `empty` state, `filter-chip`, `price-field`, the "?" hint (`tip`), a field's error (`field-err`, with the `invalid` helper on its control), and the trash's `confirm-dialog`.
+- **Native HTML first** ([AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform)): the More sheet, Switch tray, Appearance panel and hints are popovers; the trash's confirmations are `<dialog>`s opened with invoker commands (`commandfor`); a kit's stock per part is a `<meter>`; the kit form's intermediate schedule shows with `:has()`. None needs JavaScript.
 - The part rows of the kit and service forms keep their stock badges up to date in `app.js` as the item, amount or unit changes, copying them from a `<template id="stock-badges">` the page renders once, so their markup and wording stay in the Go template.
 - `templates/pages/*.html` define `content` for each page. Each page is parsed together with the layout and partials into its own template set at startup, so a broken template fails fast.
 - Template helper functions live in `render.go` (`qty`, `money`, `distance`, `distUnit`, `date`, `icon`, `withQuery`, …).
 
 ## Static files
 
-`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx and the Inter font are vendored in `static/vendor` (`app.css` asks for the font with a fixed `?v=`, so it is cached the same way), and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
+`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx and the Manrope font (Inter as its fallback) are vendored in `static/vendor` (`app.css` asks for the fonts with a fixed `?v=`, so they are cached the same way), and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
+
+- **`app.css`** is one file in cascade layers (`reset, tokens, base, shell, components, pages, utilities`), one nested block per component. Colours are `light-dark()` tokens; the accent comes from a hue and an intensity the device picks in Appearance (the `accent` cookie, `theme.go`, rendered as custom properties on `<html>`). Components respond to their own width with container queries; only the phone's shell (tab bar, sheets, the sticky Working on bar) follows the window. The rules are in [design.md](design.md).
+- **`app.js`** is what HTML and CSS can't do on their own: repeating form rows, unit pickers and stock badges, suggestion lists, photo shrinking, the clipboard, toasts, the hints' hover and placement, tabs, the Appearance panel without a reload, the double-submit guard and keyboard shortcuts. The server never relies on it.
 
 ## Key design decisions
 

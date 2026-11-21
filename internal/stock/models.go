@@ -396,9 +396,9 @@ const (
 // MovementKinds lists every kind of stock change.
 var MovementKinds = []MovementKind{MoveStarting, MoveBought, MoveUsed, MoveAdjusted, MoveService}
 
-// legacyKinds maps the values stored before migration 00019 to today's,
-// for links bookmarked and pages opened before it (?kind=purchase, the
-// item page's hidden kind field).
+// legacyKinds maps the values stored before the kinds were renamed
+// (2026-11-09) to today's, for links bookmarked and pages opened before
+// it (?kind=purchase, the item page's hidden kind field).
 var legacyKinds = map[string]MovementKind{
 	"initial": MoveStarting, "purchase": MoveBought, "use": MoveUsed, "correction": MoveAdjusted,
 }

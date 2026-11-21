@@ -464,7 +464,7 @@ check "an older migration set over public is refused" said "different migrations
 check "public is unchanged" [ "$(fingerprint public)" = "${PUB_BEFORE}" ]
 as_stock -c "INSERT INTO scrap_dst.goose_db_version (version_id, is_applied) VALUES (30, true)"
 run_sync dev scrap_dst || true
-check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration 30, newer than the copy (22); it goes back to 22"
+check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration 30, newer than the copy (1); it goes back to 1"
 PUB_BACKUP="$(latest_backup public)"
 echo "OVERWRITE public" | "${SYNC}" --from-backup "${PUB_BACKUP}" public >"${WORK}/out.log" 2>&1 || true
 check "public can go back to its backup" said "Done. public is now a copy of ${PUB_BACKUP}"

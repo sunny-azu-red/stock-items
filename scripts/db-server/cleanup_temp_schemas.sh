@@ -5,8 +5,8 @@
 #
 # Drops the pg_temp_N and pg_toast_temp_N schemas of the Pitbox database.
 # Postgres makes a pair for each connection slot that ever creates a
-# temporary table (migration 00022's reorder_columns does, and the Go tests
-# run it on many connections at once) and keeps them for reuse. They are
+# temporary table (reorder_columns did until 2026-11-21, and the Go
+# tests ran it on many connections at once) and keeps them for reuse. They are
 # harmless (at most about max_connections pairs) and Postgres makes them
 # again when needed; this only tidies the schema list. Needs the superuser.
 #
@@ -18,8 +18,8 @@
 # temp schema that isn't empty fails and rolls back, and checks afterwards
 # that no catalog row was left without its schema. (A session that
 # connects in the instant between the check and the commit and creates a
-# temporary table could still be caught out; the app only does that in
-# migration 00022, at start-up, so stop it first.)
+# temporary table could still be caught out; the app no longer makes any
+# since 2026-11-21, but stop it first.)
 #
 # Settings (environment, for tests): SYNC_DB, SYNC_PG_HOST, SYNC_PG_PORT, SYNC_PG_USER
 set -euo pipefail

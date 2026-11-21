@@ -106,29 +106,60 @@ func schemaShape(t *testing.T, pool *pgxpool.Pool) string {
 	return shape
 }
 
-// The tables 00022 rebuilds, in the order it gives them.
-var reordered = map[string][]string{
-	"vehicles": {"id", "version", "name", "kind", "make", "model", "year", "plate", "vin", "color",
-		"odometer", "purchased_on", "odometer_at_purchase", "notes", "created_at", "updated_at", "archived_at"},
-	"items": {"id", "version", "name", "brand", "category", "unit", "quantity", "min_quantity",
-		"expires_on", "location", "notes", "created_at", "updated_at", "archived_at"},
-	"service_kits": {"id", "version", "vehicle_id", "name", "interval_distance", "interval_months",
-		"inter_interval_distance", "inter_interval_months", "notes", "created_at", "updated_at", "archived_at"},
-	"service_records": {"id", "version", "vehicle_id", "kit_id", "kit_intermediate", "performed_on",
-		"odometer", "odometer_before", "odometer_moved", "odometer_at_log", "title", "labor_cost", "notes", "created_at"},
-	"stock_movements": {"id", "version", "item_id", "kind", "delta", "total_price", "supplier",
-		"note", "occurred_on", "service_record_id", "created_at"},
-	"shopping_entries": {"id", "version", "item_id", "free_text", "quantity", "unit", "note", "created_at"},
+// The six tables' column order before 2026-11-11, when they were rebuilt in
+// today's: a rebuild into it and back moves every column of each.
+var oldOrder = []struct {
+	table string
+	cols  []string
+}{
+	{"vehicles", []string{"id", "name", "kind", "make", "model", "year", "plate", "vin", "color", "odometer",
+		"notes", "created_at", "updated_at", "archived_at", "version", "purchased_on", "odometer_at_purchase"}},
+	{"items", []string{"id", "name", "brand", "category", "unit", "quantity", "min_quantity", "expires_on",
+		"location", "notes", "created_at", "updated_at", "archived_at", "version"}},
+	{"service_kits", []string{"id", "vehicle_id", "name", "interval_distance", "interval_months", "notes",
+		"created_at", "updated_at", "archived_at", "version", "inter_interval_distance", "inter_interval_months"}},
+	{"service_records", []string{"id", "vehicle_id", "kit_id", "performed_on", "odometer", "title", "notes",
+		"labor_cost", "created_at", "odometer_before", "odometer_moved", "odometer_at_log", "version", "kit_intermediate"}},
+	{"stock_movements", []string{"id", "item_id", "kind", "delta", "total_price", "supplier", "note",
+		"occurred_on", "service_record_id", "created_at", "version"}},
+	{"shopping_entries", []string{"id", "item_id", "free_text", "quantity", "note", "created_at", "unit", "version"}},
 }
 
-// 00022 only moves columns: the rows, ids, sequences, defaults, constraints,
-// indexes and foreign keys (also other tables' to the rebuilt ones) stay as
-// they were, Down puts the old order back exactly, and a trash snapshot
-// taken before still restores. Up → Down → Up.
-func TestColumnOrderMigration(t *testing.T) {
+// reorder rebuilds each table in the order given, in one transaction, and
+// fails if that gave the session a temporary schema (reorder_columns keeps
+// the rows in an ordinary table).
+func reorder(t *testing.T, pool *pgxpool.Pool, orders map[string][]string) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, o := range oldOrder { // the tables in a fixed order
+		if cols, ok := orders[o.table]; ok {
+			if _, err := tx.Exec(ctx, `SELECT reorder_columns($1::text::regclass, $2::text[])`, o.table, cols); err != nil {
+				t.Fatalf("reorder_columns(%s): %v", o.table, err)
+			}
+		}
+	}
+	var temp int64
+	if err := tx.QueryRow(ctx, `SELECT pg_my_temp_schema()::bigint`).Scan(&temp); err != nil || temp != 0 {
+		t.Errorf("the rebuild gave the session a temporary schema (%d, %v)", temp, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// reorder_columns only moves columns: the rows, ids, sequences, defaults,
+// constraints, indexes and foreign keys (also other tables' to the rebuilt
+// ones) stay as they were, putting the order back restores it exactly, and
+// a trash snapshot taken before still restores.
+func TestReorderColumnsKeepsEverything(t *testing.T) {
 	pool, provider := migrationDB(t)
 	ctx := context.Background()
-	if _, err := provider.UpTo(ctx, 21); err != nil {
+	if _, err := provider.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
 	// Every rebuilt table and each table pointing at one, with deleted last
@@ -158,7 +189,7 @@ func TestColumnOrderMigration(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
-	before, oldOrder, data := schemaShape(t, pool), columnOrder(t, pool), dump(t, pool, "")
+	before, order, data := schemaShape(t, pool), columnOrder(t, pool), dump(t, pool, "")
 
 	unchanged := func(when string) {
 		t.Helper()
@@ -170,25 +201,23 @@ func TestColumnOrderMigration(t *testing.T) {
 		}
 		checkLedger(t, pool)
 	}
-	newOrder := func(when string) {
-		t.Helper()
-		got := columnOrder(t, pool)
-		for table, cols := range oldOrder {
-			want := cols
-			if r, ok := reordered[table]; ok {
-				want = r
-			}
-			if !slices.Equal(got[table], want) {
-				t.Errorf("%s: %s columns = %v, want %v", when, table, got[table], want)
-			}
+
+	moved := map[string][]string{}
+	for _, o := range oldOrder {
+		moved[o.table] = o.cols
+	}
+	reorder(t, pool, moved)
+	unchanged("after moving the columns")
+	got := columnOrder(t, pool)
+	for table, cols := range order {
+		want := cols
+		if m, ok := moved[table]; ok {
+			want = m
+		}
+		if !slices.Equal(got[table], want) {
+			t.Errorf("after moving the columns: %s columns = %v, want %v", table, got[table], want)
 		}
 	}
-
-	if _, err := provider.UpTo(ctx, 22); err != nil {
-		t.Fatal(err)
-	}
-	unchanged("after Up")
-	newOrder("after Up")
 	// The foreign keys still do what they did: deleting an item takes its
 	// SKUs, tags, photo, kit lines and stock changes; a service with parts
 	// can't go; a vehicle still can't be named twice.
@@ -205,32 +234,24 @@ func TestColumnOrderMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if left != 0 {
-		t.Errorf("after Up: deleting an item left %d rows pointing at it", left)
+		t.Errorf("after moving the columns: deleting an item left %d rows pointing at it", left)
 	}
 	_ = tx.Rollback(ctx)
 	if err := refused(t, pool, `DELETE FROM service_records WHERE id = 1`); err == nil || !strings.Contains(err.Error(), "stock_movements_service_record_id_fkey") {
-		t.Errorf("after Up: deleting a service with parts: %v, want the foreign key to refuse it", err)
+		t.Errorf("after moving the columns: deleting a service with parts: %v, want the foreign key to refuse it", err)
 	}
 	if err := refused(t, pool, `INSERT INTO vehicles (id, name) OVERRIDING SYSTEM VALUE VALUES (100, 'golf')`); err == nil || !strings.Contains(err.Error(), "vehicles_name_key") {
-		t.Errorf("after Up: a second Golf: %v, want the unique index to refuse it", err)
+		t.Errorf("after moving the columns: a second Golf: %v, want the unique index to refuse it", err)
 	}
 	if err := refused(t, pool, `UPDATE items SET quantity = -1 WHERE id = 1`); err == nil || !strings.Contains(err.Error(), "items_quantity_non_negative") {
-		t.Errorf("after Up: a negative quantity: %v, want the CHECK to refuse it", err)
+		t.Errorf("after moving the columns: a negative quantity: %v, want the CHECK to refuse it", err)
 	}
 
-	if _, err := provider.DownTo(ctx, 21); err != nil {
-		t.Fatal(err)
+	reorder(t, pool, order)
+	unchanged("after moving them back")
+	if got := columnOrder(t, pool); !mapsEqual(got, order) {
+		t.Errorf("after moving them back: columns = %v, want %v", got, order)
 	}
-	unchanged("after Down")
-	if got := columnOrder(t, pool); !mapsEqual(got, oldOrder) {
-		t.Errorf("after Down: columns = %v, want %v", got, oldOrder)
-	}
-
-	if _, err := provider.UpTo(ctx, 22); err != nil {
-		t.Fatal(err)
-	}
-	unchanged("after second Up")
-	newOrder("after second Up")
 	// A new row takes the id after the deleted one, and the deleted one
 	// restores from its snapshot, as restoreRows does it.
 	var id int64
@@ -295,6 +316,7 @@ func TestReorderColumns(t *testing.T) {
 		{"view", `CREATE VIEW v AS SELECT code FROM item_skus; SELECT reorder_columns('item_skus', ` + all + `)`, "rules or views"},
 		{"comment", `COMMENT ON COLUMN item_skus.code IS 'x'; SELECT reorder_columns('item_skus', ` + all + `)`, "comments"},
 		{"grant", `GRANT SELECT ON item_skus TO PUBLIC; SELECT reorder_columns('item_skus', ` + all + `)`, "grants"},
+		{"scratch table", `CREATE TABLE reorder_columns_rows (x int); SELECT reorder_columns('item_skus', ` + all + `)`, "reorder_columns_rows is in the way"},
 	} {
 		err := refused(t, pool, tc.sql)
 		if err == nil || !strings.Contains(err.Error(), "nothing was changed") || !strings.Contains(err.Error(), tc.want) {
@@ -322,6 +344,10 @@ func TestReorderColumns(t *testing.T) {
 	}
 	if cols != "vehicle_id,item_id" || pkey != "PRIMARY KEY (item_id, vehicle_id)" {
 		t.Errorf("item_vehicles: columns %s, key %s", cols, pkey)
+	}
+	var temp int64
+	if err := tx.QueryRow(ctx, `SELECT pg_my_temp_schema()::bigint`).Scan(&temp); err != nil || temp != 0 {
+		t.Errorf("the rebuild gave the session a temporary schema (%d, %v)", temp, err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO item_vehicles (item_id, vehicle_id) VALUES (1, 1)`); err == nil {
 		t.Error("item_vehicles: the key no longer refuses a repeat")

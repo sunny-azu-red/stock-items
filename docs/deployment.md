@@ -140,6 +140,16 @@ New migrations are applied automatically on start; to apply them separately, run
 
 **Column order (migration 00022).** Puts `version` after `id` and the timestamps (`created_at`, `updated_at`, `archived_at`) last in vehicles, items, service kits, services, stock changes and shopping entries, by rebuilding those six tables in one transaction: no value, id or version changes, nor anything on the pages, and the trash restores as before. It also adds the `reorder_columns` function later migrations use. The rebuild takes a few seconds at most on a personal stock list; take a [backup](#backups) first anyway. An older image runs fine on the new order, as the code never relies on column positions.
 
+**One migration (2026-11-21).** The 22 migrations are squashed into `00001_init.sql`, and goose has only version 1. `reorder_columns` no longer makes a temporary table. A schema from before has goose 0–22 and the same tables; it is moved over once, without touching a row:
+
+1. Stop the stack, and keep it stopped until step 5 (nothing written to `public` in between is lost).
+2. Copy `public` to `dev` (`sync_stock_items_public_to_dev.sh`).
+3. On `dev`, in one transaction: replace `reorder_columns` with the one in `00001_init.sql` (`CREATE OR REPLACE FUNCTION`), and `DELETE FROM goose_db_version WHERE version_id > 1`.
+4. Drop `public`'s tables, `goose_db_version` included (the copy back refuses while the applied lists differ), then copy `dev` to `public` (`sync_stock_items_dev_to_public.sh`); it backs `public` up first.
+5. Optionally run `cleanup_temp_schemas.sh` (nothing is connected now; the temporary schemas don't come back), then update the stack with re-pull.
+
+The new image on a schema not yet moved over applies nothing (version 1 is there) and runs as before. **Never start an image from before 2026-11-21 on a moved-over schema:** it sees only version 1 applied and runs 00002–00022 again on the existing tables, each in its own transaction, so the ones before the first failure stay applied. To go back, restore the backup step 4 made, with an older image.
+
 ## Health check
 
 The running build's version shows when you hover the Pitbox logo at the top of the sidebar, and on any device (a phone too) at `/healthz`. `GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.
@@ -154,6 +164,8 @@ pg_dump -h <db-host> -U <db-user> -Fc --no-owner stock_items > stock_items-$(dat
 ```
 
 You can also download the current stock as CSV from the Stock page.
+
+**A backup from before 2026-11-21** holds goose versions 0–22. The new image runs on it (version 1 is applied and the tables are the same), but `sync_schema.sh --from-backup` refuses it for a moved-over `public` (it has migrations `public` doesn't). Restore it with `pg_restore` as above, with the stack stopped, and run step 3 of [One migration](#upgrades) on `public` before starting it. The nightly backups are kept 14 days, so after that all are from after the move.
 
 ## HTTPS (optional)
 

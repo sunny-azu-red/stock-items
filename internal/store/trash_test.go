@@ -838,8 +838,9 @@ func TestTrashPurgeTakesDependentsAlong(t *testing.T) {
 }
 
 // A snapshot holding an amount finer than 0.01 (only possible by hand
-// since migration 00012) is not restored: the column would round it while
-// the stock moved by the exact amount, and the ledger would stop adding up.
+// since the columns went to two decimals) is not restored: the column
+// would round it while the stock moved by the exact amount, and the
+// ledger would stop adding up.
 func TestRestoreRefusesAmountsFinerThanTwoDecimals(t *testing.T) {
 	pool := testdb.New(t)
 	s, ctx := store.New(pool), context.Background()

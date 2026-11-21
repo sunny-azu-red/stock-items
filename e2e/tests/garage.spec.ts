@@ -1255,6 +1255,24 @@ test("the photo opens larger on the page, and Close, Esc or a tap outside closes
   await page.mouse.click(2, 2);
   await expect(viewer).toBeHidden();
 
+  // The page behind doesn't scroll, over the backdrop or over the photo
+  // (made tall enough to scroll on every screen); closed, it does.
+  await page.evaluate(() => { document.body.style.minHeight = "300vh"; });
+  await open.click();
+  await expect(viewer).toBeVisible();
+  const before = await page.evaluate(() => window.scrollY);
+  const box = (await viewer.boundingBox())!;
+  for (const [x, y] of [[2, 2], [box.x + box.width / 2, box.y + box.height / 2]]) {
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(0, 600);
+  }
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+
   // All on the same page: no new tab, no navigation.
   expect(context.pages()).toHaveLength(1);
   expect(page.url()).toBe(item);

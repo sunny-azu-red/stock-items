@@ -1232,7 +1232,11 @@
     & img { display: block; width: auto; height: auto; max-width: calc(100vw - 2 * var(--page)); max-height: calc(100dvh - 2 * var(--page)); object-fit: contain; }
     & .icon-btn { position: absolute; top: 8px; right: 8px; background: var(--surface); border-color: var(--border); }
   }
-  :root:has(dialog:modal) { overflow: hidden; }
+  /* The page behind a modal doesn't scroll: a scroll over the backdrop or
+     in the dialog stays there (both scroll containers, contained), and the
+     page keeps its scrollbar, so it doesn't shift sideways as one opens. */
+  dialog:modal { overscroll-behavior: contain; }
+  dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
 
   /* ---- Messages ---------------------------------------------------- */
   .flash {

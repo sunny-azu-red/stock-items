@@ -71,7 +71,7 @@
 {{define "archived-date-badge"}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date .}}</span>{{end}}
 
 {{/* Top banners of a segmented form: stale notice and error summary. */}}
-{{define "form-banners"}}{{with .Stale}}<div class="form-section">{{template "stale" .}}</div>{{end}}{{if .Errors}}<div class="form-section">{{template "error-summary" .Errors}}{{with index .Errors "parts"}}<p class="field-error mt">{{.}}</p>{{end}}</div>{{end}}{{end}}
+{{define "form-banners"}}{{template "stale" .Stale}}{{template "error-summary" .Errors}}{{with index .Errors "parts"}}<div class="form-section"><p class="field-error">{{.}}</p></div>{{end}}{{end}}
 
 {{/* Autocomplete options: dict "ID" string "Options" []string */}}
 {{define "datalist"}}<datalist id="{{.ID}}">{{range .Options}}<option value="{{.}}">{{end}}</datalist>{{end}}

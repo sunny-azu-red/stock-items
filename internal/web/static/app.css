@@ -752,13 +752,16 @@
   /* The error summary and the stale banner: a red band across the card,
      a heading bar tall, the icon and sentence at the card's inset like the
      fields under it. In a padded card body it reaches out over the body's
-     padding to the card's edges, and the body's top padding goes under it. */
+     padding to the card's edges, and the body's top padding goes under it;
+     there it sits under tabs or a card head, and covers their grey line
+     with its own (the active tab's underline still draws over it). */
   .error-summary {
+    --band-line: color-mix(in oklab, var(--danger) 25%, var(--danger-soft));
     display: flex; align-items: center; gap: 10px; min-height: 45px; padding: 10px var(--inset);
     background: var(--danger-soft); color: var(--danger); font-weight: 600;
-    border-bottom: 1px solid color-mix(in oklab, var(--danger) 25%, var(--danger-soft));
+    border-bottom: 1px solid var(--band-line);
     & a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-    .card-body > & { margin: -14px calc(-1 * var(--inset)) calc(14px - var(--gap)); }
+    .card-body > & { margin: -15px calc(-1 * var(--inset)) calc(14px - var(--gap)); border-top: 1px solid var(--band-line); }
   }
 
   /* Pick one (Counted in, Grouped/List): 36px, or 30px in a bar. */

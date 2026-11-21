@@ -753,15 +753,14 @@
      a heading bar tall, the icon and sentence at the card's inset like the
      fields under it. In a padded card body it reaches out over the body's
      padding to the card's edges, and the body's top padding goes under it;
-     there it sits under tabs or a card head, and covers their grey line
-     with its own (the active tab's underline still draws over it). */
+     there it sits under tabs or a card head and covers their grey line, so
+     only the active tab's underline (positioned, so drawn on top) is left. */
   .error-summary {
-    --band-line: color-mix(in oklab, var(--danger) 25%, var(--danger-soft));
     display: flex; align-items: center; gap: 10px; min-height: 45px; padding: 10px var(--inset);
     background: var(--danger-soft); color: var(--danger); font-weight: 600;
-    border-bottom: 1px solid var(--band-line);
+    border-bottom: 1px solid color-mix(in oklab, var(--danger) 25%, var(--danger-soft));
     & a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-    .card-body > & { margin: -15px calc(-1 * var(--inset)) calc(14px - var(--gap)); border-top: 1px solid var(--band-line); }
+    .card-body > & { margin: -15px calc(-1 * var(--inset)) calc(14px - var(--gap)); }
   }
 
   /* Pick one (Counted in, Grouped/List): 36px, or 30px in a bar. */
@@ -1176,8 +1175,10 @@
   .sku-more { color: var(--muted); font-weight: 600; white-space: nowrap; &:hover { color: var(--accent-strong); } }
   .tabs {
     display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 var(--inset);
+    /* Positioned, so the active underline draws over what follows (the
+       error band reaches up over the tabs' line). */
     & button {
-      display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: var(--text-sm);
+      position: relative; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: var(--text-sm);
       background: none; border: 0; padding: 12px 8px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
       transition: color .15s, border-color .15s;
       &:hover { color: var(--text); }

@@ -118,8 +118,6 @@
     --badge-info:        light-dark(oklch(55% .108 calc(var(--h) - 45)), oklch(74% .081 calc(var(--h) - 45)));
     --badge-info-soft:   light-dark(oklch(95% .027 calc(var(--h) - 45)), oklch(31.5% .047 calc(var(--h) - 45)));
     --scrim:         light-dark(oklch(20% .02 var(--h) / .38), oklch(5% 0 0 / .6));
-    --shadow-pop: 0 1px 2px color-mix(in oklab, var(--text) 8%, transparent),
-                  0 12px 32px light-dark(oklch(25% .03 var(--h) / .16), oklch(0% 0 0 / .55));
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23807b88' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
 
     /* Type: Manrope. Sizes in rem, so the browser's text size scales them.
@@ -292,7 +290,7 @@
       display: grid; grid-template-columns: repeat(5, 1fr);
       position: fixed; z-index: 30; left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right));
       bottom: calc(10px + env(safe-area-inset-bottom)); height: var(--tabbar);
-      background: var(--surface); border: 1px solid transparent; border-radius: 14px; box-shadow: var(--shadow-pop);
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
       & :is(a, button) {
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
         position: relative; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
@@ -316,7 +314,7 @@
     .sidebar:popover-open {
       display: flex; position: fixed; inset: auto calc(10px + env(safe-area-inset-right)) calc(var(--tabbar-space) + 8px) calc(10px + env(safe-area-inset-left));
       height: auto; max-height: calc(100dvh - var(--tabbar-space) - 72px);
-      padding: 16px 10px; background: var(--surface); border: 1px solid transparent; border-radius: 14px; box-shadow: var(--shadow-pop);
+      padding: 16px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
       transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
       @starting-style { translate: 0 16px; opacity: 0; }
     }
@@ -549,7 +547,7 @@
   .appearance {
     position: fixed; inset: calc(var(--page) + var(--control-h) + 6px) auto auto 10px; margin: 0; width: min(320px, calc(100vw - 20px));
     padding: 16px; flex-direction: column; gap: 16px;
-    color: var(--text); background: var(--surface); border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow-pop);
+    color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     transition: translate .2s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete;
     &:popover-open { display: flex; @starting-style { translate: 0 -8px; opacity: 0; } }
     & h2 { font-size: 1rem; }
@@ -713,7 +711,7 @@
     &:open { border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
     &::picker(select) {
       margin-top: 4px; padding: 4px; color: var(--text); background: var(--surface);
-      border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-pop);
+      border: 1px solid var(--border); border-radius: var(--radius);
     }
     & option { padding: 7px 10px; border-radius: var(--radius-xs); gap: 6px; }
     & option:is(:hover, :focus-visible) { background: var(--surface-2); outline: none; }
@@ -731,7 +729,7 @@
     position-area: bottom span-right; width: anchor-size(width); max-height: 256px;
     position-try-fallbacks: flip-block, --combo-below;
     color: var(--text); background: var(--surface);
-    border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-pop);
+    border: 1px solid var(--border); border-radius: var(--radius);
     & li { padding: 7px 10px; border-radius: var(--radius-xs); cursor: pointer; }
     & li:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
   }
@@ -908,8 +906,8 @@
     .working-pick .work-on { justify-content: flex-end; }
     .working-pick:popover-open {
       position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 42px)) 0 auto; width: auto; margin: 0;
-      color: inherit; padding: 12px var(--page); border: 0; border-radius: 0 0 14px 14px;
-      background: color-mix(in oklab, var(--chip) 12%, var(--surface)); box-shadow: var(--shadow-pop);
+      color: inherit; padding: 12px var(--page); border: 0; border-bottom: 1px solid var(--border); border-radius: 0 0 14px 14px;
+      background: color-mix(in oklab, var(--chip) 12%, var(--surface));
       transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
       @starting-style { translate: 0 -12px; opacity: 0; }
     }
@@ -1214,7 +1212,7 @@
      growing in (and out, in Chrome). The page behind doesn't scroll. */
   :is(.confirm, .lightbox) {
     margin: auto;
-    color: var(--text); background: var(--surface); border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow-pop);
+    color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     opacity: 0; scale: .96;
     transition: opacity .2s, scale .2s cubic-bezier(.2, .8, .2, 1), display .2s allow-discrete, overlay .2s allow-discrete;
     &[open] { opacity: 1; scale: 1; @starting-style { opacity: 0; scale: .96; } }
@@ -1257,7 +1255,7 @@
   }
   .toast {
     display: flex; gap: 8px; align-items: center; padding: 11px 14px; border-radius: var(--radius);
-    background: var(--text); color: var(--bg); box-shadow: var(--shadow-pop); font-weight: 600;
+    background: var(--text); color: var(--bg); font-weight: 600;
     animation: toast-in .25s cubic-bezier(.2, .8, .2, 1);
     &.error { background: var(--danger); color: var(--on-accent); }
   }

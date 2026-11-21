@@ -354,10 +354,10 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 
 ## 15. Motion
 
-* **Page changes cross-fade** (`@view-transition { navigation: auto; }`).
+* **Page changes are instant**: no cross-fade (no `@view-transition`), so following a link and an in-place update (the stock's filters) feel the same.
 * **Popovers and dialogs come in**: More, Appearance and the Switch tray slide a few pixels and fade, a confirmation and a hint fade (and grow) in (`@starting-style`), and go out the same way (`overlay`, `display` with `allow-discrete`). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
 * **Short and quiet**: .15–.3s, ease-out. Hover states fade in .15s.
-* **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once, and pages don't cross-fade.
+* **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once.
 
 ---
 

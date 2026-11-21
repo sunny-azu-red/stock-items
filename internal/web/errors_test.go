@@ -141,31 +141,6 @@ func TestQuickAdjustOfADeletedItem(t *testing.T) {
 	}
 }
 
-func TestKitShortfallSkipsAnAmountTheListRefuses(t *testing.T) {
-	a := newApp(t)
-	k390, _ := a.seed()
-	ctx := context.Background()
-	pads, oil := itemID(t, a.store, "Brake Pads"), itemID(t, a.store, "Silkolene")
-	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"},
-		"line_item": {itoa(pads), itoa(oil)}, "line_qty": {"2", "1 L"}})
-	expect(t, rec, http.StatusSeeOther)
-	kit := rec.Header().Get("Location")
-	// A line saved before pieces had to be whole: 1.5 pads short, which
-	// the shopping list refuses (stock.CheckQuantity).
-	if _, err := a.pool.Exec(ctx, `UPDATE service_kit_lines SET quantity = 2.5 WHERE kit_id = $1 AND item_id = $2`, mustID(t, kit), pads); err != nil {
-		t.Fatal(err)
-	}
-	rec = a.post(kit+"/shortfall", nil)
-	expect(t, rec, http.StatusSeeOther)
-	if f := flashOf(t, rec); f.Message != "Added 1 missing part to the shopping list" {
-		t.Errorf("flash = %+v, want the oil added", f)
-	}
-	list := mustShopping(t, a)
-	if len(list) != 1 || list[0].ItemID == nil || *list[0].ItemID != oil {
-		t.Errorf("shopping list = %+v, want only the oil", list)
-	}
-}
-
 func TestLinkingADeletedItemSaysSo(t *testing.T) {
 	a := newApp(t)
 	a.seed()

@@ -241,7 +241,7 @@ func TestNewItemWithPriceIsAPurchase(t *testing.T) {
 		t.Errorf("last unit price = %v, %v", p, err)
 	}
 	if moves, _ := s.ListMovements(ctx, store.MovementFilter{ItemID: shelf}); len(moves) != 1 || moves[0].Kind != stock.MoveStarting {
-		t.Errorf("stock already on the shelf should be initial: %+v", moves)
+		t.Errorf("stock already on the shelf should be starting stock: %+v", moves)
 	}
 	for _, c := range []struct {
 		id   int64
@@ -254,7 +254,7 @@ func TestNewItemWithPriceIsAPurchase(t *testing.T) {
 
 	// Both priced items count in the stock value; only the recent purchase
 	// counts as spending.
-	st, err := s.GetStats(ctx, time.Now())
+	st, err := s.GetVehicleStats(ctx, time.Now(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -236,14 +236,6 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 			v := vehicle(nil)
 			return v, service(v, 12000)
 		}, nil},
-		{"services from before the change are left alone", func() (int64, int64) {
-			v := vehicle(odo(10000))
-			svc := service(v, 12000)
-			if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer_moved = NULL, odometer_before = NULL WHERE id = $1`, svc); err != nil {
-				t.Fatal(err)
-			}
-			return v, svc
-		}, odo(12000)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

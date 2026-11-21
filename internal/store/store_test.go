@@ -191,10 +191,10 @@ func TestDatesComeFromTheAppClock(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The purchase of June 2029 was last year.
-	if st, _ := s.GetStats(ctx, later); st.SpentThisYear != 0 {
+	if st, _ := s.GetVehicleStats(ctx, later, 0); st.SpentThisYear != 0 {
 		t.Errorf("spent in 2030 up to %s = %v, want 0", later.Format("2006-01-02"), st.SpentThisYear)
 	}
-	if st, _ := s.GetStats(ctx, dayAfter); st.SpentThisYear != 5 {
+	if st, _ := s.GetVehicleStats(ctx, dayAfter, 0); st.SpentThisYear != 5 {
 		t.Errorf("spent in 2030 up to %s = %v, want 5", dayAfter.Format("2006-01-02"), st.SpentThisYear)
 	}
 

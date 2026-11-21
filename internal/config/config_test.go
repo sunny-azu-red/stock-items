@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 	_ "time/tzdata" // the named zones, whatever the host has installed
@@ -40,7 +39,6 @@ func TestCheck(t *testing.T) {
 		{"script", func(c *Config) { c.SKUSearchURL = "javascript:alert(1)//" }, false},
 		{"placeholder in the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q={q}&lang=de" }, true},
 		{"placeholder in the path", func(c *Config) { c.SKUSearchURL = "https://parts.example.com/find/{q}" }, true},
-		{"ending in =", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search?q=" }, false},
 		{"no {q}", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search" }, false},
 		{"value after the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q=&lang=de" }, false},
 		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
@@ -57,13 +55,6 @@ func TestCheck(t *testing.T) {
 		if err := c.check(); (err == nil) != tt.ok {
 			t.Errorf("%s: check() = %v, want ok %v", tt.name, err, tt.ok)
 		}
-	}
-
-	// A URL ending in "=" gets the fixed value suggested.
-	c := good
-	c.SKUSearchURL = "https://www.google.com/search?q="
-	if err := c.check(); err == nil || !strings.Contains(err.Error(), "add it: https://www.google.com/search?q={q}") {
-		t.Errorf("ending in =: %v, want the fix suggested", err)
 	}
 }
 

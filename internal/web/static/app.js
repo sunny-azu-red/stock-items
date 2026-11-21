@@ -50,8 +50,8 @@
 
   // ---- Double submits ---------------------------------------------------
   // A double click on "Save" must not log a service (and take its parts from
-  // stock) twice. Runs after the confirmation above. htmx forms (the quick
-  // -/+ buttons) are meant to be clicked repeatedly and are left alone.
+  // stock) twice. htmx forms (the quick -/+ buttons) are meant to be
+  // clicked repeatedly and are left alone.
   //
   // A form with a one-time key (form_key) says "Saving…" on its button. Still
   // on the page after 15 s (a slow or lost connection), it unlocks and says
@@ -280,11 +280,11 @@
   // A photo input sends itself once a file is chosen. A photo larger than
   // data-shrink (px) is shrunk here first, upright and on white, so a phone
   // uploads a few hundred KB instead of many MB and the server has little
-  // to do. If the browser can't (HEIC outside Safari, an old browser, any
-  // error), the original goes and the server shrinks it. Without JS the
+  // to do. If Chrome can't (HEIC, which it doesn't decode, or any error),
+  // the original goes and the server shrinks it. Without JS the
   // form's Upload button sends the original.
   function shrinkPhoto(file, side, force) {
-    if (!side || !window.createImageBitmap || !window.DataTransfer || !HTMLCanvasElement.prototype.toBlob) {
+    if (!side) {
       return Promise.reject(new Error("can't shrink here"));
     }
     return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
@@ -597,7 +597,7 @@
   // navigator.clipboard only exists on HTTPS or localhost, so fall back to
   // execCommand for plain HTTP on the home network.
   function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
+    if (window.isSecureContext) {
       return navigator.clipboard.writeText(text);
     }
     return new Promise(function (resolve, reject) {
@@ -628,16 +628,12 @@
       .then(function (r) { if (!r.ok) throw new Error(r.statusText); return r.text(); })
       .then(function (t) { btn.setAttribute("data-copied", t); return t; });
     var copied;
-    if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+    if (window.isSecureContext) {
       // Handing the clipboard a promise keeps this click's permission
-      // while the text loads; Safari refuses a write made after the fetch.
-      try {
-        var blob = text.then(function (t) { return new Blob([t], { type: "text/plain" }); });
-        copied = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })])
-          .catch(function () { return text.then(copyText); });
-      } catch (err) { // a ClipboardItem that takes no promise
-        copied = text.then(copyText);
-      }
+      // while the text loads.
+      var blob = text.then(function (t) { return new Blob([t], { type: "text/plain" }); });
+      copied = navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })])
+        .catch(function () { return text.then(copyText); });
     } else {
       copied = text.then(copyText);
     }

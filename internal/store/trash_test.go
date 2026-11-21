@@ -871,11 +871,4 @@ func TestRestoreRefusesAmountsFinerThanTwoDecimals(t *testing.T) {
 		t.Errorf("oil after the refused restore = %v, want 1000", it.Quantity)
 	}
 	assertLedger(t, s)
-	// Two decimals, written with a third zero as numeric(12,3) did: fine.
-	setDelta("-250.500")
-	mustRestore(t, s, trashID)
-	if it := mustGet(t, s, oil); it.Quantity != 749.5 {
-		t.Errorf("oil after the restore = %v, want 749.5", it.Quantity)
-	}
-	assertLedger(t, s)
 }

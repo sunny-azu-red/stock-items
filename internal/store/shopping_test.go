@@ -346,10 +346,10 @@ func TestEnsureShoppingAddsTheReason(t *testing.T) {
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &pads, Quantity: ptr(1.0), Note: "sintered"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.EnsureShopping(ctx, pads, 2, "Short for KTM 390: Brakes"); err != nil {
+	if _, err := s.EnsureShopping(ctx, pads, 2, stock.ShortNote("Brakes", "kit")); err != nil {
 		t.Fatal(err)
 	}
-	if e := mustShoppingEntry(t, s); e.Note != "sintered; Short for KTM 390: Brakes" || *e.Quantity != 2 {
+	if e := mustShoppingEntry(t, s); e.Note != "sintered; Short for the Brakes kit" || *e.Quantity != 2 {
 		t.Errorf("entry = %+v", e)
 	}
 }

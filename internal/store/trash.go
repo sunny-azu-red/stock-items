@@ -78,8 +78,7 @@ func putTrash(ctx context.Context, tx pgx.Tx, kind, label string, p trashPayload
 // restoreRows inserts snapshot rows back into table with their ids. Only
 // the columns in the snapshot are set, so columns added since get their
 // defaults. A restored row of a versioned table comes back with a new
-// version, so a form opened before it was deleted can't save over it (a
-// snapshot without one gets the default, 1).
+// version, so a form opened before it was deleted can't save over it.
 func restoreRows(ctx context.Context, tx pgx.Tx, table string, rows json.RawMessage) error {
 	decoded, err := decodeRows(rows)
 	if err != nil || len(decoded) == 0 {
@@ -87,9 +86,7 @@ func restoreRows(ctx context.Context, tx pgx.Tx, table string, rows json.RawMess
 	}
 	if versioned(table) {
 		for _, r := range decoded {
-			if _, ok := r["version"].(json.Number); ok {
-				r["version"] = json.Number(strconv.FormatInt(r.int64("version")+1, 10))
-			}
+			r["version"] = json.Number(strconv.FormatInt(r.int64("version")+1, 10))
 		}
 		rows = encodeRows(decoded)
 	}
@@ -352,7 +349,7 @@ func (s *Store) TrashThumb(ctx context.Context, id int64) (Photo, error) {
 	err := s.pool.QueryRow(ctx, `
 		SELECT ph ->> 'content_type', ph ->> 'thumb', t.deleted_at
 		FROM trash t, jsonb_array_elements(t.payload -> 'item_photos') ph
-		WHERE t.id = $1 AND t.kind = $2 AND ph ->> 'thumb' IS NOT NULL LIMIT 1`, id, TrashPhoto).
+		WHERE t.id = $1 AND t.kind = $2 LIMIT 1`, id, TrashPhoto).
 		Scan(&p.ContentType, &thumb, &p.UpdatedAt)
 	if err != nil {
 		return p, notFound(err)

@@ -195,12 +195,9 @@ func (c Config) check() error {
 }
 
 // checkPlaceholder wants exactly one {q} in the part number search URL:
-// that is where the number goes. A URL ending in "=" gets the fixed value
-// suggested.
+// that is where the number goes.
 func checkPlaceholder(searchURL string) error {
 	switch n := strings.Count(searchURL, "{q}"); {
-	case n == 0 && strings.HasSuffix(searchURL, "="):
-		return fmt.Errorf("APP_SKU_SEARCH_URL must mark where the part number goes with {q}; add it: %s{q}", searchURL)
 	case n == 0:
 		return fmt.Errorf("APP_SKU_SEARCH_URL must mark where the part number goes with {q}, as in %s, not %q", DefaultSKUSearchURL, searchURL)
 	case n > 1:

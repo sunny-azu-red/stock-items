@@ -138,7 +138,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if _, err := s.AddShopping(ctx, stock.ShoppingInput{ItemID: &filter}); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := s.GetStats(ctx, time.Now())
+	before, _ := s.GetVehicleStats(ctx, time.Now(), 0)
 
 	u, err := s.ItemUsage(ctx, filter)
 	if err != nil || u != (stock.ItemUsage{Purchases: 1, Services: 1, Kits: 1}) {
@@ -173,7 +173,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if kit, _ := s.GetKit(ctx, kitID); len(kit.Lines) != 1 || !kit.Lines[0].Archived {
 		t.Errorf("kit lines = %+v", kit.Lines)
 	}
-	after, _ := s.GetStats(ctx, time.Now())
+	after, _ := s.GetVehicleStats(ctx, time.Now(), 0)
 	if after.SpentThisYear != before.SpentThisYear || after.StockValue != 0 || before.StockValue != 40 {
 		t.Errorf("stats before %+v, after %+v: spending kept, archived stock not valued", before, after)
 	}
@@ -233,7 +233,7 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	if kits, _ := s.ListKits(ctx, store.KitFilter{VehicleID: old}); len(kits) != 1 {
 		t.Errorf("the vehicle's own kits = %+v", kits)
 	}
-	if st, _ := s.GetStats(ctx, time.Now()); st.SpentThisYear != 0 {
+	if st, _ := s.GetVehicleStats(ctx, time.Now(), 0); st.SpentThisYear != 0 {
 		t.Errorf("labour isn't spending on items: %+v", st)
 	}
 	if err := s.RestoreVehicle(ctx, old, cur(t, s, store.WhatVehicle, old)); err != nil {

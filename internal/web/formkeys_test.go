@@ -560,7 +560,7 @@ func TestEditRetriedAfterItsSaveIsNotStale(t *testing.T) {
 	}
 }
 
-// A form without a key (opened before keys existed) is not saved: it comes
+// A form without a key is not saved: it comes
 // back with what was typed and a key, and saves with one more click.
 func TestFormsWithoutAKeyAreNotSaved(t *testing.T) {
 	a := newApp(t)

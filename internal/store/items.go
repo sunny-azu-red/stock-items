@@ -362,8 +362,8 @@ func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, er
 	return u, err
 }
 
-// DeleteItem removes an item with its own history (initial stock, uses,
-// counts), SKUs, tags and photo. An item that other records refer to
+// DeleteItem removes an item with its own history (starting stock, uses,
+// adjustments), SKUs, tags and photo. An item that other records refer to
 // (purchases, services, kits) is not deleted, as that would change them;
 // it fails with a *ConflictError and should be archived instead. An item
 // changed since version fails with a *StaleError.

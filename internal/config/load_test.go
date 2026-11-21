@@ -79,7 +79,7 @@ APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 
 	// Settings the app would only fail on later are refused at once;
 	// LoadDB, for tests, needs only the database's.
-	t.Setenv("APP_SKU_SEARCH_URL", "www.google.com/search?q=")
+	t.Setenv("APP_SKU_SEARCH_URL", "www.google.com/search")
 	if _, err := Load(); err == nil {
 		t.Error("Load took a search URL without http(s) and {q}")
 	}

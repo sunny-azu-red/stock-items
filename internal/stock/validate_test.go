@@ -60,7 +60,7 @@ func TestItemInputStartMovement(t *testing.T) {
 		{"bought but no amount", ItemInput{TotalPrice: ptr(30.0)}, MoveBought, "quantity"},
 		{"bad price", ItemInput{Quantity: 2, TotalPrice: ptr(-1.0)}, MoveBought, "total_price"},
 		{"purchase with note", ItemInput{Quantity: 2, TotalPrice: ptr(30.0), BoughtNote: "on sale"}, MoveBought, ""},
-		{"initial with note", ItemInput{Quantity: 2, BoughtNote: "gift"}, MoveStarting, ""},
+		{"starting stock with note", ItemInput{Quantity: 2, BoughtNote: "gift"}, MoveStarting, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestItemInputStartMovement(t *testing.T) {
 				t.Errorf("movement = %+v, want kind %s and note %q", m, tt.kind, in.BoughtNote)
 			}
 			if m.Kind == MoveStarting && (m.TotalPrice != nil || m.Supplier != "" || m.OccurredOn != in.BoughtOn) {
-				t.Errorf("initial stock should carry only its date and note: %+v", m)
+				t.Errorf("starting stock should carry only its date and note: %+v", m)
 			}
 			if m.Kind == MoveBought && (m.TotalPrice != in.TotalPrice || m.Supplier != in.Supplier || m.OccurredOn != in.BoughtOn) {
 				t.Errorf("purchase details not carried over: %+v", m)
@@ -201,7 +201,7 @@ func TestMovementInputValidate(t *testing.T) {
 		{"purchase cannot remove", MovementInput{Kind: MoveBought, Delta: -2}, false},
 		{"use removes", MovementInput{Kind: MoveUsed, Delta: -500}, true},
 		{"use cannot add", MovementInput{Kind: MoveUsed, Delta: 1}, false},
-		{"correction either way", MovementInput{Kind: MoveAdjusted, Delta: -1}, true},
+		{"adjustment either way", MovementInput{Kind: MoveAdjusted, Delta: -1}, true},
 		{"zero", MovementInput{Kind: MoveAdjusted, Delta: 0}, false},
 		{"unknown kind", MovementInput{Kind: "theft", Delta: -1}, false},
 		{"service part", MovementInput{Kind: MoveService, Delta: -1, ServiceRecordID: ptr(int64(3))}, true},
@@ -212,11 +212,11 @@ func TestMovementInputValidate(t *testing.T) {
 		{"huge price", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(1e12)}, false},
 		{"purchase sets best before", MovementInput{Kind: MoveBought, Delta: 1, ExpiresOn: &time.Time{}}, true},
 		{"use cannot set best before", MovementInput{Kind: MoveUsed, Delta: -1, ExpiresOn: &time.Time{}}, false},
-		{"correction cannot set best before", MovementInput{Kind: MoveAdjusted, Delta: 1, ExpiresOn: &time.Time{}}, false},
+		{"adjustment cannot set best before", MovementInput{Kind: MoveAdjusted, Delta: 1, ExpiresOn: &time.Time{}}, false},
 		{"purchase has a price and shop", MovementInput{Kind: MoveBought, Delta: 1, TotalPrice: ptr(5.0), Supplier: "Moto shop"}, true},
 		{"use has no price", MovementInput{Kind: MoveUsed, Delta: -1, TotalPrice: ptr(5.0)}, false},
-		{"correction has no shop", MovementInput{Kind: MoveAdjusted, Delta: 1, Supplier: "Moto shop"}, false},
-		{"initial stock has no price", MovementInput{Kind: MoveStarting, Delta: 1, TotalPrice: ptr(5.0)}, false},
+		{"adjustment has no shop", MovementInput{Kind: MoveAdjusted, Delta: 1, Supplier: "Moto shop"}, false},
+		{"starting stock has no price", MovementInput{Kind: MoveStarting, Delta: 1, TotalPrice: ptr(5.0)}, false},
 	}
 	for _, c := range cases {
 		if got := !c.in.Validate().Any(); got != c.ok {

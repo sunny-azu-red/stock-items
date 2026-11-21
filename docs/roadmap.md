@@ -4,7 +4,7 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 ## Spending: items, labour and the total
 
-**Now:** the dashboard's "Spent in YEAR" tile counts only what was paid for items (priced purchases, `store.GetStats`), and opens that year's purchases in Activity, so the tile and its list add up. Labour costs are shown on the Services page (the "Labour in total" footer of Service history, there and on each vehicle's page), not on the dashboard. The dashboard's tiles are about the items.
+**Now:** the dashboard's "Spent in YEAR" tile counts only what was paid for items (priced purchases, `store.GetVehicleStats`), and opens that year's purchases in Activity, so the tile and its list add up. Labour costs are shown on the Services page (the "Labour in total" footer of Service history, there and on each vehicle's page), not on the dashboard. The dashboard's tiles are about the items.
 
 **Planned design & details:** one place that shows what the vehicles cost, all together:
 
@@ -29,7 +29,7 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 ## Small things
 
-- **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
+- **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetVehicleStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
 
 ## A vehicle for free-text shopping entries
 

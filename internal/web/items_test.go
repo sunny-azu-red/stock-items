@@ -231,7 +231,7 @@ func TestNewItemBoughtJustNow(t *testing.T) {
 	page := a.get(rec.Header().Get("Location"))
 	expect(t, page, http.StatusOK, "67.00 EUR / L", "<dt>Purchases</dt><dd>1</dd>", "moto24", "Purchase", "promo pack")
 	// The app clock, which the purchase is dated by: not the real one.
-	if st, _ := a.store.GetStats(context.Background(), time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)); st.StockValue != 67 || st.SpentThisYear != 67 {
+	if st, _ := a.store.GetVehicleStats(context.Background(), time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC), 0); st.StockValue != 67 || st.SpentThisYear != 67 {
 		t.Errorf("stats = %+v, want 67 value and spending", st)
 	}
 

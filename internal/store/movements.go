@@ -440,15 +440,11 @@ type Stats struct {
 	SpentThisYear float64
 }
 
-// GetStats computes the dashboard money figures, with this year counted
-// from 1 January up to today (a purchase dated tomorrow is not counted yet).
-func (s *Store) GetStats(ctx context.Context, today time.Time) (Stats, error) {
-	return s.GetVehicleStats(ctx, today, 0)
-}
-
-// GetVehicleStats is GetStats of what fits the vehicle: items that fit it
-// or no vehicle (General), the stock the dashboard's tiles open while
-// working on it (0 for every item). Bought is never a service's change.
+// GetVehicleStats computes the dashboard money figures, with this year
+// counted from 1 January up to today (a purchase dated tomorrow is not
+// counted yet), of what fits the vehicle: items that fit it or no vehicle
+// (General), the stock the dashboard's tiles open while working on it (0
+// for every item). Bought is never a service's change.
 func (s *Store) GetVehicleStats(ctx context.Context, today time.Time, vehicleID int64) (Stats, error) {
 	var st Stats
 	day := stock.DateOnly(today)

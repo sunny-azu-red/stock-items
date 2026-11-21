@@ -42,7 +42,7 @@ func TestMovements(t *testing.T) {
 	if err != nil || price == nil || *price != 0.015 {
 		t.Errorf("last unit price = %v, %v", price, err)
 	}
-	st, err := s.GetStats(ctx, time.Now())
+	st, err := s.GetVehicleStats(ctx, time.Now(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,11 +144,11 @@ func TestSpentThisYear(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Purchases only: the labour is the Services page's.
-	if st, err := s.GetStats(ctx, today); err != nil || st.SpentThisYear != 110 {
+	if st, err := s.GetVehicleStats(ctx, today, 0); err != nil || st.SpentThisYear != 110 {
 		t.Errorf("spent in 2030 up to %s = %v, %v; want 110, without the labour", today.Format("2006-01-02"), st.SpentThisYear, err)
 	}
 	// On 1 January only that day counts.
-	if st, _ := s.GetStats(ctx, day(2030, 1, 1)); st.SpentThisYear != 10 {
+	if st, _ := s.GetVehicleStats(ctx, day(2030, 1, 1), 0); st.SpentThisYear != 10 {
 		t.Errorf("spent on 1 January = %v, want 10", st.SpentThisYear)
 	}
 }
@@ -217,7 +217,7 @@ func TestUpdateAndDeleteMovements(t *testing.T) {
 	if p, _ := s.LastUnitPrice(ctx, oil); p == nil || *p != 0.067 {
 		t.Errorf("last unit price = %v, want 0.067", p)
 	}
-	if st, _ := s.GetStats(ctx, time.Now()); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.SpentThisYear-67) > 0.001 {
+	if st, _ := s.GetVehicleStats(ctx, time.Now(), 0); math.Abs(st.StockValue-100.5) > 0.001 || math.Abs(st.SpentThisYear-67) > 0.001 {
 		t.Errorf("stats = %+v, want value 100.5 and spent 67", st)
 	}
 

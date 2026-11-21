@@ -332,7 +332,7 @@ func parseFormKey(r *http.Request) string {
 // from a repeat of itself, so rather than risk saving it twice (a service
 // would take its parts again), it re-renders with what was typed and a
 // key, to save with one more click.
-const noFormKey = "This form was opened before Pitbox was updated, so it was not saved. Check it and save again."
+const noFormKey = "This form was sent without its key, so it was not saved. Check it and save again."
 
 // checkFormKey records noFormKey in errs when key is missing.
 func checkFormKey(errs stock.Errors, key string) {

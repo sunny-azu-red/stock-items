@@ -335,8 +335,6 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 	http.Redirect(w, r, url, http.StatusSeeOther) //nolint:gosec // callers pass our own paths or back's
 }
 
-// searchTitle says where part number links search: "Search on
-// google.com (site:de)".
 // skuSearchURL is the search link of a part number: the number (and the
 // prefix, if any) escaped and put in place of the {q} in base (New refuses
 // a base without exactly one). In the query it is query-escaped, so "A+B"
@@ -358,6 +356,8 @@ func skuSearchURL(base, prefix, code, brand string) string {
 	return before + url.PathEscape(q) + after
 }
 
+// searchTitle says where part number links search: "Search on
+// google.com (site:de)".
 func searchTitle(searchURL, prefix string) string {
 	title := "Search for this part number"
 	if u, err := url.Parse(searchURL); err == nil && u.Host != "" {

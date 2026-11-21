@@ -46,14 +46,14 @@
      even too: with borders in pairs, every height is even, and centring one
      thing in another lands on a whole pixel. Set --lh, never line-height. */
   *, *::before, *::after { line-height: round(var(--lh) * 1em, 2px); }
-  body, h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; }
+  body, h1, h2, h3, p, ul, ol, dl, dd { margin: 0; }
   ul[class], ol[class] { list-style: none; padding: 0; }
   img { display: block; max-width: 100%; }
   /* font: inherit takes the parent's line height too (and an element
      selector beats *): set the control's own again. */
   button, input, select, textarea { font: inherit; line-height: round(var(--lh) * 1em, 2px); color: inherit; }
   /* A layer's !important beats every later layer's: [hidden] always hides. */
-  [hidden]:not([hidden="until-found"]) { display: none !important; }
+  [hidden] { display: none !important; }
   /* Less motion for those who ask for it: transitions end at once. */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -157,7 +157,7 @@
    base
    ====================================================================== */
 @layer base {
-  html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--surface-3) transparent; background: var(--bg); }
+  html { text-size-adjust: 100%; scrollbar-color: var(--surface-3) transparent; background: var(--bg); }
   body {
     font-family: var(--font); font-size: var(--text-sm); font-weight: 500;
     /* Manrope's word space is tight at small sizes: "13 items" ran together. */

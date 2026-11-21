@@ -169,7 +169,7 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 	var fromDate *time.Time
 	if ref != nil {
 		// A service logged without a reading counts from the vehicle's reading
-		// at the time; one logged before that was kept, from the latest reading.
+		// at the time (odometer_at_log); without one, from the latest reading.
 		lastOdo = cmp.Or(ref.Odometer, ref.OdometerAtLog, fallbackOdo)
 		fromDate = &ref.PerformedOn
 	} else {

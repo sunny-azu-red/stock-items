@@ -179,6 +179,7 @@ func TestSchemaInvariants(t *testing.T) {
 		{"deleting a service with parts", `DELETE FROM service_records WHERE id = 1`, "stock_movements_service_record_id_fkey"},
 		{"deleting its vehicle", `DELETE FROM vehicles WHERE id = 1`, "stock_movements_service_record_id_fkey"},
 		{"labour 0", `UPDATE service_records SET labor_cost = 0`, "service_records_labor_cost_check"},
+		{"whether it moved the odometer unknown", `UPDATE service_records SET odometer_moved = NULL`, `null value in column "odometer_moved"`},
 	} {
 		if err := refused(t, pool, tc.sql); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %s to refuse it", tc.name, err, tc.want)
@@ -217,5 +218,61 @@ func TestMigrationsDownUp(t *testing.T) {
 	}
 	if got := columnOrder(t, pool); !mapsEqual(got, order) {
 		t.Errorf("after Down and Up: columns = %v, want %v", got, order)
+	}
+}
+
+// 00002 makes odometer_moved NOT NULL (default false): it stops, changing
+// nothing, on a row or a trash snapshot holding NULL there, and Down makes
+// the column nullable again.
+func TestOdometerMovedNotNullMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name) VALUES ('KTM 390');
+		INSERT INTO service_records (vehicle_id, performed_on, title, odometer_moved) VALUES (1, '2026-05-01', 'Oil', NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	stopped := func(when, want string) {
+		t.Helper()
+		_, err := provider.UpTo(ctx, 2)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
+		}
+		if v, err := provider.GetDBVersion(ctx); err != nil || v != 1 {
+			t.Errorf("%s: version %d (%v), want 1", when, v, err)
+		}
+	}
+	stopped("a row with NULL", "odometer_moved")
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE service_records SET odometer_moved = false;
+		INSERT INTO trash (kind, label, payload) VALUES ('vehicle', 'Vehicle: Golf',
+			'{"vehicles": [{"id": 60, "name": "Golf"}], "service_records": [{"id": 61, "title": "Tyres", "odometer_moved": null}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("a snapshot with null", "nothing was changed: trash entries 1 hold a service")
+
+	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{service_records,0,odometer_moved}', 'false')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	var moved bool
+	if err := pool.QueryRow(ctx, `INSERT INTO service_records (vehicle_id, performed_on, title) VALUES (1, '2026-06-01', 'Chain') RETURNING odometer_moved`).Scan(&moved); err != nil || moved {
+		t.Errorf("a new service: odometer_moved = %v (%v), want false by default", moved, err)
+	}
+	if err := refused(t, pool, `UPDATE service_records SET odometer_moved = NULL`); err == nil {
+		t.Error("after Up: NULL was taken")
+	}
+
+	if _, err := provider.DownTo(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer_moved = NULL WHERE title = 'Chain'`); err != nil {
+		t.Errorf("after Down: NULL refused: %v", err)
 	}
 }

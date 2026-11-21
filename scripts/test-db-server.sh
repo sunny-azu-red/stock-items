@@ -417,7 +417,7 @@ check "a copy into public commits" said "Done. public is now a copy of scrap_src
 run_sync scrap_src dev || true
 DEV_BEFORE="$(fingerprint dev)"
 # public gains a table dev's backup won't have (with a foreign key to items).
-as_stock -c "CREATE TABLE public.extra (item_id bigint REFERENCES public.items (id))" -c "INSERT INTO public.extra VALUES (1)" -c "INSERT INTO public.goose_db_version (version_id, is_applied) VALUES (2, true)"
+as_stock -c "CREATE TABLE public.extra (item_id bigint REFERENCES public.items (id))" -c "INSERT INTO public.extra VALUES (1)" -c "INSERT INTO public.goose_db_version (version_id, is_applied) VALUES (9, true)"
 wrapper sync_stock_items_public_to_dev.sh OVERWRITE || true
 check "public -> dev commits" said "Done. dev is now a copy of public"
 check "dev holds public's rows" [ "$(fingerprint dev)" = "$(fingerprint public | sed 's/\bpublic\b/dev/g')" ]
@@ -454,17 +454,17 @@ echo "OVERWRITE public" >&7
 exec 7>&-
 wait "${SPID}" || true
 check "a sync confirmed after the source changed commits what was shown" said "Done. public is now a copy of dev"
-check "without the later migration or column" [ "$(qa -c "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.items'::regclass AND attname = 'sneaked'")-$(qa -c "SELECT max(version_id) FROM public.goose_db_version")" = "0-2" ]
+check "without the later migration or column" [ "$(qa -c "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.items'::regclass AND attname = 'sneaked'")-$(qa -c "SELECT max(version_id) FROM public.goose_db_version")" = "0-9" ]
 PUB_BEFORE="$(fingerprint public)"
 wrapper sync_stock_items_dev_to_public.sh "OVERWRITE public" && bad "a dev with unreleased migrations over public should be refused" || true
 check "a migration public doesn't have is refused" said "different migrations applied"
-as_stock -c "DELETE FROM dev.goose_db_version WHERE version_id IN (999, 2)" -c "ALTER TABLE dev.items DROP COLUMN sneaked"
+as_stock -c "DELETE FROM dev.goose_db_version WHERE version_id IN (999, 9)" -c "ALTER TABLE dev.items DROP COLUMN sneaked"
 wrapper sync_stock_items_dev_to_public.sh "OVERWRITE public" && bad "an older dev over public should be refused" || true
 check "an older migration set over public is refused" said "different migrations applied"
 check "public is unchanged" [ "$(fingerprint public)" = "${PUB_BEFORE}" ]
 as_stock -c "INSERT INTO scrap_dst.goose_db_version (version_id, is_applied) VALUES (5, true)"
 run_sync dev scrap_dst || true
-check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration 5, newer than the copy (1); it goes back to 1"
+check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration 5, newer than the copy (2); it goes back to 2"
 PUB_BACKUP="$(latest_backup public)"
 echo "OVERWRITE public" | "${SYNC}" --from-backup "${PUB_BACKUP}" public >"${WORK}/out.log" 2>&1 || true
 check "public can go back to its backup" said "Done. public is now a copy of ${PUB_BACKUP}"

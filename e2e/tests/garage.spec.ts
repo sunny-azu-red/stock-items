@@ -536,27 +536,17 @@ test("a form sent back names its errors at the fields", async ({ page }) => {
   await expect(name).toHaveAttribute("aria-invalid", "false");
   await page.getByLabel("Year").fill("soon");
   await page.getByRole("button", { name: "Save vehicle" }).click();
-  // The server's answer: a summary up top, and the field marked, focused
-  // and described by its own message (and still by its hint).
-  await expect(page.locator(".error-summary")).toContainText("Fix the fields marked below.");
+  // The server's answer: a summary up top (the sentence alone; each message
+  // is only at its field), and the field marked, focused and described by
+  // its own message (and still by its hint).
+  await expect(page.locator(".error-summary")).toHaveText("Fix the fields marked below.");
+  await expect(page.locator(".error-summary a")).toHaveCount(0);
   await expect(name).toBeFocused();
   await expect(name).toHaveAttribute("aria-invalid", "true");
   const msg = (await page.locator("#name-err").innerText()).trim();
   expect(msg).toMatch(/^[A-Z]/);
   await expect(name).toHaveAccessibleDescription(new RegExp(`^${msg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   await expect(name).toHaveAccessibleDescription(/Keep it short/);
-
-  // The summary links each message to its field, in the form's order,
-  // naming the field when the message doesn't.
-  const links = page.locator(".error-summary .error-links a");
-  await expect(links).toHaveCount(2);
-  expect(msg).toMatch(/^Name /);
-  await expect(links.nth(0)).toHaveText(msg);
-  await expect(links.nth(1)).toHaveText(`Year: ${(await page.locator("#year-err").innerText()).trim()}`);
-  await links.nth(1).click();
-  await expect(page.getByLabel("Year")).toBeFocused();
-  await links.nth(0).click();
-  await expect(name).toBeFocused();
 });
 
 test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page }) => {

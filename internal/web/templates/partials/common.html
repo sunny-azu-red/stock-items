@@ -28,9 +28,8 @@
      the message with the field. */}}
 {{define "field-err"}}{{with .Msg}}<p class="field-error" id="{{$.ID}}">{{.}}</p>{{end}}{{end}}
 
-{{/* The banner over a form sent back with errors: Errors. app.js adds a link to
-     each field's message under the sentence (data-error-summary). */}}
-{{define "error-summary"}}{{if .}}<div class="error-summary" role="alert" data-error-summary>{{icon "triangle-alert"}}<span>Fix the fields marked below.{{with index . "form"}} {{.}}{{end}}</span></div>{{end}}{{end}}
+{{/* The banner over a form sent back with errors: Errors. */}}
+{{define "error-summary"}}{{if .}}<div class="error-summary" role="alert">{{icon "triangle-alert"}}<span>Fix the fields marked below.{{with index . "form"}} {{.}}{{end}}</span></div>{{end}}{{end}}
 
 {{/* The banner of an edit form refused because its record changed or was
      deleted since it was opened: *staleNote, or nil for none. */}}

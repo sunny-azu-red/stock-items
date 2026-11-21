@@ -449,9 +449,11 @@
   .grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
   :is(.grid, .tiles, .split) > .card + .card { margin-top: 0; }
   /* The page's main column and a side column of details: the side one
-     stays 280-400px; under 680px of content, one column. */
+     stays 300-480px, wide enough for a kit row's badges beside its name
+     while the main column keeps its tables' 660px on a laptop window;
+     under 680px of content, one column. */
   .split {
-    display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, round(34%, 1px), 400px); gap: var(--gap); align-items: start;
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, round(38%, 1px), 480px); gap: var(--gap); align-items: start;
     @container main (width < 680px) { grid-template-columns: minmax(0, 1fr); }
   }
 
@@ -1092,8 +1094,9 @@
     /* Its parts are spans with their own " · ": the gap is a space wide. */
     & .meta { color: var(--muted); font-size: .75rem; display: flex; gap: 2px .3em; flex-wrap: wrap; align-items: center; }
     & .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-    /* Narrow: the badges go under the name instead of squeezing it. */
-    @container (width < 500px) {
+    /* Narrow (a phone, not a side column): the badges go under the name
+       instead of squeezing it. */
+    @container (width < 400px) {
       flex-wrap: wrap; align-items: flex-start;
       & .grow { flex-basis: calc(100% - 40px); }
       & .badges { flex-direction: row; flex-wrap: wrap; align-items: center; margin-left: 40px; }

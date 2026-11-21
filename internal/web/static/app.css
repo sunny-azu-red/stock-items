@@ -609,9 +609,11 @@
     & .inter-fields { margin-top: var(--gap); }
     &:not(:has(#has_inter:checked)) .inter-fields { display: none; }
   }
+  /* A line between sections: over each one with a section shown before
+     it, whatever hidden inputs or hidden sections sit in between. */
   .form-section {
     padding: 16px var(--inset);
-    & + .form-section { border-top: 1px solid var(--border); }
+    .form-section:not([hidden]) ~ & { border-top: 1px solid var(--border); }
     & :is(h2, h3) { margin-bottom: 12px; }
   }
 

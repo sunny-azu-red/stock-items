@@ -549,6 +549,43 @@ test("a form sent back names its errors at the fields", async ({ page }) => {
   await expect(name).toHaveAccessibleDescription(/Keep it short/);
 });
 
+test("a form's sections have a line between them, and none above the first", async ({ page }, testInfo) => {
+  // The line was "a section right after a section": hidden inputs between
+  // the error banner and the fields (a service from a kit, a kit for the
+  // vehicle worked on) dropped it, and the hidden "Start from a kit" put
+  // one over the first section of Log service.
+  const lines = () => page.evaluate(() => {
+    const out: string[] = [];
+    for (const form of document.querySelectorAll("form.card")) {
+      const shown = [...form.querySelectorAll(":scope > .form-section")].filter((s) => s.getBoundingClientRect().height > 0);
+      shown.forEach((s, i) => {
+        const top = parseFloat(getComputedStyle(s).borderTopWidth);
+        const what = (s.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 30);
+        if (i === 0 && top !== 0) out.push(`a line over the first section ("${what}")`);
+        if (i > 0 && top !== 1) out.push(`no line over section ${i + 1} ("${what}")`);
+      });
+    }
+    return out;
+  });
+  const problems: string[] = [];
+  await page.goto("/services/new");
+  await expect(page.locator("#kit-starts")).toBeHidden();
+  problems.push(...(await lines()).map((p) => `Log service: ${p}`));
+  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await page.locator("#kit-starts").getByRole("link", { name: "Oil Service" }).click();
+  await expect(page).toHaveURL(/\/services\/new\?kit=\d+$/);
+  await page.getByLabel("Date", { exact: true }).fill("");
+  await page.getByRole("button", { name: "Save service" }).click();
+  await expect(page.locator(".error-summary")).toBeVisible();
+  problems.push(...(await lines()).map((p) => `Log service from a kit, with errors: ${p}`));
+  await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
+  await page.goto("/kits/new");
+  await page.getByRole("button", { name: "Save kit" }).click();
+  await expect(page.locator(".error-summary")).toBeVisible();
+  problems.push(...(await lines()).map((p) => `Add kit working on a vehicle, with errors: ${p}`));
+  expect(problems).toEqual([]);
+});
+
 test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page }) => {
   await page.goto("/shopping");
   const colour = (v: string) => page.evaluate((v) => {

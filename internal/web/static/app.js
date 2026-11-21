@@ -1,7 +1,7 @@
 // Pitbox — the behaviour HTML and CSS can't give on their own (Baseline
 // 2025; see AGENTS.md): repeating form rows, unit pickers and stock badges,
 // suggestion dropdowns, photo shrinking, clipboard, toasts, the "?" hints'
-// hover and placement, tabs, the Appearance panel without a reload, the
+// hover, tabs, the Appearance panel without a reload, the
 // double-submit guard and keyboard shortcuts. Dialogs, popovers and the
 // kit form's intermediate schedule need none of it. JavaScript is assumed
 // (docs/conventions.md); the server never relies on what it did.
@@ -490,7 +490,6 @@
   // datalist popup cannot be styled and mixes in autofill history. Without
   // JS the plain datalist still works. The list is a
   // popover so cards with overflow: clip do not cut it off.
-  var placeOpenCombo = null;
   var comboSeed = 0;
   function enhanceCombo(input) {
     var list = document.getElementById(input.getAttribute("list"));
@@ -535,17 +534,14 @@
         box.appendChild(li);
       });
       if (!box.children.length) return hide();
-      if (!isOpen()) box.showPopover();
+      if (!isOpen()) box.showPopover({ source: input }); // app.css anchors it there
       input.setAttribute("aria-expanded", "true");
-      placeOpenCombo = place;
-      place();
       setActive(-1);
     }
     function hide() {
       if (isOpen()) box.hidePopover();
       input.setAttribute("aria-expanded", "false");
       input.removeAttribute("aria-activedescendant");
-      if (placeOpenCombo === place) placeOpenCombo = null;
     }
     function setActive(i) {
       active = i;
@@ -565,17 +561,6 @@
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       hide();
-    }
-    // Below the input, or above it when there is little room below.
-    function place() {
-      var r = input.getBoundingClientRect();
-      var below = window.innerHeight - r.bottom;
-      var up = below < 160 && r.top > below;
-      box.style.left = r.left + "px";
-      box.style.width = r.width + "px";
-      box.style.top = up ? "auto" : r.bottom + 4 + "px";
-      box.style.bottom = up ? window.innerHeight - r.top + 4 + "px" : "auto";
-      box.style.maxHeight = Math.min(256, (up ? r.top : below) - 12) + "px";
     }
 
     input.addEventListener("input", function () { show(input.value); });
@@ -607,8 +592,6 @@
       show("");
     });
   }
-  window.addEventListener("resize", function () { if (placeOpenCombo) placeOpenCombo(); });
-  document.addEventListener("scroll", function () { if (placeOpenCombo) placeOpenCombo(); }, true);
 
   // ---- Clipboard ----------------------------------------------------------
   // navigator.clipboard only exists on HTTPS or localhost, so fall back to
@@ -679,19 +662,14 @@
   // ---- Hints --------------------------------------------------------------
   // A "?" opens its hint, a popover="hint" (the tip partial): Esc and a
   // click elsewhere close it on their own. Hover and keyboard focus show it
-  // for as long as they last; a click or tap keeps it open. The hint sits
-  // just under its "?", placed here: Firefox has no anchor positioning.
-  function placeTip(tip, btn) {
-    var r = btn.getBoundingClientRect();
-    tip.style.top = Math.round(r.bottom + 6) + "px";
-    tip.style.left = Math.round(Math.max(8, Math.min(r.left - 4, window.innerWidth - tip.offsetWidth - 8))) + "px";
-  }
+  // for as long as they last; a click or tap keeps it open. Opened with its
+  // "?" as the source, app.css anchors it under it. (interestfor would do
+  // the hover too; Firefox doesn't have it yet.)
   function tipOf(btn) { return document.getElementById(btn.getAttribute("popovertarget")); }
   function showTip(btn) {
     var tip = tipOf(btn);
     if (!tip || tip.matches(":popover-open")) return;
-    tip.showPopover();
-    placeTip(tip, btn);
+    tip.showPopover({ source: btn });
   }
   function hideTip(btn) {
     var tip = tipOf(btn);
@@ -727,13 +705,6 @@
   document.addEventListener("focusout", function (e) {
     if (e.target.matches && e.target.matches(".tip-btn")) hideTip(e.target);
   });
-  // An open hint follows its "?" when the page scrolls.
-  window.addEventListener("scroll", function () {
-    document.querySelectorAll(".tip-text:popover-open").forEach(function (tip) {
-      var btn = document.querySelector('.tip-btn[popovertarget="' + tip.id + '"]');
-      if (btn) placeTip(tip, btn);
-    });
-  }, { passive: true, capture: true });
 
   // ---- Tabs ---------------------------------------------------------------
   function selectTab(tab) {

@@ -593,6 +593,8 @@
       appearance: none; width: 100%; height: 22px; margin: 0; border-radius: 99px; cursor: pointer;
       border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
     }
+    /* The same 20px knob in both: Firefox's thumb adds its border outside
+       its width, Chrome's inside. */
     & input::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text); box-shadow: var(--lift); }
     & input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text); box-shadow: var(--lift); }
     & input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -642,8 +644,12 @@
   .tip:has(.tip-text:popover-open) .tip-btn { color: var(--accent-strong); }
   /* The hint: a popover in the top layer (no card clips it), placed under
      its "?" by app.js. The browser hides it while closed: no display here. */
+  /* Anchored to its "?" (the source app.js opens it with): 6px under it,
+     starting 4px left of it; ending at it when that runs off the screen;
+     else centred under it, kept 8px inside the screen. */
   .tip-text {
-    position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(340px, calc(100vw - 16px));
+    position: fixed; inset: auto; margin: 6px 0 0 -4px; width: max-content; max-width: min(340px, calc(100vw - 16px));
+    position-area: bottom span-right; position-try-fallbacks: --tip-end, --tip-centre;
     padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-pop);
     color: var(--text); font-size: var(--text-sm); font-weight: 500; --lh: 1.5; letter-spacing: 0; text-transform: none;
     transition: opacity .15s, display .15s allow-discrete, overlay .15s allow-discrete;
@@ -717,13 +723,21 @@
      popover so a card's overflow doesn't cut it off. */
   .combo { position: relative; }
   .combo-toggle { position: absolute; inset: 0 0 0 auto; width: 34px; border: 0; padding: 0; background: none; cursor: pointer; }
+  /* Anchored to its input (app.js opens it with it as the source): below
+     it, as wide; above it when the whole list fits there and not below;
+     else below, as tall as the room lets it be. */
   .combo-list {
-    position: fixed; inset: auto; margin: 0; padding: 4px; overflow-y: auto;
+    position: fixed; inset: auto; margin: 4px 0; padding: 4px; overflow-y: auto;
+    position-area: bottom span-right; width: anchor-size(width); max-height: 256px;
+    position-try-fallbacks: flip-block, --combo-below;
     color: var(--text); background: var(--surface);
     border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-pop);
     & li { padding: 7px 10px; border-radius: var(--radius-xs); cursor: pointer; }
     & li:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
   }
+  @position-try --combo-below { position-area: bottom span-right; max-height: calc(100% - 12px); }
+  @position-try --tip-end { position-area: bottom span-left; margin: 6px -4px 0 0; }
+  @position-try --tip-centre { position-area: bottom span-all; justify-self: anchor-center; margin: 6px 8px 0; }
 
   .form-actions {
     display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; align-items: center;

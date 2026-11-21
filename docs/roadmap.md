@@ -45,7 +45,8 @@ Notes saved before 16 November 2026 read "Short for GreyJoy: Air Filter"; new on
 
 The November 2026 redesign targets Baseline 2025 in current Chrome and Firefox ([AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform)) and uses HTML and CSS before JavaScript. A few things stayed in `app.js` or as they were, waiting on a browser or on a better design:
 
-- **Hints that open on hover without a script.** `interestfor` (a popover shown while its button is hovered or focused) would replace the hints' hover code, and CSS anchor positioning their placement; until both are in Chrome and Firefox, `app.js` does these few lines.
+- **Hints that open on hover without a script.** `interestfor` (a popover shown while its button is hovered or focused) would replace the hints' hover code; until Firefox has it (Chrome does), `app.js` does these few lines. (Their placement is CSS anchor positioning already.)
+- **The Switch tray's grey from CSS alone.** The tray could be anchored under the Working on bar, but its `::backdrop` (the grey, which starts at the bar) can't be, so `app.js` measures the bar when the tray opens (`--switch-top`).
 - **Toasts as popovers.** A `popover="manual"` toast would sit in the top layer above the sheets, but a live region that is shown rather than changed isn't announced reliably by screen readers. They stay a plain `role="status"` box.
 - **Focus on the first error from the server.** An `autofocus` on the first invalid field would need every form's handler to know its field order; two lines of `app.js` do it now.
 - **Capitals trimmed with `text-box`.** `text-box: trim-both cap alphabetic` (in Chrome and Firefox) would centre text in its box at any font size, but its boxes are a fraction of a pixel tall (.735em), which the whole-pixel rule forbids. The type scale uses the sizes both browsers centre instead ([design.md](design.md#text-centred-in-its-box)).

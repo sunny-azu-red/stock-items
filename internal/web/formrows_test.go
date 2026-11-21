@@ -50,6 +50,13 @@ func TestRepeatingListsEndWithOneEmptyRow(t *testing.T) {
 		"part_item": {itoa(oil), ""}, "part_qty": {"50 ml", ""},
 	})
 	expect(t, bad, http.StatusUnprocessableEntity)
+	// The same for an item (no name), whose empty SKU row once came back
+	// along with the new one: a row more after every failed save.
+	badItem := a.post("/items", url.Values{
+		"unit": {"piece"}, "quantity": {"1"},
+		"sku_code": {"C3", ""}, "sku_kind": {"oem", "oem"}, "sku_brand": {"", ""}, "sku_pack": {"", ""}, "sku_pack_unit": {"pcs", "pcs"},
+	})
+	expect(t, badItem, http.StatusUnprocessableEntity)
 
 	for _, tc := range []struct {
 		name  string
@@ -66,6 +73,7 @@ func TestRepeatingListsEndWithOneEmptyRow(t *testing.T) {
 		{"new service from a kit", func() string { return a.get("/services/new?kit=" + kit[len("/kits/"):]).Body.String() }, "part_qty", 3},
 		{"edit service", func() string { return a.get(svc + "/edit").Body.String() }, "part_qty", 2},
 		{"service sent back", func() string { return bad.Body.String() }, "part_qty", 2},
+		{"item sent back", func() string { return badItem.Body.String() }, "sku_code", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rows, empty := listRows(tc.rec(), tc.field)

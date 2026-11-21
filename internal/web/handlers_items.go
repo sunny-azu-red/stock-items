@@ -162,6 +162,9 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 	var kept []bool // whether Normalize keeps row i, to map errors back
 	for i := range codes {
 		row := skuRow{Code: at(codes, i), Kind: at(kinds, i), Brand: at(brands, i), Pack: at(packs, i), PackUnit: at(packUnits, i)}
+		if strings.TrimSpace(row.Code) == "" && strings.TrimSpace(row.Brand) == "" && strings.TrimSpace(row.Pack) == "" {
+			continue // empty row: its type and unit are a select's default, not typed
+		}
 		sku := stock.SKU{Code: row.Code, Kind: stock.SKUKind(row.Kind), Brand: row.Brand}
 		if p, err := parseOptAmount(row.Pack, unit, row.PackUnit); err != nil {
 			row.Error = "Pack size: " + err.Error()

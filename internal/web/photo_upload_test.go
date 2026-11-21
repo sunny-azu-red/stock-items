@@ -101,3 +101,24 @@ func TestRefusedPhotoUploadsReadNothing(t *testing.T) {
 	}
 	expect(t, a.get(filter+"/photo"), http.StatusNotFound)
 }
+
+// The photo opens larger in a dialog on the item page, never in a new tab;
+// an item without a photo has no dialog.
+func TestPhotoOpensInADialog(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	ctx := context.Background()
+	oil, pads := itemID(t, a.store, "Silkolene"), itemID(t, a.store, "Brake Pads")
+	if _, err := a.store.SetPhoto(ctx, oil, "image/jpeg", []byte("full"), []byte("thumb")); err != nil {
+		t.Fatal(err)
+	}
+
+	page := a.get(itemPath(oil))
+	expect(t, page, http.StatusOK,
+		`<button class="photo-open" type="button" commandfor="photo-view" command="show-modal"`,
+		`<dialog class="lightbox" id="photo-view" closedby="any"`,
+		`commandfor="photo-view" command="close"`)
+	expectNot(t, page, `href="`+itemPath(oil)+`/photo"`, `target="_blank" rel="noopener noreferrer"><img`)
+
+	expectNot(t, a.get(itemPath(pads)), `id="photo-view"`, `class="photo-open"`)
+}

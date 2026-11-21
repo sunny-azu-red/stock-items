@@ -1159,10 +1159,16 @@
   .photo {
     height: round(78cqw, 2px); background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden;
     display: grid; place-items: center; color: var(--muted);
-    &:has(> a) { grid-template: 100% / 100%; }
-    & > a, & img { width: 100%; height: 100%; }
+    &:has(> button) { grid-template: 100% / 100%; }
+    & > button, & img { width: 100%; height: 100%; }
     & img { object-fit: cover; }
     & .icon { width: 36px; height: 36px; }
+  }
+  /* The photo opens itself larger (the .lightbox dialog); its ring sits
+     inside, as .photo clips what is outside. */
+  .photo-open {
+    display: block; padding: 0; border: 0; background: none; cursor: zoom-in;
+    &:focus-visible { outline-offset: -2px; }
   }
   .big-qty {
     font-size: 2.125rem; font-weight: 650; letter-spacing: -.03em; --lh: 1.1;
@@ -1198,20 +1204,30 @@
   }
   .welcome ol { margin: 8px 0 0; padding-left: var(--inset); display: grid; gap: 6px; }
 
-  /* ---- Dialogs (confirm-dialog) ------------------------------------- */
+  /* ---- Dialogs (confirm-dialog, the photo's lightbox) --------------- */
   /* A modal <dialog>: centred, a panel lifted off a grey page, fading and
      growing in (and out, in Chrome). The page behind doesn't scroll. */
-  .confirm {
-    width: min(420px, calc(100vw - 2 * var(--page))); padding: 20px; margin: auto;
+  :is(.confirm, .lightbox) {
+    margin: auto;
     color: var(--text); background: var(--surface); border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow-pop);
     opacity: 0; scale: .96;
     transition: opacity .2s, scale .2s cubic-bezier(.2, .8, .2, 1), display .2s allow-discrete, overlay .2s allow-discrete;
     &[open] { opacity: 1; scale: 1; @starting-style { opacity: 0; scale: .96; } }
     &::backdrop { background: var(--scrim); opacity: 0; transition: opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete; }
     &[open]::backdrop { opacity: 1; @starting-style { opacity: 0; } }
+  }
+  .confirm {
+    width: min(420px, calc(100vw - 2 * var(--page))); padding: 20px;
     & h2 { margin-bottom: 8px; }
     & p { color: var(--muted); }
     & .form-actions { margin-top: 18px; }
+  }
+  /* The photo, as large as the window allows (never past its 1600px),
+     Close in its corner. */
+  .lightbox {
+    padding: 0; overflow: hidden; max-width: none; max-height: none;
+    & img { display: block; width: auto; height: auto; max-width: calc(100vw - 2 * var(--page)); max-height: calc(100dvh - 2 * var(--page)); object-fit: contain; }
+    & .icon-btn { position: absolute; top: 8px; right: 8px; background: var(--surface); border-color: var(--border); }
   }
   :root:has(dialog:modal) { overflow: hidden; }
 

@@ -296,7 +296,7 @@ Everything else is a plain label (`{{template "chip" …}}`, `<span class="badge
 * Status and state badges (due, parts ready/missing, stock, expiry, archived). The exception is **On shopping list**, on the item page and on a kit's parts card, which links to `/shopping` (a plain label while a vehicle is worked on and the entry is on another vehicle's part of the list).
 * Anything on a form. A link there would leave what was typed; Cancel goes back.
 
-Only links that leave the app open a new tab (`target="_blank" rel="noopener noreferrer"`): SKU searches and the full-size photo. A form's hint may open a new tab when its point is to keep the form (the kit form's "add the item"). A chip or badge never does.
+Only links that leave the app open a new tab (`target="_blank" rel="noopener noreferrer"`): SKU searches. The item's photo opens larger in a modal `<dialog>` on the page (`.lightbox`, opened with `command="show-modal"`; Close, Esc, Back or a tap outside closes it), never in a tab. A form's hint may open a new tab when its point is to keep the form (the kit form's "add the item"). A chip or badge never does.
 
 ---
 

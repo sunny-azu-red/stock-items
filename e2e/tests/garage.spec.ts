@@ -1222,6 +1222,44 @@ test("a large photo is shrunk in the browser, and the server shrinks an original
   expect(imageSize(await photo.body())).toEqual({ type: "jpeg", w: 1600, h: 1200 });
 });
 
+test("the photo opens larger on the page, and Close, Esc or a tap outside closes it", async ({ page, context }) => {
+  await page.goto("/stock");
+  await page.locator(".item-row a.item-name").filter({ hasText: "Hiflofiltro" }).click();
+  const item = page.url();
+  const open = page.getByRole("button", { name: "Show the photo larger" });
+  const viewer = page.locator("dialog#photo-view");
+  await expect(viewer).toBeHidden();
+
+  // Close: the photo fills the window (within the page's margin), focus is back on the photo.
+  await open.click();
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("img")).toHaveJSProperty("complete", true);
+  const shown = (await viewer.boundingBox())!;
+  const win = page.viewportSize()!;
+  expect(Math.max(shown.width / win.width, shown.height / win.height)).toBeGreaterThan(.8);
+  expect(shown.width).toBeLessThanOrEqual(win.width);
+  expect(shown.height).toBeLessThanOrEqual(win.height);
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(viewer).toBeHidden();
+  await expect(open).toBeFocused();
+
+  // Esc.
+  await open.click();
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+
+  // A tap outside it (the photo is 4:3, so the top-left corner is outside on any of the projects).
+  await open.click();
+  await expect(viewer).toBeVisible();
+  await page.mouse.click(2, 2);
+  await expect(viewer).toBeHidden();
+
+  // All on the same page: no new tab, no navigation.
+  expect(context.pages()).toHaveLength(1);
+  expect(page.url()).toBe(item);
+});
+
 test("no page scrolls sideways", async ({ page }) => {
   const paths = ["/", "/stock", "/stock?view=list", "/stock?sort=expiry&dir=desc", "/activity?sort=price", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new"];
   // Also every detail page linked from the stock list and vehicles.

@@ -17,6 +17,7 @@ func TestVocabulary(t *testing.T) {
 		use     string
 		uiOnly  bool   // templates only (not Go, JavaScript or docs)
 		allowIn string // a file where it is right
+		unless  string // a match that contains it is right
 	}{
 		{re: `\b[Oo]n stock\b`, use: `"in stock"`},
 		{re: `in stock: \{\{|"in stock: "`, use: `the stock badge ({{template "stock-badge"}}): "3 pcs in stock"`},
@@ -44,7 +45,8 @@ func TestVocabulary(t *testing.T) {
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},
 		{re: `data-confirm`, use: `the "confirm-dialog" partial (a <dialog> opened with commandfor)`, uiOnly: true},
-		{re: `command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html"},
+		// Asking first; the photo's viewer (item_show.html) asks nothing.
+		{re: `<button[^>]*command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html", unless: `commandfor="photo-view"`},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},
 		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}
@@ -89,6 +91,9 @@ func TestVocabulary(t *testing.T) {
 			for _, loc := range re.FindAllStringIndex(text, -1) {
 				if strings.HasPrefix(text[loc[0]:], "Counted in") {
 					continue // the item form's unit label
+				}
+				if r.unless != "" && strings.Contains(text[loc[0]:loc[1]], r.unless) {
+					continue
 				}
 				line := strings.Count(text[:loc[0]], "\n") + 1
 				t.Errorf("%s:%d: %q: write %s", f, line, text[loc[0]:loc[1]], r.use)

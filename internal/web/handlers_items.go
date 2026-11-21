@@ -731,7 +731,6 @@ func (s *Server) itemMovement(w http.ResponseWriter, r *http.Request) error {
 		Note: formText(r, "note"), ExpiresOn: formText(r, "expires_on"), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	// Also under its old name: a page opened before the kinds were renamed.
 	kind, _ := stock.ParseMovementKind(f.Kind)
 	in := stock.MovementInput{ItemID: id, Kind: kind, Note: f.Note, FormKey: f.FormKey}
 	f.Kind = string(kind)

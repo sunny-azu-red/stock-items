@@ -100,7 +100,7 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 // was opened, as it was posted, saying where the change went. The page no
 // longer knows the change, so it goes by what the form said it was.
 func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int64) error {
-	kind, _ := stock.ParseMovementKind(formText(r, "kind")) // also a form opened before the kinds were renamed
+	kind, _ := stock.ParseMovementKind(formText(r, "kind"))
 	m := stock.Movement{ID: id, Kind: kind}
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		m.ItemID = *id

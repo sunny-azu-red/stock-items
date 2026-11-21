@@ -40,7 +40,7 @@ func TestCheck(t *testing.T) {
 		{"script", func(c *Config) { c.SKUSearchURL = "javascript:alert(1)//" }, false},
 		{"placeholder in the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q={q}&lang=de" }, true},
 		{"placeholder in the path", func(c *Config) { c.SKUSearchURL = "https://parts.example.com/find/{q}" }, true},
-		{"the old form, ending in =", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search?q=" }, false},
+		{"ending in =", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search?q=" }, false},
 		{"no {q}", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search" }, false},
 		{"value after the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q=&lang=de" }, false},
 		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
@@ -59,11 +59,11 @@ func TestCheck(t *testing.T) {
 		}
 	}
 
-	// A URL in the old form gets the fixed value suggested.
+	// A URL ending in "=" gets the fixed value suggested.
 	c := good
 	c.SKUSearchURL = "https://www.google.com/search?q="
 	if err := c.check(); err == nil || !strings.Contains(err.Error(), "add it: https://www.google.com/search?q={q}") {
-		t.Errorf("old form: %v, want the fix suggested", err)
+		t.Errorf("ending in =: %v, want the fix suggested", err)
 	}
 }
 

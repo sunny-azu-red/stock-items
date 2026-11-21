@@ -246,8 +246,7 @@ func (p activityPage) PageQuery(n int) string {
 
 var activityKinds = []stock.MovementKind{stock.MoveBought, stock.MoveUsed, stock.MoveService, stock.MoveAdjusted, stock.MoveStarting}
 
-// activityKind reads the ?kind= filter, ignoring unknown kinds. Old names
-// (a bookmarked ?kind=purchase) still work.
+// activityKind reads the ?kind= filter, ignoring unknown kinds.
 func activityKind(r *http.Request) stock.MovementKind {
 	kind, _ := stock.ParseMovementKind(r.URL.Query().Get("kind"))
 	return kind

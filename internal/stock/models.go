@@ -396,21 +396,11 @@ const (
 // MovementKinds lists every kind of stock change.
 var MovementKinds = []MovementKind{MoveStarting, MoveBought, MoveUsed, MoveAdjusted, MoveService}
 
-// legacyKinds maps the values stored before the kinds were renamed
-// (2026-11-09) to today's, for links bookmarked and pages opened before
-// it (?kind=purchase, the item page's hidden kind field).
-var legacyKinds = map[string]MovementKind{
-	"initial": MoveStarting, "purchase": MoveBought, "use": MoveUsed, "correction": MoveAdjusted,
-}
-
-// ParseMovementKind reads a kind of stock change from a form or a link,
-// also under its old name. ok is false for anything else.
+// ParseMovementKind reads a kind of stock change from a form or a link.
+// ok is false for anything else.
 func ParseMovementKind(s string) (MovementKind, bool) {
 	k := MovementKind(strings.TrimSpace(s))
 	if slices.Contains(MovementKinds, k) {
-		return k, true
-	}
-	if k, ok := legacyKinds[string(k)]; ok {
 		return k, true
 	}
 	return "", false

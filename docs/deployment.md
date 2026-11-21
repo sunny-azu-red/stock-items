@@ -134,9 +134,7 @@ Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=s
 
 New migrations are applied automatically on start; to apply them separately, run `pitbox -migrate-only`. With systemd, stop the service, replace the binary and start it again. With Docker, see [Portainer](#portainer).
 
-**`APP_SKU_SEARCH_URL` now needs `{q}`.** Older versions appended the part number to a URL ending in `=`; this one puts it in place of `{q}` and refuses to start without one. If you set it (in `.env` or the stack's variables), add `{q}` at the end, e.g. `APP_SKU_SEARCH_URL=https://www.google.com/search?q={q}`. The start-up error says the same. Left unset, the new default already has it.
-
-**One migration (2026-11-21, `a756c20`).** All migrations are squashed into `00001_init.sql`, and goose has only version 1 in `public` and `dev`; new ones start at 00002. **Never start an image from before `a756c20`:** it sees only version 1 applied and runs its old migrations 00002–00022 again on the existing tables, each in its own transaction, so the ones before the first failure stay applied. To go back to such an image, restore the backup taken before the move (`stock_items-public-20261121-122205.dump` in the sync backups) with it.
+**One migration.** All migrations are in `00001_init.sql` (goose version 1); new ones start at 00002. **Never start an image from before `a756c20`:** it would run its old migrations 00002–00022 again on the existing tables, and those before the first failure would stay applied. To go back to such an image, restore the backup taken before the move (`stock_items-public-20261121-122205.dump` in the sync backups) with it.
 
 ## Health check
 

@@ -106,8 +106,8 @@ func schemaShape(t *testing.T, pool *pgxpool.Pool) string {
 	return shape
 }
 
-// The six tables' column order before 2026-11-11, when they were rebuilt in
-// today's: a rebuild into it and back moves every column of each.
+// Another column order for six tables, one that moves every column of
+// each: a rebuild into it and back must keep everything.
 var oldOrder = []struct {
 	table string
 	cols  []string

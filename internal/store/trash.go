@@ -524,16 +524,14 @@ func (s *Store) RestoreTrash(ctx context.Context, id int64) (Restored, error) {
 	return out, err
 }
 
-// amountColumns are the snapshot columns holding amounts: numeric(12,2)
-// since 2026-10-31.
+// amountColumns are the snapshot columns holding amounts: numeric(12,2).
 var amountColumns = []string{"quantity", "min_quantity", "delta", "pack_size"}
 
 // checkSnapshotAmounts refuses a snapshot holding an amount finer than
 // 0.01, or fractional pieces. Restoring casts the numbers into the
 // columns' type, which would round it, and the stock is moved by the
-// unrounded delta: the ledger could stop adding up. The move to two
-// decimals (2026-10-31) made sure no snapshot holds one, and snapshots
-// since come from two-decimal columns; this keeps it so. Each amount is
+// unrounded delta: the ledger could stop adding up. Snapshots come from
+// two-decimal columns, so only one edited by hand holds one. Each amount is
 // checked in its item's unit: the snapshot's own item, else the item as
 // it is now (its unit can't change while amounts of it are in the trash),
 // else the entry's unit.

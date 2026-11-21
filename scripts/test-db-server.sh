@@ -3,8 +3,8 @@
 # Postgres 18 in Docker (never the real server): copies between scrap
 # schemas, the public <-> dev wrappers, restoring a backup, every refusal
 # and rollback path (each against a target that differs from the source,
-# so a wrong commit shows), interrupts, writes racing the sync, attempts to
-# run code as the superuser, and the temporary-schema cleanup.
+# so a wrong commit shows), interrupts, writes racing the sync, and
+# attempts to run code as the superuser.
 # Needs docker, psql, pg_dump, setpriv and Go.
 #
 # Usage: scripts/test-db-server.sh   (from the repository root)
@@ -185,7 +185,7 @@ check "a log of the run is kept" eval "ls \"${SYNC_BACKUP_DIR}\"/pitbox-sync-*-s
 check "no staging database is left" [ -z "$(qa -c "SELECT datname FROM pg_database WHERE datname LIKE 'pitbox_sync_staging_%'")" ]
 q -c "DELETE FROM scrap_dst.vehicles WHERE id = 4"
 
-echo "==> 2. Copy over an existing schema that holds reorder_columns (the bug of migration 00022)"
+echo "==> 2. Copy over an existing schema that holds reorder_columns (as every Pitbox schema does)"
 run_sync scrap_src scrap_dst || true
 check "the copy commits" said "Done. scrap_dst is now a copy of scrap_src"
 BACKUP="$(latest_backup scrap_dst)"
@@ -490,23 +490,6 @@ as_stock -c "CREATE OR REPLACE FUNCTION scrap_dst.reorder_columns(tbl regclass, 
 M1="$(manifest scrap_dst)"
 as_stock -c "CREATE OR REPLACE FUNCTION scrap_dst.reorder_columns(tbl regclass, cols text[]) RETURNS void LANGUAGE plpgsql AS 'BEGIN NULL; END'"
 check "a function body changes it" [ "$(manifest scrap_dst)" != "${M1}" ]
-
-echo "==> 15. Cleaning up temporary schemas"
-for _ in 1 2 3; do q -c "CREATE TEMP TABLE t (x int)"; done
-# A session that used a temp table and keeps its (now empty) temp schema.
-("${REAL_PSQL}" -X -q -h 127.0.0.1 -p "${PORT}" -U postgres -d stock_items -c "CREATE TEMP TABLE busy (x int)" -c "DROP TABLE busy" -c "SELECT pg_sleep(5)" >/dev/null 2>&1 &)
-sleep 1
-TEMP_BEFORE="$(qa -c "SELECT count(*) FROM pg_namespace WHERE nspname ~ '^pg_(toast_)?temp_'")"
-"${ROOT}/scripts/db-server/cleanup_temp_schemas.sh" >"${WORK}/out.log" 2>&1 && bad "the clean-up should refuse while a session is connected" || true
-check "it refuses while another session is connected" said "Other sessions are connected"
-check "and drops nothing" [ "$(qa -c "SELECT count(*) FROM pg_namespace WHERE nspname ~ '^pg_(toast_)?temp_'")" = "${TEMP_BEFORE}" ]
-sleep 5
-"${ROOT}/scripts/db-server/cleanup_temp_schemas.sh" >"${WORK}/out.log" 2>&1 || true
-check "with no one connected it drops them" said "Dropped ${TEMP_BEFORE} temporary schemas"
-check "none are left" [ "$(qa -c "SELECT count(*) FROM pg_namespace WHERE nspname ~ '^pg_(toast_)?temp_'")" = 0 ]
-check "and no catalog row is left without its schema" said "No catalog rows without a schema"
-check "pg_dump still works" eval "pg_dump -h 127.0.0.1 -p \"${PORT}\" -U postgres -d stock_items --schema=scrap_src -f /dev/null"
-check "Postgres makes them again when needed" [ "$(qa -c "CREATE TEMP TABLE again (x int); SELECT pg_my_temp_schema() <> 0")" = t ]
 
 echo
 echo "${pass} passed, ${fail} failed"

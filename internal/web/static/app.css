@@ -646,12 +646,12 @@
      it when that runs off the screen; else centred under it, kept 8px
      inside the screen. Washed in the accent, like its open "?", with a
      faint accent edge: in the card's own surface it ran into the fields
-     it covers. */
+     it covers. The tint sets it apart, so it has no shadow. */
   .tip-text {
     position: fixed; inset: auto; margin: 6px 0 0 -4px; width: max-content; max-width: min(340px, calc(100vw - 16px));
     position-area: bottom span-right; position-try-fallbacks: --tip-end, --tip-centre;
     padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); border-radius: var(--radius);
-    background: color-mix(in oklab, var(--accent-soft) 75%, var(--surface)); box-shadow: var(--shadow-pop);
+    background: color-mix(in oklab, var(--accent-soft) 75%, var(--surface));
     color: var(--text); font-size: var(--text-sm); font-weight: 500; --lh: 1.5; letter-spacing: 0; text-transform: none;
     transition: opacity .15s, display .15s allow-discrete, overlay .15s allow-discrete;
     &:popover-open { @starting-style { opacity: 0; } }

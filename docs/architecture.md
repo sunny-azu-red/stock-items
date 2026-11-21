@@ -39,7 +39,7 @@ browser ──HTTP──▶ internal/web ──▶ internal/store ──SQL─�
 
 ## Static files
 
-`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx and the Manrope font (Inter as its fallback) are vendored in `static/vendor` (`app.css` asks for the fonts with a fixed `?v=`, so they are cached the same way), and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
+`internal/web/static` is embedded. URLs carry a content hash (`/static/app.css?v=…`) and are served with `Cache-Control: immutable`. htmx and the Manrope font are vendored in `static/vendor` (`app.css` asks for the fonts with a fixed `?v=`, so they are cached the same way), and the Lucide icons are an inline sprite in `templates/partials/icons.html`, so the app needs no internet access.
 
 - **`app.css`** is one file in cascade layers (`reset, tokens, base, shell, components, pages, utilities`), one nested block per component. Colours are `light-dark()` tokens; the accent comes from a hue and an intensity the device picks in Appearance (the `accent` cookie, `theme.go`, rendered as custom properties on `<html>`). Components respond to their own width with container queries; only the phone's shell (tab bar, sheets, the sticky Working on bar) follows the window. The rules are in [design.md](design.md).
 - **`app.js`** is what HTML and CSS can't do on their own: repeating form rows, unit pickers and stock badges, suggestion lists, photo shrinking, the clipboard, toasts, tabs, the Appearance panel without a reload, the double-submit guard and keyboard shortcuts. The server never relies on it.

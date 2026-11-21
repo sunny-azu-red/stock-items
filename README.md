@@ -100,4 +100,4 @@ The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the c
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC). Includes [htmx](https://htmx.org) (Zero-Clause BSD) and the [Manrope](https://github.com/googlefonts/manrope) and [Inter](https://rsms.me/inter/) typefaces (SIL Open Font License).
+MIT. See [LICENSE](LICENSE). Icons from [Lucide](https://lucide.dev) (ISC). Includes [htmx](https://htmx.org) (Zero-Clause BSD) and the [Manrope](https://github.com/googlefonts/manrope) typeface (SIL Open Font License).

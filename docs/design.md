@@ -50,7 +50,7 @@ Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `
 
 ## 3. Type
 
-* **Manrope** (vendored, SIL OFL; Inter is its fallback), with tabular figures everywhere, so numbers line up in columns and don't shift. `word-spacing: .05em` on the body: Manrope's own space ran "13 items" together at small sizes.
+* **Manrope** (vendored, SIL OFL; the system's sans-serif stands in for a letter it lacks), with tabular figures everywhere, so numbers line up in columns and don't shift. `word-spacing: .05em` on the body: Manrope's own space ran "13 items" together at small sizes.
 * **Sizes are in rem**, so the browser's text size setting scales them; lengths stay in px (§5).
 
 | Token | Size | For |

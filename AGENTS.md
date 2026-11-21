@@ -34,6 +34,7 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 | All checks (fmt, tidy, vet, lint, tests with -race and coverage) | `scripts/check.sh` |
 | Unit tests only (no DB needed) | `go test ./internal/stock/` |
 | E2E tests (Chrome: 2K screen, laptop window, phone) | `cd e2e && npx playwright test` |
+| E2E on one screen, while iterating | `cd e2e && npx playwright test --project=laptop` |
 | Web platform guidance (CSS, HTML, browser JS) | `npx -y modern-web-guidance@latest search "<query>"`, then `retrieve "<id>"` |
 | Docker image | `docker build -t pitbox .` |
 | Screenshots (docs/screenshots, README) | `scripts/screenshots.sh` ([docs/development.md](docs/development.md#screenshots)) |
@@ -88,7 +89,13 @@ Go lives at `~/.local/go/bin` on the dev machine. Prefix commands with `PATH=$HO
 - **Spacing comes from the scale** ([docs/design.md](docs/design.md#5-spacing)): `--gap` (12px) between cards, sections, tiles and columns; `--inset` (16px, 14px on a phone) inside a card, left and right, for every part of it (heads, rows, forms, tables' outer cells); `--page` around the page (20px on desktop, all four sides, the content filling the width; 14px on a phone); on a wide window lists and tables fill it, while a page that is a form stops at `--form-width` (`page-form`) and a side column at 480px (`.split`); heading bars one height (45px). Never a new number for one of these, and no margin under the last child of a page or card. The e2e test "every page's spacing follows the scale" checks every page in every e2e project.
 - Tests live next to the code (`_test.go`, one file per feature), the Go convention; there is no separate test directory. New HTTP tests go in the feature's file in `internal/web`; a new kind of trash entry gets a case in `trash_matrix_test.go`.
 - Every green push to `master` becomes `latest`, which Portainer re-pulls, and starting it applies new migrations to the real data. So CI must stay strict: never weaken or skip a check to get an image out.
-- Run `scripts/check.sh` (and the e2e tests for UI changes) before committing. Make sure `gofmt -l .` prints nothing and golangci-lint ([`.golangci.yml`](.golangci.yml)) is clean; a `//nolint` needs a reason.
+- **Run the checks the change needs before committing**, not more. CI runs every check again on each push and `latest` is built only from a green run, so a local run is for catching it early:
+  - **CSS, templates or `app.js` only:** `go test ./internal/web/` (it parses the templates; `TestVocabulary`) and the e2e tests.
+  - **Go code:** `scripts/check.sh`, and the e2e tests if a page changes. Make sure `gofmt -l .` prints nothing and golangci-lint ([`.golangci.yml`](.golangci.yml)) is clean; a `//nolint` needs a reason.
+  - **Locks or transactions in `internal/store`:** also the lock tests as CI runs them (`-race -count=5`, in `.github/workflows/ci.yml`).
+  - **Docs only:** nothing.
+  - **Run them at once, in the background:** the Go tests (`test_*` schemas) and the e2e tests (`e2e_*`) don't share a schema, so they can run side by side.
+  - **e2e while iterating: one screen** (`--project=laptop`); all three projects once, before committing. A single test can't run on its own (`-g`): each test starts from the data the earlier ones left, so run the whole project.
 
 ## Style
 

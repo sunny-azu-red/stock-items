@@ -132,4 +132,4 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 ## Commits
 
 - Small, focused commits. The subject has a type prefix (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `style:`, `ci:`, `chore:`) and says in plain words what changed ("fix: plain Save service and Delete buttons"); the body says why.
-- Run `scripts/check.sh` (and the e2e tests for UI changes) before committing.
+- Run the checks the change needs before committing: [AGENTS.md](../AGENTS.md) says which (CSS and templates: the web tests and e2e; Go: `scripts/check.sh`). CI runs all of them on every push.

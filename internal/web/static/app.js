@@ -1,9 +1,9 @@
-// Pitbox — the behaviour HTML and CSS can't give on their own (Baseline
-// 2025; see AGENTS.md): repeating form rows, unit pickers and stock badges,
-// suggestion dropdowns, photo shrinking, clipboard, toasts, the "?" hints'
-// hover, tabs, the Appearance panel without a reload, the
-// double-submit guard and keyboard shortcuts. Dialogs, popovers and the
-// kit form's intermediate schedule need none of it. JavaScript is assumed
+// Pitbox — the behaviour HTML and CSS can't give on their own (current
+// Chrome; see AGENTS.md): repeating form rows, unit pickers and stock
+// badges, suggestion dropdowns, photo shrinking, clipboard, toasts, tabs,
+// the Appearance panel without a reload, the double-submit guard and
+// keyboard shortcuts. Dialogs, popovers, the "?" hints and the kit form's
+// intermediate schedule need none of it. JavaScript is assumed
 // (docs/conventions.md); the server never relies on what it did.
 (function () {
   "use strict";
@@ -619,8 +619,8 @@
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-copy-url]");
     if (!btn) return;
-    // Ctrl/Cmd/Shift-click or a middle click (which Firefox reports to the
-    // document as a click) opens the text, as on any link.
+    // Ctrl/Cmd/Shift-click or a middle click opens the text, as on any
+    // link.
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     var url = btn.getAttribute("data-copy-url");
@@ -657,53 +657,6 @@
     extra.forEach(function (s) { s.hidden = false; });
     more.remove();
     if (extra.length) extra[0].focus();
-  });
-
-  // ---- Hints --------------------------------------------------------------
-  // A "?" opens its hint, a popover="hint" (the tip partial): Esc and a
-  // click elsewhere close it on their own. Hover and keyboard focus show it
-  // for as long as they last; a click or tap keeps it open. Opened with its
-  // "?" as the source, app.css anchors it under it. (interestfor would do
-  // the hover too; Firefox doesn't have it yet.)
-  function tipOf(btn) { return document.getElementById(btn.getAttribute("popovertarget")); }
-  function showTip(btn) {
-    var tip = tipOf(btn);
-    if (!tip || tip.matches(":popover-open")) return;
-    tip.showPopover({ source: btn });
-  }
-  function hideTip(btn) {
-    var tip = tipOf(btn);
-    if (tip && tip.matches(":popover-open") && !tip.dataset.pinned) tip.hidePopover();
-  }
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest(".tip-btn");
-    if (!btn) return;
-    var tip = tipOf(btn);
-    if (!tip) return;
-    e.preventDefault(); // the popover is toggled here, pinned or not
-    if (tip.matches(":popover-open") && tip.dataset.pinned) {
-      tip.hidePopover();
-    } else {
-      showTip(btn);
-      tip.dataset.pinned = "1";
-    }
-  });
-  document.addEventListener("toggle", function (e) {
-    if (e.target.classList && e.target.classList.contains("tip-text") && e.newState === "closed") delete e.target.dataset.pinned;
-  }, true);
-  document.addEventListener("mouseover", function (e) {
-    var btn = e.target.closest && e.target.closest(".tip-btn");
-    if (btn && !btn.contains(e.relatedTarget)) showTip(btn);
-  });
-  document.addEventListener("mouseout", function (e) {
-    var btn = e.target.closest && e.target.closest(".tip-btn");
-    if (btn && !btn.contains(e.relatedTarget)) hideTip(btn);
-  });
-  document.addEventListener("focusin", function (e) {
-    if (e.target.matches && e.target.matches(".tip-btn:focus-visible")) showTip(e.target);
-  });
-  document.addEventListener("focusout", function (e) {
-    if (e.target.matches && e.target.matches(".tip-btn")) hideTip(e.target);
   });
 
   // ---- Tabs ---------------------------------------------------------------

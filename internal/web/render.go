@@ -556,8 +556,8 @@ func fieldErr(msg any, id string) map[string]any {
 // invalidAttrs are a form control's aria-invalid and aria-describedby: its
 // error message (see fieldErr) when there is one, then its hints (ids; a
 // false or empty one is left out, so a hint can depend on the form).
-// aria-invalid is always said, "false" too: Firefox treats an empty
-// required field as invalid from the start otherwise.
+// aria-invalid is always said, "false" too, so a required field left empty
+// isn't announced as invalid before the form has been sent.
 func invalidAttrs(msg any, id string, hints ...any) template.HTMLAttr {
 	var ids []string
 	bad := isMessage(msg)

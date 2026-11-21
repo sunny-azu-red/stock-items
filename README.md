@@ -35,7 +35,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
 - **Suggestions as you type:** brands, categories, makes and models, shops and service names you've used before.
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
-- Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome and Firefox, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service).
+- Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service).
 - **Appearance per device:** light, dark or the system's theme, and the accent colour picked from presets or a hue wheel with an intensity slider, remembered on each device.
 
 | Stock grouped by vehicle | Service kit | Vehicles |
@@ -82,7 +82,7 @@ All settings come from environment variables or a `.env` file (real environment 
 
 ```bash
 scripts/check.sh      # gofmt, go mod tidy, vet, lint, unit + integration tests with coverage
-cd e2e && npm ci && npx playwright install chromium firefox && npx playwright test   # end-to-end: Chrome and Firefox, desktop, laptop and phone
+cd e2e && npm ci && npx playwright install chromium && npx playwright test   # end-to-end in Chrome: 2K screen, laptop window, phone
 ```
 
 The integration and e2e tests use throwaway schemas (`test_*`, `e2e_*`) in the configured database and never touch your data. More in [docs/development.md](docs/development.md).

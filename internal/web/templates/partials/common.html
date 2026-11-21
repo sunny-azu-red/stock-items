@@ -11,11 +11,13 @@
 {{/* dict "IDs" []int64 "Vehicles" map[int64]Vehicle, and "Link" true on a stock row: each chip then shows that vehicle's stock */}}
 {{define "vehicle-chips"}}{{$vs := .Vehicles}}{{$link := .Link}}<span class="chips">{{range .IDs}}{{with index $vs .}}{{if $link}}<a class="chip" href="/stock?v={{.ID}}" style="{{chipStyle .Color}}" title="Show {{.Name}} stock"><span class="dot"></span>{{.Name}}</a>{{else}}{{template "chip" .}}{{end}}{{end}}{{else}}{{if $link}}<a class="chip" href="/stock?general=1" title="Show General stock">General</a>{{else}}<span class="chip">General</span>{{end}}{{end}}</span>{{end}}
 
-{{/* A "?" after a field label that shows a hint on hover, focus or tap: dict "ID" string "Text" string,
-   The hint is a popover (popover="hint"): Esc and a click outside close it, and no card clips it.
-   and "For" the field's name, which names the button ("More about Keep at least").
-   Put it in a .label-row next to the label, and point the input's aria-describedby at the ID. */}}
-{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="{{with .For}}More about {{.}}{{else}}Help{{end}}" aria-describedby="{{.ID}}" popovertarget="{{.ID}}">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}" popover="hint">{{.Text}}</span></span>{{end}}
+{{/* A "?" after a field label that shows a hint: dict "ID" string "Text" string, and "For" the
+   field's name, which names the button ("More about Keep at least"). The hint is a popover="hint"
+   in the top layer, so no card clips it. Hovering or focusing the "?" shows it while it lasts
+   (interestfor); a click or tap keeps it open (popovertarget, action show); Esc or a click
+   elsewhere closes it. app.css anchors it under the "?". Put it in a .label-row next to the
+   label, and point the input's aria-describedby at the ID. */}}
+{{define "tip"}}<span class="tip"><button class="tip-btn" type="button" aria-label="{{with .For}}More about {{.}}{{else}}Help{{end}}" aria-describedby="{{.ID}}" interestfor="{{.ID}}" popovertarget="{{.ID}}" popovertargetaction="show">{{icon "circle-question-mark"}}</button><span class="tip-text" role="tooltip" id="{{.ID}}" popover="hint">{{.Text}}</span></span>{{end}}
 
 {{/* A message that belongs to no one field (a list's, a row's). */}}
 {{define "err"}}{{with .}}<p class="field-error">{{.}}</p>{{end}}{{end}}

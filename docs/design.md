@@ -1,6 +1,6 @@
 # Design & UI Conventions
 
-This is the spec for how Pitbox looks and behaves on screen: tokens, components, link styles, layout and alignment. `internal/web/static/app.css` follows it; change this document first, then the CSS. The platform rules (Baseline 2025, native HTML first, the Modern Web Guidance skill) are in [AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform).
+This is the spec for how Pitbox looks and behaves on screen: tokens, components, link styles, layout and alignment. `internal/web/static/app.css` follows it; change this document first, then the CSS. The platform rules (current Chrome, native HTML first, the Modern Web Guidance skill) are in [AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform).
 
 ---
 
@@ -60,22 +60,22 @@ Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `
 | h2, h3 | 1rem | card and section headings |
 | h1 | 1.625rem (1.4375rem on a phone) | the page heading |
 
-Weights: 800 for headings, figures and badges; 700 for names, labels and buttons; 600 for secondary links and nav; 500 for text. Headings balance their lines (`text-wrap: balance`); paragraphs avoid a lone last word where the browser can (`text-wrap: pretty`, Chrome).
+Weights: 800 for headings, figures and badges; 700 for names, labels and buttons; 600 for secondary links and nav; 500 for text. Headings balance their lines (`text-wrap: balance`); paragraphs avoid a lone last word (`text-wrap: pretty`).
 
 ### Text centred in its box
 
-Browsers put the baseline on a whole pixel, and Chrome and Firefox each round their own way (Chrome rounds Manrope's ascent and descent first; Firefox rounds the space above the text to half a pixel). So where Manrope's capitals (.735em tall; ascent 1.066em, descent .300em) land in a line is fixed by the font size, differently in each browser. In a box of even height, only some sizes leave the same space above the capitals as below in both; at the others Firefox, or Chrome, leaves half a pixel or a whole one more on one side, whatever the padding. Measured from the painted pixels in Chromium and Firefox with Manrope, whatever the line height:
+Chrome rounds the font's ascent and descent to whole pixels and puts the baseline on a whole pixel, so where Manrope's capitals (.735em tall; ascent 1.066em, descent .300em) land in a line is fixed by the font size. In a box of even height, only some sizes leave the same space above the capitals as below; the others leave a whole pixel more on one side, whatever the padding. Measured in Chromium with Manrope, whatever the line height:
 
-| Font size | In an even box, in Chrome and Firefox |
+| Font size | In an even box |
 |---|---|
-| .64–.67rem (10.1–10.75px) | centred: `--text-xs` .65rem (chips, badges, table headers, counts, tab labels) |
-| .84rem (13.4–13.5px) | centred: `--text-sm` .84rem (buttons, toggles, nav rows, fields) |
-| .97–1.02rem (15.5–16.4px) | centred: 1rem (heading bars) |
-| 1.18–1.19rem (18.75–19.1px) | centred |
+| .63–.73rem (10.1–11.7px) | centred: `--text-xs` .65rem (chips, badges, table headers, counts, tab labels) |
+| .735–.79rem | off by a pixel: don't use in a box |
+| .80–.90rem (12.8–14.4px) | centred: `--text-sm` .84rem (buttons, toggles, nav rows, fields) |
+| .905–.965rem | off by a pixel: don't use in a box |
+| .97–1.07rem (15.5–17.1px) | centred: 1rem (heading bars) |
+| 1.14–1.24rem | centred |
 
-Every size between leaves the capitals half a pixel or a pixel low in one browser: Firefox hints glyphs to whole pixels, so it is never a little off, only half or whole pixels. Line heights don't change this; only the font size does.
-
-A box is anything with its text centred in a background, a border or a bar: buttons, chips, badges, nav rows, counts, table headers, heading bars. Text not in a box (meta lines, hints, figures) may use any size. The e2e test "every box sits on whole pixels and its text lines up" fails on a box whose capitals are more than .3px off its middle, using Manrope's metrics, in Chrome and Firefox alike. A kit start's status is the one exception: it stands on the button name's baseline (§10).
+A box is anything with its text centred in a background, a border or a bar: buttons, chips, badges, nav rows, counts, table headers, heading bars. Text not in a box (meta lines, hints, figures) may use any size. The e2e test "every box sits on whole pixels and its text lines up" fails on a box whose capitals are more than .3px off its middle, using Manrope's metrics. A kit start's status is the one exception: it stands on the button name's baseline (§10).
 
 ---
 
@@ -123,7 +123,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 * **Kept on purpose:** a dashboard figure (`.tile`) is padded 12px 14px: its figures need the width, and nothing lines up against them.
 * **The logo is level with the page heading.** The sidebar starts `--page` down, as the page does, and its header row is a control tall (36px), as the heading row is.
 * **Spacing utilities win.** `.mt` and `.mb` live in the last cascade layer, so spacing asked for in the markup beats a component's own margins (§17).
-* The e2e test "every page's spacing follows the scale" checks every page on desktop, phone and Firefox.
+* The e2e test "every page's spacing follows the scale" checks every page on a 2K screen, a laptop window and a phone.
 
 ---
 
@@ -146,7 +146,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 
   Only the shell (tab bar, More sheet, Switch tray, the sticky Working on bar, toasts) follows the window, at 820px.
 * **Confirmations** (only the trash's permanent deletes ask) are a modal `<dialog>`, the `confirm-dialog` partial: centred, 420px at most, on the grey `--scrim`; its button opens it itself (`commandfor`), Cancel has the focus first, and Esc or a click outside closes it. The page behind doesn't scroll while it is open.
-* **Hints** (the "?" after a label, the `tip` partial) are `popover="hint"`s in the top layer, so no card clips them: hover and keyboard focus show one for as long as they last, a click keeps it open, Esc or a click elsewhere closes it. CSS anchor positioning puts it 6px under its "?" (`app.js` opens it with the "?" as its source), starting just left of it; near the screen's edge it ends at the "?" instead, or centres under it, 8px inside the screen. A suggestion list is anchored the same way: under its field and as wide, above it when the whole list fits there and not below.
+* **Hints** (the "?" after a label, the `tip` partial) are `popover="hint"`s in the top layer, so no card clips them, and need no JavaScript: hovering or focusing the "?" shows one for as long as it lasts (`interestfor`, after .15s), a click or tap keeps it open (`popovertarget`, action `show`), Esc or a click elsewhere closes it. CSS anchor positioning puts it 6px under its "?", starting just left of it; near the screen's edge it ends at the "?" instead, or centres under it, 8px inside the screen. A suggestion list is anchored the same way (`app.js` opens it with its field as the source): under its field and as wide, above it when the whole list fits there and not below.
 * **Popovers and sheets** (More, Switch, Appearance, suggestion lists) are `popover`s: Esc and a tap outside close them, without JavaScript. On a phone the page behind goes grey (`--scrim`); what is grey is out of reach (a tap there only closes the popover). More and Appearance float just above the tab bar, rounded on all corners; the Switch tray hangs under the Working on bar, as wide and as tinted, rounded at the bottom.
 
 ---
@@ -347,8 +347,8 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 
 ## 15. Motion
 
-* **Page changes cross-fade** in Chrome (`@view-transition { navigation: auto; }`); Firefox loads the next page without one.
-* **Popovers and dialogs come in**: More, Appearance and the Switch tray slide a few pixels and fade, a confirmation and a hint fade (and grow) in (`@starting-style`); in Chrome they also go out that way (`overlay`, `display` with `allow-discrete`), in Firefox they close at once. Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
+* **Page changes cross-fade** (`@view-transition { navigation: auto; }`).
+* **Popovers and dialogs come in**: More, Appearance and the Switch tray slide a few pixels and fade, a confirmation and a hint fade (and grow) in (`@starting-style`), and go out the same way (`overlay`, `display` with `allow-discrete`). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
 * **Short and quiet**: .15–.3s, ease-out. Hover states fade in .15s.
 * **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once, and pages don't cross-fade.
 
@@ -384,4 +384,4 @@ Every box starts and ends on a whole CSS pixel. Text is snapped to whole pixels 
 * **pages**: rules for one page only (and print).
 * **utilities**: spacing asked for in the markup (`.mt`, `.mb`), which wins over a component's own margins. Only spacing: a utility that set more would override the components that refine it.
 
-Native nesting, with declarations before nested rules; never nest under a selector list (its `:is()` takes the list's highest specificity). No `@supports` for anything in Baseline 2025; a Chrome-only property (customizable `<select>`, `text-wrap: pretty`, exit transitions) is simply ignored by Firefox, with no fallback written for it.
+Native nesting, with declarations before nested rules; never nest under a selector list (its `:is()` takes the list's highest specificity). No `@supports` and no fallbacks: what current Chrome has is used as it is (customizable `<select>`, `text-wrap: pretty`, exit transitions, `interestfor`).

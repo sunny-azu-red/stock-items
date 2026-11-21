@@ -20,7 +20,7 @@ type ItemSpec = {
 const exact = (s: string) => new RegExp(`^\\s*${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
 
 // The projects (playwright.config.ts): a phone has the tab bar and its
-// sheets; the others the sidebar, "mid" with a main column under 680px.
+// sheets; desktop and laptop the sidebar.
 const phone = (t: TestInfo) => !!t.project.use.isMobile;
 
 // A field by its label. Exact, since a label's "?" hint is a button named
@@ -103,11 +103,8 @@ test("set up vehicles and the example inventory", async ({ page }) => {
   await expect(page.locator(".tile").filter({ hasText: "Items" })).toContainText("13");
 });
 
-test("filter stock by vehicle and copy it as text", async ({ page, context, browserName }, testInfo) => {
-  // Firefox writes the clipboard on a click without asking; reading it back
-  // needs a permission only Chromium can be given.
-  const readable = browserName === "chromium";
-  if (readable) await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+test("filter stock by vehicle and copy it as text", async ({ page, context }, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/stock");
   await expect(page.locator(".section")).toHaveCount(3);
 
@@ -124,7 +121,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context, brow
   await copy.click();
   await expect(copy).toHaveAttribute("data-copied", /KTM 390\n-{12}\n/);
   await expect(page.locator(".toast")).toContainText("Copied to clipboard");
-  if (readable) expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   const text = await copy.getAttribute("data-copied");
   expect(text).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   expect(text).toContain("KTM 390 + KTM 1290\n------------------\n6 pcs - KTM Oil Filter O-Ring\n640 ml - Motorex M3.0 Ready To Use");
@@ -549,7 +546,7 @@ test("a form sent back names its errors at the fields", async ({ page }) => {
   await expect(name).toHaveAccessibleDescription(/Keep it short/);
 });
 
-test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page, browserName }) => {
+test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page }) => {
   await page.goto("/shopping");
   const colour = (v: string) => page.evaluate((v) => {
     const probe = document.createElement("div");
@@ -570,11 +567,8 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
 
   const unit = page.locator('select[name="quantity_unit"]');
   await unit.click();
-  // Open (Chrome's themed list), it keeps the ring. Firefox's list is the
-  // system's, which headless Firefox doesn't open: the select keeps the
-  // focus, and with it the ring.
-  if (browserName === "chromium") await expect.poll(() => unit.evaluate((e) => e.matches(":open"))).toBe(true);
-  else await expect(unit).toBeFocused();
+  // Open (the themed list), it keeps the ring.
+  await expect.poll(() => unit.evaluate((e) => e.matches(":open"))).toBe(true);
   await expect(unit).toHaveCSS("border-top-color", accent);
   await expect(unit).toHaveCSS("box-shadow", ring(accent));
   await page.keyboard.press("Escape");
@@ -712,7 +706,7 @@ test("pick the accent in Appearance", async ({ page }) => {
   expect((await page.context().cookies()).find((c) => c.name === "accent")).toBeUndefined();
 });
 
-test("Back shows the theme chosen on the next page", async ({ page, browserName }, testInfo) => {
+test("Back shows the theme chosen on the next page", async ({ page }, testInfo) => {
   // Back shows the page as it was left, from the page cache or the HTTP
   // cache, with the theme it had then; it must switch to the one chosen.
   const check = async (p: Page, fromPageCache: boolean) => {
@@ -741,7 +735,6 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
 
   // Playwright turns Chromium's page cache off, and its headless shell
   // has none; this full Chromium has it on.
-  test.skip(browserName !== "chromium");
   const browser = await chromium.launch({ channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] });
   try {
     const context = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
@@ -882,7 +875,7 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/\/shopping$/);
 });
 
-test("Back after switching vehicles shows the one worked on now", async ({ page, browserName }, testInfo) => {
+test("Back after switching vehicles shows the one worked on now", async ({ page }, testInfo) => {
   // Back may bring a page from before the switch out of the page cache,
   // which the server never sees: app.js compares the cookie with the page
   // and reloads it. Trash isn't narrowed, so only the bar tells.
@@ -903,7 +896,6 @@ test("Back after switching vehicles shows the one worked on now", async ({ page,
   await check(page, false);
 
   // Playwright turns Chromium's page cache off; this full Chromium has it.
-  test.skip(browserName !== "chromium");
   const browser = await chromium.launch({ channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] });
   try {
     const context = await browser.newContext({ baseURL: base });
@@ -1328,12 +1320,12 @@ test("sort the stock with Sort by and its direction", async ({ page }) => {
 
 // Opt-in: SCREENSHOT_DIR=/tmp/shots npx playwright test (see docs/development.md)
 // Every page and form, in both themes: <dir>/<desktop|mobile>/<light|dark>/<name>.png.
-// The desktop shots come from "mid" (1360px): a 2K page is too wide to read
+// The desktop shots come from "laptop" (1360px): a 2K page is too wide to read
 // in the README.
 test("screenshots", async ({ page }, testInfo) => {
   const dir = process.env.SCREENSHOT_DIR;
   test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
-  test.skip(!["mid", "mobile"].includes(testInfo.project.name), "the docs' screenshots are the laptop's and the phone's");
+  test.skip(!["laptop", "mobile"].includes(testInfo.project.name), "the docs' screenshots are the laptop's and the phone's");
   const device = phone(testInfo) ? "mobile" : "desktop";
   test.setTimeout(180_000);
   // The first link on a page that matches, for the pages of one record.
@@ -1445,13 +1437,11 @@ async function offGrid(page: Page) {
 // each, by more than 1px; the capitals against the middle of their own box
 // (a button, chip, badge, nav link, table header or heading bar) by more
 // than .3px, since past that the space above them is a whole pixel more
-// than below. Chrome and Firefox put the baseline on a whole pixel, each
-// rounding its own way, so only some font sizes centre in both
-// (docs/design.md#text-centred-in-its-box); at those, both paint the
-// capitals where this computes them. Chips and badges are 24px tall, chips
-// you pick or tap 30px. The capitals' middle is the baseline (the text
-// box's top plus Manrope's ascent, 1.066em, rounded) less half their height
-// (.735em). Monospace text (SKUs) is left out.
+// than below (Chrome puts the baseline on a whole pixel, so only some font
+// sizes can be centred: docs/design.md#text-centred-in-its-box). Chips and
+// badges are 24px tall, chips you pick or tap 30px. The capitals' middle is
+// the baseline (the text box's top plus Manrope's ascent, 1.066em, rounded)
+// less half their height (.735em). Monospace text (SKUs) is left out.
 async function misaligned(page: Page) {
   return page.evaluate(() => {
     const vis = (el: Element) => {
@@ -1744,7 +1734,7 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
   // apart and tiles 12px while other cards were 16px, card parts sat 18 or
   // 19px in (13px for a phone's stock rows), the item's History table was
   // wider than its card, and a heading bar grew with a button or shrank
-  // without chips. "desktop" is the sidebar's shell (desktop, Firefox, mid).
+  // without chips. "desktop" is the sidebar's shell (desktop and laptop).
   const desktop = !phone(testInfo);
   const link = async (url: string, selector: string) => {
     await page.goto(url);

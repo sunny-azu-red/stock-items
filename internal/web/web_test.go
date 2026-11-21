@@ -728,8 +728,9 @@ func TestAccessibilityDetails(t *testing.T) {
 	expectNot(t, rec, "Please")
 	// Required fields say so natively; forms validate on the server only.
 	expect(t, a.get("/items/new"), http.StatusOK, `name="name" value="" required`, `novalidate`)
-	// A "?" is named after its field, and its hint is a popover it opens.
-	expect(t, a.get("/items/new"), http.StatusOK, `aria-label="More about Keep at least" aria-describedby="min-tip" popovertarget="min-tip"`,
+	// A "?" is named after its field, and its hint is a popover it shows on
+	// hover or focus (interestfor) and opens on a click.
+	expect(t, a.get("/items/new"), http.StatusOK, `aria-label="More about Keep at least" aria-describedby="min-tip" interestfor="min-tip" popovertarget="min-tip" popovertargetaction="show"`,
 		`<span class="tip-text" role="tooltip" id="min-tip" popover="hint">`)
 	// The keyboard can skip the sidebar; the stock's filters are a search.
 	stockPage := a.get("/stock")

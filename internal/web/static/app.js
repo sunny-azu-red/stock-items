@@ -690,6 +690,40 @@
   var firstError = document.querySelector(".has-error input:not([type=hidden]), .has-error select, .has-error textarea");
   if (firstError) firstError.focus();
 
+  // The error summary lists each field's message as a link to the field,
+  // in the form's order. A message that doesn't say which field it is about
+  // gets the label first ("Year: "soon" is not a whole number"); one that
+  // does stays as it is ("Name is required"). The server's Errors are a
+  // map, so the page's order is the one to follow. A message that belongs
+  // to no one field (a list's, a row's) has no id and isn't listed.
+  document.querySelectorAll("[data-error-summary]").forEach(function (summary) {
+    var scope = summary.closest("form") || document;
+    var list = document.createElement("ul");
+    list.className = "error-links";
+    scope.querySelectorAll(".field-error[id]").forEach(function (msg) {
+      var owner = scope.querySelector('[aria-describedby~="' + msg.id + '"]');
+      if (!owner) return;
+      var control = owner.matches("fieldset") ? owner.querySelector("input, select, textarea") : owner;
+      var label = owner.matches("fieldset") ? owner.querySelector("legend") : control.labels && control.labels[0];
+      if (!control || !label) return;
+      var a = document.createElement("a");
+      a.href = "#" + control.id;
+      var name = label.textContent.trim().replace(/\s*\([^)]*\)$/, ""); // "Odometer (km)": Odometer
+      var text = msg.textContent.trim();
+      a.textContent = text.toLowerCase().indexOf(name.toLowerCase()) === 0 ? text : name + ": " + text;
+      // Going to the fragment scrolls but doesn't move the focus.
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        control.focus();
+        control.scrollIntoView({ block: "center" });
+      });
+      var li = document.createElement("li");
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+    if (list.children.length) summary.appendChild(list);
+  });
+
   // ---- Appearance: theme and accent (theme.go) ---------------------------
   // Both forms work without this (they post and come back); here a change
   // shows on the spot and is saved in the background, so trying colours is

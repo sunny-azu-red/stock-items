@@ -41,7 +41,7 @@ function server(port: number, schema: string) {
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
-  workers: 2, // one per project; each has its own server and schema
+  workers: 4, // one per project; each has its own server and schema
   forbidOnly: !!process.env.CI,
   // No retries: the tests run in order against one schema, so a retry of a
   // later test would start from a state the earlier ones already changed.
@@ -51,15 +51,25 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  // Chrome and Firefox are both targets (AGENTS.md, Baseline 2025): each on a
+  // 2K screen, and Chrome in a laptop-sized window ("mid") and on a phone.
   projects: [
     {
       name: "desktop",
-      use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:18080", viewport: { width: 1360, height: 900 } },
+      use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:18080", viewport: { width: 2560, height: 1440 } },
     },
     {
       name: "mobile",
-      use: { ...devices["Pixel 7"], baseURL: "http://127.0.0.1:18081" },
+      use: { ...devices["Pixel 9 Pro"], baseURL: "http://127.0.0.1:18081" },
+    },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"], baseURL: "http://127.0.0.1:18082", viewport: { width: 2560, height: 1440 } },
+    },
+    {
+      name: "mid",
+      use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:18083", viewport: { width: 1360, height: 900 } },
     },
   ],
-  webServer: [server(18080, "e2e_desktop"), server(18081, "e2e_mobile")],
+  webServer: [server(18080, "e2e_desktop"), server(18081, "e2e_mobile"), server(18082, "e2e_firefox"), server(18083, "e2e_mid")],
 });

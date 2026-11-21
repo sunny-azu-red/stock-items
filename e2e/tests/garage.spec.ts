@@ -1,4 +1,4 @@
-import { chromium, expect, test, type Page, type Request } from "@playwright/test";
+import { chromium, expect, test, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import * as zlib from "node:zlib";
 
 // One realistic walk through the app, using the inventory from the
@@ -19,9 +19,17 @@ type ItemSpec = {
 
 const exact = (s: string) => new RegExp(`^\\s*${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
 
+// The projects (playwright.config.ts): a phone has the tab bar and its
+// sheets; the others the sidebar, "mid" with a main column under 680px.
+const phone = (t: TestInfo) => !!t.project.use.isMobile;
+
+// A field by its label. Exact, since a label's "?" hint is a button named
+// "More about <label>", which a loose match finds too.
+const field = (scope: Page | Locator, label: string) => scope.getByLabel(label, { exact: true });
+
 async function addVehicle(page: Page, name: string, odometer: string) {
   await page.goto("/vehicles/new");
-  await page.getByLabel("Name").fill(name);
+  await field(page, "Name").fill(name);
   await page.getByLabel("Odometer (km)").fill(odometer);
   await page.getByRole("button", { name: "Save vehicle" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
@@ -34,7 +42,7 @@ async function addItem(page: Page, it: ItemSpec) {
   if (it.volume) await page.locator("label", { hasText: "Volume (ml / L)" }).click();
   await page.getByLabel("In stock").fill(it.qty);
   if (it.qtyUnit) await page.locator('select[name="quantity_unit"]').selectOption(it.qtyUnit);
-  if (it.min) await page.getByLabel("Keep at least").fill(it.min);
+  if (it.min) await field(page, "Keep at least").fill(it.min);
   if (it.category) await page.getByLabel("Category").fill(it.category);
   for (const v of it.vehicles) {
     await page.locator("label.chip-toggle").filter({ hasText: exact(v) }).click();
@@ -95,8 +103,11 @@ test("set up vehicles and the example inventory", async ({ page }) => {
   await expect(page.locator(".tile").filter({ hasText: "Items" })).toContainText("13");
 });
 
-test("filter stock by vehicle and copy it as text", async ({ page, context }, testInfo) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+test("filter stock by vehicle and copy it as text", async ({ page, context, browserName }, testInfo) => {
+  // Firefox writes the clipboard on a click without asking; reading it back
+  // needs a permission only Chromium can be given.
+  const readable = browserName === "chromium";
+  if (readable) await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/stock");
   await expect(page.locator(".section")).toHaveCount(3);
 
@@ -113,7 +124,7 @@ test("filter stock by vehicle and copy it as text", async ({ page, context }, te
   await copy.click();
   await expect(copy).toHaveAttribute("data-copied", /KTM 390\n-{12}\n/);
   await expect(page.locator(".toast")).toContainText("Copied to clipboard");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
+  if (readable) expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   const text = await copy.getAttribute("data-copied");
   expect(text).toContain("525 ml - Silkolene 15W50 PRO 4 XP");
   expect(text).toContain("KTM 390 + KTM 1290\n------------------\n6 pcs - KTM Oil Filter O-Ring\n640 ml - Motorex M3.0 Ready To Use");
@@ -170,7 +181,7 @@ test("quick adjust and record a purchase", async ({ page }) => {
   const bought = page.locator("#panel-bought");
   await bought.getByLabel("Amount bought").fill("1");
   await bought.locator('select[name="amount_unit"]').selectOption("l");
-  await bought.getByLabel("Total price").fill("18,50");
+  await field(bought, "Total price (EUR)").fill("18,50");
   await bought.getByLabel("Shop").fill("Moto shop");
   await bought.getByRole("button", { name: "Add to stock" }).click();
   await expect(page.locator("#item-qty")).toHaveText("1\u202f525 ml");
@@ -183,8 +194,8 @@ test("fix a wrong price in the history", async ({ page }) => {
   const history = page.locator("section").filter({ hasText: "History" });
   await history.locator("tr").filter({ hasText: "Moto shop" }).getByRole("link", { name: /Edit the purchase/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edit purchase");
-  await expect(page.getByLabel("Total price")).toHaveValue("18.50");
-  await page.getByLabel("Total price").fill("16,50");
+  await expect(field(page, "Total price (EUR)")).toHaveValue("18.50");
+  await field(page, "Total price (EUR)").fill("16,50");
   await page.getByRole("button", { name: "Save purchase" }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved the purchase");
   await expect(page.locator("#item-qty")).toHaveText("1\u202f525 ml");
@@ -192,12 +203,11 @@ test("fix a wrong price in the history", async ({ page }) => {
 });
 
 test("plan an oil service, shop for what is missing and log it", async ({ page }, testInfo) => {
-  page.on("dialog", (d) => d.accept());
   await page.goto("/vehicles");
   await page.locator("a.vehicle-card").filter({ has: page.locator(".name", { hasText: exact("KTM 390") }) }).click();
   await page.getByRole("link", { name: "Add kit" }).click();
 
-  await page.getByLabel("Name").fill("Oil Service");
+  await field(page, "Name").fill("Oil Service");
   await page.getByLabel("Distance (km)", { exact: true }).fill("7500");
   await page.getByLabel("Months", { exact: true }).fill("12");
   const items = page.locator('select[name="line_item"]');
@@ -216,6 +226,12 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await expect(page.locator(".page-head")).toContainText("1 part missing");
   await expect(page.locator(".page-head")).toContainText("Not done yet");
+  // Each part's stock against what the kit needs is a <meter>, red when short.
+  const meters = page.locator("meter.meter");
+  await expect(meters).toHaveCount(3);
+  await expect(page.locator("meter.meter.short")).toHaveCount(1);
+  const short = page.locator("meter.meter.short");
+  expect(Number(await short.getAttribute("value"))).toBeLessThan(Number(await short.getAttribute("max")));
   await page.screenshot({ path: testInfo.outputPath("kit-short.png"), fullPage: true });
 
   await expect(page.locator(".page-head")).not.toContainText("Add missing");
@@ -261,7 +277,7 @@ test("buy something new from the shopping list", async ({ page }) => {
 
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Chain lube");
   await expect(page.getByLabel("In stock")).toHaveValue("2");
-  await page.getByLabel("Total price").fill("59,80");
+  await field(page, "Total price (EUR)").fill("59,80");
   await page.getByLabel("Shop").fill("Moto shop");
   await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Added Chain lube to stock");
@@ -275,7 +291,6 @@ test("buy something new from the shopping list", async ({ page }) => {
 });
 
 test("edit and delete items", async ({ page }) => {
-  page.on("dialog", (d) => d.accept());
   await page.goto("/stock?q=Fuel");
   await page.locator(".item-row a.item-name").first().click();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
@@ -291,7 +306,6 @@ test("edit and delete items", async ({ page }) => {
 });
 
 test("archive an item that a service still refers to", async ({ page }) => {
-  page.on("dialog", (d) => d.accept());
   const filterRow = () => row(page, "KTM Oil Filter").filter({ hasNotText: "O-Ring" });
   await page.goto("/stock");
   await filterRow().getByRole("link").first().click();
@@ -330,7 +344,6 @@ test("fix a logged service", async ({ page }) => {
 });
 
 test("undo a deleted service", async ({ page }) => {
-  page.on("dialog", (d) => d.accept());
   await page.goto("/stock");
   const before = await row(page, "15W50 PRO 4 XP").locator(".qty").textContent();
   await page.goto("/activity?kind=service");
@@ -357,6 +370,38 @@ test("restore a shopping entry from the trash", async ({ page }) => {
   await expect(page.locator(".flash-success")).toContainText("Restored Zip ties to the shopping list");
   await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(1);
   await page.getByRole("button", { name: "Remove Zip ties" }).click();
+});
+
+test("a permanent delete asks in a dialog first", async ({ page }) => {
+  // The test above left Zip ties in the trash.
+  await page.goto("/trash");
+  const entry = page.locator(".list li").filter({ hasText: "Shopping list: Zip ties" });
+  await expect(entry).toHaveCount(1);
+  const ask = entry.getByRole("button", { name: /^Delete .*Zip ties permanently$/ });
+  const dialog = page.getByRole("dialog", { name: /Zip ties permanently\?$/ });
+  await expect(dialog).toBeHidden();
+
+  // Its button opens it (no script), Cancel first, so Enter doesn't delete.
+  await ask.click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("It can't be restored after that.");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  // Esc, Cancel and a click outside it each keep the entry.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await ask.click();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await ask.click();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+  await expect(entry).toHaveCount(1);
+
+  await ask.click();
+  await dialog.getByRole("button", { name: "Delete permanently" }).click();
+  await expect(page.locator(".flash-success")).toContainText("Permanently deleted");
+  await expect(entry).toHaveCount(0);
 });
 
 test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
@@ -454,24 +499,57 @@ test("form hints open from the question mark", async ({ page }) => {
   await page.goto("/items/new");
   const hint = page.getByRole("tooltip", { name: "You get a low-stock warning below this." });
   await expect(hint).toBeHidden();
-  // The input stays described by the hint for screen readers.
-  await expect(page.getByLabel("Keep at least")).toHaveAccessibleDescription("You get a low-stock warning below this.");
+  // The input stays described by the hint for screen readers, and the "?"
+  // says which field it is about.
+  await expect(field(page, "Keep at least")).toHaveAccessibleDescription("You get a low-stock warning below this.");
+  const help = page.getByRole("button", { name: "More about Keep at least" });
 
-  const help = page.locator(".label-row").filter({ hasText: "Keep at least" }).getByRole("button", { name: "Help" });
+  // Hover shows it, as a popover in the top layer (no card clips it), 6px
+  // under its "?".
   await help.hover();
   await expect(hint).toBeVisible();
-  await page.getByLabel("Name", { exact: true }).hover();
+  expect(await hint.evaluate((e) => e.matches(":popover-open"))).toBe(true);
+  const b = (await help.boundingBox())!, h = (await hint.boundingBox())!;
+  expect(Math.round(h.y - (b.y + b.height)), "the hint's distance under its button").toBe(6);
+  await field(page, "Name").hover();
+  await expect(hint).toBeHidden();
+
+  // So does keyboard focus, for as long as it lasts.
+  await help.focus();
+  await expect(hint).toBeVisible();
+  await field(page, "Keep at least").focus();
   await expect(hint).toBeHidden();
 
   // A click (or tap) keeps it open until Escape or a click elsewhere.
   await help.click();
-  await page.getByLabel("Name", { exact: true }).hover();
+  await field(page, "Name").hover();
   await expect(hint).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(hint).toBeHidden();
+  await help.click();
+  await expect(hint).toBeVisible();
+  await page.locator("main h1").click();
+  await expect(hint).toBeHidden();
 });
 
-test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page }) => {
+test("a form sent back names its errors at the fields", async ({ page }) => {
+  await page.goto("/vehicles/new");
+  const name = field(page, "Name");
+  await expect(name).toHaveAttribute("required", "");
+  await expect(name).toHaveAttribute("aria-invalid", "false");
+  await page.getByRole("button", { name: "Save vehicle" }).click();
+  // The server's answer: a summary up top, and the field marked, focused
+  // and described by its own message (and still by its hint).
+  await expect(page.locator(".error-summary")).toContainText("Fix the fields marked below.");
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  const msg = (await page.locator("#name-err").innerText()).trim();
+  expect(msg).toMatch(/^[A-Z]/);
+  await expect(name).toHaveAccessibleDescription(new RegExp(`^${msg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  await expect(name).toHaveAccessibleDescription(/Keep it short/);
+});
+
+test("a clicked field shows a 2px focus ring, red with an error, and an open select keeps it", async ({ page, browserName }) => {
   await page.goto("/shopping");
   const colour = (v: string) => page.evaluate((v) => {
     const probe = document.createElement("div");
@@ -485,15 +563,18 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
   // The border and a 1px shadow in the ring colour, then the pale glow.
   const ring = (c: string) => new RegExp(`^${c.replace(/[()]/g, "\\$&")} 0px 0px 0px 1px, `);
 
-  const name = page.getByLabel("Something new");
+  const name = field(page, "Something new");
   await name.click();
   await expect(name).toHaveCSS("border-top-color", accent);
   await expect(name).toHaveCSS("box-shadow", ring(accent));
 
   const unit = page.locator('select[name="quantity_unit"]');
   await unit.click();
-  // Open, the list has focus, not the select itself.
-  await expect.poll(() => unit.evaluate((e) => e.matches(":open") && document.activeElement?.tagName === "OPTION")).toBe(true);
+  // Open (Chrome's themed list), it keeps the ring. Firefox's list is the
+  // system's, which headless Firefox doesn't open: the select keeps the
+  // focus, and with it the ring.
+  if (browserName === "chromium") await expect.poll(() => unit.evaluate((e) => e.matches(":open"))).toBe(true);
+  else await expect(unit).toBeFocused();
   await expect(unit).toHaveCSS("border-top-color", accent);
   await expect(unit).toHaveCSS("box-shadow", ring(accent));
   await page.keyboard.press("Escape");
@@ -539,26 +620,96 @@ test("a and l open Add item and Log service from any page", async ({ page }) => 
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("al");
 });
 
-test("switch between light and dark theme", async ({ page }) => {
+// Opens the Appearance panel (from the sidebar; on a phone, the More sheet)
+// unless it is open.
+async function appearance(page: Page) {
+  const panel = page.locator("#appearance");
+  if (!(await panel.evaluate((e) => e.matches(":popover-open")))) {
+    await (await sidebar(page)).getByRole("button", { name: "Appearance" }).click();
+  }
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+// Picks a theme in Appearance and waits until it is saved.
+async function pickTheme(page: Page, name: "System" | "Light" | "Dark") {
+  const saved = page.waitForResponse((r) => r.url().endsWith("/theme") && r.request().method() === "POST");
+  await (await appearance(page)).getByRole("button", { name, exact: true }).click();
+  expect((await saved).status()).toBe(204);
+}
+
+test("pick the theme in Appearance", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
   const html = page.locator("html");
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const light = await bg();
+  const pressed = async () => (await appearance(page)).locator('.theme-pick button[aria-pressed="true"]');
 
-  await (await sidebar(page)).getByRole("button", { name: "Switch to dark theme" }).click();
+  await expect(await pressed()).toHaveText("System");
+  // At once, without a reload, and still after one.
+  await page.evaluate(() => { (window as any).same = true; });
+  await pickTheme(page, "Dark");
   await expect(html).toHaveAttribute("data-theme", "dark");
   expect(await bg()).not.toBe(light);
+  expect(await page.evaluate(() => (window as any).same)).toBe(true);
+  await expect(await pressed()).toHaveText("Dark");
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(await pressed()).toHaveText("Dark");
 
   // Back to what the system shows: the choice is forgotten.
-  await (await sidebar(page)).getByRole("button", { name: "Switch to light theme" }).click();
+  await pickTheme(page, "System");
   await expect(html).not.toHaveAttribute("data-theme");
   expect(await bg()).toBe(light);
   await page.reload();
   await expect(html).not.toHaveAttribute("data-theme");
-  await expect((await sidebar(page)).getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
+  await expect(await pressed()).toHaveText("System");
+});
+
+test("pick the accent in Appearance", async ({ page }) => {
+  await page.goto("/");
+  const html = page.locator("html");
+  const accent = () => page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  });
+  const indigo = await accent();
+  const saved = () => page.waitForResponse((r) => r.url().endsWith("/accent") && r.request().method() === "POST");
+  const panel = await appearance(page);
+  await expect(panel.getByRole("button", { name: "Indigo", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  // A preset recolours the page at once and is remembered on this device.
+  let done = saved();
+  await panel.getByRole("button", { name: "Ocean", exact: true }).click();
+  await done;
+  await expect(html).toHaveAttribute("style", /--accent-h: 228; --accent-i: 50/);
+  expect(await accent()).not.toBe(indigo);
+  await expect(panel.getByRole("button", { name: "Ocean", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(panel.getByRole("slider", { name: "Colour" })).toHaveValue("228");
+  await page.reload();
+  await expect(html).toHaveAttribute("style", /--accent-h: 228; --accent-i: 50/);
+
+  // The sliders: any hue and intensity, saved once let go.
+  done = saved();
+  await (await appearance(page)).getByRole("slider", { name: "Colour" }).fill("150");
+  await done;
+  await page.reload();
+  await expect(html).toHaveAttribute("style", /--accent-h: 150; --accent-i: 50/);
+  await expect((await appearance(page)).locator('.swatch[aria-pressed="true"]')).toHaveCount(0);
+
+  // Back to Indigo forgets it.
+  done = saved();
+  await (await appearance(page)).getByRole("button", { name: "Back to Indigo" }).click();
+  await done;
+  expect(await accent()).toBe(indigo);
+  await page.reload();
+  await expect(html).not.toHaveAttribute("style");
+  expect((await page.context().cookies()).find((c) => c.name === "accent")).toBeUndefined();
 });
 
 test("Back shows the theme chosen on the next page", async ({ page, browserName }, testInfo) => {
@@ -571,7 +722,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
       window.addEventListener("pageshow", (e) => { (window as any).fromCache = e.persisted; });
     });
     await p.goto("/");
-    await (await sidebar(p)).getByRole("button", { name: "Switch to dark theme" }).click();
+    await pickTheme(p, "Dark");
     await expect(p.locator("html")).toHaveAttribute("data-theme", "dark");
     await p.goBack({ waitUntil: "commit" });
     await expect(p).toHaveURL(/\/stock$/);
@@ -581,7 +732,7 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
 
     // And back to following the system.
     await p.goForward({ waitUntil: "commit" });
-    await (await sidebar(p)).getByRole("button", { name: "Switch to light theme" }).click();
+    await pickTheme(p, "System");
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
     await p.goBack({ waitUntil: "commit" });
     await expect(p.locator("html")).not.toHaveAttribute("data-theme");
@@ -599,6 +750,11 @@ test("Back shows the theme chosen on the next page", async ({ page, browserName 
     await browser.close();
   }
 });
+
+// Waits for an element's transitions (a sheet sliding in) to end.
+async function settled(l: Locator) {
+  await l.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
+}
 
 // The sidebar, for its buttons: on a phone, the sheet the tab bar's More
 // opens (opened if it isn't).
@@ -630,7 +786,7 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await workOn(page, "KTM 390");
   const bar = page.locator(".working-on");
   await expect(bar).toContainText("Working on KTM 390");
-  if (testInfo.project.name === "mobile") {
+  if (phone(testInfo)) {
     // Edge to edge at the top, a bottom border only (its rules once lost to
     // the desktop ones that come later in app.css).
     const box = await bar.boundingBox();
@@ -638,9 +794,9 @@ test("work on a vehicle", async ({ page }, testInfo) => {
     expect(box && box.x === 0 && box.y === 0 && box.width === width, `bar at ${JSON.stringify(box)} in ${width}px`).toBe(true);
     await expect(bar).toHaveCSS("border-top-width", "0px");
     await expect(bar).toHaveCSS("border-bottom-width", "1px");
-    // One row: the buttons in 6px padding, and the bottom border.
+    // One row: the buttons in 5px padding, and the bottom border.
     const buttons = await bar.locator(".working-actions").boundingBox();
-    expect(box?.height, "the bar wraps onto a second row").toBe((buttons?.height ?? 0) + 13);
+    expect(box?.height, "the bar wraps onto a second row").toBe((buttons?.height ?? 0) + 11);
   }
   await expect(page).toHaveURL(/\/\?v=\d+$/);
   // The bar names the vehicle; the title doesn't say it again.
@@ -675,7 +831,7 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await page.goto("/stock");
   await expect(page).toHaveURL(/v=\d+/);
   const k390 = new URL(page.url()).searchParams.get("v");
-  if (testInfo.project.name === "mobile") {
+  if (phone(testInfo)) {
     await bar.getByRole("button", { name: "Switch" }).click();
     await expect(page.locator("#switch").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
     await page.locator("#switch").getByRole("button", { name: "KTM 1290" }).click();
@@ -703,7 +859,7 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
   await expect(page.locator("main h1")).toHaveText("Shopping");
   await expect(page.locator('[aria-label="Filter by vehicle"]')).toHaveCount(0);
-  const entries = Number((await page.locator(".card-head").filter({ hasText: "On the list" }).locator(".muted").innerText()).split(" ")[0]);
+  const entries = Number((await page.locator(".card-head").filter({ hasText: "On the list" }).locator(".meta").innerText()).split(" ")[0]);
   expect(await shopCount()).toBe(entries);
 
   // All vehicles stops and keeps the search: every vehicle's matches.
@@ -761,7 +917,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
   await page.goto("/shopping");
   const sheet = page.locator("#more");
-  const mobile = testInfo.project.name === "mobile";
+  const mobile = phone(testInfo);
   if (mobile) {
     await expect(sheet).toBeHidden();
     await sidebar(page);
@@ -814,7 +970,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
 });
 
 test("a phone's More and Switch grey the page, not what opened them", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "mobile", "More and Switch are a phone's");
+  test.skip(!phone(testInfo), "More and Switch are a phone's");
   await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
   await page.goto("/shopping");
   // Taps in the middle of what a selector finds. The grey (the popover's
@@ -832,16 +988,14 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   // More: the bar under the grey only closes it.
   await more.click();
   await expect(sheet).toBeVisible();
-  // It covers the tab bar's top border with its dashed seam, and casts no
-  // shadow: the grey sets it apart. So does the Switch tray (below).
-  const seam = (await sheet.boundingBox())!;
+  // It floats just above the tab bar, as wide, rounded on every corner
+  // (design.md#6-layout); measured once it has slid into place.
+  await settled(sheet);
+  const sh = (await sheet.boundingBox())!;
   const tabs = (await page.locator(".tabbar").boundingBox())!;
-  expect(seam.y + seam.height, "the sheet's bottom").toBe(tabs.y + 1);
-  await expect(sheet).toHaveCSS("border-bottom-style", "dashed");
-  await expect(sheet).toHaveCSS("box-shadow", "none");
-  // Rounded on its free edge, the top; square along the seam. The tray
-  // (below) mirrors it.
-  await expect(sheet).toHaveCSS("border-radius", "16px 16px 0px 0px");
+  expect(Math.round(tabs.y - (sh.y + sh.height)), "the sheet's gap above the tab bar").toBe(8);
+  expect(sh.x === tabs.x && sh.width === tabs.width, `sheet at ${JSON.stringify(sh)}, tab bar ${JSON.stringify(tabs)}`).toBe(true);
+  await expect(sheet).toHaveCSS("border-radius", "14px");
   // The build isn't in it: it is the logo's title (and /healthz).
   await expect(sheet.locator(".sidebar-foot")).toBeHidden();
   // More is lit while it is open, as the current tab (Shop) is.
@@ -860,16 +1014,16 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   await page.goto("/shopping");
   await expect(stockTab).toBeVisible();
 
-  // Switch: the tray hangs from the bar, covering its bottom border.
+  // Switch: the tray hangs under the bar, as wide, rounded at the bottom,
+  // over the bar's bottom border, so the two join without a seam.
   await bar.getByRole("button", { name: "Switch" }).click();
   await expect(tray).toBeVisible();
+  await settled(tray);
   const b = (await bar.boundingBox())!;
   const t = (await tray.boundingBox())!;
   expect(t.y, "the tray's top").toBe(b.y + b.height - 1);
   expect(t.x === 0 && t.width === b.width, `tray at ${JSON.stringify(t)}, bar ${JSON.stringify(b)}`).toBe(true);
-  await expect(tray).toHaveCSS("border-top-style", "dashed");
-  await expect(tray).toHaveCSS("box-shadow", "none");
-  await expect(tray).toHaveCSS("border-radius", "0px 0px 16px 16px");
+  await expect(tray).toHaveCSS("border-radius", "0px 0px 14px 14px");
   // Everything below is grey, the tab bar too: a tap only closes it.
   await tap(".tabbar a[href='/stock']");
   await expect(tray).toBeHidden();
@@ -1078,12 +1232,12 @@ test("sort the activity by clicking its headers", async ({ page }) => {
   await page.goto("/activity");
   const th = (name: string) => page.locator("table.table thead th").filter({ hasText: name });
   await expect(th("Date")).toHaveAttribute("aria-sort", "descending");
-  await expect(th("Item")).toHaveAttribute("aria-sort", "none");
+  await expect(th("Item")).not.toHaveAttribute("aria-sort");
 
   await th("Item").getByRole("link").click();
   await expect(page).toHaveURL(/\/activity\?sort=item$/);
   await expect(th("Item")).toHaveAttribute("aria-sort", "ascending");
-  await expect(th("Date")).toHaveAttribute("aria-sort", "none");
+  await expect(th("Date")).not.toHaveAttribute("aria-sort");
   const az = await columnRuns(page, 2);
   expect(az.length).toBeGreaterThan(2);
 
@@ -1260,13 +1414,14 @@ test("screenshots", async ({ page }, testInfo) => {
 // on a fraction moves against its icon from row to row, and a border on one
 // is drawn blurred across two. Icons, images and inline text are skipped,
 // and so is what is hidden from sight (.sr-only, or clipped away like it,
-// as the Working on bar's button names on a phone).
+// as the Working on bar's button names).
 async function offGrid(page: Page) {
   return page.evaluate(() => {
+    const clipped = (el: Element) => { const cs = getComputedStyle(el); return cs.clip === "rect(0px, 0px, 0px, 0px)" || cs.clipPath === "inset(50%)"; };
     const frac = (v: number) => Math.abs(v - Math.round(v)) > 0.01;
     const out: string[] = [];
     for (const el of document.querySelectorAll("body *")) {
-      if (el.closest("svg") || el.closest(".sr-only") || getComputedStyle(el).clip === "rect(0px, 0px, 0px, 0px)" || ["IMG", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "OPTION", "BR"].includes(el.tagName)) continue;
+      if (el.closest("svg") || el.closest(".sr-only") || clipped(el) || ["IMG", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "OPTION", "BR"].includes(el.tagName)) continue;
       const display = getComputedStyle(el).display;
       if (display === "inline" || display === "none" || display === "contents") continue;
       const r = el.getBoundingClientRect();
@@ -1286,17 +1441,19 @@ async function offGrid(page: Page) {
 // each, by more than 1px; the capitals against the middle of their own box
 // (a button, chip, badge, nav link, table header or heading bar) by more
 // than .3px, since past that the space above them is a whole pixel more
-// than below (Chrome puts the baseline on a whole pixel, so only some font
-// sizes can be centred: docs/design.md#text-centred-in-its-box). Chips and
-// badges are 26px tall. The capitals' middle is the baseline (the text
-// box's top plus Inter's ascent, .96875em, rounded) less half their height
-// (.727em). Monospace text (SKUs) is left out.
+// than below. Chrome and Firefox put the baseline on a whole pixel, each
+// rounding its own way, so only some font sizes centre in both
+// (docs/design.md#text-centred-in-its-box); at those, both paint the
+// capitals where this computes them. Chips and badges are 24px tall, chips
+// you pick or tap 30px. The capitals' middle is the baseline (the text
+// box's top plus Manrope's ascent, 1.066em, rounded) less half their height
+// (.735em). Monospace text (SKUs) is left out.
 async function misaligned(page: Page) {
   return page.evaluate(() => {
     const vis = (el: Element) => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
-      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest(".sr-only") && cs.clip !== "rect(0px, 0px, 0px, 0px)";
+      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest(".sr-only") && cs.clip !== "rect(0px, 0px, 0px, 0px)" && cs.clipPath !== "inset(50%)";
     };
     const mono = (el: Element) => /mono|Menlo|Consolas/i.test(getComputedStyle(el).fontFamily);
     const caps = (t: Text) => {
@@ -1304,7 +1461,7 @@ async function misaligned(page: Page) {
       const rg = document.createRange();
       rg.selectNodeContents(t);
       const r = rg.getClientRects()[0];
-      return r.top + Math.round(0.96875 * fs) - (0.727 * fs) / 2;
+      return r.top + Math.round(1.066 * fs) - (0.735 * fs) / 2;
     };
     // An element's own text: direct, or inside its inline children.
     const ownText = (el: Element) => {
@@ -1370,9 +1527,17 @@ async function misaligned(page: Page) {
       const d = caps(t) - middle(bar);
       if (Math.abs(d) > 0.3) out.push(`heading of ${name(bar)} ${d.toFixed(2)}px off its middle`);
     }
-    for (const el of document.querySelectorAll(".chip:not(.chip-toggle), .badge:not(.kit-start .badge)")) {
+    // Chips you pick or tap (the filter bars, the Switch tray) are a small
+    // button's height; the sidebar's Work on and Stock by vehicle are list
+    // rows, as tall as the nav's (design.md#10-chips-vs-badges).
+    const tap = ".chip-toggle, .work-on .chip, .nav-vehicles .chip";
+    for (const el of document.querySelectorAll(`.chip:not(${tap}), .badge:not(.kit-start .badge)`)) {
       const h = el.getBoundingClientRect().height;
-      if (vis(el) && h !== 26) out.push(`${name(el)} ${h}px tall, not 26px`);
+      if (vis(el) && h !== 24) out.push(`${name(el)} ${h}px tall, not 24px`);
+    }
+    for (const el of document.querySelectorAll(`:is(${tap}):not(.sidebar .chip)`)) {
+      const h = el.getBoundingClientRect().height;
+      if (vis(el) && h !== 30) out.push(`${name(el)} ${h}px tall, not 30px`);
     }
     for (const el of document.querySelectorAll("body *")) {
       if (!vis(el) || el instanceof SVGElement) continue;
@@ -1412,6 +1577,8 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   // Every page's offenders, so one run shows them all.
   const problems: string[] = [];
   const check = async (where: string) => {
+    // Once what slides or fades in (a flash, a sheet) has come to rest.
+    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)));
     for (const box of await offGrid(page)) problems.push(`${where}: ${box}`);
     for (const text of await misaligned(page)) problems.push(`${where}: ${text}`);
   };
@@ -1444,15 +1611,15 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   }
   // An open hint, and a form sent back with its errors.
   await page.goto("/items/new");
-  await page.locator(".label-row").filter({ hasText: "Keep at least" }).getByRole("button", { name: "Help" }).click();
+  await page.getByRole("button", { name: "More about Keep at least" }).click();
   await check("/items/new with a hint open");
   await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   await check("/items/new with errors");
   // The kit form with its intermediate schedule expanded and its hint open.
   await page.goto(kit + "/edit");
-  await page.getByRole("button", { name: "Add intermediate schedule" }).click();
-  await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
+  await page.getByLabel("Use an intermediate schedule").check();
+  await page.getByRole("button", { name: "More about Intermediate months" }).click();
   await check(kit + "/edit with intermediate schedule and hint open");
   // Working on a vehicle: the bar on every page, and its Switch open.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 390");
@@ -1476,13 +1643,14 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
 });
 
 test("every page header has the same spacing", async ({ page }, testInfo) => {
-  // Every page header is the same grid: the heading and the buttons share a
-  // row at least a button (38px) tall, the heading centred in it, and the
-  // line under it (Archived, chips, badges, then text) runs the full width,
-  // under the buttons too. On a phone the heading is at the top, the line
-  // 6px below, then the buttons. The item page once centred its heading
-  // against its buttons, 3px lower than the rest, with its badges 15px below.
-  const desktop = testInfo.project.name === "desktop";
+  // Every page header is the same grid (design.md#7-page-headers): the
+  // heading and the buttons share a row at least a button (36px) tall, the
+  // heading centred in it, and the line under it (Archived, chips, badges,
+  // then text) runs the full width, under the buttons too: 4px under the
+  // row. In a main column under 680px (a phone, a narrow window) the heading
+  // is at the top, the line 4px below, then the buttons. The item page once
+  // centred its heading against its buttons, 3px lower than the rest, with
+  // its badges 15px below.
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
@@ -1504,7 +1672,6 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
     kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
-  const want = desktop ? { top: 3, gap: 9 } : { top: 0, gap: 6 };
   const problems: string[] = [];
   // And the pages that show the Working on bar: the header starts below it.
   const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
@@ -1519,6 +1686,7 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
     await page.goto(p);
     const m = await page.evaluate(() => {
       const main = document.querySelector(".main") as HTMLElement;
+      const narrow = main.clientWidth - parseFloat(getComputedStyle(main).paddingLeft) - parseFloat(getComputedStyle(main).paddingRight) < 680;
       const bar = document.querySelector(".working-on");
       const contentTop = bar
         ? bar.getBoundingClientRect().bottom + parseFloat(getComputedStyle(bar).marginBottom)
@@ -1537,6 +1705,10 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
       };
       const ranks = sub && sub.matches(".flex") ? [...sub.children].map(rank) : [];
       return {
+        narrow,
+        // The heading row is a button tall: the heading's line (32px)
+        // centred in 36px. A phone's smaller heading starts the column.
+        want: narrow ? { top: 0, gap: 4 } : { top: (36 - Math.round(r.height)) / 2, gap: 4 + (36 - Math.round(r.height)) / 2 },
         inTitle: h1.parentElement?.classList.contains("page-title") ?? false,
         top: Math.round(r.top - contentTop),
         gap: sub ? Math.round(sub.getBoundingClientRect().top - r.bottom) : null,
@@ -1552,12 +1724,12 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
       continue;
     }
     if (!m.inTitle) problems.push(`${entry}: the h1 is not in .page-title`);
-    if (m.top !== want.top) problems.push(`${entry}: the heading is ${m.top}px below the top of the content, not ${want.top}`);
-    if (m.gap !== null && m.gap !== want.gap) problems.push(`${entry}: the line under the heading is ${m.gap}px below it, not ${want.gap}`);
+    if (m.top !== m.want.top) problems.push(`${entry}: the heading is ${m.top}px below the top of the content, not ${m.want.top}`);
+    if (m.gap !== null && m.gap !== m.want.gap) problems.push(`${entry}: the line under the heading is ${m.gap}px below it, not ${m.want.gap}`);
     if (!m.ordered) problems.push(`${entry}: the line is out of order (${m.ranks}; want Archived 0, chips 1, badges 2, text 3)`);
     if (m.badgeInText) problems.push(`${entry}: a chip or badge inside a <p class="sub"> sentence`);
-    if (desktop && m.underButtons === false) problems.push(`${entry}: the line stops short of the buttons instead of running under them`);
-    if (!desktop && m.buttonsAfter === false) problems.push(`${entry}: on a phone the buttons come before the line`);
+    if (!m.narrow && m.underButtons === false) problems.push(`${entry}: the line stops short of the buttons instead of running under them`);
+    if (m.narrow && m.buttonsAfter === false) problems.push(`${entry}: in a narrow column the buttons come before the line`);
   }
   expect(problems).toEqual([]);
 });
@@ -1568,8 +1740,8 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
   // apart and tiles 12px while other cards were 16px, card parts sat 18 or
   // 19px in (13px for a phone's stock rows), the item's History table was
   // wider than its card, and a heading bar grew with a button or shrank
-  // without chips.
-  const desktop = testInfo.project.name === "desktop";
+  // without chips. "desktop" is the sidebar's shell (desktop, Firefox, mid).
+  const desktop = !phone(testInfo);
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
@@ -1605,11 +1777,12 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       const name = (el: Element) => el.tagName.toLowerCase() + [...el.classList].map((c) => "." + c).join("");
       const main = document.querySelector(".main") as HTMLElement;
       // The same space on the page's sides and under it as above it (and
-      // the tab bar's height under it on a phone), and nothing at the end adding a margin: the
-      // main column fitted to its content, its last box ends at its padding.
+      // on a phone the floating tab bar's space: its height and the 10px
+      // under it), and nothing at the end adding a margin: the main column
+      // fitted to its content, its last box ends at its padding.
       const pt = px(main, "padding-top"), pb = px(main, "padding-bottom");
-      const tabbar = desktop ? 0 : parseFloat(root.getPropertyValue("--tabbar"));
-      if (pb !== pt + tabbar) out.push(`the page has ${pb}px under it and ${pt}px above`);
+      const tabbar = desktop ? 0 : Math.round(window.innerHeight - document.querySelector(".tabbar")!.getBoundingClientRect().top);
+      if (pb !== pt + tabbar) out.push(`the page has ${pb}px under it and ${pt}px above (and the tab bar's ${tabbar}px)`);
       const pl = px(main, "padding-left"), pr = px(main, "padding-right");
       if (pl !== pt || pr !== pt) out.push(`the page has ${pl}px on the left and ${pr}px on the right, ${pt}px above`);
       // It fills the width: no empty space beyond its padding on a wide window.
@@ -1631,14 +1804,14 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       // Cards, sections, tiles and columns side by side or one under the
       // other are --gap apart.
       const block = ".card, .split > *, .grid > *, .tiles > *, .stack > *";
-      // A results heading ("13 items") is nearer what it heads: 20px above
-      // it, 12px below.
+      // A results heading ("13 items") is nearer what it heads: 18px above
+      // it, 10px below.
       for (const h of document.querySelectorAll(".results-head")) {
         const above = h.previousElementSibling, below = h.nextElementSibling, r = h.getBoundingClientRect();
-        if (above && shown(above) && Math.round(r.top - above.getBoundingClientRect().bottom) !== 20)
-          out.push(`a results heading is ${Math.round(r.top - above.getBoundingClientRect().bottom)}px below ${name(above)}, not 20`);
-        if (below && shown(below) && Math.round(below.getBoundingClientRect().top - r.bottom) !== 12)
-          out.push(`${name(below)} is ${Math.round(below.getBoundingClientRect().top - r.bottom)}px below its results heading, not 12`);
+        if (above && shown(above) && Math.round(r.top - above.getBoundingClientRect().bottom) !== 18)
+          out.push(`a results heading is ${Math.round(r.top - above.getBoundingClientRect().bottom)}px below ${name(above)}, not 18`);
+        if (below && shown(below) && Math.round(below.getBoundingClientRect().top - r.bottom) !== 10)
+          out.push(`${name(below)} is ${Math.round(below.getBoundingClientRect().top - r.bottom)}px below its results heading, not 10`);
       }
       for (const b of document.querySelectorAll(block)) {
         const a = b.previousElementSibling;
@@ -1666,8 +1839,10 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       for (const table of document.querySelectorAll(".card .table")) {
         const card = table.closest(".card")!;
         const wrap = table.closest(".table-wrap") ?? table;
-        if (desktop && wrap.scrollWidth > wrap.clientWidth) out.push(`a table is ${wrap.scrollWidth - wrap.clientWidth}px wider than its card`);
+        // A table fits a card 660px wide or more; a narrower one keeps it
+        // 640px and scrolls it inside (design.md#6-layout).
         const rc = card.getBoundingClientRect();
+        if (rc.width >= 660 && wrap.scrollWidth > wrap.clientWidth) out.push(`a table is ${wrap.scrollWidth - wrap.clientWidth}px wider than its ${Math.round(rc.width)}px card`);
         for (const row of table.querySelectorAll("tr")) {
           const cells = [...row.children];
           if (cells.length === 0) continue;
@@ -1693,21 +1868,22 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
         }
         if (heights.size > 1) out.push(`${sel} bars of ${[...heights].map(([hh, t]) => `${hh}px ("${t}")`).join(", ")}`);
       }
-      // The theme button is a nav row's box: its hover ends on the same
-      // edge as the nav's, and it is as tall.
+      // The Appearance button is a nav row's box: its hover ends on the
+      // same edge as the nav's, and it is as tall.
       const theme = [...document.querySelectorAll(".sidebar-head .icon-btn")].find((b) => b.getBoundingClientRect().width > 0);
       const navLink = document.querySelector(".sidebar .nav a");
       if (desktop && theme && navLink) {
         const t = theme.getBoundingClientRect(), n = navLink.getBoundingClientRect();
         if (Math.round(t.right) !== Math.round(n.right) || Math.round(t.height) !== Math.round(n.height))
-          out.push(`the theme button is ${Math.round(t.height)}px tall ending at ${Math.round(t.right)}px, the nav's rows ${Math.round(n.height)}px ending at ${Math.round(n.right)}px`);
+          out.push(`the Appearance button is ${Math.round(t.height)}px tall ending at ${Math.round(t.right)}px, the nav's rows ${Math.round(n.height)}px ending at ${Math.round(n.right)}px`);
       }
-      // The sidebar's logo is level with the page heading's row.
+      // The sidebar's logo is level with the page heading's row, a control
+      // (36px) tall.
       const mark = document.querySelector(".sidebar .app-brand-mark");
       const head = document.querySelector(".page-head");
       if (desktop && mark && head && !document.querySelector(".working-on")) {
         const m = mark.getBoundingClientRect(), h = head.getBoundingClientRect();
-        const off = Math.round((m.top + m.height / 2) - (h.top + 19));
+        const off = Math.round((m.top + m.height / 2) - (h.top + 18));
         if (off !== 0) out.push(`the logo is ${off}px off the heading's row`);
       }
       return out;
@@ -1718,14 +1894,12 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
 });
 
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
-  page.on("dialog", (d) => d.accept());
   await page.goto("/stock");
   await row(page, "KTM Rear Brake Pads").getByRole("link").first().click();
   const edit = page.url() + "/edit";
   await page.goto(edit);
 
   const other = await context.newPage();
-  other.on("dialog", (d) => d.accept());
   await other.goto(edit);
   await other.getByLabel("Notes").fill("From the other tab");
   await other.getByRole("button", { name: "Save item", exact: true }).click();
@@ -1828,9 +2002,11 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await page.locator("a.kit-row").first().click();
   await page.getByRole("link", { name: "Edit", exact: true }).click();
 
-  await page.getByRole("button", { name: "Add intermediate schedule" }).click();
+  // Its fields show while the box is ticked.
+  await expect(page.getByLabel("Intermediate distance (km)")).toBeHidden();
+  await page.getByLabel("Use an intermediate schedule").check();
   await page.getByLabel("Intermediate distance (km)").fill("3500");
-  await page.locator(".label-row").filter({ hasText: "Intermediate months" }).getByRole("button", { name: "Help" }).click();
+  await page.getByRole("button", { name: "More about Intermediate months" }).click();
   await expect(page.locator("#inter-months-tip")).toBeVisible();
   const interItems = page.locator('select[name="inter_line_item"]');
   const interQtys = page.locator('input[name="inter_line_qty"]');

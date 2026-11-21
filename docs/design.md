@@ -55,9 +55,8 @@ Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `
 
 | Token | Size | For |
 |---|---|---|
-| `--text-xs` | .72rem (11.5px) | chips, badges, table headers, counts, keys |
-| `--text-sm` | .8125rem (13px) | buttons, toggles, labels, card links, meta in heading bars |
-| `--text-md` | .875rem (14px) | body text, fields, nav |
+| `--text-xs` | .65rem (10.4px) | chips, badges, table headers, counts, keys, tab labels |
+| `--text-sm` | .84rem (13.4px) | body text, fields, buttons, toggles, labels, nav, card links, meta in heading bars |
 | h2, h3 | 1rem | card and section headings |
 | h1 | 1.625rem (1.4375rem on a phone) | the page heading |
 
@@ -65,18 +64,18 @@ Weights: 800 for headings, figures and badges; 700 for names, labels and buttons
 
 ### Text centred in its box
 
-Chrome rounds the font's ascent and descent to whole pixels and puts the baseline on a whole pixel, so where Manrope's capitals (.735em tall; ascent 1.066em, descent .300em) land in a line is fixed by the font size. In a box of even height, only some sizes leave the same space above the capitals as below; the others leave a whole pixel more on one side, whatever the padding. Measured in Chromium with Manrope, whatever the line height:
+Browsers put the baseline on a whole pixel, and Chrome and Firefox each round their own way (Chrome rounds Manrope's ascent and descent first; Firefox rounds the space above the text to half a pixel). So where Manrope's capitals (.735em tall; ascent 1.066em, descent .300em) land in a line is fixed by the font size, differently in each browser. In a box of even height, only some sizes leave the same space above the capitals as below in both; at the others Firefox, or Chrome, leaves half a pixel or a whole one more on one side, whatever the padding. Measured from the painted pixels in Chromium and Firefox with Manrope, whatever the line height:
 
-| Font size | In an even box |
+| Font size | In an even box, in Chrome and Firefox |
 |---|---|
-| .63–.73rem (10.1–11.7px) | centred (chips, badges, table headers, counts, tab labels) |
-| .735–.79rem | off by a pixel: don't use in a box |
-| .80–.90rem (12.8–14.4px) | centred (buttons, toggles, nav rows, fields) |
-| .905–.965rem | off by a pixel: don't use in a box |
-| .97–1.07rem (15.5–17.1px) | centred (heading bars) |
-| 1.14–1.24rem | centred |
+| .64–.67rem (10.1–10.75px) | centred: `--text-xs` .65rem (chips, badges, table headers, counts, tab labels) |
+| .84rem (13.4–13.5px) | centred: `--text-sm` .84rem (buttons, toggles, nav rows, fields) |
+| .97–1.02rem (15.5–16.4px) | centred: 1rem (heading bars) |
+| 1.18–1.19rem (18.75–19.1px) | centred |
 
-A box is anything with its text centred in a background, a border or a bar: buttons, chips, badges, nav rows, counts, table headers, heading bars. Text not in a box (meta lines, hints, figures) may use any size. The e2e test "every box sits on whole pixels and its text lines up" fails on a box whose capitals are more than .3px off its middle, using Manrope's metrics. A kit start's status is the one exception: it stands on the button name's baseline (§10).
+Every size between leaves the capitals half a pixel or a pixel low in one browser: Firefox hints glyphs to whole pixels, so it is never a little off, only half or whole pixels. Line heights don't change this; only the font size does.
+
+A box is anything with its text centred in a background, a border or a bar: buttons, chips, badges, nav rows, counts, table headers, heading bars. Text not in a box (meta lines, hints, figures) may use any size. The e2e test "every box sits on whole pixels and its text lines up" fails on a box whose capitals are more than .3px off its middle, using Manrope's metrics, in Chrome and Firefox alike. A kit start's status is the one exception: it stands on the button name's baseline (§10).
 
 ---
 

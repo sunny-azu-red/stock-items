@@ -9,7 +9,7 @@ This is the spec for how Pitbox looks and behaves on screen: tokens, components,
 Calm, friendly and dense enough for a garage full of parts:
 
 * **Mellow, not stark.** Soft text, a muted accent, faint outlines and medium weights: nothing on the page shouts (see [Contrast](#contrast)).
-* **Panels, outlined.** Cards sit on a lightly tinted page, set off by their own surface and a hairline in `--border`, with no shadow. Inside a card, rules between rows are the same hairline.
+* **Panels, outlined.** Cards sit on a lightly tinted page, set off by their own surface and a hairline in `--border`, with no shadow. Inside a card, rules between rows are the same hairline. A shadow (`--shadow-pop`) means something floats over the page: the phone's tab bar and its sheets, popovers, tooltips, a select's list and suggestions, dialogs and toasts. Nothing in the page has one, a button on a photo included.
 * **Colour means something.** The accent marks what you can do (the main button, the current page, focus). Status colours say how things are (green on track, amber low or due, red missing or out of stock). Each dashboard figure has a colour of its own, and a vehicle's colour washes what belongs to it (its stock section, its page's avatar, the Working on bar).
 * **Tight corners.** Cards 8px, buttons and fields 6px, badges 4px. Only vehicle chips, counts and avatars' discs are round.
 * **One typeface:** Manrope, semi-bold for headings and figures, medium for text.

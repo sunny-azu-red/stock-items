@@ -941,6 +941,8 @@
     & .input-icon { flex: 1 1 260px; }
     & select.input { width: auto; flex: 0 1 200px; }
     & .sort-by select.input { flex: 0 1 auto; height: var(--control-sm); min-height: var(--control-sm); padding-block: 4px; font-size: var(--text-sm); }
+    /* Pick one in a bar (Fits any/all, sort direction): 30px, like the chips and toggles beside it. */
+    & .segmented label { padding: 6px 11px; white-space: nowrap; }
   }
   /* A check that filters: 30px. */
   .toggle {
@@ -958,7 +960,6 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto;
     @container (width < 620px) { margin-left: 0; }
     & .segmented { gap: 0; }
-    & .segmented label { padding: 6px 11px; white-space: nowrap; }
     & .segmented label:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
     & .segmented label:last-of-type { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
     & .segmented label:has(input:checked) { position: relative; z-index: 1; }

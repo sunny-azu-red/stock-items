@@ -270,9 +270,8 @@
   .sidebar-foot { margin-top: auto; }
   .sidebar-actions {
     display: grid; gap: 6px;
-    /* Icon and label start at the left, like the nav links above them; a
-       keyboard shortcut sits on what it does, at the button's end. */
-    & .btn { position: relative; justify-content: flex-start; }
+    /* A keyboard shortcut sits on what it does, at the button's end. */
+    & .btn { position: relative; }
     & .kbd { position: absolute; inset: 0 8px 0 auto; margin: auto 0; }
   }
 
@@ -550,7 +549,9 @@
     &:hover { background: var(--surface-2); }
   }
   .btn-sm { padding: 6px 10px; }
-  .btn-block { width: 100%; }
+  /* Full width, icon and label at the left like the nav links (the
+     sidebar's Add item and Log service). */
+  .btn-block { width: 100%; justify-content: flex-start; }
   /* Log service's kit starts: the kit's status is the button's end, flush to
      its border behind a divider, standing on the name's baseline. */
   .kit-start {

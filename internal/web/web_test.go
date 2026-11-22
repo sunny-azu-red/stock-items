@@ -287,9 +287,25 @@ func TestErrorsAndInfrastructure(t *testing.T) {
 	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "immutable") {
 		t.Errorf("Cache-Control = %q", cc)
 	}
-	if csp := a.get("/").Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
-		t.Errorf("CSP = %q", csp)
+	// The security headers: scripts only from our own files, inline styles
+	// only as style="" attributes, and htmx never evaluates text as script.
+	rec = a.get("/")
+	for name, want := range map[string]string{
+		"Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; " +
+			"script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+		"Cross-Origin-Opener-Policy":   "same-origin",
+		"Cross-Origin-Resource-Policy": "same-origin",
+		"X-Content-Type-Options":       "nosniff",
+		"X-Frame-Options":              "DENY",
+		"Referrer-Policy":              "same-origin",
+		"Permissions-Policy":           "geolocation=(), microphone=(), camera=(self)",
+	} {
+		if got := rec.Header().Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
 	}
+	expect(t, rec, http.StatusOK, `"allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true`)
+	expectNot(t, rec, "<style")
 
 	// Cross-site form posts are rejected.
 	rec = a.post("/vehicles", url.Values{"name": {"Evil"}}, "Sec-Fetch-Site", "cross-site", "Origin", "https://evil.example")

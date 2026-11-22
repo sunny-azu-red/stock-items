@@ -290,6 +290,63 @@ func TestProcessPhotoRefusesOtherFiles(t *testing.T) {
 	}
 }
 
+// Only files that start as a photo format does reach vipsheader: an SVG,
+// PDF or TIFF is refused before any libvips decoder parses it.
+func TestSniffPhoto(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+		want bool
+	}{
+		{"jpeg", "\xff\xd8\xff\xe0\x00\x10JFIF", true},
+		{"png", "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR", true},
+		{"gif87a", "GIF87a\x01\x00", true},
+		{"gif89a", "GIF89a\x01\x00", true},
+		{"webp", "RIFF\x24\x00\x00\x00WEBPVP8 ", true},
+		{"heic", "\x00\x00\x00\x18ftypheic\x00\x00\x00\x00", true},
+		{"avif", "\x00\x00\x00\x1cftypavif\x00\x00\x00\x00", true},
+		{"svg", `<svg xmlns="http://www.w3.org/2000/svg"/>`, false},
+		{"xml svg", `<?xml version="1.0"?><svg/>`, false},
+		{"html", "<!doctype html><script>alert(1)</script>", false},
+		{"pdf", "%PDF-1.7\n", false},
+		{"tiff", "II*\x00\x08\x00\x00\x00", false},
+		{"riff not webp", "RIFF\x24\x00\x00\x00WAVEfmt ", false},
+		{"short", "\xff\xd8", false},
+		{"short ftyp", "\x00\x00\x00\x18ftyp", false},
+		{"empty", "", false},
+	} {
+		if got := sniffPhoto([]byte(tc.data)); got != tc.want {
+			t.Errorf("%s: sniffPhoto = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// An SVG upload is refused with the usual message, and neither vips tool
+// is run for it.
+func TestPhotoUploadNotAPhotoRunsNoVips(t *testing.T) {
+	ran := filepath.Join(t.TempDir(), "ran")
+	for _, bin := range []*string{&vipsBin, &vipsheaderBin} {
+		path := filepath.Join(t.TempDir(), "vips")
+		if err := os.WriteFile(path, []byte("#!/bin/sh\ntouch "+ran+"\nexit 1\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		swap(t, bin, path)
+	}
+	a := newApp(t)
+	a.seed()
+	item := itemPath(itemID(t, a.store, "Silkolene"))
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>alert(1)</script></svg>`)
+	rec := a.do(photoUpload(t, context.Background(), item, svg))
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || !strings.Contains(f.Message, "not a JPEG, PNG, GIF, WebP or HEIC") {
+		t.Errorf("flash = %+v", f)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("vips ran on an SVG")
+	}
+	expect(t, a.get(item+"/photo"), http.StatusNotFound)
+}
+
 // pngWithSize is a 1x1 PNG of img's colour type whose header declares w x
 // h, as a small file can ("decompression bomb"), interlaced or not.
 func pngWithSize(t *testing.T, img image.Image, w, h uint32, interlaced bool) []byte {

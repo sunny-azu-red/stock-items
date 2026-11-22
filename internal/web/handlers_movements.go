@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"html/template"
 	"math"
 	"net/http"
 
@@ -28,7 +27,7 @@ type movementPage struct {
 	Name      string // "purchase", "use", …
 	Undo      string // how deleting it changes the stock, e.g. "−1 L"
 	Form      movementEditForm
-	Back      template.URL // the page that opened the form, already checked
+	Back      string // the page that opened the form, already checked
 	Units     []stock.SubUnit
 	Gone      bool // deleted since the form was opened: Movement is what the form said
 	Suppliers []string
@@ -92,7 +91,7 @@ func (s *Server) renderMovementForm(w http.ResponseWriter, r *http.Request, stat
 	}
 	s.render(w, r, status, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
 		Data: movementPage{Movement: m, Name: changeName(m.Kind), Undo: stock.FormatDelta(-m.Delta, m.ItemUnit),
-			Form: f, Back: template.URL(f.Back), Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
+			Form: f, Back: f.Back, Units: stock.SubUnitsFor(m.ItemUnit), Suppliers: suppliers, Item: it}})
 	return nil
 }
 
@@ -129,7 +128,7 @@ func (s *Server) goneMovementForm(w http.ResponseWriter, r *http.Request, id int
 		return err
 	}
 	s.render(w, r, http.StatusUnprocessableEntity, "movement_form", View{Title: "Edit " + changeName(m.Kind), Nav: "stock",
-		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: template.URL(f.Back), Units: units, Gone: true, Suppliers: suppliers, Item: it}}) //nolint:gosec // Back is a checked local path
+		Data: movementPage{Movement: m, Name: changeName(m.Kind), Form: f, Back: f.Back, Units: units, Gone: true, Suppliers: suppliers, Item: it}})
 	return nil
 }
 

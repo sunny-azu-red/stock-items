@@ -197,12 +197,14 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		// skuSearch links a part number (optionally with brand) to the configured search engine,
 		// with the configured prefix (e.g. "site:de"), if any, added to the query.
-		"skuSearch": func(code string, brand ...string) template.URL {
+		// A string, not template.URL: html/template still refuses a
+		// scheme other than http(s) in the operator's URL.
+		"skuSearch": func(code string, brand ...string) string {
 			b := ""
 			if len(brand) > 0 {
 				b = brand[0]
 			}
-			return template.URL(skuSearchURL(s.skuSearch, s.skuSearchPrefix, code, b)) //nolint:gosec // the operator's URL, the code escaped
+			return skuSearchURL(s.skuSearch, s.skuSearchPrefix, code, b)
 		},
 		"skuSearchTitle": func() string { return s.skuSearchTitle },
 		"emptyLine":      func() lineRow { return lineRow{} },

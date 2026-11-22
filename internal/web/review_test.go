@@ -236,6 +236,19 @@ func TestPartNumberLinks(t *testing.T) {
 			t.Errorf("got query %q, want %q", got, "Silkolene 601449901")
 		}
 	})
+	// A search URL that isn't http(s) (config refuses one; New doesn't)
+	// never becomes a link that runs script.
+	t.Run("not a script", func(t *testing.T) {
+		srv, err := New(a.store, Options{SKUSearchURL: "javascript:alert(document.cookie)//{q}",
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, itemPath(id), nil))
+		expect(t, rec, http.StatusOK, `<a class="sku-link" href="#ZgotmplZ"`)
+		expectNot(t, rec, "javascript:")
+	})
 	for _, bad := range []string{"https://www.google.com/search?q=", "https://example.com/{q}?q={q}"} {
 		if _, err := New(a.store, Options{SKUSearchURL: bad}); err == nil {
 			t.Errorf("New accepted the search URL %q", bad)

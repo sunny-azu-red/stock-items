@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="{{or .Theme "light dark"}}">
   <meta name="theme-color" content="#5a3fcc">
-  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "historyCacheSize": 0, "scrollIntoViewOnBoost": false}'>
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "historyCacheSize": 0, "scrollIntoViewOnBoost": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true}'>
   <title>{{.Title}} · Pitbox</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
   <link rel="stylesheet" href="{{asset "app.css"}}">

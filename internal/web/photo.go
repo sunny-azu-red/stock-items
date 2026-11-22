@@ -66,6 +66,24 @@ var (
 // riskiest, and this list the rest.
 var photoLoaders = map[string]bool{"jpegload": true, "pngload": true, "gifload": true, "webpload": true, "heifload": true}
 
+// sniffPhoto reports whether data starts as a JPEG, PNG, GIF, WebP or
+// HEIF/AVIF file does. Anything else (SVG, PDF, TIFF, ...) is refused
+// before vipsheader parses it, so only the decoders of photoLoaders ever
+// see an upload; photoLoaders is checked as well.
+func sniffPhoto(data []byte) bool {
+	switch {
+	case bytes.HasPrefix(data, []byte("\xff\xd8\xff")),
+		bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")),
+		bytes.HasPrefix(data, []byte("GIF87a")), bytes.HasPrefix(data, []byte("GIF89a")):
+		return true
+	case len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP":
+		return true
+	case len(data) >= 12 && string(data[4:8]) == "ftyp": // ISO base media: HEIC, AVIF
+		return true
+	}
+	return false
+}
+
 // photoSlot lets one photo be processed at a time, so a few uploads at
 // once can't add up. One at a time is plenty for a garage.
 var photoSlot = make(chan struct{}, 1)
@@ -103,6 +121,9 @@ func processPhotoQueued(ctx context.Context, data []byte) (full, thumb []byte, e
 // orientation applied), in sRGB, on white where it was transparent, and
 // without metadata. It returns ctx's error when ctx ends.
 func processPhoto(ctx context.Context, data []byte) (full, thumb []byte, err error) {
+	if !sniffPhoto(data) {
+		return nil, nil, errPhotoNotImage
+	}
 	vips, err1 := exec.LookPath(vipsBin)
 	header, err2 := exec.LookPath(vipsheaderBin)
 	if err := errors.Join(err1, err2); err != nil {

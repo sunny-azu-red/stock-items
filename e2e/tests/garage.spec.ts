@@ -1663,9 +1663,7 @@ test("screenshots", async ({ page }, testInfo) => {
       // over the content: put it at the end of the page, as when scrolled down.
       // The sticky sidebar is one screen high too: stretch it down the page,
       // so its footer is at the bottom and not halfway down.
-      await page.addStyleTag({
-        content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
-      });
+      await fullPageStyles(page);
       await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
     }
   }
@@ -1675,13 +1673,21 @@ test("screenshots", async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: scheme });
     for (const [name, url] of [["dashboard-working", "/"], ["stock-working", "/stock"]]) {
       await page.goto(url);
-      await page.addStyleTag({
-        content: "body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }",
-      });
+      await fullPageStyles(page);
       await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
     }
   }
 });
+
+// fullPageStyles readies a page for a full-page shot (see above). A
+// constructed sheet, not addStyleTag: the CSP allows no <style> element.
+async function fullPageStyles(page: Page) {
+  await page.evaluate(() => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync("body { position: relative; } .tabbar { position: absolute !important; } .sidebar { position: static; height: auto; }");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  });
+}
 
 // Boxes that don't start and end on whole CSS pixels (docs/conventions.md):
 // the browser snaps text to whole pixels but not icons or borders, so text

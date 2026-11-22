@@ -344,6 +344,9 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   // read twice by a screen reader).
   await expect(item.locator("xpath=..")).toHaveAttribute("title", "Silkolene 15W50 PRO 4 XP");
   await expect(item).not.toHaveAttribute("title", /./);
+  // Its list and chevron don't show that name over every entry.
+  await expect(item.locator("xpath=..").locator(".combo-list")).toHaveAttribute("title", "");
+  await expect(item.locator("xpath=..").locator(".combo-toggle")).toHaveAttribute("title", "");
 
   // Changed: something new again, and the unit the item chose goes back.
   await item.pressSequentially(" synthetic");

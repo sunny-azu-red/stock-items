@@ -566,6 +566,9 @@
     box.className = "combo-list";
     box.setAttribute("role", "listbox");
     box.setAttribute("popover", "manual");
+    // An item box's title (the picked item's whole name) would show over
+    // every entry of its list and over the chevron: an empty one stops it.
+    if (wrap.matches(".item-box")) { box.title = ""; toggle.title = ""; }
     wrap.append(toggle, box);
     input.removeAttribute("list");
     input.setAttribute("autocomplete", "off");

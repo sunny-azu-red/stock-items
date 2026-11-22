@@ -376,7 +376,7 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 ## 15. Motion
 
 * **Page changes are instant**: no cross-fade (no `@view-transition`), so following a link and an in-place update (the stock's filters) feel the same.
-* **Popovers and dialogs come in**: More and Appearance slide a few pixels and fade (on a phone Appearance takes the sheet's place at once, no fade), a confirmation and a hint fade (and grow) in (`@starting-style`), and go out the same way (`overlay`, `display` with `allow-discrete`). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
+* **Popovers and dialogs come in**: More and Appearance slide a few pixels and fade (on a phone Appearance takes the sheet's place at once, no fade), a confirmation and a hint fade (and grow) in (`@starting-style`). A hint, a confirmation and a desktop's Appearance go out the same way (`overlay`, `display` with `allow-discrete`, and a closed look with `opacity: 0`). A phone's sheets close at once, More and Appearance alike: More fading out would show again under an Appearance closing over it (a tap on the grey closes both). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
 * **Short and quiet**: .15–.3s, ease-out. Hover states fade in .15s.
 * **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once.
 

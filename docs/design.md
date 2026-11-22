@@ -116,6 +116,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Between cards, sections, tiles and columns | 12px | 12px | `--gap`: `.card + .card`, `.grid`, `.split`, `.tiles`, `.stack`, `.mt`, `.mb` |
 | Inside a card, left and right, for every part of it | 16px | 14px | `--inset` |
 | Under the page header | 18px | 18px | `.page-head` |
+| Between the header's line and its buttons, in a narrow column | 12px | 12px | `.page-head .actions` |
 | Under the Working on bar | 18px | `--page` (it runs edge to edge) | `.working-on` |
 | Above / below a results heading ("24 items" and its buttons) | 18px / 10px | the same | `.results-head` |
 | Under a flash | 12px | 12px | `.flash` |
@@ -175,28 +176,30 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 
 Every page starts with the same header: the heading and the record's buttons on one row, and one line under it that runs the full width, under the buttons too.
 
+**`layout.html` writes the header; a page only fills it in.** A page template defines up to four blocks next to `content`, and `render` (`renderHead` in `render.go`) renders each one and trims it. A block that is missing or renders nothing leaves no element behind:
+
 ```html
-<div class="page-head">
-  <div class="page-title">
-    <h1>…</h1>
-    <div class="sub flex">                                   <!-- or <p class="sub"> for text alone -->
-      {{template "archived-date-badge" …}}                    <!-- 1. Archived, when it is -->
-      {{template "chip-link" …}}                              <!-- 2. vehicle chips -->
-      <a class="badge badge-muted" …>…</a>                    <!-- 3. kit, item or category, then states -->
-      <span>One sentence.</span>                              <!-- 4. text, if any -->
-    </div>
-  </div>
-  <div class="actions">…</div>                               <!-- optional: the record's buttons -->
-</div>
+{{define "head-title"}}…{{end}}                        <!-- required: the <h1>'s text -->
+{{define "head-line"}}                                  <!-- optional: the line under it -->
+  {{template "archived-date-badge" …}}                  <!-- 1. Archived, when it is -->
+  {{template "chip-link" …}}                            <!-- 2. vehicle chips -->
+  <a class="badge badge-muted" …>…</a>                  <!-- 3. kit, item or category, then states -->
+  <span>One sentence.</span>                            <!-- 4. text, if any, always in a <span> -->
+{{end}}
+{{define "head-actions"}}…{{end}}                      <!-- optional: the record's buttons -->
+{{define "head-lead"}}<span class="avatar" …>{{end}}   <!-- optional: the vehicle page's tile -->
 ```
 
-* **Heading row**: `.page-head` is a grid. Its first row is at least a button tall (36px) with the heading centred in it, so the heading sits in the same place with or without buttons. `.page-title` and `.vehicle-hero` are `display: contents`: they group the markup, and their children are the grid's items.
-* **The line**: at most one line under the heading, 4px below the heading row, spanning the full width. In order: the **Archived** badge first when the record is archived, then **chips**, then the other **badges** (the kit, item or category the record belongs to, then its states), then **text** in a `<span>`. Text never comes before a chip or badge. A sentence on its own is a `<p class="sub">`.
+The layout turns them into `<div class="page-head" id="page-head">`, holding the lead, `<h1>`, `<div class="sub">` (the line) and `<div class="actions">`, all of them items of one grid. A page never writes this markup itself: `TestPageHeads` fails on a page without `head-title`, or on one with its own `<h1>`, `page-head` or `sub` class. The line is a flex row with no margin of its own, so a sentence alone sits exactly where chips would. (Before this, nine pages wrote the line as a `<p>`, whose margin put 30px under their header instead of 18.)
+
+* **Heading row**: `.page-head` is a grid. Its first row is at least a button tall (36px) with the heading centred in it, so the heading sits in the same place with or without buttons.
+* **The line**: at most one line under the heading, 4px below the heading row, spanning the full width. In order: the **Archived** badge first when the record is archived, then **chips**, then the other **badges** (the kit, item or category the record belongs to, then its states), then **text** in a `<span>`. Text never comes before a chip or badge.
+* **Under the header**: 18px to whatever comes next, on every page.
 * **The heading names the record or the action** and nothing else: no vehicle names after a ` · `. A vehicle that can't change on the page (a kit's service, an edit) is a chip on the line; when a field on the page still chooses it, it isn't shown. On a form's line, chips and badges are plain labels.
 * **The way back**: a record's page starts its buttons with a ghost ← button to where the record belongs, never to the page it came from: an item's to **Stock**, a service's to **Services**, a kit's to its vehicle (named), a vehicle's to **Vehicles** (not while you work on a vehicle: the bar's × leads there). An archived item or vehicle goes to the archived list it is in (`?archived=1`).
-* **Narrow content** (under 680px of main column): the heading, the line under it, then the buttons as an even grid (`minmax(96px, 1fr)` cells, each button filling its cell): tidy rows however many there are, and two share the width.
+* **Narrow content** (under 680px of main column): the heading, the line under it, then, 12px below it, the buttons as an even grid (`minmax(96px, 1fr)` cells, each button filling its cell): tidy rows however many there are, and two share the width.
 * **Vehicle page**: the kind icon in a 64px tile of the vehicle's colour, left of the heading and the line and spanning both; 52px under 680px.
-* The e2e test "every page header has the same spacing" checks the heading's place, the gap under it and the order of the line on every page.
+* The e2e test "every page header has the same spacing" checks on every page: one header, from the layout; the heading's place; the line 4px under it, in order, with its text in spans; 18px under the header; and, in a narrow column, the buttons 12px under the line.
 
 ---
 

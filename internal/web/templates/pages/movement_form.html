@@ -54,8 +54,10 @@
       <input class="input" type="date" id="occurred_on" name="occurred_on" value="{{$f.OccurredOn}}" {{invalid (index $e "occurred_on") "occurred_on"}}>
       {{template "field-err" (fieldErr (index $e "occurred_on") "occurred_on")}}
     </div>
-    {{/* A use has three fields: its note takes two columns, so the row fills four (or two). */}}
-    <div class="field{{if eq $m.Kind "used"}} span-2{{end}}">
+    {{/* A use has three fields: its note takes two columns, so the row fills
+         four (or two). A purchase or starting stock has five: its note goes
+         across the row rather than alone on one. */}}
+    <div class="field{{if eq $m.Kind "used"}} span-2{{else if $m.TakesPrice}} span-all{{end}}">
       <label for="note">Note</label>
       <input class="input" id="note" name="note" value="{{$f.Note}}" placeholder="{{if eq $m.Kind "bought"}}e.g. on sale, 2 for 1{{else if eq $m.Kind "used"}}e.g. topped up after the trip{{else if eq $m.Kind "adjusted"}}e.g. found a spare box{{else}}e.g. left over from the old bike{{end}}">
     </div>

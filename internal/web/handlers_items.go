@@ -836,6 +836,18 @@ func examplesFor(u stock.Unit) string {
 	return "2"
 }
 
+// numberExampleFor is examplesFor without its units, for a part row's
+// quantity, whose unit picker sits beside it.
+func numberExampleFor(u stock.Unit) string {
+	switch u {
+	case stock.UnitML:
+		return "500"
+	case stock.UnitGram:
+		return "400"
+	}
+	return "2"
+}
+
 // itemAdjust is the quick -/+ in stock rows.
 func (s *Server) itemAdjust(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r, "id")

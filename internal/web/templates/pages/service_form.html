@@ -38,24 +38,13 @@
   {{$byBar := and (not (or $f.KitID $f.ID)) .WorkingOn (eq $f.VehicleID .WorkingOn.ID)}}
   {{if or $f.KitID $f.ID $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
-  {{if $d.Kits}}
-  {{/* A new service without a kit: the chosen vehicle's kits to start from
-       instead (app.js shows the right ones when the vehicle changes). Each
-       kit's status is the end of its button, how far off it is the title;
-       a kit without a schedule is just its name. */}}
-  {{$any := false}}{{range $d.Kits}}{{if eq .Kit.VehicleID $f.VehicleID}}{{$any = true}}{{end}}{{end}}
-  <div class="form-section" id="kit-starts"{{if not $any}} hidden{{end}}>
-    <h2>Start from a kit</h2>
-    <p class="hint">A kit fills in its parts and counts the service towards its schedule.</p>
-    <div class="flex mt">
-      {{range $d.Kits}}<span class="flex" data-kit-vehicle="{{.Kit.VehicleID}}"{{if ne .Kit.VehicleID $f.VehicleID}} hidden{{end}}><a class="btn btn-sm kit-start"{{with .Due.Summary}} title="{{.}}"{{end}} href="/services/new?kit={{.Kit.ID}}" data-kit-start>{{icon "list-checks"}} {{.Kit.Name}}{{template "due-badge" .Due}}</a></span>{{end}}
-    </div>
-  </div>
-  {{end}}
-  <div class="form-section">
+  {{/* One section, its rows stacked: the vehicle (when asked) on a row of
+       its own, its kits to start from right under it, a kit's schedule on a
+       row of its own, then the service's four fields filling one row. */}}
+  <div class="form-section form-rows">
+    {{if not (or $f.KitID $f.ID $byBar)}}
     <div class="form-grid">
-      {{if not (or $f.KitID $f.ID $byBar)}}
-      <div class="field{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
+      <div class="field span-2{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
         <select class="input" id="vehicle_id" name="vehicle_id" required{{if not $f.VehicleID}} autofocus{{end}} {{invalid (index $e "vehicle_id") "vehicle_id"}}>
           <option value="">Choose…</option>
@@ -64,16 +53,33 @@
         {{template "field-err" (fieldErr (index $e "vehicle_id") "vehicle_id")}}
         {{template "err" (index $e "kit_id")}}
       </div>
-      {{end}}
-      {{if $d.KitHasInter}}
-      <fieldset class="field">
+    </div>
+    {{end}}
+    {{if $d.Kits}}
+    {{/* A new service without a kit: the chosen vehicle's kits to start from
+         instead (app.js shows the right ones when the vehicle changes). Each
+         kit's status is the end of its button, how far off it is the title;
+         a kit without a schedule is just its name. */}}
+    {{$any := false}}{{range $d.Kits}}{{if eq .Kit.VehicleID $f.VehicleID}}{{$any = true}}{{end}}{{end}}
+    <div class="field" id="kit-starts"{{if not $any}} hidden{{end}}>
+      <div class="label-row"><span class="label" id="kit-starts-label">Start from a kit</span>{{template "tip" (dict "For" "Start from a kit" "ID" "kit-starts-tip" "Text" "A kit fills in its parts and counts the service towards its schedule.")}}</div>
+      <div class="flex" role="group" aria-labelledby="kit-starts-label" aria-describedby="kit-starts-tip">
+        {{range $d.Kits}}<span class="flex" data-kit-vehicle="{{.Kit.VehicleID}}"{{if ne .Kit.VehicleID $f.VehicleID}} hidden{{end}}><a class="btn btn-sm kit-start"{{with .Due.Summary}} title="{{.}}"{{end}} href="/services/new?kit={{.Kit.ID}}" data-kit-start>{{icon "list-checks"}} {{.Kit.Name}}{{template "due-badge" .Due}}</a></span>{{end}}
+      </div>
+    </div>
+    {{end}}
+    {{if $d.KitHasInter}}
+    <div class="form-grid">
+      <fieldset class="field span-2">
         <legend>Schedule</legend>
         <span class="segmented">
           <label title="Full"><input type="radio" name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="{{$f.KitName}}" {{if not $f.KitIntermediate}}checked{{end}}><span class="seg-text">Full</span></label>
           <label title="Intermediate"><input type="radio" name="kit_intermediate" value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="{{$f.KitName}}" {{if $f.KitIntermediate}}checked{{end}}><span class="seg-text">Intermediate</span></label>
         </span>
       </fieldset>
-      {{end}}
+    </div>
+    {{end}}
+    <div class="form-grid">
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <div class="label-row"><label for="title">Work performed</label>{{template "req"}}</div>
         <input class="input" id="title" name="title" value="{{$f.Title}}" required placeholder="e.g. Oil Service" list="service-titles" autocomplete="off"{{if and $f.VehicleID (not (or $f.ID $f.Title))}} autofocus{{end}} {{invalid (index $e "title") "title"}}>

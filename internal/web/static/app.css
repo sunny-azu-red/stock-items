@@ -615,12 +615,18 @@
     grid-template-columns: repeat(auto-fill, var(--form-col));
   }
   @container form-grid (width >= 412px) { .form-grid > .span-2 { grid-column: span 2; } }
-  /* A page form has four fields a row, or two, or one: never three, so a
-     row of four boxes (a purchase, a SKU) always lines up with the fields
-     around it and no field is left alone on a row. Under four (four 200px
+  /* A field across the row: the last of five (a purchase's Note), rather
+     than alone on a row of four. */
+  .form-grid > .span-all { grid-column: 1 / -1; }
+  /* A section of rows that come and go (Log service: the vehicle, its
+     kits, a kit's schedule, the service's fields), the gap between them. */
+  .form-rows { display: grid; gap: var(--gap); }
+  /* A form has four fields a row, or two, or one: never three, so a row of
+     four boxes (a purchase, a SKU) always lines up with the fields around
+     it and no field is left alone on a row. Under four (four 200px
      columns, three gaps and the card's inset), two columns of half each. */
   @container (width < 868px) {
-    .page-form .form-grid { --form-col: minmax(max(min(200px, 100%), round(down, (100% - var(--gap)) / 2, 1px)), 1fr); }
+    .form-grid { --form-col: minmax(max(min(200px, 100%), round(down, (100% - var(--gap)) / 2, 1px)), 1fr); }
   }
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
@@ -850,6 +856,7 @@
     & .icon-btn { margin-top: 3px; }
   }
   .row-head { font-size: var(--text-sm); font-weight: 600; margin-bottom: -2px; }
+  .row-head-pair { display: none; }
   .row-end {
     display: flex; gap: 8px; align-items: start; min-width: 0;
     & > .qty-input { flex: 1; min-width: 0; }
@@ -877,7 +884,10 @@
       & .qty-input { grid-area: 2 / 1; }
       & .part-stock { grid-area: 2 / 2; }
     }
-    .row-head { display: none; }
+    /* A part's item picker and unit say what they are; a SKU's heading
+       names each column's two boxes, Code · Brand and Type · Pack size. */
+    .part-line.row-head, .sku-line.row-head > :nth-child(n + 3) { display: none; }
+    .row-head-pair { display: inline; }
   }
 
   /* ---- Chips (vehicles) ------------------------------------------- */

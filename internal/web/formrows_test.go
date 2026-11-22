@@ -100,7 +100,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	// From the vehicle page: its kits show at once, each ending in its due badge.
 	// The odometer starts empty, the last reading as its placeholder.
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK,
-		`<div class="form-section" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit",
+		`<div class="field" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit",
 		`Oil service<span class="badge badge-muted">Not done yet</span></a>`,
 		`name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
 		`data-odometer="10`+"\u202f"+`000 km"`)

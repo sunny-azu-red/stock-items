@@ -126,7 +126,8 @@
     <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
     {{template "err" (index $e "skus")}}
     <div class="rows" id="sku-rows">
-      <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Brand</span><span>Pack size</span></div>
+      {{/* On two lines each column holds two boxes, and its heading names both (the second names show only then). */}}
+      <div class="row-line sku-line row-head"><span>Code<span class="row-head-pair"> · Brand</span></span><span>Type<span class="row-head-pair"> · Pack size</span></span><span>Brand</span><span>Pack size</span></div>
       {{range $f.SKUs}}{{template "sku-row" (dict "Row" . "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}{{end}}
     </div>
     <template id="sku-template">{{template "sku-row" (dict "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}</template>

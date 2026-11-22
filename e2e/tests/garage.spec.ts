@@ -405,11 +405,12 @@ test("part rows keep a quantity hint until an item is chosen", async ({ page }) 
   await page.goto("/services/new");
   const items = page.locator('select[name="part_item"]');
   const qtys = page.locator('input[name="part_qty"]');
-  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
-  await items.first().selectOption({ label: "KTM Oil Filter" });
-  await expect(qtys.first()).not.toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+  // The number alone: the unit picker beside it says the unit.
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
+  await items.first().selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 500");
   await items.first().selectOption({ label: "Choose an item…" });
-  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1 or 1.7 L");
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
 });
 
 test("part rows offer the chosen item's units", async ({ page }) => {
@@ -2059,6 +2060,16 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
                 if (!on(r)) out.add(`${what} row: ${label} ends at ${at(r)}px, not on ${cols}`);
               }
             }
+            // Its heading, when shown: one line, each label on a column.
+            const head = row.parentElement?.querySelector(":scope > .row-head");
+            if (head && shown(head)) {
+              const labels = [...head.children].filter(shown);
+              if (new Set(labels.map((l) => Math.round(l.getBoundingClientRect().top))).size > 1) out.add(`${what} row's heading takes more than one line`);
+              for (const l of labels) {
+                const x = l.getBoundingClientRect().left;
+                if (!on(x)) out.add(`${what} row's heading "${(l.textContent ?? "").trim()}" starts at ${at(x)}px, not on ${cols}`);
+              }
+            }
             for (const badge of row.querySelectorAll(".part-stock > .badge")) {
               const l = badge.getBoundingClientRect().left;
               if (shown(badge) && !on(l)) out.add(`${what} row: its stock badge starts at ${at(l)}px, not on ${cols}`);
@@ -2226,4 +2237,62 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
   await expect(partItem.locator("option:checked")).toHaveText("Silkolene 15W50 PRO 4 XP");
   await expect(partQty).toHaveValue("1.5 L");
+});
+
+// After the kit above has an intermediate schedule, so Log service from it
+// shows its Schedule row.
+test("every form's fields fill its columns", async ({ page }, testInfo) => {
+  // docs/design.md#6-layout (Forms). Fields went three a row (thirds, off
+  // the columns of the sections around them, and a fourth field alone on
+  // the next row), and Labour cost, a purchase's Note and a use's Note
+  // were left alone on a second row. Every form's grid has four columns,
+  // two or one, all as wide, and no row ends with one field alone (a field
+  // in a grid of its own, like Counted in, is a row of its own on purpose).
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const fromKit = await link(kit, '.page-head a[href^="/services/new?kit="]');
+  await page.goto("/activity");
+  const movements = [...new Set(await page.locator('a[href^="/movements/"]').evaluateAll((as) => as.map((a) => a.getAttribute("href") as string)))].slice(0, 8);
+  // [path, the item page's tab to open first]
+  const pages: [string, string?][] = [["/items/new"], [item + "/edit"], ["/vehicles/new"], [vehicle + "/edit"], ["/kits/new"], [kit + "/edit"],
+    ["/services/new"], [service + "/edit"], [fromKit], ["/shopping"], [item], [item, "Used"], [item, "Adjust"], ...movements.map((m): [string] => [m])];
+  const problems: string[] = [];
+  for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
+    if (width) await page.setViewportSize({ width, height: 900 });
+    for (const [p, tab] of pages) {
+      await page.goto(p);
+      if (tab) await page.getByRole("tab", { name: tab }).click();
+      if (p === "/services/new") await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+      const found = await page.evaluate(() => {
+        const out: string[] = [];
+        const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        const label = (f: Element) => (f.querySelector("label, legend, .label")?.textContent ?? "").trim();
+        for (const grid of document.querySelectorAll(".card .form-grid")) {
+          if (!shown(grid)) continue;
+          const tracks = getComputedStyle(grid).gridTemplateColumns.split(" ").map(parseFloat).filter((t) => t > 0.5);
+          const fields = [...grid.children].filter((c) => c.matches(".field") && shown(c));
+          const names = fields.map(label).join(", ");
+          if (tracks.length === 3) out.push(`three a row (${names})`);
+          if (Math.max(...tracks) - Math.min(...tracks) > 1) out.push(`columns of ${tracks.map(Math.round).join(", ")}px (${names})`);
+          const rows = new Map<number, Element[]>();
+          for (const f of fields) {
+            const top = Math.round(f.getBoundingClientRect().top);
+            rows.set(top, [...(rows.get(top) ?? []), f]);
+          }
+          const last = [...rows.entries()].sort((a, b) => a[0] - b[0]).at(-1)?.[1] ?? [];
+          if (tracks.length > 1 && rows.size > 1 && last.length === 1 && last[0].getBoundingClientRect().width < tracks[0] * 1.5)
+            out.push(`"${label(last[0])}" alone on its row (${names})`);
+        }
+        return out;
+      });
+      for (const f of found) problems.push(`${width ? width + "px" : "the window"} ${p}${tab ? " (" + tab + ")" : ""}: ${f}`);
+    }
+  }
+  expect(problems).toEqual([]);
 });

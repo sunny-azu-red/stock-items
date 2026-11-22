@@ -151,8 +151,11 @@ func (s *Server) funcs() template.FuncMap {
 			return rowData{Item: it, Vehicles: vs, HideChips: hideChips, Here: here, Working: working}
 		},
 		"placeholderFor": func(u stock.Unit) string { return "e.g. " + examplesFor(u) },
-		"optInt":         optIntString,
-		"unitPrice":      s.formatUnitPrice,
+		// rowPlaceholderFor is a part row's: the number alone, as the unit
+		// picker beside it says the unit (and a phone has room for little).
+		"rowPlaceholderFor": func(u stock.Unit) string { return "e.g. " + numberExampleFor(u) },
+		"optInt":            optIntString,
+		"unitPrice":         s.formatUnitPrice,
 		// withQuery joins a path and an already encoded query string
 		// (from url.Values.Encode), so html/template does not escape it again.
 		"withQuery": func(path, query string) template.URL {

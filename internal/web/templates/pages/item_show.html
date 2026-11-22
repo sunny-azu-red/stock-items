@@ -161,7 +161,8 @@
       {{if $active}}{{template "field-err" (fieldErr (index $e "occurred_on") (print "date-" .Kind))}}{{end}}
     </div>
     {{end}}
-    <div class="field">
+    {{/* A use has three fields: its note takes two columns, so the row fills four (or two). */}}
+    <div class="field{{if eq .Kind "used"}} span-2{{end}}">
       <label for="note-{{.Kind}}">Note</label>
       <input class="input" id="note-{{.Kind}}" name="note" value="{{if $active}}{{$m.Note}}{{end}}" placeholder="{{if eq .Kind "used"}}e.g. topped up after the trip{{else}}e.g. found a spare box{{end}}">
     </div>

@@ -282,12 +282,12 @@
   <div class="field">
     <select class="input" name="{{.Prefix}}_item" data-part-item aria-label="Item">
       <option value="">Choose an item…</option>
-      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}} data-placeholder="{{placeholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
+      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}} data-placeholder="{{rowPlaceholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
     </select>
     {{template "err" $row.Error}}
   </div>
   <div class="qty-input">
-    <input class="input" name="{{.Prefix}}_qty" value="{{$row.Qty}}" placeholder="e.g. 1 or 1.7 L" aria-label="Quantity" data-part-qty>
+    <input class="input" name="{{.Prefix}}_qty" value="{{$row.Qty}}" placeholder="e.g. 2" aria-label="Quantity" data-part-qty>
     <select class="input" name="{{.Prefix}}_unit" aria-label="Unit" data-part-unit>
       <option value="" data-base="">unit</option>
       {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $row.Unit}}selected{{end}}>{{.Label}}</option>{{end}}

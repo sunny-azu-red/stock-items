@@ -615,6 +615,13 @@
     grid-template-columns: repeat(auto-fill, var(--form-col));
   }
   @container form-grid (width >= 412px) { .form-grid > .span-2 { grid-column: span 2; } }
+  /* A page form has four fields a row, or two, or one: never three, so a
+     row of four boxes (a purchase, a SKU) always lines up with the fields
+     around it and no field is left alone on a row. Under four (four 200px
+     columns, three gaps and the card's inset), two columns of half each. */
+  @container (width < 868px) {
+    .page-form .form-grid { --form-col: minmax(max(min(200px, 100%), round(down, (100% - var(--gap)) / 2, 1px)), 1fr); }
+  }
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
   .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
@@ -851,20 +858,25 @@
   .part-line > :first-child { grid-column: span 2; }
   /* The stock badge (24px), centred against the 36px fields. */
   .part-stock { display: flex; min-width: 0; margin-top: 6px; }
-  /* Under four fields a row (.form-grid: four 200px columns, three gaps
-     and the card's inset), rows take two lines. */
+  /* Under four fields a row, the form's two columns, at its gap: a SKU is
+     Code · Type and its × over Brand · Pack size; a part is its item and
+     its × (the whole line) over Quantity · its stock badge. The remove
+     button ends the first line, inside its last box. */
   @container (width < 868px) {
-    /* The remove button ends the first line, as on a part row. */
-    .sku-line { grid-template-columns: repeat(2, minmax(0, 1fr)) var(--control-sm); }
-    .sku-line .row-end { display: contents; }
-    .sku-line .qty-input { grid-column: 2; grid-row: 2; }
-    .sku-line .row-remove { grid-column: 3; grid-row: 1; margin-left: 0; }
-    .part-line { grid-template-columns: minmax(0, 1fr) var(--control-sm); }
-    .part-line > :first-child { grid-column: 1; }
-    .part-line .row-end { display: contents; }
-    .part-line .qty-input { grid-column: 1; grid-row: 2; }
-    .part-line .row-remove { grid-column: 2; grid-row: 1; margin-left: 0; }
-    .part-line .part-stock { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
+    .row-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row-end { display: contents; }
+    .row-remove { grid-area: 1 / 2; justify-self: end; margin-left: 0; }
+    .sku-line {
+      & > .field { grid-area: 1 / 1; }
+      & > select { grid-area: 1 / 2; width: calc(100% - var(--control-sm) - 8px); }
+      & > input { grid-area: 2 / 1; }
+      & .qty-input { grid-area: 2 / 2; }
+    }
+    .part-line {
+      & > :first-child { grid-column: 1 / -1; grid-row: 1; padding-right: calc(var(--control-sm) + 8px); }
+      & .qty-input { grid-area: 2 / 1; }
+      & .part-stock { grid-area: 2 / 2; }
+    }
     .row-head { display: none; }
   }
 

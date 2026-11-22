@@ -121,7 +121,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Under a flash | 12px | 12px | `.flash` |
 | Between table columns | 12px each side; `--inset` at the table's edges | the same | `.table` |
 | A page that is a form | at most `--form-width` 980px, its header and flash too | the page's width | `.page-form` |
-| A form's fields | at most 4 a row, at least 200px each | one a row | `.form-grid` |
+| A form's fields | at most 4 a row, at least 200px each; on a page form 4, 2 or 1, never 3 | one a row | `.form-grid` |
 | A page's side column | 300–480px; the main column takes the rest | under the main column (below 680px of content) | `.split` |
 | Vehicle cards | at least 320px, as many as fit | one a row | `.grid-3` |
 
@@ -159,7 +159,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
   - **A page that is a form** (`form.card.page-form`: item, vehicle, kit, service) is a run of `.form-section`s. The **first has no heading**: the page's `<h1>` (Add item, Edit KTM 390, Log service) names it. **Every later section has an `<h2>`**, a short noun in sentence case (Vehicles, Stock, Purchase, SKUs, Details, Odometer, Schedule, Parts, Parts used), never a question. The one exception is a shortcut before the form proper (Log service's **Start from a kit**), which keeps its heading.
   - **A section's hint goes right under its heading**, before its fields (`<p class="hint mb">`, one at most); a hint about one field goes behind a "?" at its label (`tip`).
   - **No field stands alone in a short last row** where it can be helped: a long code takes two columns instead (`.span-2`: the vehicle's VIN beside nothing, under Make, Model, Year and Plate).
-  - **Repeating rows keep the form's columns** (`.row-line`: four equal ones at the `.form-grid`'s gap), so every box of a row stands under a field above it: a SKU is Code · Type · Brand · Pack size and its ×; a part is its item (two columns, as wide as one of two fields) · Quantity · its stock badge and ×. Under four fields a row they take two lines.
+  - **Repeating rows keep the form's columns** (`.row-line`: four equal ones at the `.form-grid`'s gap), so every box of a row stands under a field above it: a SKU is Code · Type · Brand · Pack size and its ×; a part is its item (two columns, as wide as one of two fields) · Quantity · its stock badge and ×. Under four fields a row they take the form's two columns: a SKU is Code · Type and its × over Brand · Pack size, a part its item and × (the whole line) over Quantity · its stock badge. So that a row of four always lines up, a page form has four fields a row, two or one, never three.
   - **Notes is the last section**, on its own and without a heading: its label says it.
   - **The record's own fields come first** (what it is and what it's called), and a new form has the focus on the first field to type in.
   - **Dates say what happened on them**: Bought on, Used on, Adjusted on, Started on (starting stock), Done on, Purchased on.

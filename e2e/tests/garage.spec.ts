@@ -1078,7 +1078,15 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await expect(page.locator("main h1")).toHaveText("KTM 390");
   if (mobile) {
     await expect(sheet).toBeHidden();
-    await expect(page.locator(".tabbar .current")).toHaveText("More");
+    const current = page.locator(".tabbar .current:visible");
+    await expect(current).toHaveText("More");
+    // Still while Appearance is open in More's place: the page is the same.
+    await appearance(page);
+    await expect(current).toHaveText("More");
+    await expect(current.locator(".icon")).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
   }
   // On its own page the bar's name is no link.
   await expect(page.locator(".working-on a.working-name")).toHaveCount(0);

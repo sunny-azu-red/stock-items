@@ -510,14 +510,14 @@ func TestWorkingOnNav(t *testing.T) {
 	// The phone's More opens the sidebar, which leaves out what the
 	// tabbar has; Activity and Trash moved off the vehicles list into it.
 	rec = a.getWorking("/activity?general=1&v="+w, w)
-	expect(t, rec, http.StatusOK, `<div class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
+	expect(t, rec, http.StatusOK, `<div class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `class="tab-back current"`, `href="/stock" class="tab-dup"`)
 	expectNot(t, a.get("/vehicles"), `href="/activity"><svg`, `Trash (`)
 	// One place to choose the vehicle, the sidebar's Work on list (in More
 	// on a phone): the bar only stops, and Appearance, in the sheet, has
 	// its way back to More.
 	expect(t, rec, http.StatusOK, `<form class="chips work-on"`, `popovertarget="appearance" popovertargetaction="hide"`)
 	expectNot(t, rec, `id="switch"`, `popovertarget="switch"`)
-	expectNot(t, a.get("/shopping"), `popovertarget="more" class="current"`)
+	expectNot(t, a.get("/shopping"), `popovertarget="more" class="current"`, `class="tab-back current"`)
 }
 
 // An empty stock while working on a vehicle says so; it once failed (500)

@@ -2176,6 +2176,116 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
   expect(problems).toEqual([]);
 });
 
+test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo) => {
+  // docs/design.md#6-layout (Forms, Spacing). A line of text keeps about
+  // 5px above its capitals and under its letters, so one CSS gap looked
+  // 17px above a box and 22px above a label: Vehicles' chips sat closer to
+  // their note than Purchase's fields to theirs, a heading was 14px from
+  // its note, and a field's error pushed the next field 5px further away.
+  // Measured from what you see (a box's edge, a line's capitals or
+  // baseline): 10px from a thing to what belongs to it (a label to its
+  // box, a box to its error or note, the rows' heading to the rows, an
+  // error over the rows), 17px to the next (a heading to what follows it,
+  // a section's note to its fields, a field's error to the field under
+  // it). With errors too, at every width.
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const vehicle = await link("/vehicles", "a.vehicle-card");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const submit = (name: string) => async () => { await page.getByRole("button", { name, exact: true }).first().click(); };
+  const pages: [string, string, (() => Promise<void>)?][] = [
+    ["/items/new", "Add item"], ["/items/new", "Add item with errors", submit("Save item")], [item + "/edit", "Edit item"],
+    ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
+    ["/kits/new", "Add kit", async () => { await page.locator("#has_inter").check(); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
+    ["/services/new", "Log service", async () => { await page.locator("#vehicle_id").selectOption({ label: "KTM 390" }); }], [service + "/edit", "Edit service"],
+    ["/shopping", "Shopping"], ["/shopping", "Shopping with errors", submit("Add")],
+    [item, "an item's Bought"], [item, "an item's Used", async () => { await page.getByRole("tab", { name: "Used" }).click(); }],
+  ];
+  const problems: string[] = [];
+  for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
+    if (width) await page.setViewportSize({ width, height: 900 });
+    for (const [url, name, before] of pages) {
+      await page.goto(url);
+      if (before) await before();
+      const found = await page.evaluate(() => {
+        const out: string[] = [];
+        const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
+        const cv = document.createElement("canvas").getContext("2d")!;
+        const TEXT = "h2, h3, p, label, legend, .label-row, .row-head, .field-error";
+        const BOX = ".input, .item-box, .combo, .chips, .toggle, .segmented, .btn, select, textarea, .qty-input";
+        // Where a line's capitals start and its letters stand, from the top
+        // of its box (Manrope's metrics, the element's own line height).
+        const lines = (el: Element) => {
+          const t = el.matches(".label-row") ? el.querySelector("label, .label")! : el.matches(".flex") ? el.querySelector("h2, h3")! : el;
+          const cs = getComputedStyle(t);
+          cv.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+          const m = cv.measureText("H");
+          const lh = parseFloat(cs.lineHeight);
+          const half = (lh - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+          return { lh, cap: half + m.fontBoundingBoxAscent - m.actualBoundingBoxAscent, base: half + m.fontBoundingBoxAscent };
+        };
+        const isText = (el: Element) => el.matches(TEXT) && !el.matches(".btn, .toggle");
+        // The bottom you see: a box's edge, or the last line's letters.
+        const bottom = (el: Element) => { const r = el.getBoundingClientRect(); if (!isText(el) && !el.matches(".flex")) return r.bottom; const l = lines(el); return r.bottom - l.lh + l.base; };
+        // The top you see of a block: its highest box edge or capitals.
+        const top = (el: Element): number => {
+          const cands = [el, ...el.querySelectorAll(`${TEXT}, ${BOX}`)].filter((c) => shown(c) && (c.matches(TEXT) || c.matches(BOX)));
+          let best = Infinity;
+          for (const c of cands) {
+            const r = c.getBoundingClientRect();
+            const y = isText(c) ? r.top + lines(c).cap : r.top;
+            if (y < best) best = y;
+          }
+          return best;
+        };
+        const next = (el: Element) => { let n = el.nextElementSibling; while (n && !shown(n)) n = n.nextElementSibling; return n; };
+        const say = (el: Element) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 32) || el.getAttribute("aria-label") || el.className;
+        const check = (a: Element, b: Element | null, want: number, what: string) => {
+          if (!b) return;
+          const t = top(b);
+          if (!Number.isFinite(t)) return;
+          const gap = t - bottom(a);
+          if (Math.abs(gap - want) > 1) out.push(`${what}: "${say(a)}" → "${say(b)}" is ${Math.round(gap * 10) / 10}px as you see it, not ${want}px`);
+        };
+        for (const sec of document.querySelectorAll(".form-section:not(.form-actions)")) {
+          if (!shown(sec)) continue;
+          const head = sec.querySelector(":scope > :is(h2, h3, .flex)");
+          if (head && shown(head)) check(head, next(head), 17, "under a heading");
+          for (const note of sec.querySelectorAll(":scope > p.hint:not(.req-note)")) if (shown(note)) check(note, next(note), 17, "under a section's note");
+          for (const err of sec.querySelectorAll(":scope > .field-error")) if (shown(err)) check(err, next(err), 10, "an error over its rows");
+        }
+        for (const field of document.querySelectorAll(".field")) {
+          if (!shown(field)) continue;
+          const kids = [...field.children].filter((c) => shown(c) && c.tagName !== "DATALIST");
+          for (let i = 0; i + 1 < kids.length; i++) check(kids[i], kids[i + 1], 10, "in a field");
+          // A field's error to the field under it, in the same column.
+          const err = field.querySelector(":scope > .field-error");
+          const grid = field.parentElement;
+          if (err && shown(err) && grid?.matches(".form-grid")) {
+            const fr = field.getBoundingClientRect();
+            const below = [...grid.children].filter((c) => c !== field && shown(c))
+              .map((c) => ({ c, r: c.getBoundingClientRect() }))
+              .filter(({ r }) => r.top >= fr.bottom - 6 && r.left < fr.right - 1 && r.right > fr.left + 1)
+              .sort((x, y) => x.r.top - y.r.top)[0];
+            if (below) check(err, below.c, 17, "under a field's error");
+          }
+        }
+        for (const head of document.querySelectorAll(".row-head")) {
+          if (!shown(head)) continue;
+          check(head, next(head), 10, "under the rows' heading");
+        }
+        return [...new Set(out)];
+      });
+      for (const f of found) problems.push(`${width ? width + "px" : "the window"} ${name}: ${f}`);
+    }
+  }
+  expect(problems).toEqual([]);
+});
+
 test("a form's rows keep its columns", async ({ page }, testInfo) => {
   // docs/design.md#6-layout (Forms). A SKU's or a part's boxes stood
   // between the fields above them: the rows had columns of their own, an
@@ -2438,7 +2548,7 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
   // and Labour cost, a purchase's Note and a use's Note were left alone on
   // a second row. So: a page form's first section has no heading, every
   // later one but Notes has one, never a question; a section's hint comes
-  // before its fields, 5px under its heading; Notes is the last section; a date's label says what
+  // before its fields; Notes is the last section; a date's label says what
   // happened on it ("Bought on"), or is Best before. Every form's grid has
   // four columns, two or one, all as wide, and no row ends with one field
   // alone (a field in a grid of its own, like Counted in, is a row of its
@@ -2485,12 +2595,6 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
               let before = hint.previousElementSibling;
               while (before && !before.matches(".form-grid, .rows, .chips, .toggle, .field, .inter-fields")) before = before.previousElementSibling;
               if (before) out.push(`the hint "${text(hint)}" comes after the fields of its section`);
-              // 5px under its heading, as a note under its field.
-              const head = hint.previousElementSibling;
-              if (head?.matches("h2, .flex")) {
-                const gap = hint.getBoundingClientRect().top - head.getBoundingClientRect().bottom;
-                if (Math.abs(gap - 5) > 0.5) out.push(`the hint "${text(hint)}" is ${Math.round(gap * 10) / 10}px under its heading, not 5px`);
-              }
             }
           });
         }

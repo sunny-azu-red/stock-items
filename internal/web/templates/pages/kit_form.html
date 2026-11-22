@@ -35,7 +35,7 @@
   </div>
   <div class="form-section">
     <h2>Schedule</h2>
-    <p class="hint mb">Repeat every this distance or this many months, whichever comes first. The dashboard reminds you when the job is due.</p>
+    <p class="hint">Repeat every this distance or this many months, whichever comes first. The dashboard reminds you when the job is due.</p>
     <div class="form-grid">
       <div class="field{{if index $e "interval_distance"}} has-error{{end}}">
         <label for="interval_distance">Distance ({{distUnit}})</label>
@@ -51,7 +51,7 @@
   </div>
   <div class="form-section">
     <h2>Parts</h2>
-    <p class="hint mb">The parts the job needs, so you see at a glance what is on the shelf and what to buy. Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
+    <p class="hint">The parts the job needs, so you see at a glance what is on the shelf and what to buy. Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="kit-lines">
       {{template "part-line-head"}}
@@ -66,7 +66,7 @@
        server drops its fields when it isn't, so nothing needs clearing. */}}
   <div class="form-section inter-schedule">
     <h2>Intermediate schedule</h2>
-    <p class="hint mb">For a lighter job between full services (like a mid-interval oil &amp; filter change), with its own, smaller set of parts. It alternates with the schedule above.</p>
+    <p class="hint">For a lighter job between full services (like a mid-interval oil &amp; filter change), with its own, smaller set of parts. It alternates with the schedule above.</p>
     <label class="toggle"><input type="checkbox" id="has_inter" name="has_inter" value="1"{{if $f.ShowInter}} checked{{end}}> Use an intermediate schedule</label>
     <div class="inter-fields" id="inter-section">
       <div class="form-grid">

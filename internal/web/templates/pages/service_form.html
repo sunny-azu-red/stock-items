@@ -104,7 +104,7 @@
       <button class="btn btn-sm" type="submit" form="service-short-form" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add missing</button>
       {{end}}
     </div>
-    <p class="hint mb">Remove rows for parts you did not use, or that did not come from your stock.</p>
+    <p class="hint">Remove rows for parts you did not use, or that did not come from your stock.</p>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="part-lines" data-stock-need>
       {{template "part-line-head"}}

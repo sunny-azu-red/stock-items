@@ -665,19 +665,32 @@
   .form-section {
     padding: 16px var(--inset);
     .form-section:not([hidden]) ~ & { border-top: 1px solid var(--border); }
-    & :is(h2, h3) { margin-bottom: 12px; }
-    /* A section's note sits 5px under its heading, as a field's error or
-       note under its box (and a label over it); then 12px to the fields.
-       A heading with a button beside it (Parts used, Add missing) is a
-       row as tall as the heading, the button hanging over its edges. */
-    & > :is(h2, h3):has(+ .hint) { margin-bottom: 5px; }
+    /* Spaced by what you see (design.md#forms, Spacing): a line of text
+       keeps about 5px above its capitals and under its letters, so 12px
+       between two lines of text looks like 22px, and between text and a
+       box like 17px. A form has two gaps as you see them: 10px from a
+       thing to what belongs to it (a label to its box, a box to its
+       error), 17px to the next (a heading to what follows it, a note to
+       its fields, a field to the next). Under a heading comes text (a
+       note, a label, a legend): 8px. A heading with a button beside it
+       (Parts used, Add missing) is a row as tall as the heading, the
+       button hanging over its edges. */
+    & :is(h2, h3) { margin-bottom: 8px; }
     & > .flex:has(> :is(h2, h3)) {
-      margin-bottom: 12px;
-      &:has(+ .hint) { margin-bottom: 5px; }
+      margin-bottom: 8px;
       & > :is(h2, h3) { margin-bottom: 0; }
       & > .btn-sm { margin-block: -5px; }
     }
+    /* A section's note: 7px to text under it (labels, the rows' heading,
+       an error), 12px to a box (chips, a toggle). */
+    & > .hint:not(:last-child, .req-note) {
+      margin-bottom: 7px;
+      &:has(+ :is(.chips, .toggle)) { margin-bottom: var(--gap); }
+    }
   }
+  /* A field with an error: the next row as far from the error as from a
+     box (17px as you see it), not 5px further. */
+  .form-grid > .field:has(> .field-error) { margin-bottom: -5px; }
 
   .field { display: grid; gap: 5px; align-content: start; min-width: 0; }
   :is(.field > label, .label-row > label, .label, legend) { font-weight: 600; font-size: var(--text-sm); }
@@ -933,7 +946,10 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     & .icon-btn { margin-top: 3px; }
   }
-  .row-head { font-size: var(--text-sm); font-weight: 600; margin-bottom: -2px; }
+  /* A row's heading 5px over its boxes, as a label over its box; a row
+     with an error as far from the next row as one without. */
+  .row-head { font-size: var(--text-sm); font-weight: 600; margin-bottom: -3px; }
+  .rows > .row-line:has(.field-error) { margin-bottom: -5px; }
   .row-head-pair { display: none; }
   .row-end {
     display: flex; gap: 8px; align-items: start; min-width: 0;
@@ -950,7 +966,11 @@
        to the next row, so each reads as one; its heading stays as close
        to the first as on one line. */
     .rows { gap: var(--gap); }
-    .row-head { margin-bottom: -6px; }
+    .row-head { margin-bottom: -7px; }
+    /* A part row starts with its item's box here (its heading is left
+       out): a note over the rows 12px, an error 5px. */
+    .form-section > .hint:has(+ .rows > .part-line) { margin-bottom: var(--gap); }
+    .form-section > .field-error:has(+ .rows > .part-line) { margin-bottom: 5px; }
     .row-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .row-end { display: contents; }
     .row-remove { grid-area: 1 / 2; justify-self: end; margin-left: 0; }

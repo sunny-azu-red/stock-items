@@ -57,7 +57,7 @@
   </div>
   <div class="form-section">
     <h2>Odometer</h2>
-    <p class="hint mb">Reminders count from the purchase until a service is logged.</p>
+    <p class="hint">Reminders count from the purchase until a service is logged.</p>
     {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
     <div class="form-grid">
       <div class="field span-2{{if index $e "odometer"}} has-error{{end}}">

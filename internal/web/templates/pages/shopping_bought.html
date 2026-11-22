@@ -9,7 +9,7 @@
   <div class="form-actions">
     <a class="btn btn-ghost spacer" href="{{$d.List}}">Cancel</a>
     <form class="inline-form" method="post" action="/shopping/{{$d.Entry.ID}}/bought"><input type="hidden" name="version" value="{{$d.Entry.Version}}">{{with $d.V}}<input type="hidden" name="v" value="{{.}}">{{end}}<button class="btn" type="submit">{{icon "check"}} Just tick it off</button></form>
-    <a class="btn btn-primary" href="/items/new?shopping={{$d.Entry.ID}}">{{icon "package-plus"}} Add to stock as a new item</a>
+    <a class="btn btn-primary" href="/items/new?shopping={{$d.Entry.ID}}{{with $d.V}}&amp;v={{.}}{{end}}">{{icon "package-plus"}} Add to stock as a new item</a>
   </div>
 </div>
 {{else}}

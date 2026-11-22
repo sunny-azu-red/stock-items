@@ -279,13 +279,13 @@
      []Vehicle "Checked" id "Err" (its error) "KitErr" (a service's kit's,
      under it too). docs/design.md, Chips you pick. */}}
 {{define "vehicle-pick"}}{{$c := .Checked}}
-<fieldset class="field span-all{{if or .Err .KitErr}} has-error{{end}}" id="vehicle_id"{{if .Err}} aria-describedby="vehicle_id-err"{{end}}>
+<fieldset class="field span-all{{if or .Err .KitErr}} has-error{{end}}" id="vehicle_id"{{if or .Err .KitErr}} aria-describedby="{{if .Err}}vehicle_id-err{{end}}{{if and .Err .KitErr}} {{end}}{{if .KitErr}}kit_id-err{{end}}"{{end}}>
   <legend>Vehicle {{template "req"}}</legend>
   <div class="chips">
     {{range $i, $v := .Vehicles}}<label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="radio" name="vehicle_id" value="{{.ID}}" data-name="{{.Name}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} required{{if eq .ID $c}} checked{{end}}{{if and (eq $i 0) (not $c)}} autofocus{{end}}><span class="dot"></span>{{.Name}}</label>{{end}}
   </div>
   {{template "field-err" (fieldErr .Err "vehicle_id")}}
-  {{template "err" .KitErr}}
+  {{template "field-err" (fieldErr .KitErr "kit_id")}}
 </fieldset>{{end}}
 
 {{/* A list of stock items for item fields (itemPicker; once per page):

@@ -220,9 +220,10 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	return s.renderServiceForm(w, r, http.StatusOK, f)
 }
 
-// parseServiceForm reads the posted service form. Problems are recorded in
-// form.Errors; the returned input is only meaningful without errors.
-func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceInput, error) {
+// parseServiceForm reads the posted service form (of service id; 0 for a
+// new one). Problems are recorded in form.Errors; the returned input is only
+// meaningful without errors.
+func (s *Server) parseServiceForm(r *http.Request, id int64) (serviceForm, stock.ServiceInput, error) {
 	items, err := s.store.ListItems(r.Context(), store.ItemFilter{Archived: store.ArchivedAll})
 	if err != nil {
 		return serviceForm{}, stock.ServiceInput{}, err
@@ -256,7 +257,20 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	if err != nil {
 		return serviceForm{}, stock.ServiceInput{}, err
 	}
-	f.Parts, in.Parts = parseLines(r, "part", itemsByID(items), findVehicle(vehicles, f.VehicleID), f.Errors)
+	// A service is a record of what was done: the parts it has stay, even
+	// an item since retagged for another vehicle (as an archived one does).
+	var had map[int64]bool
+	if id != 0 {
+		rec, err := s.store.GetService(r.Context(), id)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return serviceForm{}, stock.ServiceInput{}, err
+		}
+		had = map[int64]bool{}
+		for _, p := range rec.Parts {
+			had[p.ItemID] = true
+		}
+	}
+	f.Parts, in.Parts = parseLines(r, "part", itemsByID(items), findVehicle(vehicles, f.VehicleID), had, f.Errors)
 	in.Normalize()
 	for k, v := range in.Validate() {
 		f.Errors.Add(k, v)
@@ -304,7 +318,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatService, servicePath, "/services"); done || err != nil {
 		return err
 	}
-	f, in, err := s.parseServiceForm(r)
+	f, in, err := s.parseServiceForm(r, 0)
 	if err != nil {
 		return err
 	}
@@ -384,7 +398,7 @@ func (s *Server) serviceUpdate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatService, servicePath, "/services"); done || err != nil {
 		return err
 	}
-	f, in, err := s.parseServiceForm(r)
+	f, in, err := s.parseServiceForm(r, id)
 	if err != nil {
 		return err
 	}

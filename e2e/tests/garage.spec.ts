@@ -2857,9 +2857,9 @@ test("duplicate a kit for another vehicle", async ({ page }, testInfo) => {
   await (await headAction(page, "button", "Delete")).click();
   const flash = page.locator(".flash-success");
   await expect(flash).toContainText("Deleted");
-  // The header is 18px under the flash, as under the bar; the bar (here
-  // the vehicle page's offer) is a gap above the flash, on a phone its
-  // edge-to-edge spacing.
+  // The header is 18px under the flash, and the flash 18px under the bar
+  // (here the vehicle page's offer), as every band; on a phone the bar
+  // keeps its edge-to-edge spacing.
   // (Once it has slid in.)
   const gaps = () => flash.evaluate((f) => {
     const r = f.getBoundingClientRect(), bar = document.querySelector(".working-on");
@@ -2868,6 +2868,28 @@ test("duplicate a kit for another vehicle", async ({ page }, testInfo) => {
       bar: bar ? Math.round(r.top - bar.getBoundingClientRect().bottom) : null,
     };
   });
-  const barGap = (await gaps()).bar === null ? null : phone(testInfo) ? 14 : 12;
+  const barGap = (await gaps()).bar === null ? null : phone(testInfo) ? 14 : 18;
   await expect.poll(gaps).toEqual({ head: 18, bar: barGap });
+});
+
+test("a part row moves to the picked vehicle's item of its name", async ({ page }) => {
+  // One name, an item for each bike (last in the file: the pages and
+  // screenshots before keep their data).
+  for (const v of ["KTM 390", "KTM 1290"]) await addItem(page, { brand: "KTM", name: "Spark Plug", qty: "2", vehicles: [v] });
+  await page.goto("/kits/new");
+  await pickVehicle(page, "KTM 390");
+  const row = page.locator("#kit-lines .part-line:not(.row-head)").first();
+  const id = row.locator('input[name="line_item"]');
+  await pickPart(row.locator('input[name="line_item_text"]'), "KTM Spark Plug");
+  const k390 = await id.inputValue();
+  expect(k390).not.toBe("");
+  // KTM 1290 has an item of that name: the row takes it, and stays.
+  await pickVehicle(page, "KTM 1290");
+  await expect(row).toBeVisible();
+  await expect(id).not.toHaveValue(k390);
+  await expect(id).not.toHaveValue("");
+  await expect(row.locator('input[name="line_item_text"]')).toHaveValue("KTM Spark Plug");
+  // And back.
+  await pickVehicle(page, "KTM 390");
+  await expect(id).toHaveValue(k390);
 });

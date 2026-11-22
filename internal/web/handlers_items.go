@@ -33,6 +33,7 @@ type itemForm struct {
 	// the free-text shopping entry it was bought from, if any.
 	TotalPrice, Supplier, BoughtOn, BoughtNote string
 	ShoppingID                                 int64
+	ShoppingV                                  int64 // the shopping list's vehicle it was bought from (v), 0 for the whole list
 	VehicleIDs                                 []int64
 	SKUs                                       []skuRow
 	Errors                                     stock.Errors
@@ -120,7 +121,7 @@ func parseItemForm(r *http.Request, isNew bool, today time.Time) (itemForm, stoc
 		in.Supplier = f.Supplier
 		in.BoughtNote = f.BoughtNote
 		if id := parseOptID(formText(r, "shopping_id")); id != nil {
-			f.ShoppingID = *id
+			f.ShoppingID, f.ShoppingV = *id, listVehicle(r)
 		}
 		if p, err := parseOptMoney(f.TotalPrice); err != nil {
 			f.Errors.Add("total_price", err.Error())
@@ -271,7 +272,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		if e.ItemID != nil {
 			return store.ErrNotFound
 		}
-		f.ShoppingID, f.Name, f.Notes, f.Unit = e.ID, e.FreeText, e.Note, string(e.ItemUnit)
+		f.ShoppingID, f.ShoppingV, f.Name, f.Notes, f.Unit = e.ID, vehicleParam(q), e.FreeText, e.Note, string(e.ItemUnit)
 		// The form carries the entry's version: saving ticks it off.
 		f.Version, shoppingVersion = e.Version, e.Version
 		_, f.MinUnit = stock.SplitForInput(0, e.ItemUnit)
@@ -285,7 +286,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if f.ShoppingID != 0 {
-		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name); err != nil {
+		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name, f.ShoppingV); err != nil {
 			return err
 		}
 		page.ShoppingVersion = shoppingVersion
@@ -325,7 +326,8 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		} else if err == nil {
 			if f.ShoppingID != 0 {
 				// Undo puts the entry back on the list; the item stays.
-				s.redirectUndo(w, r, "/shopping", "Added "+displayInput(in)+" to stock", trashID)
+				// Back to the list's part it came from (v).
+				s.redirectUndo(w, r, shoppingListPath(r), "Added "+displayInput(in)+" to stock", trashID)
 				return nil
 			}
 			if r.PostFormValue("next") == "new" {
@@ -352,7 +354,7 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if f.ShoppingID != 0 {
-		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name); err != nil {
+		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name, f.ShoppingV); err != nil {
 			return err
 		}
 		e, err := s.store.GetShopping(r.Context(), f.ShoppingID)

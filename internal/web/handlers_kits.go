@@ -93,8 +93,9 @@ func (s *Server) pickerItems(ctx context.Context, rows []lineRow) ([]stock.Item,
 // <prefix>_qty / <prefix>_unit fields: the item picked (its id) or named
 // (lineItem), and its quantity. A unit typed into the quantity wins over
 // the unit select. A form from before the item text posts no text. A
-// part must fit the form's vehicle (nil: none chosen yet).
-func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, vehicle *stock.Vehicle, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
+// part must fit the form's vehicle (nil: none chosen yet), unless the
+// record had it (had: a service's own parts; nil for none).
+func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, vehicle *stock.Vehicle, had map[int64]bool, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
 	ids, texts := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_item_text"]
 	qtys, units := r.PostForm[prefix+"_qty"], r.PostForm[prefix+"_unit"]
 	var rows []lineRow
@@ -111,7 +112,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, vehi
 			row.Unit = units[i]
 		}
 		id, _ := strconv.ParseInt(raw, 10, 64)
-		it, msg := lineItem(id, row.Text, items, vehicle)
+		it, msg := lineItem(id, row.Text, items, vehicle, had[id])
 		row.ItemID = it.ID
 		switch {
 		case id == 0 && row.Text == "" && row.Qty == "":
@@ -150,12 +151,13 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, vehi
 // archived item is in the page's list only for the rows that have it, and
 // isn't matched by name there either. Either way it must fit the vehicle
 // (stock.Item.Fits; nil: none chosen), as the page offers only those, and
-// a name counts only the items that do. Otherwise msg says why there is
-// none: a part must be an item in stock.
-func lineItem(id int64, text string, items map[int64]stock.Item, vehicle *stock.Vehicle) (it stock.Item, msg string) {
+// a name counts only the items that do; a picked item the record had
+// (had) stays all the same. Otherwise msg says why there is none: a part
+// must be an item in stock.
+func lineItem(id int64, text string, items map[int64]stock.Item, vehicle *stock.Vehicle, had bool) (it stock.Item, msg string) {
 	fits := func(it stock.Item) bool { return vehicle == nil || it.Fits(vehicle.ID) }
 	if it, ok := items[id]; ok {
-		if !fits(it) {
+		if !fits(it) && !had {
 			return stock.Item{}, notForVehicle(it.DisplayName(), vehicle)
 		}
 		return it, ""
@@ -294,8 +296,10 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 		return kitForm{}, stock.KitInput{}, err
 	}
 	byID, vehicle := itemsByID(items), findVehicle(vehicles, f.VehicleID)
-	f.Lines, in.Lines = parseLines(r, "line", byID, vehicle, f.Errors)
-	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, vehicle, f.Errors)
+	// A kit is for jobs to come: its parts must fit its vehicle, so one
+	// retagged since is flagged at its row rather than kept.
+	f.Lines, in.Lines = parseLines(r, "line", byID, vehicle, nil, f.Errors)
+	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, vehicle, nil, f.Errors)
 	if !f.ShowInter {
 		// The intermediate schedule was removed (or never added): its
 		// fields are dropped here, not only blanked by the page's script.

@@ -30,8 +30,7 @@ type shoppingPage struct {
 	Entries     []stock.ShoppingEntry
 	Others      int // entries left out: other vehicles'
 	Suggestions []stock.Suggestion
-	Items       []stock.Item
-	Picker      itemPicker // Add to the list's items: Items, in sections
+	Picker      itemPicker // Add to the list's items, in sections
 	Form        shoppingForm
 	Vehicles    []stock.Vehicle // the filter chips: the active vehicles
 	VehicleID   int64           // the vehicle whose part shows, 0 for all
@@ -139,7 +138,7 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shopp
 	if !slices.ContainsFunc(vehicles, func(v stock.Vehicle) bool { return v.ID == vid }) {
 		vid = 0
 	}
-	p := shoppingPage{Items: items, Form: f, Vehicles: activeVehicles(vehicles), VehicleID: vid, chips: chipVehicles(vehicles),
+	p := shoppingPage{Form: f, Vehicles: activeVehicles(vehicles), VehicleID: vid, chips: chipVehicles(vehicles),
 		// What is listed counts whoever it was added for: a shared item on
 		// the list covers every vehicle's need.
 		Suggestions: stock.SuggestPurchases(items, kits, listedQuantities(entries), *s.today(), vid)}
@@ -155,11 +154,11 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shopp
 		}
 		// What the form adds shows on this part: the vehicle's items and
 		// the General ones (free text always does).
-		p.Items = slices.DeleteFunc(p.Items, func(it stock.Item) bool { return !it.Fits(vid) })
+		items = slices.DeleteFunc(items, func(it stock.Item) bool { return !it.Fits(vid) })
 	}
 	// Headed as every item list is: For the part's vehicle, then General;
 	// the whole list's in the stock page's sections.
-	p.Picker = newItemPicker("shopping-items", p.Items, vehicles, findVehicle(vehicles, vid), false)
+	p.Picker = newItemPicker("shopping-items", items, vehicles, findVehicle(vehicles, vid), false)
 	return p, nil
 }
 

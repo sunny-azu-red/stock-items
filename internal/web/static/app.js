@@ -270,11 +270,14 @@
     if (!scope || !opt.hasAttribute("data-vehicles")) return opt.getAttribute("data-group");
     return opt.getAttribute("data-vehicles") ? "For " + scope.name : "General";
   }
-  // A vehicle picked on a kit or service form: the part rows whose item
-  // doesn't fit it are put aside (hidden, their fields disabled so they
-  // aren't sent) where they are, and come back when a vehicle they fit is
-  // picked again, as typed. Empty rows and text that names no item stay.
-  // The list follows by itself (itemScope); "add the item" adds one for it.
+  // A vehicle picked on a kit or service form: a part row whose item
+  // doesn't fit it takes the one item of that name that does (two bikes'
+  // "KTM Oil Filter Service Kit"), else is put aside (hidden, its fields
+  // disabled so they aren't sent) where it is, and comes back when a
+  // vehicle it fits is picked again, as typed. Empty rows and text that
+  // names no item stay. The list follows by itself (itemScope); "add the
+  // item" adds one for it. A save refused for another field forgets the
+  // rows put aside: they weren't sent.
   function followVehicle(form) {
     if (!form) return;
     form.querySelectorAll(".rows").forEach(function (rows) {
@@ -284,6 +287,14 @@
         var input = row.querySelector("input[data-item-pick]");
         var list = input && document.getElementById(input.getAttribute("data-item-pick"));
         var off = !!opt && !fitsScope(opt, itemScope(list));
+        if (off) {
+          var named = namedOptions(input);
+          if (named.length === 1) {
+            row.querySelector("[data-item-id]").value = named[0].getAttribute("data-id");
+            off = false;
+            changed = true;
+          }
+        }
         if (off === row.hidden) return;
         row.hidden = off;
         row.querySelectorAll("input, select, button").forEach(function (el) { el.disabled = off; });
@@ -795,15 +806,20 @@
   // of items the text names ({named}: several only when it names more
   // than one, which is none of them unless one is picked).
   function pickedItem(input) {
-    var list = document.getElementById(input.getAttribute("data-item-pick"));
-    var opts = list ? Array.prototype.slice.call(list.options) : [];
     var picked = itemOption(input.closest(".field"));
     if (picked && namesOption(input.value, picked)) return { opt: picked, named: 1 };
-    // An archived item is in the list only for the row that has it; and
-    // only the items for the vehicle in scope are offered (itemScope).
-    var scope = itemScope(list);
-    var named = opts.filter(function (o) { return !o.hasAttribute("data-archived") && fitsScope(o, scope) && namesOption(input.value, o); });
+    var named = namedOptions(input);
     return { opt: named.length === 1 ? named[0] : null, named: named.length };
+  }
+  // namedOptions are the options an item field's text names among those
+  // its list offers: an archived item is in the list only for the row that
+  // has it, and only the items for the vehicle in scope are offered
+  // (itemScope).
+  function namedOptions(input) {
+    var list = document.getElementById(input.getAttribute("data-item-pick"));
+    var opts = list ? Array.prototype.slice.call(list.options) : [];
+    var scope = itemScope(list);
+    return opts.filter(function (o) { return !o.hasAttribute("data-archived") && fitsScope(o, scope) && namesOption(input.value, o); });
   }
   function followItem(input) {
     var field = input.closest(".field");

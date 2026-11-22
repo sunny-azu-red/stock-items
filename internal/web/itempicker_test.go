@@ -159,6 +159,24 @@ func TestPartsFitTheVehicle(t *testing.T) {
 		"line_item": {itoa(pads)}, "line_item_text": {"OEM Rear Brake Pads"}, "line_qty": {"1"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "“OEM Rear Brake Pads” isn&#39;t for KTM 390: pick one from the list",
 		`name="line_item_text" value="OEM Rear Brake Pads"`)
+
+	// A service is a record of what was done: its edit keeps the parts it
+	// has, retagged since or not; a new part must still fit.
+	retag(t, a, pads, k390)
+	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-21"},
+		"part_item": {itoa(pads)}, "part_item_text": {"OEM Rear Brake Pads"}, "part_qty": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	retag(t, a, pads, k1290)
+	edit := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads (front too)"}, "performed_on": {"2026-10-21"},
+		"part_item": {itoa(pads)}, "part_item_text": {"OEM Rear Brake Pads"}, "part_qty": {"1"}}
+	expect(t, a.postV(svc, edit), http.StatusSeeOther)
+	expect(t, a.get(svc), http.StatusOK, "Pads (front too)", "OEM Rear Brake Pads")
+	edit.Set("title", "Pads and filter")
+	edit.Add("part_item", itoa(hiflo))
+	edit.Add("part_item_text", "Hiflofiltro Oil Filter")
+	edit.Add("part_qty", "1")
+	expect(t, a.postV(svc, edit), http.StatusUnprocessableEntity, "“Hiflofiltro Oil Filter” isn&#39;t for KTM 390")
 }
 
 // Shopping offers what each list's part is for, as every item list: a
@@ -222,6 +240,19 @@ func TestShoppingOffersThePartsItems(t *testing.T) {
 	if e, _ := a.store.GetShopping(ctx, free); e.ItemID != nil {
 		t.Error("another vehicle's item was linked")
 	}
-	// The new-item form from the entry offers both, with their chips.
+	// The new-item form from the entry offers both, with their chips; from
+	// KTM 390's part (Bought carries v) its own, and goes back there.
 	expect(t, a.get("/items/new?shopping="+itoa(free)), http.StatusOK, chip("KTM 390"), chip("KTM 1290"))
+	expect(t, part, http.StatusOK, `href="/items/new?shopping=`+itoa(free)+`&amp;v=`+itoa(k390)+`"`)
+	form := a.get("/items/new?shopping=" + itoa(free) + "&v=" + itoa(k390))
+	expect(t, form, http.StatusOK, `name="item_id" value="`+itoa(kit[k390])+`"`, `<input type="hidden" name="v" value="`+itoa(k390)+`">`,
+		`href="/shopping?v=`+itoa(k390)+`">Cancel`)
+	expectNot(t, form, `name="item_id" value="`+itoa(kit[k1290])+`"`)
+	e, err = a.store.GetShopping(ctx, free)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = a.post("/items", url.Values{"shopping_id": {itoa(free)}, "v": {itoa(k390)}, "version": {itoa(int64(e.Version))},
+		"name": {"KTM Oil Filter Service Kit"}, "brand": {"Other"}, "unit": {"piece"}, "quantity": {"1"}})
+	expectRedirect(t, rec, "/shopping?v="+itoa(k390))
 }

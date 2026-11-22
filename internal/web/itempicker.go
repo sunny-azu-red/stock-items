@@ -127,9 +127,9 @@ func matchRows(items []stock.Item, here int64) []matchRow {
 }
 
 // shoppingMatches are the items named like a free-text entry, as a new
-// item's form from it offers them (the whole list's: it isn't a vehicle's),
-// and the vehicles their chips name.
-func (s *Server) shoppingMatches(ctx context.Context, name string) ([]matchRow, map[int64]stock.Vehicle, error) {
+// item's form from it offers them (matchRows: on the list's part for
+// vehicle here, its items), and the vehicles their chips name.
+func (s *Server) shoppingMatches(ctx context.Context, name string, here int64) ([]matchRow, map[int64]stock.Vehicle, error) {
 	named, err := s.store.ItemsNamed(ctx, name)
 	if err != nil {
 		return nil, nil, err
@@ -138,5 +138,5 @@ func (s *Server) shoppingMatches(ctx context.Context, name string) ([]matchRow, 
 	if err != nil {
 		return nil, nil, err
 	}
-	return matchRows(named, 0), vehicleMap(vehicles), nil
+	return matchRows(named, here), vehicleMap(vehicles), nil
 }

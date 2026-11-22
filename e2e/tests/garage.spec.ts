@@ -405,10 +405,12 @@ test("part rows keep a quantity hint until an item is chosen", async ({ page }) 
   await page.goto("/services/new");
   const items = page.locator('select[name="part_item"]');
   const qtys = page.locator('input[name="part_qty"]');
-  // The number alone: the unit picker beside it says the unit.
+  // The number alone: the unit picker beside it says the unit, L for a
+  // liquid.
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
   await items.first().selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
-  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 500");
+  await expect(page.locator('select[name="part_unit"]').first()).toHaveValue("l");
+  await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1.5");
   await items.first().selectOption({ label: "Choose an item…" });
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
 });
@@ -2241,13 +2243,21 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
 
 // After the kit above has an intermediate schedule, so Log service from it
 // shows its Schedule row.
-test("every form's fields fill its columns", async ({ page }, testInfo) => {
-  // docs/design.md#6-layout (Forms). Fields went three a row (thirds, off
-  // the columns of the sections around them, and a fourth field alone on
-  // the next row), and Labour cost, a purchase's Note and a use's Note
-  // were left alone on a second row. Every form's grid has four columns,
-  // two or one, all as wide, and no row ends with one field alone (a field
-  // in a grid of its own, like Counted in, is a row of its own on purpose).
+test("every form follows the Forms rules", async ({ page }, testInfo) => {
+  // docs/design.md#6-layout (Forms), the rules every form keeps, new ones
+  // too (add a new form's page to the list below). The forms had grown
+  // apart: one first section with a heading ("What is it?"), questions for
+  // headings, hints under the fields, Notes inside a section, a date
+  // labelled "Date". Fields went three a row (thirds, off the columns of
+  // the sections around them, and a fourth field alone on the next row),
+  // and Labour cost, a purchase's Note and a use's Note were left alone on
+  // a second row. So: a page form's first section has no heading, every
+  // later one but Notes has one, never a question; a section's hint comes
+  // before its fields; Notes is the last section; a date's label says what
+  // happened on it ("Bought on"), or is Best before. Every form's grid has
+  // four columns, two or one, all as wide, and no row ends with one field
+  // alone (a field in a grid of its own, like Counted in, is a row of its
+  // own on purpose).
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
@@ -2273,6 +2283,31 @@ test("every form's fields fill its columns", async ({ page }, testInfo) => {
         const out: string[] = [];
         const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
         const label = (f: Element) => (f.querySelector("label, legend, .label")?.textContent ?? "").trim();
+        const text = (el: Element) => (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 30);
+        for (const form of document.querySelectorAll("form.page-form")) {
+          // Its sections, leaving out the buttons and a band that only
+          // holds an error.
+          const sections = [...form.querySelectorAll(":scope > .form-section:not(.form-actions)")]
+            .filter((sec) => shown(sec) && sec.querySelector("input:not([type=hidden]), select, textarea, a, .hint"));
+          sections.forEach((sec, i) => {
+            const h = sec.querySelector(":scope > h2, :scope > .flex > h2");
+            const notes = !!sec.querySelector("textarea[name=notes]");
+            if (i === 0 && h) out.push(`the first section has a heading ("${text(h)}")`);
+            if (i > 0 && !h && !notes) out.push(`section ${i + 1} has no heading ("${text(sec)}")`);
+            if (h && /\?$/.test(text(h))) out.push(`the heading "${text(h)}" is a question`);
+            if (notes && i !== sections.length - 1) out.push("Notes isn't the last section");
+            for (const hint of sec.querySelectorAll(":scope > p.hint")) {
+              let before = hint.previousElementSibling;
+              while (before && !before.matches(".form-grid, .rows, .chips, .toggle, .field, .inter-fields")) before = before.previousElementSibling;
+              if (before) out.push(`the hint "${text(hint)}" comes after the fields of its section`);
+            }
+          });
+        }
+        for (const input of document.querySelectorAll<HTMLInputElement>("form .field input[type=date]")) {
+          if (!shown(input)) continue;
+          const name = (document.querySelector(`label[for="${input.id}"]`)?.textContent ?? "").trim();
+          if (!/ on$/.test(name) && name !== "Best before") out.push(`a date labelled "${name}", not what happened on it ("Bought on")`);
+        }
         for (const grid of document.querySelectorAll(".card .form-grid")) {
           if (!shown(grid)) continue;
           const tracks = getComputedStyle(grid).gridTemplateColumns.split(" ").map(parseFloat).filter((t) => t > 0.5);

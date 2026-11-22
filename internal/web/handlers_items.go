@@ -836,14 +836,16 @@ func examplesFor(u stock.Unit) string {
 	return "2"
 }
 
-// numberExampleFor is examplesFor without its units, for a part row's
-// quantity, whose unit picker sits beside it.
+// numberExampleFor is a part row's example quantity without its unit:
+// the unit picker beside it says the unit, and choosing a liquid or a
+// weight selects L or kg there (app.js prefers the larger unit), so the
+// number is one for L or kg.
 func numberExampleFor(u stock.Unit) string {
 	switch u {
 	case stock.UnitML:
-		return "500"
+		return "1.5"
 	case stock.UnitGram:
-		return "400"
+		return "1"
 	}
 	return "2"
 }

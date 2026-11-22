@@ -1156,9 +1156,16 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   await page.goto("/shopping");
   await expect(stockTab).toBeVisible();
 
+  // The grey stops at the tab bar, which stays as it is.
+  const grey = (popover: Locator) => popover.evaluate((e) => {
+    const s = getComputedStyle(e, "::backdrop");
+    return s.visibility === "hidden" ? "none" : `${s.backgroundColor} to ${Math.round(window.innerHeight - parseFloat(s.bottom))}`;
+  });
+  const scrim = await grey(sheet);
+  expect(scrim, "More's grey").toMatch(new RegExp(` to ${Math.round(tabs.y)}$`));
   // Appearance, from the sheet's palette button, takes the sheet's place:
-  // the sheet is out of sight under it, and the page isn't grey, so a
-  // colour shows on it.
+  // the sheet is out of sight under it, its grey taken over by
+  // Appearance's own, the same.
   await more.click();
   await sheet.getByRole("button", { name: "Appearance" }).click();
   await expect(panel).toBeVisible();
@@ -1167,9 +1174,9 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   expect(ap.y + ap.height, "Appearance's bottom").toBe(tabs.y);
   expect(ap.x === 0 && ap.width === width, `Appearance at ${JSON.stringify(ap)} in ${width}px`).toBe(true);
   await expect(sheet.locator(".nav")).toBeHidden();
-  const backdrop = () => sheet.evaluate((e) => getComputedStyle(e, "::backdrop").opacity);
-  await expect.poll(backdrop).toBe("0");
-  // Still out of reach: a tap on the page closes both, and opens nothing.
+  expect(await grey(sheet), "More's grey under Appearance").toBe("none");
+  expect(await grey(panel), "Appearance's grey").toBe(scrim);
+  // Out of reach: a tap on the page closes both, and opens nothing.
   await tap(".working-on a.working-name");
   await expect(panel).toBeHidden();
   await expect(sheet).toBeHidden();
@@ -1180,7 +1187,7 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   await panel.getByRole("button", { name: "Back to More" }).click();
   await expect(panel).toBeHidden();
   await expect(sheet.locator(".nav")).toBeVisible();
-  await expect.poll(backdrop).toBe("1");
+  expect(await grey(sheet), "More's grey again").toBe(scrim);
   // Esc closes it too.
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();

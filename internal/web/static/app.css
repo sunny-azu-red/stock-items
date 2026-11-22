@@ -327,11 +327,11 @@
       @starting-style { translate: 0 16px; opacity: 0; }
     }
     .sidebar .tab-dup, .sidebar .sidebar-foot { display: none; }
-    /* Behind the phone's popovers the page goes grey. */
-    .sidebar::backdrop {
-      background: var(--scrim);
-      transition: opacity .25s, display .25s allow-discrete, overlay .25s allow-discrete;
-    }
+    /* Behind the phone's sheet the page goes grey, down to the tab bar,
+       which stays as it is (and live). Appearance, in the sheet's place,
+       brings the same grey. */
+    :is(.sidebar, .appearance)::backdrop { inset: 0 0 var(--tabbar-space); background: var(--scrim); }
+    .sidebar::backdrop { transition: opacity .25s, display .25s allow-discrete, overlay .25s allow-discrete; }
     .sidebar:popover-open::backdrop { @starting-style { opacity: 0; } }
     /* What is grey is out of reach: a tap there only closes the popover
        (the ::backdrop takes no taps, so they would reach the link under it).
@@ -546,10 +546,10 @@
   /* ---- Appearance (theme and accent, theme.go) --------------------- */
   /* The sidebar's palette button opens it: theme, then the accent's hue
      and intensity, with presets. A popover: Esc and a tap outside close
-     it. On a desktop it opens under the button. On a phone the button is
-     in the More sheet, and the sheet becomes Appearance: in its place, with
-     a back button to More, and the page above no longer grey, so a colour
-     shows on the real page as it is tried. */
+     it. On a desktop it opens under the button, the page in view. On a
+     phone the button is in the More sheet, and the sheet becomes
+     Appearance: in its place, with a back button to More, the page above
+     grey as for More. */
   .appearance-btn {
     width: var(--control-h); height: var(--control-h); background: transparent; color: var(--muted);
     &:hover { background: var(--surface-2); color: var(--text); }
@@ -575,11 +575,10 @@
   .appearance-back { display: none; }
   @media (width <= 820px) {
     .appearance-back { display: inline-grid; margin-left: -10px; }
-    /* The sheet that opened it is under it, out of sight, and the grey
-       lifts off the page (which stays out of reach). */
-    .sidebar:has(#appearance:popover-open) { visibility: hidden; }
+    /* The sheet that opened it is under it, out of sight, its grey too:
+       Appearance's own takes its place, so the swap shows no change. */
+    .sidebar:has(#appearance:popover-open), .sidebar:has(#appearance:popover-open)::backdrop { visibility: hidden; }
     .appearance { visibility: visible; }
-    body:has(#appearance:popover-open) .sidebar::backdrop { opacity: 0; }
   }
   /* System / Light / Dark: one pressed, like a segmented control. */
   .theme-pick .pick {

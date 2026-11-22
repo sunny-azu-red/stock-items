@@ -46,8 +46,8 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, `href="`+path+`"`, "Active vehicles", `<span class="badge badge-muted" title="Archived `, `<svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg> Archived</span>`)
 	// Pickers leave it out; items tagged with it keep the tag when saved.
 	form := a.get("/services/new")
-	expect(t, form, http.StatusOK, ">KTM 1290</option>")
-	expectNot(t, form, ">KTM 390</option>")
+	expect(t, form, http.StatusOK, `<span class="dot"></span>KTM 1290</label>`)
+	expectNot(t, form, `<span class="dot"></span>KTM 390</label>`)
 	pads := itemID(t, a.store, "Rear Brake")
 	expect(t, a.get("/items/"+itoa(pads)+"/edit"), http.StatusOK, `name="vehicle" value="`+itoa(k390)+`" checked`)
 

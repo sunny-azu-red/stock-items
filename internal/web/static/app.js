@@ -132,14 +132,7 @@
     var add = e.target.closest("[data-add-row]");
     if (add) {
       e.preventDefault();
-      var tpl = document.getElementById(add.getAttribute("data-add-row"));
-      var rows = document.getElementById(add.getAttribute("data-rows"));
-      if (!tpl || !rows) return;
-      var frag = tpl.content.cloneNode(true);
-      rows.appendChild(frag);
-      syncUnits(rows.closest("form"));
-      var added = rows.lastElementChild;
-      if (added) added.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
+      var added = addRow(add);
       var focus = added && added.querySelector("input, select");
       if (focus) focus.focus();
       return;
@@ -151,8 +144,9 @@
       var container = row && row.parentElement;
       if (!row) return;
       dirty = true;
-      // Keep at least one row: clear it instead of removing it.
-      if (container && container.querySelectorAll(".row-line:not(.row-head)").length <= 1) {
+      // Keep at least one row: clear it instead of removing it. (Rows
+      // put aside for another vehicle, followVehicle, don't count.)
+      if (container && container.querySelectorAll(".row-line:not(.row-head):not([hidden])").length <= 1) {
         row.classList.remove("has-error");
         row.querySelectorAll("input").forEach(function (i) { i.value = ""; });
         row.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; delete s.dataset.before; });
@@ -169,6 +163,19 @@
       return;
     }
   });
+
+  // addRow adds the row of <button data-add-row="tpl-id"
+  // data-rows="container-id">'s template, and returns it.
+  function addRow(add) {
+    var tpl = document.getElementById(add.getAttribute("data-add-row"));
+    var rows = document.getElementById(add.getAttribute("data-rows"));
+    if (!tpl || !rows) return null;
+    rows.appendChild(tpl.content.cloneNode(true));
+    syncUnits(rows.closest("form"));
+    var added = rows.lastElementChild;
+    if (added) added.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
+    return added;
+  }
 
   // ---- Unit pickers -------------------------------------------------------
   // In the item form, the base unit radio decides which sub units
@@ -205,7 +212,10 @@
       updateStockBadges(e.target);
     }
     if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
-    if (e.target.matches("#vehicle_id")) showKitStarts(e.target);
+    if (e.target.matches('input[name="vehicle_id"]')) {
+      showKitStarts(e.target.form);
+      followVehicle(e.target.form);
+    }
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
     // A picker that filters the page (Activity's year).
     if (e.target.matches("select[data-submit-on-change]")) e.target.form.requestSubmit();
@@ -216,21 +226,83 @@
   // vehicle's last reading. Picking a kit opens its form, keeping the date,
   // odometer and labour changed so far (only those: an untouched form
   // gives the kit's plain link).
-  function showKitStarts(select) {
-    var odo = select.form && select.form.elements.odometer;
+  function showKitStarts(form) {
+    var picked = form && form.querySelector('input[name="vehicle_id"]:checked');
+    var odo = form && form.elements.odometer;
     if (odo) {
-      var opt = select.options[select.selectedIndex];
-      var last = opt && opt.getAttribute("data-odometer");
+      var last = picked && picked.getAttribute("data-odometer");
       odo.placeholder = last ? "Last reading " + last : "e.g. 15000";
     }
     var sec = document.getElementById("kit-starts");
     if (!sec) return;
     var any = false;
     sec.querySelectorAll("[data-kit-vehicle]").forEach(function (k) {
-      k.hidden = k.getAttribute("data-kit-vehicle") !== select.value;
+      k.hidden = !picked || k.getAttribute("data-kit-vehicle") !== picked.value;
       if (!k.hidden) any = true;
     });
     sec.hidden = !any;
+  }
+
+  // ---- Item lists and the vehicle ------------------------------------------
+  // Every list of stock items (the "item-picker" partial) offers them the
+  // same way (docs/design.md, Item lists): with a vehicle in scope, only
+  // the items that fit it (tagged with it, or General: stock.Item.Fits),
+  // headed "For <vehicle>", then "General"; with none, all of them in the
+  // stock page's sections (each option's data-group). The vehicle in scope
+  // is the list's data-for (fixed by the page), else its form's vehicle_id:
+  // the Vehicle chip picked, or the hidden field of a form that doesn't ask.
+  function itemScope(list) {
+    if (!list) return null;
+    if (list.hasAttribute("data-for")) return { id: list.getAttribute("data-for"), name: list.getAttribute("data-for-name") };
+    var form = list.closest("form");
+    var field = form && form.querySelector('input[name="vehicle_id"]:checked, input[type="hidden"][name="vehicle_id"]');
+    return field && field.value ? { id: field.value, name: field.getAttribute("data-name") || "" } : null;
+  }
+  // fitsScope tells whether an option is offered for the scope: any option
+  // without data-vehicles (not a stock item) is.
+  function fitsScope(opt, scope) {
+    if (!scope || !opt.hasAttribute("data-vehicles")) return true;
+    var ids = opt.getAttribute("data-vehicles").split(" ").filter(Boolean);
+    return !ids.length || ids.indexOf(scope.id) >= 0;
+  }
+  // groupOf is the heading an offered option comes under.
+  function groupOf(opt, scope) {
+    if (!scope || !opt.hasAttribute("data-vehicles")) return opt.getAttribute("data-group");
+    return opt.getAttribute("data-vehicles") ? "For " + scope.name : "General";
+  }
+  // A vehicle picked on a kit or service form: the part rows whose item
+  // doesn't fit it are put aside (hidden, their fields disabled so they
+  // aren't sent) where they are, and come back when a vehicle they fit is
+  // picked again, as typed. Empty rows and text that names no item stay.
+  // The list follows by itself (itemScope); "add the item" adds one for it.
+  function followVehicle(form) {
+    if (!form) return;
+    form.querySelectorAll(".rows").forEach(function (rows) {
+      var changed = false;
+      rows.querySelectorAll(".part-line:not(.row-head)").forEach(function (row) {
+        var opt = itemOption(row);
+        var input = row.querySelector("input[data-item-pick]");
+        var list = input && document.getElementById(input.getAttribute("data-item-pick"));
+        var off = !!opt && !fitsScope(opt, itemScope(list));
+        if (off === row.hidden) return;
+        row.hidden = off;
+        row.querySelectorAll("input, select, button").forEach(function (el) { el.disabled = off; });
+        changed = true;
+      });
+      // What a row's text names may change with what is offered: "oil
+      // filter", two items' name, is one vehicle's own.
+      rows.querySelectorAll(".part-line:not(.row-head):not([hidden]) input[data-item-pick]").forEach(followItem);
+      if (!changed) return;
+      if (!rows.querySelector(".part-line:not(.row-head):not([hidden])")) {
+        var add = form.querySelector('[data-add-row][data-rows="' + CSS.escape(rows.id) + '"]');
+        if (add) addRow(add);
+      }
+      updateStockBadges(rows);
+    });
+    var picked = form.querySelector('input[name="vehicle_id"]:checked');
+    form.querySelectorAll("a[data-vehicle-href]").forEach(function (a) {
+      a.href = a.getAttribute("data-vehicle-href") + (picked ? "?vehicle=" + encodeURIComponent(picked.value) : "");
+    });
   }
   document.addEventListener("click", function (e) {
     var start = e.target.closest("a[data-kit-start]");
@@ -448,7 +520,7 @@
     if (!document.getElementById("stock-badges")) return;
     var group = el.closest("[data-stock-need]");
     var row = el.closest(".part-line");
-    var rows = group ? group.querySelectorAll(".part-line") : row ? [row] : [];
+    var rows = group ? group.querySelectorAll(".part-line:not([hidden])") : row ? [row] : [];
     var picked = [];
     var need = {};
     Array.prototype.forEach.call(rows, function (r) {
@@ -585,11 +657,17 @@
       box.textContent = "";
       var group = null;
       var into = box;
+      // A list of stock items offers those for the vehicle in scope, read
+      // each time: a form's Vehicle may change (itemScope).
+      var scope = itemScope(list);
+      var offered = entries.filter(function (o) { return fitsScope(o, scope); });
       entries.forEach(function (o, i) {
+        if (!fitsScope(o, scope)) return;
         if (q && o.value.toLowerCase().indexOf(q) < 0) return;
-        // Each group's entries (a vehicle's items, then the others) in a
-        // group named by its heading, as a <select>'s optgroup.
-        var g = o.getAttribute("data-group");
+        // Each group's entries in a group named by its heading, as a
+        // <select>'s optgroup: an item list's always (For KTM 390 says
+        // whose list it is), other lists' none.
+        var g = groupOf(o, scope);
         if (g && g !== group) {
           var wrapper = document.createElement("li");
           var head = document.createElement("div");
@@ -622,7 +700,7 @@
         }
         into.appendChild(li);
       });
-      if (newEntry && q && !entries.some(function (o) { return namesOption(filter, o); })) {
+      if (newEntry && q && !offered.some(function (o) { return namesOption(filter, o); })) {
         var li = document.createElement("li");
         li.id = box.id + "-new";
         li.className = "combo-new";
@@ -721,8 +799,10 @@
     var opts = list ? Array.prototype.slice.call(list.options) : [];
     var picked = itemOption(input.closest(".field"));
     if (picked && namesOption(input.value, picked)) return { opt: picked, named: 1 };
-    // An archived item is in the list only for the row that has it.
-    var named = opts.filter(function (o) { return !o.hasAttribute("data-archived") && namesOption(input.value, o); });
+    // An archived item is in the list only for the row that has it; and
+    // only the items for the vehicle in scope are offered (itemScope).
+    var scope = itemScope(list);
+    var named = opts.filter(function (o) { return !o.hasAttribute("data-archived") && fitsScope(o, scope) && namesOption(input.value, o); });
     return { opt: named.length === 1 ? named[0] : null, named: named.length };
   }
   function followItem(input) {

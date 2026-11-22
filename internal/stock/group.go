@@ -25,6 +25,20 @@ func (s Section) Shared() bool { return len(s.Vehicles) > 1 }
 // General reports whether the section holds untagged items.
 func (s Section) General() bool { return len(s.Vehicles) == 0 }
 
+// PickerTitle is the section's heading in an item picker that has no
+// vehicle in scope, in the stock page's words: "Only KTM 390", "Shared
+// KTM 390 + KTM 1290", "General". (With a vehicle, a picker heads its
+// items "For" the vehicle, then "General": app.js.)
+func (s Section) PickerTitle() string {
+	switch {
+	case s.General():
+		return "General"
+	case s.Shared():
+		return "Shared " + s.Title
+	}
+	return "Only " + s.Title
+}
+
 // GroupByVehicles groups items by their exact vehicle tag set. Single
 // vehicle sections come first (in the order of vehicles), then shared
 // combinations (fewest vehicles first), then "General". Items keep their

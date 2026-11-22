@@ -135,6 +135,13 @@ func (a *testApp) seed() (k390, k1290 int64) {
 
 func ptr[T any](v T) *T { return &v }
 
+// vehicleChecked reports whether a kit or service form's Vehicle chips have
+// the vehicle with id picked.
+func vehicleChecked(body string, id int64) bool {
+	re := regexp.MustCompile(`<input type="radio" name="vehicle_id" value="` + strconv.FormatInt(id, 10) + `"[^>]*\schecked[\s>]`)
+	return re.MatchString(body)
+}
+
 // cur reads a record's current version, for changes made "in another
 // tab" straight through the store (0 when the record is gone).
 func cur(t *testing.T, s *store.Store, what string, id int64) int {
@@ -263,7 +270,9 @@ func TestPagesRenderWithData(t *testing.T) {
 	expect(t, a.get("/vehicles/"+itoa(k390)+"/edit"), http.StatusOK, `value="KTM 390"`)
 	expect(t, a.get("/items/"+itoa(oil)), http.StatusOK, "525 ml", "Starting stock")
 	expect(t, a.get("/items/"+itoa(oil)+"/edit"), http.StatusOK, `value="525"`)
-	expect(t, a.get("/kits/new?vehicle="+itoa(k390)), http.StatusOK, "For KTM 390")
+	// The part rows' list: each item with its vehicles and section (app.js
+	// heads them "For KTM 390", then "General", while KTM 390 is picked).
+	expect(t, a.get("/kits/new?vehicle="+itoa(k390)), http.StatusOK, `data-vehicles="`+itoa(k390)+`" data-group="Only KTM 390"`)
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `name="odometer" value=""`, "Last reading 10\u202f000 km")
 }
 
@@ -726,7 +735,7 @@ func TestAccessibilityDetails(t *testing.T) {
 	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	edit := a.get(rec.Header().Get("Location") + "/edit")
-	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`">`)
+	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`" data-name="KTM 390">`)
 	expectNot(t, edit, `for="vehicle_id"`, `id="vehicle_id"`)
 	// The item field is marked when it is what's wrong.
 	expect(t, a.post("/shopping", url.Values{"item_id": {"999999"}}), http.StatusUnprocessableEntity,
@@ -814,7 +823,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	// New service from kit pre-selects Full schedule and pre-fills Full parts.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
 		`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</span>`,
-		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
+		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`" data-name="KTM 1290">`,
 		`name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="Oil service" checked`,
 		`id="title" name="title" value="Oil service"`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`)

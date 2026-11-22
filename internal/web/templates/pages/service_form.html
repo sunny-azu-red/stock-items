@@ -30,7 +30,7 @@
        bar names it, and the form doesn't ask (a link that names another
        vehicle still shows the field). */}}
   {{$byBar := and (not (or $f.KitID $f.ID)) .WorkingOn (eq $f.VehicleID .WorkingOn.ID)}}
-  {{if or $f.KitID $f.ID $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
+  {{if or $f.KitID $f.ID $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}"{{with $d.Vehicle}} data-name="{{.Name}}"{{end}}>{{end}}
   {{if $f.KitID}}<input type="hidden" name="kit_id" value="{{$f.KitID}}"><input type="hidden" name="kit_name" value="{{$f.KitName}}">{{end}}
   {{/* One section, its rows stacked: the vehicle (when asked) on a row of
        its own, its kits to start from right under it, a kit's schedule on a
@@ -38,15 +38,7 @@
   <div class="form-section form-rows">
     {{if not (or $f.KitID $f.ID $byBar)}}
     <div class="form-grid">
-      <div class="field span-2{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
-        <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" required{{if not $f.VehicleID}} autofocus{{end}} {{invalid (index $e "vehicle_id") "vehicle_id"}}>
-          <option value="">Choose…</option>
-          {{range $d.Vehicles}}<option value="{{.ID}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
-        </select>
-        {{template "field-err" (fieldErr (index $e "vehicle_id") "vehicle_id")}}
-        {{template "err" (index $e "kit_id")}}
-      </div>
+      {{template "vehicle-pick" (dict "Vehicles" $d.Vehicles "Checked" $f.VehicleID "Err" (index $e "vehicle_id") "KitErr" (index $e "kit_id"))}}
     </div>
     {{end}}
     {{if $d.Kits}}
@@ -121,7 +113,7 @@
     </template>
     {{end}}
     {{template "stock-badge-templates"}}
-    {{template "part-items" $d.ItemGroups}}
+    {{template "item-picker" $d.Picker}}
     <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "part")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
   </div>

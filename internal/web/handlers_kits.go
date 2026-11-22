@@ -66,15 +66,10 @@ func describeRows(rows []lineRow, items []stock.Item, withNeed bool) {
 	}
 }
 
-// itemGroup is a part of the part rows' item list (vehicle items first).
-type itemGroup struct {
-	Label string
-	Items []stock.Item
-}
-
 // pickerItems lists the items to choose from in kit and service forms:
 // the active ones, plus archived items already chosen in rows, so saving
-// the form never drops a line.
+// the form never drops a line. All vehicles' items: the form's list
+// follows its Vehicle field (itemPicker).
 func (s *Server) pickerItems(ctx context.Context, rows []lineRow) ([]stock.Item, error) {
 	items, err := s.store.ListItems(ctx, store.ItemFilter{})
 	if err != nil {
@@ -94,34 +89,12 @@ func (s *Server) pickerItems(ctx context.Context, rows []lineRow) ([]stock.Item,
 	return append(items, more...), err
 }
 
-// itemOptions splits items into those for vehicleID and the rest.
-func itemOptions(items []stock.Item, vehicle *stock.Vehicle) []itemGroup {
-	if vehicle == nil {
-		return []itemGroup{{Label: "Items", Items: items}}
-	}
-	mine := itemGroup{Label: "For " + vehicle.Name}
-	other := itemGroup{Label: "Other items"}
-	for _, it := range items {
-		if it.HasVehicle(vehicle.ID) {
-			mine.Items = append(mine.Items, it)
-		} else {
-			other.Items = append(other.Items, it)
-		}
-	}
-	var out []itemGroup
-	for _, g := range []itemGroup{mine, other} {
-		if len(g.Items) > 0 {
-			out = append(out, g)
-		}
-	}
-	return out
-}
-
 // parseLines reads parallel <prefix>_item / <prefix>_item_text /
 // <prefix>_qty / <prefix>_unit fields: the item picked (its id) or named
 // (lineItem), and its quantity. A unit typed into the quantity wins over
-// the unit select. A form from before the item text posts no text.
-func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
+// the unit select. A form from before the item text posts no text. A
+// part must fit the form's vehicle (nil: none chosen yet).
+func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, vehicle *stock.Vehicle, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
 	ids, texts := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_item_text"]
 	qtys, units := r.PostForm[prefix+"_qty"], r.PostForm[prefix+"_unit"]
 	var rows []lineRow
@@ -138,7 +111,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			row.Unit = units[i]
 		}
 		id, _ := strconv.ParseInt(raw, 10, 64)
-		it, msg := lineItem(id, row.Text, items)
+		it, msg := lineItem(id, row.Text, items, vehicle)
 		row.ItemID = it.ID
 		switch {
 		case id == 0 && row.Text == "" && row.Qty == "":
@@ -175,25 +148,39 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 // even when the item was renamed since (and an archived one a row has
 // stays); else the one active item the text names (stock.NamesItem): an
 // archived item is in the page's list only for the rows that have it, and
-// isn't matched by name there either. Otherwise msg says why there is
+// isn't matched by name there either. Either way it must fit the vehicle
+// (stock.Item.Fits; nil: none chosen), as the page offers only those, and
+// a name counts only the items that do. Otherwise msg says why there is
 // none: a part must be an item in stock.
-func lineItem(id int64, text string, items map[int64]stock.Item) (it stock.Item, msg string) {
+func lineItem(id int64, text string, items map[int64]stock.Item, vehicle *stock.Vehicle) (it stock.Item, msg string) {
+	fits := func(it stock.Item) bool { return vehicle == nil || it.Fits(vehicle.ID) }
 	if it, ok := items[id]; ok {
+		if !fits(it) {
+			return stock.Item{}, notForVehicle(it.DisplayName(), vehicle)
+		}
 		return it, ""
 	}
 	if text == "" {
 		return stock.Item{}, "Choose an item"
 	}
 	var named []stock.Item
+	others := 0 // named, but for other vehicles
 	for _, it := range items {
-		if !it.Archived() && stock.NamesItem(text, it.Brand, it.Name) {
+		if it.Archived() || !stock.NamesItem(text, it.Brand, it.Name) {
+			continue
+		}
+		if fits(it) {
 			named = append(named, it)
+		} else {
+			others++
 		}
 	}
-	switch len(named) {
-	case 1:
+	switch {
+	case len(named) == 1:
 		return named[0], ""
-	case 0:
+	case len(named) == 0 && others > 0:
+		return stock.Item{}, notForVehicle(text, vehicle)
+	case len(named) == 0:
 		return stock.Item{}, "No item is called “" + text + "”: pick one from the list"
 	default:
 		return stock.Item{}, strconv.Itoa(len(named)) + " items are called “" + text + "”: pick one from the list"
@@ -227,11 +214,11 @@ type kitForm struct {
 }
 
 type kitFormPage struct {
-	Form       kitForm
-	IsNew      bool
-	Vehicles   []stock.Vehicle
-	ItemGroups []itemGroup
-	KitNames   []string
+	Form     kitForm
+	IsNew    bool
+	Vehicles []stock.Vehicle
+	Picker   itemPicker // the part rows' items
+	KitNames []string
 }
 
 func hasRowInput(rows []lineRow) bool {
@@ -261,12 +248,6 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 		f.Errors["inter_interval_distance"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
 	describeRows(f.Lines, items, false)
 	describeRows(f.InterLines, items, false)
-	var vehicle *stock.Vehicle
-	for i := range vehicles {
-		if vehicles[i].ID == f.VehicleID {
-			vehicle = &vehicles[i]
-		}
-	}
 	f.Lines = withEmptyRow(f.Lines)
 	f.InterLines = withEmptyRow(f.InterLines)
 	title := "Add kit"
@@ -274,7 +255,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 		title = "Edit " + f.Stored
 	}
 	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
-		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), ItemGroups: itemOptions(items, vehicle),
+		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), Picker: newItemPicker("part-items", items, vehicles, nil, true),
 		KitNames: names,
 	}})
 	return nil
@@ -308,9 +289,13 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	if in.InterIntervalMonths, err = parseOptInt(f.InterIntervalMonths); err != nil {
 		f.Errors.Add("inter_interval_months", err.Error())
 	}
-	byID := itemsByID(items)
-	f.Lines, in.Lines = parseLines(r, "line", byID, f.Errors)
-	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, f.Errors)
+	vehicles, err := s.store.ListVehicles(r.Context())
+	if err != nil {
+		return kitForm{}, stock.KitInput{}, err
+	}
+	byID, vehicle := itemsByID(items), findVehicle(vehicles, f.VehicleID)
+	f.Lines, in.Lines = parseLines(r, "line", byID, vehicle, f.Errors)
+	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, vehicle, f.Errors)
 	if !f.ShowInter {
 		// The intermediate schedule was removed (or never added): its
 		// fields are dropped here, not only blanked by the page's script.
@@ -372,6 +357,22 @@ func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		f = duplicateKitForm(k, f.VehicleID)
+	}
+	if f.VehicleID == 0 {
+		// With one vehicle, the kit is for it.
+		if f.VehicleID, err = s.soleVehicleID(r.Context()); err != nil {
+			return err
+		}
+	}
+	if f.VehicleID != 0 {
+		// A copy (Duplicate, often for another vehicle) keeps only the
+		// parts that fit its vehicle, as the form offers only those.
+		if f.Lines, err = s.fittingRows(r.Context(), f.Lines, f.VehicleID); err != nil {
+			return err
+		}
+		if f.InterLines, err = s.fittingRows(r.Context(), f.InterLines, f.VehicleID); err != nil {
+			return err
+		}
 	}
 	return s.renderKitForm(w, r, http.StatusOK, f, true)
 }

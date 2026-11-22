@@ -57,8 +57,9 @@ type itemFormPage struct {
 	Units           []stock.Unit
 	SubUnits        []stock.SubUnit
 	SKUKinds        []stock.SKUKind
-	Matches         []stock.Item // for a new item from the shopping list: items with its name
-	ShoppingVersion int          // for its Matches buttons
+	Matches         []matchRow // for a new item from the shopping list: items with its name
+	MatchVehicles   map[int64]stock.Vehicle
+	ShoppingVersion int // for its Matches buttons
 }
 
 func itemFormFromItem(it stock.Item) itemForm {
@@ -284,7 +285,7 @@ func (s *Server) itemNew(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if f.ShoppingID != 0 {
-		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
+		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name); err != nil {
 			return err
 		}
 		page.ShoppingVersion = shoppingVersion
@@ -351,7 +352,7 @@ func (s *Server) itemCreate(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if f.ShoppingID != 0 {
-		if page.Matches, err = s.store.ItemsNamed(r.Context(), f.Name); err != nil {
+		if page.Matches, page.MatchVehicles, err = s.shoppingMatches(r.Context(), f.Name); err != nil {
 			return err
 		}
 		e, err := s.store.GetShopping(r.Context(), f.ShoppingID)

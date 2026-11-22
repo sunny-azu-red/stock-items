@@ -31,6 +31,7 @@ type shoppingPage struct {
 	Others      int // entries left out: other vehicles'
 	Suggestions []stock.Suggestion
 	Items       []stock.Item
+	Picker      itemPicker // Add to the list's items: Items, in sections
 	Form        shoppingForm
 	Vehicles    []stock.Vehicle // the filter chips: the active vehicles
 	VehicleID   int64           // the vehicle whose part shows, 0 for all
@@ -156,6 +157,9 @@ func (s *Server) loadShopping(r *http.Request, f shoppingForm, vid int64) (shopp
 		// the General ones (free text always does).
 		p.Items = slices.DeleteFunc(p.Items, func(it stock.Item) bool { return !it.Fits(vid) })
 	}
+	// Headed as every item list is: For the part's vehicle, then General;
+	// the whole list's in the stock page's sections.
+	p.Picker = newItemPicker("shopping-items", p.Items, vehicles, findVehicle(vehicles, vid), false)
 	return p, nil
 }
 
@@ -238,6 +242,14 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 		return err
 	case gone:
 		f.Errors.Add("item", "That item was archived or deleted meanwhile")
+	case it != nil && vid != 0 && !it.Fits(vid):
+		// Picked from a list that offered it, before it was retagged: a
+		// vehicle's part offers its own items and the General ones.
+		v, err := s.store.GetVehicle(r.Context(), vid)
+		if err != nil {
+			return err
+		}
+		f.Errors.Add("item", notForVehicle(it.DisplayName(), &v))
 	case it != nil:
 		f.ItemID, in.ItemID, in.Unit, in.FreeText = it.ID, &it.ID, it.Unit, ""
 		title = it.DisplayName()
@@ -381,7 +393,8 @@ type boughtPage struct {
 	Entry     stock.ShoppingEntry
 	Move      movementForm
 	Units     []stock.SubUnit
-	Matches   []stock.Item // items already in stock with a free-text entry's name
+	Matches   []matchRow // items already in stock with a free-text entry's name
+	Vehicles  map[int64]stock.Vehicle
 	Suppliers []string
 }
 
@@ -400,18 +413,24 @@ func (s *Server) shoppingBoughtForm(w http.ResponseWriter, r *http.Request) erro
 	} else {
 		_, f.AmountUnit = stock.SplitForInput(0, e.ItemUnit)
 	}
-	var matches []stock.Item
+	var matches []matchRow
+	vehicles, err := s.store.ListVehicles(r.Context())
+	if err != nil {
+		return err
+	}
 	if e.ItemID == nil {
-		if matches, err = s.store.ItemsNamed(r.Context(), e.FreeText); err != nil {
+		named, err := s.store.ItemsNamed(r.Context(), e.FreeText)
+		if err != nil {
 			return err
 		}
+		matches = matchRows(named, listVehicle(r))
 	}
 	suppliers, err := s.store.Suppliers(r.Context())
 	if err != nil {
 		return err
 	}
 	s.render(w, r, http.StatusOK, "shopping_bought", View{Title: "Bought " + e.Title(), Nav: "shopping",
-		Data: boughtPage{List: shoppingListPath(r), V: listVehicle(r), Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches, Suppliers: suppliers}})
+		Data: boughtPage{List: shoppingListPath(r), V: listVehicle(r), Entry: e, Move: f, Units: stock.SubUnitsFor(e.ItemUnit), Matches: matches, Vehicles: vehicleMap(vehicles), Suppliers: suppliers}})
 	return nil
 }
 
@@ -445,6 +464,13 @@ func (s *Server) shoppingLink(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	} else if err != nil {
 		return err
+	}
+	if v := listVehicle(r); v != 0 && !it.Fits(v) {
+		// A vehicle's part offers its own items and the General ones
+		// (matchRows): this one was retagged since the page offered it.
+		s.setFlash(w, "error", "“"+it.DisplayName()+"” isn't for that vehicle any more, so nothing was linked. Choose another, or add it as a new item.")
+		s.redirect(w, r, boughtPath(r, id), "")
+		return nil
 	}
 	entry, dropped, err := s.store.LinkShopping(r.Context(), id, parseVersion(r), *itemID)
 	if errors.Is(err, store.ErrNotFound) || errors.As(err, new(*store.StaleError)) {

@@ -155,7 +155,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 // typed.
 func TestPartRowsTakeTypedNames(t *testing.T) {
 	a := newApp(t)
-	k390, _ := a.seed()
+	k390, k1290 := a.seed()
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
 	kitLines := func(t *testing.T, rec *httptest.ResponseRecorder) []int64 {
@@ -203,10 +203,30 @@ func TestPartRowsTakeTypedNames(t *testing.T) {
 		expect(t, rec, http.StatusUnprocessableEntity, "No item is called “Silkolene 10W40”: pick one from the list",
 			`name="line_item_text" value="Silkolene 10W40"`, `<input type="hidden" name="line_item" value="" data-item-id>`)
 	})
+	// A part must fit the form's vehicle: tagged with it, or General. The
+	// page offers only those, and a name counts only those.
+	hiflo := itemID(t, a.store, "Hiflofiltro") // KTM 1290's
+	t.Run("another vehicle's item, picked", func(t *testing.T) {
+		rec := a.post("/kits", kit("Other's", itoa(hiflo), "Hiflofiltro Oil Filter"))
+		expect(t, rec, http.StatusUnprocessableEntity, "“Hiflofiltro Oil Filter” isn&#39;t for KTM 390: pick one from the list",
+			`<input type="hidden" name="line_item" value="" data-item-id>`)
+	})
+	t.Run("another vehicle's item, typed", func(t *testing.T) {
+		expect(t, a.post("/kits", kit("Other's typed", "", "hiflofiltro oil filter")), http.StatusUnprocessableEntity,
+			"“hiflofiltro oil filter” isn&#39;t for KTM 390: pick one from the list")
+	})
 	t.Run("a name two items have", func(t *testing.T) {
-		expect(t, a.post("/items", url.Values{"brand": {"KTM"}, "name": {"Oil Filter"}, "unit": {"piece"}}), http.StatusSeeOther)
-		expect(t, a.post("/kits", kit("Two", "", "oil filter")), http.StatusUnprocessableEntity,
-			"2 items are called “oil filter”: pick one from the list")
+		rec := a.post("/items", url.Values{"brand": {"KTM"}, "name": {"Oil Filter"}, "unit": {"piece"}})
+		expect(t, rec, http.StatusSeeOther)
+		general := mustID(t, rec.Header().Get("Location"))
+		// For KTM 390, only the General one fits: the name is it.
+		if got := kitLines(t, a.post("/kits", kit("One fits", "", "oil filter"))); !slices.Equal(got, []int64{general}) {
+			t.Errorf("lines = %v, want the General oil filter %d", got, general)
+		}
+		// For KTM 1290, both do.
+		f := kit("Two", "", "oil filter")
+		f.Set("vehicle_id", itoa(k1290))
+		expect(t, a.post("/kits", f), http.StatusUnprocessableEntity, "2 items are called “oil filter”: pick one from the list")
 	})
 	t.Run("a service's part, and its edit form names it", func(t *testing.T) {
 		rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-20"},

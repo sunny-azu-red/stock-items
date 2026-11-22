@@ -12,19 +12,14 @@
        names it, and the form doesn't ask (a link that names another vehicle
        still shows the field). */}}
   {{$byBar := and $d.IsNew .WorkingOn (eq $f.VehicleID .WorkingOn.ID)}}
-  {{if $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}">{{end}}
-  <div class="form-section">
+  {{if $byBar}}<input type="hidden" name="vehicle_id" value="{{$f.VehicleID}}" data-name="{{.WorkingOn.Name}}">{{end}}
+  <div class="form-section form-rows">
+    {{if not $byBar}}
     <div class="form-grid">
-      {{if not $byBar}}
-      <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
-        <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" required{{if not $f.VehicleID}} autofocus{{end}} {{invalid (index $e "vehicle_id") "vehicle_id"}}>
-          <option value="">Choose…</option>
-          {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
-        </select>
-        {{template "field-err" (fieldErr (index $e "vehicle_id") "vehicle_id")}}
-      </div>
-      {{end}}
+      {{template "vehicle-pick" (dict "Vehicles" $d.Vehicles "Checked" $f.VehicleID "Err" (index $e "vehicle_id"))}}
+    </div>
+    {{end}}
+    <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" required placeholder="e.g. Oil Service" list="kit-names" autocomplete="off" {{if and $f.VehicleID (not $f.Name)}}autofocus{{end}} {{invalid (index $e "name") "name"}}>
@@ -51,14 +46,14 @@
   </div>
   <div class="form-section">
     <h2>Parts</h2>
-    <p class="hint">The parts the job needs, so you see at a glance what is on the shelf and what to buy. Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
+    <p class="hint">The parts the job needs, so you see at a glance what is on the shelf and what to buy. Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank" data-vehicle-href="/items/new">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="kit-lines">
       {{template "part-line-head"}}
       {{range $f.Lines}}{{template "line-row" (dict "Row" . "Prefix" "line")}}{{end}}
     </div>
     {{template "stock-badge-templates"}}
-    {{template "part-items" $d.ItemGroups}}
+    {{template "item-picker" $d.Picker}}
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
   </div>

@@ -242,7 +242,13 @@ func TestArchiveKitFlow(t *testing.T) {
 func TestServicePartsGoWithTheirService(t *testing.T) {
 	a := newApp(t)
 	a.seed()
-	oil := itemID(t, a.store, "Silkolene")
+	// General, so it fits the new vehicle below.
+	in := stock.ItemInput{Brand: "Castrol", Name: "Chain Oil", Unit: stock.UnitML, Quantity: 500}
+	in.Normalize()
+	oil, err := a.store.CreateItem(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
 	had := a.quantity(t, oil)
 	rec := a.post("/vehicles", url.Values{"name": {"Spare bike"}, "kind": {"motorcycle"}})
 	expect(t, rec, http.StatusSeeOther)
@@ -813,11 +819,13 @@ func TestKitMissingStates(t *testing.T) {
 
 	// A kit of an archived vehicle: no new work; its chip still leads up to
 	// the vehicle.
+	// (Its parts fit it: the coolant both bikes use, 640 ml in stock.)
+	coolant := itemID(t, a.store, "M3.0")
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
-		"line_item": {itoa(oil)}, "line_qty": {"2 L"}})
+		"line_item": {itoa(coolant)}, "line_qty": {"2 L"}})
 	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
 		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
-		"line_item": {itoa(oil)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"100 ml"}})
+		"line_item": {itoa(coolant)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(coolant)}, "inter_line_qty": {"100 ml"}})
 	v, err := a.store.GetVehicle(ctx, k1290)
 	if err != nil {
 		t.Fatal(err)
@@ -1057,7 +1065,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 		"part_item": {itoa(filter), itoa(oil)}, "part_qty": {"1", "750 ml"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity,
-		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`">`,
+		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`" data-name="KTM 1290">`,
 		`<input type="hidden" name="kit_id" value="`+itoa(kitID)+`">`,
 		`value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil Service" checked`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`, `value="750 ml"`, "Work performed is required")
@@ -1206,13 +1214,15 @@ func TestZeroLabourIsNoLabour(t *testing.T) {
 
 // TestKitDuplicate: Duplicate on a kit's page starts a new kit's form from
 // it (name, schedule, parts, notes), for the vehicle chosen on the form
-// (the one worked on, if any), leaving out parts whose item is archived.
+// (the one worked on, if any), leaving out parts whose item is archived,
+// and, once its vehicle is known, the parts that don't fit it.
 func TestKitDuplicate(t *testing.T) {
 	a := newApp(t)
 	k390, k1290 := a.seed()
-	oil, pads := itemID(t, a.store, "15W50"), itemID(t, a.store, "Rear Brake Pads")
+	oil, pads := itemID(t, a.store, "15W50"), itemID(t, a.store, "Rear Brake Pads") // KTM 390's
+	ring := itemID(t, a.store, "O-Ring")                                            // both bikes'
 	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"},
-		"line_item": {itoa(oil), itoa(pads)}, "line_qty": {"2", "1"}, "line_unit": {"l", ""}, "notes": {"Warm the engine first"}})
+		"line_item": {itoa(oil), itoa(pads), itoa(ring)}, "line_qty": {"2", "1", "1"}, "line_unit": {"l", "", ""}, "notes": {"Warm the engine first"}})
 	expect(t, rec, http.StatusSeeOther)
 	src := mustID(t, rec.Header().Get("Location"))
 	dup := "/kits/new?from=" + itoa(src)
@@ -1222,19 +1232,32 @@ func TestKitDuplicate(t *testing.T) {
 	}
 	form := a.get(dup)
 	expect(t, form, http.StatusOK, "<h1>Add kit</h1>", `value="Oil service"`, `value="5000"`, "Warm the engine first",
-		`name="line_item" value="`+itoa(oil)+`"`)
-	expectNot(t, form, `name="line_item" value="`+itoa(pads)+`"`, `name="version"`, `<option value="`+itoa(k390)+`" selected`)
+		`name="line_item" value="`+itoa(oil)+`"`, `name="line_item" value="`+itoa(ring)+`"`)
+	expectNot(t, form, `name="line_item" value="`+itoa(pads)+`"`, `name="version"`)
+	if vehicleChecked(form.Body.String(), k390) {
+		t.Error("the copy starts with the source's vehicle picked")
+	}
 	// Saved for the other vehicle: a second kit, the first one unchanged.
-	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Oil service"}, "interval_distance": {"5000"},
-		"line_item": {itoa(oil)}, "line_qty": {"2"}, "line_unit": {"l"}})
+	// Its parts must fit it: KTM 390's oil doesn't.
+	other := url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Oil service"}, "interval_distance": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"2"}, "line_unit": {"l"}}
+	expect(t, a.post("/kits", other), http.StatusUnprocessableEntity, "“Silkolene 15W50 PRO 4 XP” isn&#39;t for KTM 1290")
+	other.Set("line_item", itoa(ring))
+	other.Set("line_unit", "")
+	rec = a.post("/kits", other)
 	expect(t, rec, http.StatusSeeOther)
 	if id := mustID(t, rec.Header().Get("Location")); id == src {
 		t.Fatalf("saved over the kit it was duplicated from")
 	}
 	expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Oil service")
 	expect(t, a.get(kitPath(src)), http.StatusOK, "Rear Brake Pads")
-	// A vehicle asked for is chosen.
-	expect(t, a.get(dup+"&vehicle="+itoa(k1290)), http.StatusOK, `<option value="`+itoa(k1290)+`" selected`)
+	// A vehicle asked for is chosen, and the copy keeps the parts that fit it.
+	form = a.get(dup + "&vehicle=" + itoa(k1290))
+	if !vehicleChecked(form.Body.String(), k1290) {
+		t.Error("the vehicle asked for isn't picked")
+	}
+	expect(t, form, http.StatusOK, `name="line_item" value="`+itoa(ring)+`"`)
+	expectNot(t, form, `name="line_item" value="`+itoa(oil)+`"`)
 	// While a vehicle is worked on, the copy is for it, and another
 	// vehicle's kit is out of view, as its page is.
 	expect(t, a.getWorking(dup, itoa(k390)), http.StatusOK, `name="vehicle_id" value="`+itoa(k390)+`"`)

@@ -62,6 +62,21 @@ func TestGroupByVehicles(t *testing.T) {
 	}
 }
 
+func TestSectionPickerTitle(t *testing.T) {
+	items, vehicles := exampleInventory()
+	items = append(items, Item{Name: "Brake cleaner", Unit: UnitML, Quantity: 500})
+	want := []string{"Only KTM 390", "Only KTM 1290", "Shared KTM 390 + KTM 1290", "General"}
+	got := GroupByVehicles(items, vehicles)
+	if len(got) != len(want) {
+		t.Fatalf("got %d sections, want %d", len(got), len(want))
+	}
+	for i, s := range got {
+		if s.PickerTitle() != want[i] {
+			t.Errorf("section %d picker title = %q, want %q", i, s.PickerTitle(), want[i])
+		}
+	}
+}
+
 func TestGroupIgnoresUnknownVehicles(t *testing.T) {
 	items := []Item{{Name: "X", VehicleIDs: []int64{99}}}
 	got := GroupByVehicles(items, []Vehicle{{ID: 1, Name: "A"}})

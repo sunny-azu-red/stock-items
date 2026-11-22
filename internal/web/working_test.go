@@ -374,10 +374,10 @@ func TestWorkingOnPages(t *testing.T) {
 		// A new service or kit is for the vehicle worked on, without asking.
 		for _, path := range []string{"/services/new", "/kits/new"} {
 			rec := a.getWorking(path, w)
-			expect(t, rec, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+w+`">`)
+			expect(t, rec, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+w+`" data-name="KTM 390">`)
 			expectNot(t, rec, `id="vehicle_id"`)
 			expect(t, a.get(path), http.StatusOK, `id="vehicle_id"`)
-			if !regexp.MustCompile(`<option value="` + itoa(k1290) + `"[^>]*selected>`).MatchString(a.get(path + "?vehicle=" + itoa(k1290)).Body.String()) {
+			if !vehicleChecked(a.get(path+"?vehicle="+itoa(k1290)).Body.String(), k1290) {
 				t.Errorf("%s: without a vehicle worked on, ?vehicle= doesn't choose it", path)
 			}
 		}
@@ -422,7 +422,7 @@ func TestWorkingOnPages(t *testing.T) {
 		rec := a.postWorking("/services", form, w)
 		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to log this service",
 			`value="Tyre swap"`, `id="vehicle_id"`, `value="`+key+`"`)
-		if !regexp.MustCompile(`<option value="` + k + `"[^>]*selected>`).MatchString(rec.Body.String()) {
+		if !vehicleChecked(rec.Body.String(), k1290) {
 			t.Error("the refused form doesn't keep the other vehicle chosen")
 		}
 		rec = a.postWorking("/services", url.Values{"vehicle_id": {k}, "kit_id": {itoa(kit)}, "kit_name": {"Big kit"}, "title": {"Big kit"}, "performed_on": {"2026-10-29"}}, w)

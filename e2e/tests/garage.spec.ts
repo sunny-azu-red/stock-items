@@ -45,6 +45,14 @@ async function pickPart(input: Locator, name: string) {
   await input.page().getByRole("listbox").getByRole("option").filter({ has: input.page().locator(".combo-text", { hasText: exact(name) }) }).click();
 }
 
+// A kit or service form's Vehicle: its chip.
+async function pickVehicle(page: Page, name: string) {
+  await page.locator("#vehicle_id label.chip-toggle").filter({ hasText: exact(name) }).click();
+}
+
+// The headings of an open item list, in order.
+const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
+
 async function addVehicle(page: Page, name: string, odometer: string) {
   await page.goto("/vehicles/new");
   await field(page, "Name").fill(name);
@@ -382,6 +390,24 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   await expect(many.locator('[aria-hidden="true"]')).toHaveText("2 matches");
   await expect(many.locator(".sr-only")).toHaveText("2 items have this name: pick one, or it's added as something new");
   await expect(many).toHaveAttribute("title", "2 items have this name: pick one, or it's added as something new");
+  // The whole list's items in the stock page's sections, so the two tell
+  // apart by their vehicle.
+  await item.fill("oil filter");
+  expect(await listGroups(page)).toEqual(["Only KTM 390", "Only KTM 1290", "Shared KTM 390 + KTM 1290"]);
+  await item.press("Escape");
+  // A vehicle's part offers its items and the General ones, For it: there
+  // the name is its own.
+  await page.getByRole("group", { name: "Filter by vehicle" }).getByRole("link", { name: "KTM 390" }).click();
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  await item.fill("oil filter");
+  expect(await listGroups(page)).toEqual(["For KTM 390"]);
+  await expect(itemID).not.toHaveValue("");
+  await expect(status.locator("[data-many-status]")).toBeHidden();
+  await expect(page.getByRole("listbox").getByRole("option", { name: /^Hiflofiltro/ })).toHaveCount(0);
+  await item.fill("chain lube");
+  expect(await listGroups(page)).toEqual(["General"]);
+  await item.press("Escape");
+  await page.goto("/shopping");
 
   // An item's exact name is that item, picked or not.
   await item.fill("ktm fuel filter");
@@ -572,7 +598,7 @@ test("part rows find an item by typing, and refuse a name that is none", async (
   await expect(unit).toHaveValue("");
 
   // Saved like that, the row says why.
-  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await pickVehicle(page, "KTM 390");
   await field(page, "Work performed").fill("Top up");
   await row.locator('input[name="part_qty"]').fill("100 ml");
   await page.getByRole("button", { name: "Save service" }).click();
@@ -623,7 +649,7 @@ test("Log service offers the chosen vehicle's kits and keeps what was typed", as
   const odometer = page.getByLabel("Odometer (km)");
   await expect(starts).toBeHidden();
   await expect(odometer).toHaveAttribute("placeholder", "e.g. 15000");
-  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await pickVehicle(page, "KTM 390");
   await expect(starts).toBeVisible();
   // The odometer stays empty; the vehicle's last reading is its placeholder.
   await expect(odometer).toHaveValue("");
@@ -639,7 +665,7 @@ test("Log service offers the chosen vehicle's kits and keeps what was typed", as
 
   // What was changed comes along: the date, odometer and labour.
   await page.goto("/services/new");
-  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await pickVehicle(page, "KTM 390");
   await page.getByLabel("Done on", { exact: true }).fill("2026-10-05");
   await odometer.fill("12345");
   await page.getByLabel(/^Labour cost/).fill("80");
@@ -730,7 +756,7 @@ test("a form's sections have a line between them, and none above the first", asy
   await page.goto("/services/new");
   await expect(page.locator("#kit-starts")).toBeHidden();
   problems.push(...(await lines()).map((p) => `Log service: ${p}`));
-  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await pickVehicle(page, "KTM 390");
   await page.locator("#kit-starts").getByRole("link", { name: "Oil Service" }).click();
   await expect(page).toHaveURL(/\/services\/new\?kit=\d+$/);
   await page.getByLabel("Done on", { exact: true }).fill("");
@@ -2262,9 +2288,9 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
     ["/items/new", "Add item"], ["/items/new", "Add item with errors", submit("Save item")], [item + "/edit", "Edit item"],
     ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
     ["/kits/new", "Add kit", async () => { await page.locator("#has_inter").check(); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
-    ["/services/new", "Log service", async () => { await page.locator("#vehicle_id").selectOption({ label: "KTM 390" }); }], [service + "/edit", "Edit service"],
+    ["/services/new", "Log service", async () => { await pickVehicle(page, "KTM 390"); }], [service + "/edit", "Edit service"],
     ["/services/new", "Log service with a part that names no item", async () => {
-      await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+      await pickVehicle(page, "KTM 390");
       await page.getByRole("button", { name: "Add part" }).click();
       const rows = page.locator("#part-lines .part-line:not(.row-head)");
       await rows.nth(0).locator('input[name="part_item_text"]').fill("No such part");
@@ -2528,7 +2554,7 @@ test("a save that seems stuck can be tried again, and saves once", async ({ page
     page.evaluate(() => { (window as any).held = window.open("/services/new"); }),
   ]);
   await form.waitForLoadState();
-  await form.getByLabel("Vehicle", { exact: true }).selectOption({ label: "KTM 390" });
+  await form.locator("#vehicle_id label.chip-toggle").filter({ hasText: exact("KTM 390") }).click();
   await form.getByLabel("Work performed").fill("Chain clean (retried)");
 
   // The first save is held on its way to the server. Once let go it is
@@ -2668,7 +2694,7 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
     for (const [p, tab] of pages) {
       await page.goto(p);
       if (tab) await page.getByRole("tab", { name: tab }).click();
-      if (p === "/services/new") await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+      if (p === "/services/new") await pickVehicle(page, "KTM 390");
       const found = await page.evaluate(() => {
         const out: string[] = [];
         const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -2792,14 +2818,41 @@ test("duplicate a kit for another vehicle", async ({ page }, testInfo) => {
   await expect(page).toHaveURL(/\/kits\/new\?from=\d+$/);
   await expect(page.locator("main h1")).toHaveText("Add kit");
   await expect(field(page, "Name")).toHaveValue(name);
-  await expect(field(page, "Vehicle")).toHaveValue("");
+  await expect(page.locator('#vehicle_id input[name="vehicle_id"]:checked')).toHaveCount(0);
+  const rows = page.locator("#kit-lines .part-line:not(.row-head)");
+  const shown = rows.locator("visible=true");
   const parts = await page.locator('input[name="line_item"]').evaluateAll((l) => l.filter((i) => (i as HTMLInputElement).value).length);
   expect(parts).toBeGreaterThan(0);
-  await field(page, "Vehicle").selectOption({ label: "KTM 1290" });
+  // With no vehicle picked, the list is the stock page's sections.
+  const empty = rows.last().locator('input[name="line_item_text"]');
+  await empty.fill("e");
+  expect(await listGroups(page)).toEqual(["Only KTM 390", "Only KTM 1290", "Shared KTM 390 + KTM 1290", "General"]);
+  await empty.press("Escape");
+  await empty.fill("");
+  // Its parts are KTM 390's: for KTM 1290 they are put aside (not sent),
+  // and the list offers KTM 1290's items and the General ones.
+  await pickVehicle(page, "KTM 1290");
+  await expect(shown).toHaveCount(1);
+  await expect(shown.locator('input[name="line_item_text"]')).toHaveValue("");
+  await shown.locator('input[name="line_item_text"]').fill("e");
+  expect(await listGroups(page)).toEqual(["For KTM 1290", "General"]);
+  const offered = (name: string) => page.getByRole("listbox").getByRole("option").filter({ has: page.locator(".combo-text", { hasText: exact(name) }) });
+  await expect(offered("KTM Oil Filter")).toHaveCount(0); // KTM 390's
+  await expect(offered("Hiflofiltro Oil Filter")).toHaveCount(1);
+  await expect(offered("KTM Oil Filter O-Ring")).toHaveCount(1); // shared
+  await shown.locator('input[name="line_item_text"]').press("Escape");
+  await shown.locator('input[name="line_item_text"]').fill("");
+  // Back to KTM 390: they come back as they were.
+  await pickVehicle(page, "KTM 390");
+  await expect(shown).toHaveCount(parts + 1);
+  await expect(page.locator('#kit-lines input[name="line_item"]:not(:disabled)')).toHaveCount(parts + 1);
+  // For KTM 1290 they stay out of what is saved.
+  await pickVehicle(page, "KTM 1290");
   await page.getByRole("button", { name: "Save kit" }).click();
   await expect(page).toHaveURL(/\/kits\/\d+$/);
   await expect(page.locator(".page-head h1")).toHaveText(name);
   await expect(page.locator(".page-head .chip")).toHaveText("KTM 1290");
+  await expect(page.locator("meter.meter")).toHaveCount(0);
   // The copy goes again, so the pages and screenshots stay as they were.
   await (await headAction(page, "button", "Delete")).click();
   const flash = page.locator(".flash-success");

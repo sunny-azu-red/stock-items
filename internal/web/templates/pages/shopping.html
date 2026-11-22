@@ -58,9 +58,7 @@
               <span class="item-status" id="item-status" aria-live="polite" data-item-status><span class="badge badge-accent" data-new-status title="Not in stock: added as something new" hidden><span aria-hidden="true">New</span><span class="sr-only">Not in stock: added as something new</span></span><span class="badge badge-warn" data-many-status title="{n} items have this name: pick one, or it's added as something new" hidden><span aria-hidden="true">{n} matches</span><span class="sr-only">{n} items have this name: pick one, or it's added as something new</span></span></span>
             </div>
             <input type="hidden" name="item_id" value="{{with $f.ItemID}}{{.}}{{end}}" data-item-id>
-            <datalist id="shopping-items">
-              {{range $d.Items}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}></option>{{end}}
-            </datalist>
+            {{template "item-picker" $d.Picker}}
             {{template "field-err" (fieldErr (index $e "item") "item")}}
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">

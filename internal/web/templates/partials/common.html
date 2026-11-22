@@ -273,12 +273,31 @@
 </div>
 {{end}}
 
-{{/* The items the part rows offer, once per page: []itemGroup, each
-     item's name with what app.js needs for its units and stock badge (as
-     the shopping list's), and its group when there are two (a vehicle's
-     items, then the others). */}}
-{{define "part-items"}}{{$groups := .}}<datalist id="part-items">
-  {{range $groups}}{{$g := .Label}}{{range .Items}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{rowPlaceholderFor .Unit}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}{{if .Archived}} data-archived{{end}}{{if gt (len $groups) 1}} data-group="{{$g}}"{{end}}></option>{{end}}{{end}}
+{{/* A kit or service form's Vehicle: single-choice chips (the item
+     form's Vehicles, one pick), on a row of its own, as it decides which
+     items the part rows offer (app.js follows it). dict "Vehicles"
+     []Vehicle "Checked" id "Err" (its error) "KitErr" (a service's kit's,
+     under it too). docs/design.md, Chips you pick. */}}
+{{define "vehicle-pick"}}{{$c := .Checked}}
+<fieldset class="field span-all{{if or .Err .KitErr}} has-error{{end}}" id="vehicle_id"{{if .Err}} aria-describedby="vehicle_id-err"{{end}}>
+  <legend>Vehicle {{template "req"}}</legend>
+  <div class="chips">
+    {{range $i, $v := .Vehicles}}<label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="radio" name="vehicle_id" value="{{.ID}}" data-name="{{.Name}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} required{{if eq .ID $c}} checked{{end}}{{if and (eq $i 0) (not $c)}} autofocus{{end}}><span class="dot"></span>{{.Name}}</label>{{end}}
+  </div>
+  {{template "field-err" (fieldErr .Err "vehicle_id")}}
+  {{template "err" .KitErr}}
+</fieldset>{{end}}
+
+{{/* A list of stock items for item fields (itemPicker; once per page):
+     each item's name with what app.js needs for its units and stock badge,
+     its vehicles (data-vehicles, none for General) and its section's
+     heading (data-group, the stock page's: Only …, Shared …, General), in
+     the stock page's order. app.js offers and heads them for the vehicle in
+     scope: data-for when the page fixes it, else the form's vehicle_id
+     (For the vehicle, then General); with none, by data-group.
+     docs/design.md, Item lists. */}}
+{{define "item-picker"}}<datalist id="{{.ID}}"{{with .For}} data-for="{{.ID}}" data-for-name="{{.Name}}"{{end}}>
+  {{range .Options}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{if $.Rows}}{{rowPlaceholderFor .Unit}}{{else}}{{placeholderFor .Unit}}{{end}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}{{if .Archived}} data-archived{{end}} data-vehicles="{{.Vehicles}}" data-group="{{.Group}}"></option>{{end}}
 </datalist>{{end}}
 
 {{/* Item + quantity row for kit / service forms, with the chosen item's
@@ -345,15 +364,17 @@
 {{end}}
 
 {{/* Items already in stock with a free-text shopping entry's name:
-     dict "EntryID" int64 "Version" int "Matches" []Item */}}
-{{/* "V": the shopping list's vehicle the page came from, carried back. */}}
-{{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}{{$v := .V}}
+     dict "EntryID" int64 "Version" int "Matches" []matchRow "Vehicles"
+     (their chips' vehicles, by id), and "V": the shopping list's vehicle
+     the page came from, carried back (its part offers only the items that
+     fit it, matchRows). Each shows its vehicles as a stock row does. */}}
+{{define "shopping-matches"}}{{$entry := .EntryID}}{{$version := .Version}}{{$v := .V}}{{$vs := .Vehicles}}
 <div class="card card-body">
   <p><strong>Already have it?</strong> Add this purchase to the item instead of creating a new one.</p>
   <ul class="list">
     {{range .Matches}}
     <li>
-      <span class="grow"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a><span class="stock-line">{{template "stock-badge" (stockBadge . true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
+      <span class="grow"><span class="title-row"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a>{{if .Chips}}{{template "vehicle-chips" (dict "IDs" .VehicleIDs "Vehicles" $vs "Link" false)}}{{end}}</span><span class="stock-line">{{template "stock-badge" (stockBadge .Item true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
       <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}">{{with $v}}<input type="hidden" name="v" value="{{.}}">{{end}}<button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}

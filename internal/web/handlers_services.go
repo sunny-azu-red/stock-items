@@ -36,7 +36,7 @@ type serviceFormPage struct {
 	Form          serviceForm
 	Vehicles      []stock.Vehicle
 	Vehicle       *stock.Vehicle
-	ItemGroups    []itemGroup
+	Picker        itemPicker // the part rows' items
 	ServiceTitles []string
 	KitHasInter   bool
 	KitFullParts  []lineRow
@@ -136,7 +136,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 	}
 	f.Parts = withEmptyRow(f.Parts)
 	p.Form = f
-	p.ItemGroups = itemOptions(items, p.Vehicle)
+	p.Picker = newItemPicker("part-items", items, vehicles, nil, true)
 	title := "Log service"
 	if f.ID != 0 {
 		title = "Edit service"
@@ -183,6 +183,12 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			lines = k.InterLines
 		}
 		f.Parts = kitPartRows(lines)
+	}
+	if f.VehicleID == 0 && !q.Has("kit") {
+		// With one vehicle, the service is for it.
+		if f.VehicleID, err = s.soleVehicleID(ctx); err != nil {
+			return err
+		}
 	}
 	if wid != 0 && f.VehicleID != wid {
 		// While a vehicle is worked on, new work is for it: an old link to
@@ -246,7 +252,11 @@ func (s *Server) parseServiceForm(r *http.Request) (serviceForm, stock.ServiceIn
 	if in.LaborCost, err = parseOptMoney(f.LaborCost); err != nil {
 		f.Errors.Add("labor_cost", err.Error())
 	}
-	f.Parts, in.Parts = parseLines(r, "part", itemsByID(items), f.Errors)
+	vehicles, err := s.store.ListVehicles(r.Context())
+	if err != nil {
+		return serviceForm{}, stock.ServiceInput{}, err
+	}
+	f.Parts, in.Parts = parseLines(r, "part", itemsByID(items), findVehicle(vehicles, f.VehicleID), f.Errors)
 	in.Normalize()
 	for k, v := range in.Validate() {
 		f.Errors.Add(k, v)

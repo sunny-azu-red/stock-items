@@ -270,8 +270,9 @@
   .sidebar-foot { margin-top: auto; }
   .sidebar-actions {
     display: grid; gap: 6px;
-    /* A keyboard shortcut sits on what it does, at the button's end. */
-    & .btn { position: relative; }
+    /* Icon and label start at the left, like the nav links above them; a
+       keyboard shortcut sits on what it does, at the button's end. */
+    & .btn { position: relative; justify-content: flex-start; }
     & .kbd { position: absolute; inset: 0 8px 0 auto; margin: auto 0; }
   }
 

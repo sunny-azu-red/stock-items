@@ -1181,15 +1181,30 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   await expect(panel).toBeHidden();
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
-  // Back to More: the sheet again, and the grey.
+  // Back to More, by ←, by the tab bar's More and by Esc: the sheet again,
+  // and its grey. The two swap at once: nothing of Appearance lingers in
+  // or out (a fade shows the page through it; its grey left on More's is
+  // twice as dark).
+  const lingers = () => panel.evaluate((e) => e.getAnimations().map((a) => (a as CSSTransition).transitionProperty ?? a.id));
   await more.click();
-  await sheet.getByRole("button", { name: "Appearance" }).click();
-  await panel.getByRole("button", { name: "Back to More" }).click();
-  await expect(panel).toBeHidden();
-  await expect(sheet.locator(".nav")).toBeVisible();
-  expect(await grey(sheet), "More's grey again").toBe(scrim);
-  // Esc closes it too.
+  for (const back of [
+    () => panel.getByRole("button", { name: "Back to More" }).click(),
+    () => more.click(),
+    () => page.keyboard.press("Escape"),
+  ]) {
+    await sheet.getByRole("button", { name: "Appearance" }).click();
+    expect(await lingers(), "Appearance fading in").toEqual([]);
+    await back();
+    expect(await lingers(), "Appearance fading out").toEqual([]);
+    await expect(panel).toBeHidden();
+    await expect(sheet.locator(".nav")).toBeVisible();
+    expect(await grey(sheet), "More's grey again").toBe(scrim);
+  }
+  // Then Esc, or More, closes it.
   await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await more.click();
+  await more.click();
   await expect(sheet).toBeHidden();
   // The bar has no Switch: the sheet's Work on list switches.
   await expect(page.locator(".working-on").getByRole("button")).toHaveCount(1);

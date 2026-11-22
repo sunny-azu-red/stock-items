@@ -82,6 +82,8 @@
   <a href="/services" {{if eq .Nav "services"}}aria-current="page"{{end}}>{{icon "wrench"}}Services</a>
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shop{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>
   <button type="button" popovertarget="more"{{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash")}} class="current" aria-current="page"{{end}}>{{icon "menu"}}More</button>
+  {{/* While Appearance is in the More sheet's place, More goes back to More. */}}
+  <button type="button" class="tab-back" popovertarget="appearance" popovertargetaction="hide">{{icon "menu"}}More</button>
 </nav>
 {{/* One polite live region for every toast. */}}
 <div id="toasts" class="toasts" role="status"></div>

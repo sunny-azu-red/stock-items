@@ -567,7 +567,10 @@
       inset: auto 0 var(--tabbar-space) 0; width: auto; max-height: calc(100dvh - var(--tabbar-space) - 64px);
       padding: 12px calc(var(--page) + env(safe-area-inset-right)) 18px calc(var(--page) + env(safe-area-inset-left));
       border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
-      &:popover-open { @starting-style { translate: 0; opacity: 0; } }
+      /* It swaps with the sheet at once, both ways: a fade would show the
+         page through it, and its grey lingering on the way out would lie
+         on the sheet's own, twice as dark. */
+      transition: none;
     }
   }
   .appearance-head { display: flex; align-items: center; gap: 6px; }
@@ -579,6 +582,13 @@
        Appearance's own takes its place, so the swap shows no change. */
     .sidebar:has(#appearance:popover-open), .sidebar:has(#appearance:popover-open)::backdrop { visibility: hidden; }
     .appearance { visibility: visible; }
+    /* Meanwhile the tab bar's More goes back to More, as ← does: a button
+       of its own, which hides Appearance only. */
+    .tabbar .tab-back { display: none; }
+    body:has(#appearance:popover-open) .tabbar {
+      & .tab-back { display: flex; }
+      & [popovertarget="more"] { display: none; }
+    }
   }
   /* System / Light / Dark: one pressed, like a segmented control. */
   .theme-pick .pick {

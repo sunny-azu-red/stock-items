@@ -166,7 +166,7 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
-		name, err := spell(ctx, tx, kitNameSpellings, 0, in.Name)
+		name, err := spell(ctx, tx, kitNameSpellings, 0, "", in.Name)
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,8 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// The kit's vehicle is read without a lock first; a kit moved since
 		// has a new version, so the check below refuses it.
 		var was int64
-		err := tx.QueryRow(ctx, `SELECT vehicle_id FROM service_kits WHERE id = $1`, id).Scan(&was)
+		var nameWas string
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, name FROM service_kits WHERE id = $1`, id).Scan(&was, &nameWas)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return goneError(ctx, tx, WhatKit, id)
 		}
@@ -243,7 +244,7 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 				return &ConflictError{Field: "form", Message: target + " is archived; restore it first."}
 			}
 		}
-		name, err := spell(ctx, tx, kitNameSpellings, id, in.Name)
+		name, err := spell(ctx, tx, kitNameSpellings, id, nameWas, in.Name)
 		if err != nil {
 			return err
 		}

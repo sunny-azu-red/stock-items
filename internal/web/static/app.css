@@ -772,9 +772,11 @@
     /* A group's heading (a vehicle's items, then the others), as a
        select's optgroup: not an entry, so worded like the sidebar's
        headings (.nav-title), close over its entries. */
+    & li[role="group"] { padding: 0; cursor: default; }
+    & ul[role="none"] { margin: 0; padding: 0; list-style: none; }
     & .combo-group {
       font-size: var(--text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
-      color: var(--muted); padding: 10px 10px 4px; cursor: default;
+      color: var(--muted); padding: 10px 10px 4px;
     }
     /* A stock item's entry: its name, cut short, and its stock badge (24px)
        at the end, the entry as tall as one without. */
@@ -783,6 +785,8 @@
     & .badge { flex: none; }
     /* "Something new: “…”", after the items, as tall as they are. */
     & .combo-new { color: var(--accent-strong); font-weight: 600; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-xs) var(--radius-xs); padding-top: 6px; }
+    /* Alone (nothing in stock matches), no line over it. */
+    & .combo-new:first-child { border-top: 0; padding-top: 7px; }
   }
   @position-try --combo-below { position-area: bottom span-right; max-height: calc(100% - 12px); }
   @position-try --tip-end { position-area: bottom span-left; margin: 6px -4px 0 0; }

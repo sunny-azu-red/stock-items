@@ -58,9 +58,12 @@ func (s *Store) suggestions(ctx context.Context, spellings string) ([]string, er
 
 // spell is text as the suggestion list spells it, leaving out the record
 // self (0 for a new one) and the built-in spellings: text itself when no
-// other spelling in use differs from it only in case.
-func spell(ctx context.Context, q queryRower, spellings string, self int64, text string) (string, error) {
-	if strings.TrimSpace(text) == "" {
+// other spelling in use differs from it only in case. A record's text that
+// is exactly what it had (was) stays as it is: saving a record never
+// changes a field it didn't change, even one whose spelling differs from
+// the list's.
+func spell(ctx context.Context, q queryRower, spellings string, self int64, was, text string) (string, error) {
+	if strings.TrimSpace(text) == "" || (self != 0 && text == was) {
 		return text, nil
 	}
 	var v string
@@ -73,14 +76,22 @@ func spell(ctx context.Context, q queryRower, spellings string, self int64, text
 	return v, err
 }
 
-// spellEach applies spell to each field: its list's spelling.
-func spellEach(ctx context.Context, q queryRower, self int64, fields map[*string]string) error {
-	for p, spellings := range fields {
-		v, err := spell(ctx, q, spellings, self, *p)
+// spelledField is a field for spellFields: its text, its list's spellings
+// and what the record had (was; "" for a new one).
+type spelledField struct {
+	text      *string
+	spellings string
+	was       string
+}
+
+// spellFields applies spell to each field of the record self.
+func spellFields(ctx context.Context, q queryRower, self int64, fields ...spelledField) error {
+	for _, f := range fields {
+		v, err := spell(ctx, q, f.spellings, self, f.was, *f.text)
 		if err != nil {
 			return err
 		}
-		*p = v
+		*f.text = v
 	}
 	return nil
 }

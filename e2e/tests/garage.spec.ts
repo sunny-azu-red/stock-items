@@ -217,7 +217,9 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   const qtys = page.locator('input[name="line_qty"]');
   // The list puts the vehicle's items first, under their heading.
   await items.nth(0).fill("oil filter");
-  await expect(page.getByRole("listbox").locator(".combo-group").first()).toHaveText("For KTM 390");
+  const mine = page.getByRole("listbox").getByRole("group").first();
+  await expect(mine).toHaveAccessibleName("For KTM 390");
+  await expect(mine.getByRole("option").first()).toContainText("KTM Oil Filter");
   await pickPart(items.nth(0), "KTM Oil Filter");
   await qtys.nth(0).fill("1");
   // One empty row to start with; Add part adds the next.
@@ -298,7 +300,8 @@ test("buy something new from the shopping list", async ({ page }) => {
 
 test("Shopping's Item suggests your stock, and the units and the badge follow it", async ({ page }) => {
   await page.goto("/shopping");
-  await expect(page.locator(".list li").filter({ hasText: "KTM Fuel Filter" })).toHaveCount(0);
+  const onList = page.locator("section.card").filter({ has: page.getByRole("heading", { name: "On the list" }) }).locator(".list li");
+  await expect(onList.filter({ hasText: "KTM Fuel Filter" })).toHaveCount(0);
   const item = field(page, "Item");
   const form = page.locator('form[action="/shopping"]');
   const itemID = form.locator('input[name="item_id"]');
@@ -350,7 +353,7 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   await page.getByLabel("Quantity").fill("1");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Added KTM Fuel Filter to the shopping list");
-  const entry = page.locator(".list li").filter({ hasText: "KTM Fuel Filter" });
+  const entry = onList.filter({ hasText: "KTM Fuel Filter" });
   await expect(entry.getByRole("link", { name: "KTM Fuel Filter" })).toHaveAttribute("href", /^\/items\/\d+$/);
   await entry.getByRole("button", { name: "Remove KTM Fuel Filter" }).click();
   await expect(entry).toHaveCount(0);
@@ -508,7 +511,16 @@ test("part rows find an item by typing, and refuse a name that is none", async (
   const list = page.getByRole("listbox");
   await expect(list.getByRole("option")).toHaveCount(1);
   await expect(list.getByRole("option").first().locator(".badge")).toContainText("in stock");
-  await list.getByRole("option").first().click();
+  // Enter with nothing highlighted closes the list and saves nothing.
+  await page.keyboard.press("Enter");
+  await expect(list).toBeHidden();
+  await expect(page).toHaveURL(/\/services\/new$/);
+  await expect(id).toHaveValue("");
+  // ArrowDown opens it again on what was typed; Enter picks.
+  await page.keyboard.press("ArrowDown");
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
   await expect(item).toHaveValue("Silkolene 15W50 PRO 4 XP");
   await expect(id).not.toHaveValue("");
   await expect(unit).toHaveValue("l");

@@ -122,7 +122,7 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := checkArchivedParts(ctx, tx, 0, in.Parts); err != nil {
 			return err
 		}
-		title, err := spell(ctx, tx, serviceTitleSpellings, 0, in.Title)
+		title, err := spell(ctx, tx, serviceTitleSpellings, 0, "", in.Title)
 		if err != nil {
 			return err
 		}
@@ -169,8 +169,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		var kitWas *int64
 		var interWas bool
 		var version int
-		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, kit_intermediate FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&version, &in.VehicleID, &kitWas, &interWas)
+		var titleWas string
+		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, kit_intermediate, title FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&version, &in.VehicleID, &kitWas, &interWas, &titleWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
 			return err
 		}
@@ -221,7 +222,7 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// movement ids): a form opened before this save is stale now.
 		// odometer_at_log stays as it was logged: a reading added now wins
 		// over it, and removing that reading again falls back to it.
-		if in.Title, err = spell(ctx, tx, serviceTitleSpellings, id, in.Title); err != nil {
+		if in.Title, err = spell(ctx, tx, serviceTitleSpellings, id, titleWas, in.Title); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `

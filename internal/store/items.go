@@ -233,7 +233,7 @@ func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, versi
 
 // createItem inserts an item with its starting stock, SKUs and tags.
 func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, error) {
-	if err := spellItem(ctx, tx, 0, &in); err != nil {
+	if err := spellItem(ctx, tx, 0, &in, itemWas{}); err != nil {
 		return 0, err
 	}
 	var id int64
@@ -296,7 +296,13 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in the trash"}
 			}
 		}
-		if err := spellItem(ctx, tx, id, &in); err != nil {
+		var was itemWas
+		err = tx.QueryRow(ctx, `SELECT brand, category, location, ARRAY(SELECT brand FROM item_skus WHERE item_id = $1) FROM items WHERE id = $1`, id).
+			Scan(&was.Brand, &was.Category, &was.Location, &was.SKUBrands)
+		if err != nil {
+			return err
+		}
+		if err := spellItem(ctx, tx, id, &in, was); err != nil {
 			return err
 		}
 		// A new version: a form opened before this save is stale now.
@@ -317,21 +323,37 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 	})
 }
 
+// itemWas is what an item had of the fields spellItem spells.
+type itemWas struct {
+	Brand, Category, Location string
+	SKUBrands                 []string
+}
+
 // spellItem spells an item's brand, category and location, and its SKUs'
 // brands, as their suggestion lists do (spell), leaving out the item self
-// (0 for a new one). A SKU's brand that is the item's takes its spelling.
-func spellItem(ctx context.Context, q queryRower, self int64, in *stock.ItemInput) error {
-	err := spellEach(ctx, q, self, map[*string]string{&in.Brand: brandSpellings, &in.Category: categorySpellings, &in.Location: locationSpellings})
+// (0 for a new one) and what it had (was) unchanged. A SKU's brand that is
+// the item's or an earlier SKU's takes that spelling.
+func spellItem(ctx context.Context, q queryRower, self int64, in *stock.ItemInput, was itemWas) error {
+	err := spellFields(ctx, q, self, spelledField{&in.Brand, brandSpellings, was.Brand},
+		spelledField{&in.Category, categorySpellings, was.Category}, spelledField{&in.Location, locationSpellings, was.Location})
 	if err != nil {
 		return err
 	}
 	in.SKUs = slices.Clone(in.SKUs) // the caller's stay as they were
+	seen := []string{in.Brand}
 	for i := range in.SKUs {
-		if strings.EqualFold(in.SKUs[i].Brand, in.Brand) {
-			in.SKUs[i].Brand = in.Brand
-		} else if in.SKUs[i].Brand, err = spell(ctx, q, brandSpellings, self, in.SKUs[i].Brand); err != nil {
+		b := &in.SKUs[i].Brand
+		if *b == "" {
+			continue
+		}
+		if self != 0 && (*b == was.Brand || slices.Contains(was.SKUBrands, *b)) {
+			// Unchanged: as it was.
+		} else if j := slices.IndexFunc(seen, func(s string) bool { return strings.EqualFold(s, *b) }); j >= 0 {
+			*b = seen[j]
+		} else if *b, err = spell(ctx, q, brandSpellings, self, "", *b); err != nil {
 			return err
 		}
+		seen = append(seen, *b)
 	}
 	return nil
 }

@@ -191,8 +191,15 @@ func TestPartRowsTakeTypedNames(t *testing.T) {
 			t.Errorf("lines = %v, want the oil", got)
 		}
 	})
-	t.Run("picked, then changed", func(t *testing.T) {
-		rec := a.post("/kits", kit("Changed", itoa(oil), "Silkolene 10W40"))
+	t.Run("picked, then renamed in another tab", func(t *testing.T) {
+		// The page clears the id once the text no longer names the item, so
+		// a posted one stands: an open form's row keeps its renamed item.
+		if got := kitLines(t, a.post("/kits", kit("Renamed", itoa(oil), "Silkolene (old name)"))); !slices.Equal(got, []int64{oil}) {
+			t.Errorf("lines = %v, want the oil", got)
+		}
+	})
+	t.Run("a name that is no item", func(t *testing.T) {
+		rec := a.post("/kits", kit("Unknown", "", "Silkolene 10W40"))
 		expect(t, rec, http.StatusUnprocessableEntity, "No item is called “Silkolene 10W40”: pick one from the list",
 			`name="line_item_text" value="Silkolene 10W40"`, `<input type="hidden" name="line_item" value="" data-item-id>`)
 	})

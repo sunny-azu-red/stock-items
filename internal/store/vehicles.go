@@ -53,7 +53,7 @@ func vehicleConflict(err error) error {
 func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64, error) {
 	var id int64
 	err := s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
-		if err := spellEach(ctx, tx, 0, map[*string]string{&in.Make: makeSpellings, &in.Model: modelSpellings}); err != nil {
+		if err := spellFields(ctx, tx, 0, spelledField{&in.Make, makeSpellings, ""}, spelledField{&in.Model, modelSpellings, ""}); err != nil {
 			return err
 		}
 		err := tx.QueryRow(ctx, `
@@ -74,7 +74,9 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 		// The lock the update takes anyway (and checkVehicleOdometer), first.
 		var version int
 		var currentOdo *int
-		err := tx.QueryRow(ctx, `SELECT version, odometer FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&version, &currentOdo)
+		var makeWas, modelWas string
+		err := tx.QueryRow(ctx, `SELECT version, odometer, make, model FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).
+			Scan(&version, &currentOdo, &makeWas, &modelWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatVehicle, id); err != nil {
 			return err
 		}
@@ -96,7 +98,7 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 				return err
 			}
 		}
-		if err := spellEach(ctx, tx, id, map[*string]string{&in.Make: makeSpellings, &in.Model: modelSpellings}); err != nil {
+		if err := spellFields(ctx, tx, id, spelledField{&in.Make, makeSpellings, makeWas}, spelledField{&in.Model, modelSpellings, modelWas}); err != nil {
 			return err
 		}
 		// A new version: a form opened before this save is stale now.

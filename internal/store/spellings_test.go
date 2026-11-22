@@ -125,6 +125,79 @@ func TestSpellings(t *testing.T) {
 		}
 	})
 
+	t.Run("two SKUs of one item take one spelling", func(t *testing.T) {
+		id := item(t, stock.ItemInput{Name: "Spark Plug", SKUs: []stock.SKU{{Code: "N1", Kind: stock.SKUOEM, Brand: "ngk"}, {Code: "N2", Kind: stock.SKUOEM, Brand: "NGK"}}})
+		if got := col(t, `SELECT string_agg(brand, ',' ORDER BY code) FROM item_skus WHERE item_id = $1`, id); got != "ngk,ngk" {
+			t.Errorf("SKU brands = %q, want ngk twice", got)
+		}
+	})
+
+	t.Run("an update leaves out the record itself, and keeps what it didn't change", func(t *testing.T) {
+		in := stock.VehicleInput{Name: "Car", Make: "skoda", Model: "Octavia"}
+		in.Normalize()
+		car, err := s.CreateVehicle(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in.Make, in.Version = "Skoda", cur(t, s, store.WhatVehicle, car)
+		if err := s.UpdateVehicle(ctx, car, in); err != nil {
+			t.Fatal(err)
+		}
+		if got := col(t, `SELECT make FROM vehicles WHERE id = $1`, car); got != "Skoda" {
+			t.Errorf("make = %q, want Skoda (its own skoda doesn't count)", got)
+		}
+
+		kin := stock.KitInput{VehicleID: car, Name: "timing belt"}
+		kin.Normalize()
+		kit, err := s.CreateKit(ctx, kin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kin.Name, kin.Version = "Timing belt", cur(t, s, store.WhatKit, kit)
+		if err := s.UpdateKit(ctx, kit, kin); err != nil {
+			t.Fatal(err)
+		}
+		if got := col(t, `SELECT name FROM service_kits WHERE id = $1`, kit); got != "Timing belt" {
+			t.Errorf("kit = %q, want Timing belt", got)
+		}
+
+		sin := stock.ServiceInput{VehicleID: car, Title: "wipers", PerformedOn: time.Now()}
+		sin.Normalize()
+		svc, err := s.CreateService(ctx, sin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sin.Title, sin.Version = "Wipers", cur(t, s, store.WhatService, svc)
+		if err := s.UpdateService(ctx, svc, sin); err != nil {
+			t.Fatal(err)
+		}
+		if got := col(t, `SELECT title FROM service_records WHERE id = $1`, svc); got != "Wipers" {
+			t.Errorf("title = %q, want Wipers", got)
+		}
+
+		// Spellings that already differ: an edit that doesn't touch the
+		// brand keeps it, whichever the list shows.
+		a := item(t, stock.ItemInput{Name: "Brake Disc", Brand: "Brembo"})
+		b := item(t, stock.ItemInput{Name: "Brake Hose", Brand: "x"})
+		if _, err := pool.Exec(ctx, `UPDATE items SET brand = 'brembo' WHERE id = $1`, b); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []int64{a, b} {
+			it, err := s.GetItem(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			edit := stock.ItemInput{Name: it.Name, Brand: it.Brand, Unit: it.Unit, Quantity: it.Quantity, Notes: "edited", Version: it.Version}
+			edit.Normalize()
+			if err := s.UpdateItem(ctx, id, edit, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := col(t, `SELECT string_agg(brand, ',' ORDER BY id) FROM items WHERE id IN ($1, `+strconv.FormatInt(b, 10)+`)`, a); got != "Brembo,brembo" {
+			t.Errorf("brands = %q, want both kept", got)
+		}
+	})
+
 	t.Run("spellings saved before differ: the list's wins", func(t *testing.T) {
 		if _, err := pool.Exec(ctx, `UPDATE items SET brand = 'hiflo' WHERE name = 'Oil Filter'`); err != nil {
 			t.Fatal(err)

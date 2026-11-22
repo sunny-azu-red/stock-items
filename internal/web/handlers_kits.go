@@ -170,13 +170,15 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 	return rows, lines
 }
 
-// lineItem is the item of a part row: the one picked (id) while the text
-// still names it or is empty (a form from before the text), else the one
-// active item the text names (stock.NamesItem), as the list offers no
-// archived ones but a row's own. Otherwise msg says why there is none: a
-// part must be an item in stock.
+// lineItem is the item of a part row: the one picked (id), which the page
+// clears as soon as the text no longer names it, so a posted one stands
+// even when the item was renamed since (and an archived one a row has
+// stays); else the one active item the text names (stock.NamesItem): an
+// archived item is in the page's list only for the rows that have it, and
+// isn't matched by name there either. Otherwise msg says why there is
+// none: a part must be an item in stock.
 func lineItem(id int64, text string, items map[int64]stock.Item) (it stock.Item, msg string) {
-	if it, ok := items[id]; ok && (text == "" || stock.NamesItem(text, it.Brand, it.Name)) {
+	if it, ok := items[id]; ok {
 		return it, ""
 	}
 	if text == "" {

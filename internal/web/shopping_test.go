@@ -217,8 +217,10 @@ func TestShoppingItemField(t *testing.T) {
 		linked(t, add(t, url.Values{"item": {"  silkolene 15w50 pro 4 xp "}}), oil)
 		linked(t, add(t, url.Values{"item": {"rear brake pads"}, "quantity": {"2"}}), pads) // the name alone
 	})
-	t.Run("picked then changed", func(t *testing.T) {
-		free(t, add(t, url.Values{"item": {"Silkolene 10W40"}, "item_id": {itoa(oil)}}), "Silkolene 10W40")
+	t.Run("picked, then renamed in another tab", func(t *testing.T) {
+		// The page clears item_id once the text no longer names the item, so
+		// a posted one stands: the item was renamed since the page was shown.
+		linked(t, add(t, url.Values{"item": {"Silkolene 15W50 (old name)"}, "item_id": {itoa(oil)}}), oil)
 	})
 	t.Run("something new with a unit", func(t *testing.T) {
 		e := add(t, url.Values{"item": {"Coolant"}, "quantity": {"4 L"}})
@@ -235,6 +237,12 @@ func TestShoppingItemField(t *testing.T) {
 		free(t, add(t, url.Values{"free_text": {"Chain lube"}}), "Chain lube")
 		linked(t, add(t, url.Values{"free_text": {"OEM Rear Brake Pads"}}), pads)
 		linked(t, add(t, url.Values{"item_id": {itoa(pads)}, "quantity": {"2"}}), pads)
+		// Both filled in: the item, with the text as a note, as then.
+		e := add(t, url.Values{"item_id": {itoa(pads)}, "free_text": {"sintered ones"}, "note": {"rear"}})
+		linked(t, e, pads)
+		if e.Note != "sintered ones; rear" {
+			t.Errorf("note = %q, want the text, then the note", e.Note)
+		}
 	})
 	t.Run("empty", func(t *testing.T) {
 		before := len(mustShopping(t, a))

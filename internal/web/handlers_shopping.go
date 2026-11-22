@@ -209,9 +209,14 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	// A form opened before Item replaced them posts free_text or item_id.
+	// A form opened before Item replaced them posts free_text or item_id:
+	// with both, the text was a note on the item, as it was then.
 	f := shoppingForm{Item: cmp.Or(formText(r, "item"), formText(r, "free_text")), Quantity: formText(r, "quantity"),
 		Unit: formText(r, "quantity_unit"), Note: formText(r, "note"), FormKey: parseFormKey(r), Errors: stock.Errors{}}
+	if !r.PostForm.Has("item") && f.Item != "" && formText(r, "item_id") != "" {
+		f.Note = strings.TrimSuffix(f.Item+"; "+f.Note, "; ")
+		f.Item = ""
+	}
 	if done, err := s.savedBefore(w, r, f.FormKey, "", nil, shoppingListPath(r)); done || err != nil {
 		return err
 	}
@@ -288,13 +293,14 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 }
 
 // shoppingItem is the stock item Add to the list's Item is, nil for
-// something new: the picked one (item_id) while the text still names it or
-// is empty (a form from before Item, which had a select); else the one
-// item the text names (stock.NamesItem) among those the form offers
-// (active, and on a vehicle's part its own and the General ones), so what
-// the line under the field said is what is saved. Several are something
-// new too, and Bought offers them. gone reports a picked item deleted or
-// archived meanwhile.
+// something new: the picked one (item_id), which the page clears as soon
+// as the text no longer names it, so a posted one stands even when the
+// item was renamed since; else the one item the text names
+// (stock.NamesItem) among those the form offers (active, and on a
+// vehicle's part its own and the General ones), so what the line under
+// the field said is what is saved. Several are something new too, and
+// Bought offers them. gone reports a picked item deleted or archived
+// meanwhile.
 func (s *Server) shoppingItem(r *http.Request, text string, vid int64) (it *stock.Item, gone bool, err error) {
 	if id := parseOptID(formText(r, "item_id")); id != nil {
 		picked, err := s.store.GetItem(r.Context(), *id)
@@ -303,10 +309,7 @@ func (s *Server) shoppingItem(r *http.Request, text string, vid int64) (it *stoc
 		} else if err != nil {
 			return nil, false, err
 		}
-		if strings.TrimSpace(text) == "" || stock.NamesItem(text, picked.Brand, picked.Name) {
-			return &picked, picked.Archived(), nil
-		}
-		// Picked, then changed: the text says what to buy.
+		return &picked, picked.Archived(), nil
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil, false, nil

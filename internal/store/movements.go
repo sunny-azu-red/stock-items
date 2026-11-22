@@ -59,7 +59,7 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 	if in.OccurredOn != nil {
 		occurred = *in.OccurredOn
 	}
-	supplier, err := spell(ctx, tx, supplierSpellings, 0, in.Supplier)
+	supplier, err := spell(ctx, tx, supplierSpellings, 0, "", in.Supplier)
 	if err != nil {
 		return 0, err
 	}
@@ -394,7 +394,7 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 		if err := reviseMovement(ctx, tx, m, in.Delta); err != nil {
 			return err
 		}
-		if in.Supplier, err = spell(ctx, tx, supplierSpellings, id, in.Supplier); err != nil {
+		if in.Supplier, err = spell(ctx, tx, supplierSpellings, id, m.Supplier, in.Supplier); err != nil {
 			return err
 		}
 		// A new version: an edit form opened before this one is stale now.

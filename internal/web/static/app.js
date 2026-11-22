@@ -573,17 +573,27 @@
       var q = filter.trim().toLowerCase();
       box.textContent = "";
       var group = null;
+      var into = box;
       entries.forEach(function (o, i) {
         if (q && o.value.toLowerCase().indexOf(q) < 0) return;
-        // A heading over each group's entries (a vehicle's items, then
-        // the others), as a <select>'s optgroup.
+        // Each group's entries (a vehicle's items, then the others) in a
+        // group named by its heading, as a <select>'s optgroup.
         var g = o.getAttribute("data-group");
         if (g && g !== group) {
-          var head = document.createElement("li");
+          var wrapper = document.createElement("li");
+          var head = document.createElement("div");
+          var sub = document.createElement("ul");
           head.className = "combo-group";
-          head.setAttribute("role", "presentation");
+          head.id = box.id + "-group-" + i;
           head.textContent = g;
-          box.appendChild(head);
+          wrapper.setAttribute("role", "group");
+          wrapper.setAttribute("aria-labelledby", head.id);
+          sub.setAttribute("role", "none");
+          wrapper.append(head, sub);
+          box.appendChild(wrapper);
+          into = sub;
+        } else if (!g) {
+          into = box;
         }
         group = g;
         var li = document.createElement("li");
@@ -599,7 +609,7 @@
         } else {
           li.textContent = o.value;
         }
-        box.appendChild(li);
+        into.appendChild(li);
       });
       if (newEntry && q && !entries.some(function (o) { return namesOption(filter, o); })) {
         var li = document.createElement("li");
@@ -628,6 +638,9 @@
       var li = opts[i];
       if (li) {
         input.setAttribute("aria-activedescendant", li.id);
+        // A group's first entry brings its heading into view too.
+        var head = !li.previousElementSibling && li.parentElement !== box && li.parentElement.previousElementSibling;
+        if (head) head.scrollIntoView({ block: "nearest" });
         li.scrollIntoView({ block: "nearest" });
       } else {
         input.removeAttribute("aria-activedescendant");
@@ -649,11 +662,16 @@
       var n = options().length;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        if (!isOpen()) return show("");
+        if (!isOpen()) return show(input.value);
         setActive(e.key === "ArrowDown" ? (active + 1) % n : (active <= 0 ? n : active) - 1);
       } else if (e.key === "Enter" && isOpen() && active >= 0) {
         e.preventDefault();
         pick(options()[active]);
+      } else if (e.key === "Enter" && isOpen() && input.hasAttribute("data-item-pick")) {
+        // An item field searches as it is typed in: Enter with nothing
+        // picked closes the list rather than saving half a name.
+        e.preventDefault();
+        hide();
       } else if (e.key === "Escape" && isOpen()) {
         e.preventDefault();
         hide();
@@ -690,7 +708,8 @@
     var opts = list ? Array.prototype.slice.call(list.options) : [];
     var picked = itemOption(input.closest(".field"));
     if (picked && namesOption(input.value, picked)) return { opt: picked, named: 1 };
-    var named = opts.filter(function (o) { return namesOption(input.value, o); });
+    // An archived item is in the list only for the row that has it.
+    var named = opts.filter(function (o) { return !o.hasAttribute("data-archived") && namesOption(input.value, o); });
     return { opt: named.length === 1 ? named[0] : null, named: named.length };
   }
   function followItem(input) {

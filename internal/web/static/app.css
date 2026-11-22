@@ -946,6 +946,11 @@
      its × (the whole line) over its quantity, as wide as the item's box.
      The remove button ends the first line, inside its last box. */
   @container (width < 868px) {
+    /* A row on two lines: 8px between its lines, 12px (the fields' gap)
+       to the next row, so each reads as one; its heading stays as close
+       to the first as on one line. */
+    .rows { gap: var(--gap); }
+    .row-head { margin-bottom: -6px; }
     .row-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .row-end { display: contents; }
     .row-remove { grid-area: 1 / 2; justify-self: end; margin-left: 0; }

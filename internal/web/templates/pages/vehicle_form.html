@@ -64,7 +64,7 @@
     <p class="hint mb">Reminders count from the purchase until a service is logged. 0 for a brand new vehicle.</p>
     {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
     <div class="form-grid">
-      <div class="field{{if index $e "odometer"}} has-error{{end}}">
+      <div class="field span-2{{if index $e "odometer"}} has-error{{end}}">
         <label for="odometer">Odometer ({{distUnit}})</label>
         <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>
         {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}

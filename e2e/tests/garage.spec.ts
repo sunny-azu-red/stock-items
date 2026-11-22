@@ -1990,6 +1990,89 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
   expect(problems).toEqual([]);
 });
 
+test("a form's rows keep its columns", async ({ page }, testInfo) => {
+  // docs/design.md#6-layout (Forms). A SKU's or a part's boxes stood
+  // between the fields above them: the rows had columns of their own, an
+  // extra one for the remove button on two lines, and the fields went
+  // three a row, which four boxes can't line up with. Every field of the
+  // form starts and ends on a line of the rows' columns, and so does every
+  // box of a row: boxes closer than the gap are one (quantity and unit,
+  // Type and its ×); a remove button alone ends its box, a stock badge
+  // starts its own. The projects' windows give four columns or a phone's
+  // one; 1100px and 900px give the two in between.
+  const link = async (url: string, selector: string) => {
+    await page.goto(url);
+    return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
+  };
+  const item = await link("/stock?q=Silkolene", ".item-row a.item-name");
+  const kit = await link("/services", "a.kit-row");
+  const service = await link("/services", 'a.title[href^="/services/"]');
+  const paths = ["/items/new", item + "/edit", "/kits/new", kit + "/edit", "/services/new", service + "/edit"];
+  const problems: string[] = [];
+  for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
+    if (width) await page.setViewportSize({ width, height: 900 });
+    for (const p of paths) {
+      await page.goto(p);
+      const inter = page.locator("#has_inter");
+      if (await inter.count()) await inter.check();
+      const found = await page.evaluate(() => {
+        const out = new Set<string>();
+        const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        for (const form of document.querySelectorAll("form.page-form")) {
+          for (const row of form.querySelectorAll(".row-line:not(.row-head)")) {
+            if (!shown(row)) continue;
+            const what = row.matches(".sku-line") ? "a SKU" : "a part";
+            const cs = getComputedStyle(row), rr = row.getBoundingClientRect(), gap = parseFloat(cs.columnGap);
+            const lines: number[] = [];
+            let x = rr.left;
+            for (const t of cs.gridTemplateColumns.split(" ").map(parseFloat)) { lines.push(x, x + t); x += t + gap; }
+            const at = (v: number) => Math.round(v - rr.left);
+            const on = (v: number) => lines.some((l) => Math.abs(l - v) < 0.5);
+            const cols = `its columns' lines at ${lines.map(at).join(", ")}px`;
+            for (const f of form.querySelectorAll(".form-grid > .field")) {
+              if (!shown(f)) continue;
+              const fr = f.getBoundingClientRect();
+              const name = (f.querySelector("label, legend")?.textContent ?? "").trim();
+              if (!on(fr.left) || !on(fr.right)) out.add(`the field "${name}" runs ${at(fr.left)}–${at(fr.right)}px, off ${what} row's columns (${cols})`);
+            }
+            // Its boxes, line by line (two lines under four fields a row).
+            const pieces = [...row.querySelectorAll("input:not([type=hidden]), select, .row-remove")].filter(shown)
+              .map((el) => ({ el, r: el.getBoundingClientRect() }));
+            const byLine = new Map<number, typeof pieces>();
+            for (const pc of pieces) {
+              const key = [...byLine.keys()].find((k) => Math.abs(k - pc.r.top) < 12) ?? pc.r.top;
+              byLine.set(key, [...(byLine.get(key) ?? []), pc]);
+            }
+            for (const line of byLine.values()) {
+              line.sort((a, b) => a.r.left - b.r.left);
+              const boxes: (typeof pieces)[] = [];
+              for (const pc of line) {
+                const last = boxes[boxes.length - 1];
+                if (last && pc.r.left - last[last.length - 1].r.right < gap - 0.5) last.push(pc);
+                else boxes.push([pc]);
+              }
+              for (const box of boxes) {
+                const l = box[0].r.left, r = box[box.length - 1].r.right;
+                const removeOnly = box.length === 1 && box[0].el.matches(".row-remove");
+                const label = removeOnly ? "its remove button" : `a box (${box.map((b) => b.el.getAttribute("aria-label") ?? b.el.tagName.toLowerCase()).join(" + ")})`;
+                if (!removeOnly && !on(l)) out.add(`${what} row: ${label} starts at ${at(l)}px, not on ${cols}`);
+                if (!on(r)) out.add(`${what} row: ${label} ends at ${at(r)}px, not on ${cols}`);
+              }
+            }
+            for (const badge of row.querySelectorAll(".part-stock > .badge")) {
+              const l = badge.getBoundingClientRect().left;
+              if (shown(badge) && !on(l)) out.add(`${what} row: its stock badge starts at ${at(l)}px, not on ${cols}`);
+            }
+          }
+        }
+        return [...out];
+      });
+      for (const f of found) problems.push(`${width ? width + "px" : "the window"} ${p}: ${f}`);
+    }
+  }
+  expect(problems).toEqual([]);
+});
+
 test("an edit saved in another tab first is not overwritten", async ({ page, context }) => {
   await page.goto("/stock");
   await row(page, "KTM Rear Brake Pads").getByRole("link").first().click();

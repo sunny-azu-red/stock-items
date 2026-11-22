@@ -16,7 +16,7 @@
 
   <div class="form-section">
     <div class="form-grid">
-      <div class="field{{if index $e "name"}} has-error{{end}}">
+      <div class="field span-2{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
         <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="200" placeholder="e.g. Rear Brake Pads" autofocus {{invalid (index $e "name") "name"}}>
         {{template "field-err" (fieldErr (index $e "name") "name")}}

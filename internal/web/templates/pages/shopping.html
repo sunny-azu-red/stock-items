@@ -56,7 +56,7 @@
           <div class="field span-2{{if index $e "item"}} has-error{{end}}">
             <div class="label-row"><label for="item">Item</label>{{template "req"}}{{template "tip" (dict "For" "Item" "ID" "item-tip" "Text" "Pick from your stock, or type something new")}}</div>
             <input class="input" id="item" name="item" value="{{$f.Item}}" required placeholder="e.g. Chain lube" list="shopping-items" autocomplete="off" data-item-pick="shopping-items" data-new-entry="Something new: “{text}”" {{invalid (index $e "item") "item" "item-tip" "item-status"}}>
-            <input type="hidden" name="item_id" value="{{with $f.ItemID}}{{.}}{{end}}">
+            <input type="hidden" name="item_id" value="{{with $f.ItemID}}{{.}}{{end}}" data-item-id>
             <datalist id="shopping-items">
               {{range $d.Items}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}></option>{{end}}
             </datalist>

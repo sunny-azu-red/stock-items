@@ -273,17 +273,25 @@
 </div>
 {{end}}
 
+{{/* The items the part rows offer, once per page: []itemGroup, each
+     item's name with what app.js needs for its units and stock badge (as
+     the shopping list's), and its group when there are two (a vehicle's
+     items, then the others). */}}
+{{define "part-items"}}{{$groups := .}}<datalist id="part-items">
+  {{range $groups}}{{$g := .Label}}{{range .Items}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{rowPlaceholderFor .Unit}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}{{if gt (len $groups) 1}} data-group="{{$g}}"{{end}}></option>{{end}}{{end}}
+</datalist>{{end}}
+
 {{/* Item + quantity row for kit / service forms, with the chosen item's
      stock badge (app.js keeps it up to date; the page renders
-     "stock-badge-templates" once):
-     dict "Row" lineRow "Groups" []itemGroup "Prefix" "line"|"part" */}}
+     "stock-badge-templates" and "part-items" once). The item is picked
+     from the list or typed (Text): the hidden _item is its id, which
+     app.js keeps on the item the text names; parseLines decides the same.
+     dict "Row" lineRow "Prefix" "line"|"inter_line"|"part" */}}
 {{define "line-row"}}{{$row := .Row}}
 <div class="row-line part-line{{if or $row.Error $row.Short}} has-error{{end}}"{{if $row.Short}} data-short{{end}}>
   <div class="field">
-    <select class="input" name="{{.Prefix}}_item" data-part-item aria-label="Item">
-      <option value="">Choose an item…</option>
-      {{range .Groups}}<optgroup label="{{.Label}}">{{range .Items}}<option value="{{.ID}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}} data-placeholder="{{rowPlaceholderFor .Unit}}" data-unit="{{.Unit}}" {{if eq .ID $row.ItemID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</optgroup>{{end}}
-    </select>
+    <input class="input" name="{{.Prefix}}_item_text" value="{{$row.Text}}" placeholder="Choose an item…" aria-label="Item" list="part-items" autocomplete="off" data-item-pick="part-items">
+    <input type="hidden" name="{{.Prefix}}_item" value="{{with $row.ItemID}}{{.}}{{end}}" data-item-id>
     {{template "err" $row.Error}}
   </div>
   <div class="qty-input">

@@ -159,7 +159,7 @@
         row.querySelectorAll("[data-stock-badge]").forEach(function (n) { n.textContent = ""; });
         row.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
         row.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
-        row.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
+        row.querySelectorAll("input[data-item-pick]").forEach(followItem);
         syncUnits(row.closest("form"));
       } else {
         row.remove();
@@ -200,7 +200,6 @@
   }
   document.addEventListener("change", function (e) {
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
-    if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-part-unit]")) {
       delete e.target.dataset.before; // picked by hand: it stays (followItemUnits)
       updateStockBadges(e.target);
@@ -265,7 +264,8 @@
       delete keptTierRows[radio.value];
     } else {
       rows.appendChild(tpl.content.cloneNode(true));
-      rows.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
+      rows.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
+      rows.querySelectorAll("input[data-item-pick]").forEach(followItem);
     }
     var title = form.querySelector("#title");
     var name = radio.getAttribute("data-kit-name");
@@ -353,12 +353,23 @@
       .then(function (small) { done(small || file); }, function () { done(file); });
   }
 
+  // itemOption is the <option> of the item an item field holds (its
+  // hidden [data-item-id], beside its input[data-item-pick] in scope), or
+  // null for none.
+  function itemOption(scope) {
+    var hidden = scope.querySelector("[data-item-id]");
+    var input = scope.querySelector("input[data-item-pick]");
+    var list = input && document.getElementById(input.getAttribute("data-item-pick"));
+    if (!hidden || !hidden.value || !list) return null;
+    return list.querySelector('option[data-id="' + CSS.escape(hidden.value) + '"]');
+  }
+
   // In kit / service part rows, the units and stock badge follow the
   // chosen item.
-  function updatePartNote(sel) {
-    var row = sel.closest(".row-line");
+  function updatePartNote(el) {
+    var row = el.closest(".row-line");
     if (!row) return;
-    followItemUnits(sel.value ? sel.options[sel.selectedIndex] : null, row);
+    followItemUnits(itemOption(row), row);
     updateStockBadges(row);
   }
 
@@ -441,14 +452,14 @@
     var picked = [];
     var need = {};
     Array.prototype.forEach.call(rows, function (r) {
-      var sel = r.querySelector("select[data-part-item]");
-      var opt = sel && sel.value ? sel.options[sel.selectedIndex] : null;
+      var opt = itemOption(r);
+      var id = opt ? opt.getAttribute("data-id") : "";
       var qty = r.querySelector("input[data-part-qty]");
       var unit = r.querySelector("select[data-part-unit]");
       var base = opt ? opt.getAttribute("data-unit") : "";
       var q = opt && group && qty ? readAmount(qty.value, unit ? unit.value : "", base) : null;
-      if (q) need[sel.value] = Math.round(((need[sel.value] || 0) + q) * 100) / 100;
-      picked.push({ row: r, opt: opt, id: sel ? sel.value : "" });
+      if (q) need[id] = Math.round(((need[id] || 0) + q) * 100) / 100;
+      picked.push({ row: r, opt: opt, id: id });
     });
     picked.forEach(function (p) {
       var slot = p.row.querySelector("[data-stock-badge]");
@@ -557,11 +568,24 @@
 
     var active = -1;
     function isOpen() { return box.matches(":popover-open"); }
+    function options() { return box.querySelectorAll('[role="option"]'); }
     function show(filter) {
       var q = filter.trim().toLowerCase();
       box.textContent = "";
+      var group = null;
       entries.forEach(function (o, i) {
         if (q && o.value.toLowerCase().indexOf(q) < 0) return;
+        // A heading over each group's entries (a vehicle's items, then
+        // the others), as a <select>'s optgroup.
+        var g = o.getAttribute("data-group");
+        if (g && g !== group) {
+          var head = document.createElement("li");
+          head.className = "combo-group";
+          head.setAttribute("role", "presentation");
+          head.textContent = g;
+          box.appendChild(head);
+        }
+        group = g;
         var li = document.createElement("li");
         li.id = box.id + "-" + i;
         li.setAttribute("role", "option");
@@ -585,7 +609,7 @@
         li.textContent = newEntry.replace("{text}", filter.trim());
         box.appendChild(li);
       }
-      if (!box.children.length) return hide();
+      if (!options().length) return hide();
       if (!isOpen()) box.showPopover({ source: input }); // app.css anchors it there
       input.setAttribute("aria-expanded", "true");
       setActive(-1);
@@ -597,10 +621,11 @@
     }
     function setActive(i) {
       active = i;
-      Array.prototype.forEach.call(box.children, function (li, j) {
+      var opts = options();
+      Array.prototype.forEach.call(opts, function (li, j) {
         li.setAttribute("aria-selected", j === i ? "true" : "false");
       });
-      var li = box.children[i];
+      var li = opts[i];
       if (li) {
         input.setAttribute("aria-activedescendant", li.id);
         li.scrollIntoView({ block: "nearest" });
@@ -621,14 +646,14 @@
     input.addEventListener("input", function () { show(input.value); });
     input.addEventListener("blur", hide);
     input.addEventListener("keydown", function (e) {
-      var n = box.children.length;
+      var n = options().length;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         if (!isOpen()) return show("");
         setActive(e.key === "ArrowDown" ? (active + 1) % n : (active <= 0 ? n : active) - 1);
       } else if (e.key === "Enter" && isOpen() && active >= 0) {
         e.preventDefault();
-        pick(box.children[active]);
+        pick(options()[active]);
       } else if (e.key === "Escape" && isOpen()) {
         e.preventDefault();
         hide();
@@ -637,7 +662,7 @@
     // Keep focus in the input while clicking the list or the chevron.
     box.addEventListener("mousedown", function (e) { e.preventDefault(); });
     box.addEventListener("click", function (e) {
-      var li = e.target.closest("li");
+      var li = e.target.closest('li[role="option"]');
       if (li) pick(li);
     });
     toggle.addEventListener("mousedown", function (e) { e.preventDefault(); });
@@ -648,31 +673,34 @@
     });
   }
 
-  // ---- Shopping's Item -----------------------------------------------------
-  // <input data-item-pick="datalist-id"> is a stock item or something new:
-  // the item picked from its list while the text still names it, else the
-  // one item the text names, as shoppingItem decides on the server. Its
-  // form's item_id, the quantity's units and the line under the field
-  // ([data-item-status]: the item's stock badge, or [data-new-status])
-  // follow.
+  // ---- Item fields --------------------------------------------------------
+  // <input data-item-pick="datalist-id"> names a stock item (Shopping's
+  // Item, a part row's item): the one picked from its list while the text
+  // still names it, else the one item the text names, as the server
+  // decides (shoppingItem, lineItem). Its id goes in the [data-item-id]
+  // beside it, in its .field. A part row's units and stock badge follow
+  // (updatePartNote); Shopping's units and the line under the field
+  // ([data-item-status]: the item's stock badge, [data-new-status] or
+  // [data-many-status]) too.
   // pickedItem is the item the field is ({opt}), or null with the number
   // of items the text names ({named}: several only when it names more
-  // than one, which is something new unless one is picked).
+  // than one, which is none of them unless one is picked).
   function pickedItem(input) {
     var list = document.getElementById(input.getAttribute("data-item-pick"));
     var opts = list ? Array.prototype.slice.call(list.options) : [];
-    var id = input.form.elements.item_id.value;
-    var picked = id && opts.find(function (o) { return o.getAttribute("data-id") === id; });
+    var picked = itemOption(input.closest(".field"));
     if (picked && namesOption(input.value, picked)) return { opt: picked, named: 1 };
     var named = opts.filter(function (o) { return namesOption(input.value, o); });
     return { opt: named.length === 1 ? named[0] : null, named: named.length };
   }
   function followItem(input) {
+    var field = input.closest(".field");
     var p = pickedItem(input);
     var opt = p.opt;
-    input.form.elements.item_id.value = opt ? opt.getAttribute("data-id") : "";
+    field.querySelector("[data-item-id]").value = opt ? opt.getAttribute("data-id") : "";
+    if (input.closest(".row-line")) return updatePartNote(input);
     followItemUnits(opt, input.form);
-    var status = input.closest(".field").querySelector("[data-item-status]");
+    var status = field.querySelector("[data-item-status]");
     if (!status) return;
     status.querySelectorAll(".badge").forEach(function (b) { b.remove(); });
     var badge = opt && stockBadgeFor(opt, 0);
@@ -688,7 +716,7 @@
   }
   document.addEventListener("combo-pick", function (e) {
     if (!e.target.matches("input[data-item-pick]")) return;
-    e.target.form.elements.item_id.value = e.detail ? e.detail.getAttribute("data-id") : "";
+    e.target.closest(".field").querySelector("[data-item-id]").value = e.detail ? e.detail.getAttribute("data-id") : "";
   });
   document.addEventListener("input", function (e) {
     if (e.target.matches("input[data-item-pick]")) followItem(e.target);
@@ -948,7 +976,6 @@
   // ---- Init ---------------------------------------------------------------
   function init(root) {
     root.querySelectorAll("form").forEach(syncUnits);
-    root.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
     root.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
     root.querySelectorAll("input[data-item-pick]").forEach(followItem);
   }

@@ -59,10 +59,11 @@
     {{template "err" (index $e "lines")}}
     <div class="rows" id="kit-lines">
       {{template "part-line-head"}}
-      {{range $f.Lines}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "line")}}{{end}}
+      {{range $f.Lines}}{{template "line-row" (dict "Row" . "Prefix" "line")}}{{end}}
     </div>
     {{template "stock-badge-templates"}}
-    <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "line")}}</template>
+    {{template "part-items" $d.ItemGroups}}
+    <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
   </div>
   {{/* The intermediate schedule shows while its box is ticked (CSS). The
@@ -88,9 +89,9 @@
       {{template "err" (index $e "inter_lines")}}
       <div class="rows" id="inter-lines">
         {{template "part-line-head"}}
-        {{range $f.InterLines}}{{template "line-row" (dict "Row" . "Groups" $d.ItemGroups "Prefix" "inter_line")}}{{end}}
+        {{range $f.InterLines}}{{template "line-row" (dict "Row" . "Prefix" "inter_line")}}{{end}}
       </div>
-      <template id="inter-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "inter_line")}}</template>
+      <template id="inter-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "inter_line")}}</template>
       <button class="btn btn-sm mt" type="button" data-add-row="inter-line-template" data-rows="inter-lines">{{icon "plus"}} Add part</button>
     </div>
   </div>

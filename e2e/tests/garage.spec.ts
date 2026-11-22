@@ -27,6 +27,12 @@ const phone = (t: TestInfo) => !!t.project.use.isMobile;
 // "More about <label>", which a loose match finds too.
 const field = (scope: Page | Locator, label: string) => scope.getByLabel(label, { exact: true });
 
+// Picks an item in a part row: types its name and picks it from the list.
+async function pickPart(input: Locator, name: string) {
+  await input.fill(name);
+  await input.page().getByRole("listbox").getByRole("option").filter({ has: input.page().locator(".combo-text", { hasText: exact(name) }) }).click();
+}
+
 async function addVehicle(page: Page, name: string, odometer: string) {
   await page.goto("/vehicles/new");
   await field(page, "Name").fill(name);
@@ -207,16 +213,19 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
   await field(page, "Name").fill("Oil Service");
   await page.getByLabel("Distance (km)", { exact: true }).fill("7500");
   await page.getByLabel("Months", { exact: true }).fill("12");
-  const items = page.locator('select[name="line_item"]');
+  const items = page.locator('input[name="line_item_text"]');
   const qtys = page.locator('input[name="line_qty"]');
-  await items.nth(0).selectOption({ label: "KTM Oil Filter" });
+  // The list puts the vehicle's items first, under their heading.
+  await items.nth(0).fill("oil filter");
+  await expect(page.getByRole("listbox").locator(".combo-group").first()).toHaveText("For KTM 390");
+  await pickPart(items.nth(0), "KTM Oil Filter");
   await qtys.nth(0).fill("1");
   // One empty row to start with; Add part adds the next.
   await page.getByRole("button", { name: "Add part" }).first().click();
-  await items.nth(1).selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await pickPart(items.nth(1), "Silkolene 15W50 PRO 4 XP");
   await qtys.nth(1).fill("1.7 L");
   await page.getByRole("button", { name: "Add part" }).first().click();
-  await items.nth(2).selectOption({ label: "KTM Oil Screen 1 O-Ring" });
+  await pickPart(items.nth(2), "KTM Oil Screen 1 O-Ring");
   await qtys.nth(2).fill("1");
   await page.getByRole("button", { name: "Save kit" }).click();
 
@@ -463,15 +472,15 @@ test("a permanent delete asks in a dialog first", async ({ page }) => {
 
 test("part rows keep a quantity hint until an item is chosen", async ({ page }) => {
   await page.goto("/services/new");
-  const items = page.locator('select[name="part_item"]');
+  const items = page.locator('input[name="part_item_text"]');
   const qtys = page.locator('input[name="part_qty"]');
   // The number alone: the unit picker beside it says the unit, L for a
   // liquid.
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
-  await items.first().selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await pickPart(items.first(), "Silkolene 15W50 PRO 4 XP");
   await expect(page.locator('select[name="part_unit"]').first()).toHaveValue("l");
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 1.5");
-  await items.first().selectOption({ label: "Choose an item…" });
+  await items.first().fill("");
   await expect(qtys.first()).toHaveAttribute("placeholder", "e.g. 2");
 });
 
@@ -479,11 +488,45 @@ test("part rows offer the chosen item's units", async ({ page }) => {
   await page.goto("/services/new");
   const row = page.locator(".part-line:not(.row-head)").first();
   const unit = row.locator('select[name="part_unit"]');
-  await row.locator('select[name="part_item"]').selectOption({ label: "KTM Oil Filter" });
+  await pickPart(row.locator('input[name="part_item_text"]'), "KTM Oil Filter");
   await expect(unit).toHaveValue("pcs");
-  await row.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await pickPart(row.locator('input[name="part_item_text"]'), "Silkolene 15W50 PRO 4 XP");
   await expect(unit).toHaveValue("l");
   await expect(row.locator("[data-stock-badge] .badge")).toContainText("in stock");
+});
+
+test("part rows find an item by typing, and refuse a name that is none", async ({ page }) => {
+  await page.goto("/services/new");
+  const row = page.locator("#part-lines .part-line:not(.row-head)").first();
+  const item = row.locator('input[name="part_item_text"]');
+  const id = row.locator('input[name="part_item"]');
+  const unit = row.locator('select[name="part_unit"]');
+  const badge = row.locator("[data-stock-badge] .badge");
+
+  // Typing lists the matching items with their stock; no "Something new".
+  await item.pressSequentially("silko");
+  const list = page.getByRole("listbox");
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await expect(list.getByRole("option").first().locator(".badge")).toContainText("in stock");
+  await list.getByRole("option").first().click();
+  await expect(item).toHaveValue("Silkolene 15W50 PRO 4 XP");
+  await expect(id).not.toHaveValue("");
+  await expect(unit).toHaveValue("l");
+  await expect(badge).toContainText("in stock");
+
+  // Changed: no item, no badge, and the item's unit goes back.
+  await item.pressSequentially(" extra");
+  await expect(id).toHaveValue("");
+  await expect(badge).toHaveCount(0);
+  await expect(unit).toHaveValue("");
+
+  // Saved like that, the row says why.
+  await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+  await field(page, "Work performed").fill("Top up");
+  await row.locator('input[name="part_qty"]').fill("100 ml");
+  await page.getByRole("button", { name: "Save service" }).click();
+  await expect(page.locator(".part-line.has-error")).toContainText("No item is called “Silkolene 15W50 PRO 4 XP extra”: pick one from the list");
+  await expect(page.locator('input[name="part_item_text"]').first()).toHaveValue("Silkolene 15W50 PRO 4 XP extra");
 });
 
 test("part rows show the item's stock badge, red when the rows ask for more", async ({ page }) => {
@@ -491,8 +534,8 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
   const rows = page.locator("#part-lines .part-line:not(.row-head)");
   const badge = (i: number) => rows.nth(i).locator("[data-stock-badge] .badge");
   const first = rows.nth(0);
-  await first.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
-  const have = Number(await first.locator('select[name="part_item"] option:checked').getAttribute("data-have-base"));
+  await pickPart(first.locator('input[name="part_item_text"]'), "Silkolene 15W50 PRO 4 XP");
+  const have = Number(await page.locator('#part-items option[value="Silkolene 15W50 PRO 4 XP"]').getAttribute("data-have-base"));
   expect(have).toBeGreaterThan(2);
   await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
 
@@ -511,7 +554,7 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
   await expect(rows).toHaveCount(1);
   await page.getByRole("button", { name: "Add part" }).click();
   const second = rows.nth(1);
-  await second.locator('select[name="part_item"]').selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await pickPart(second.locator('input[name="part_item_text"]'), "Silkolene 15W50 PRO 4 XP");
   await second.locator('select[name="part_unit"]').selectOption("ml");
   await second.locator('input[name="part_qty"]').fill(String(have - half + 1));
   await expect(badge(0)).toHaveAttribute("data-stock-level", "short");
@@ -2261,9 +2304,9 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await page.getByLabel("Intermediate distance (km)").fill("3500");
   await page.getByRole("button", { name: "More about Intermediate months" }).click();
   await expect(page.locator("#inter-months-tip")).toBeVisible();
-  const interItems = page.locator('select[name="inter_line_item"]');
+  const interItems = page.locator('input[name="inter_line_item_text"]');
   const interQtys = page.locator('input[name="inter_line_qty"]');
-  await interItems.nth(0).selectOption({ label: "Silkolene 15W50 PRO 4 XP" });
+  await pickPart(interItems.nth(0), "Silkolene 15W50 PRO 4 XP");
   await interQtys.nth(0).fill("1.7 L");
   await page.getByRole("button", { name: "Save kit" }).click();
 
@@ -2285,9 +2328,9 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(page.locator("#vehicle_id")).toHaveCount(0);
 
   // The intermediate parts are filled in; change one.
-  const partItem = page.locator('#part-lines select[name="part_item"]').first();
+  const partItem = page.locator('#part-lines input[name="part_item_text"]').first();
   const partQty = page.locator('#part-lines input[name="part_qty"]').first();
-  await expect(partItem.locator("option:checked")).toHaveText("Silkolene 15W50 PRO 4 XP");
+  await expect(partItem).toHaveValue("Silkolene 15W50 PRO 4 XP");
   await partQty.fill("1.5 L");
 
   // Toggling to Full in the browser switches the title and parts to Full;
@@ -2297,7 +2340,7 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(partQty).not.toHaveValue("1.5 L");
   await page.locator(".segmented label").filter({ hasText: "Intermediate" }).click();
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
-  await expect(partItem.locator("option:checked")).toHaveText("Silkolene 15W50 PRO 4 XP");
+  await expect(partItem).toHaveValue("Silkolene 15W50 PRO 4 XP");
   await expect(partQty).toHaveValue("1.5 L");
 });
 

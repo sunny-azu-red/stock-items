@@ -394,8 +394,8 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	expectNot(t, kitPage, `/shortfall"`)
 	form := a.get("/services/new?kit=" + kit[len("/kits/"):])
 	ring := itoa(itemID(t, a.store, "O-Ring"))
-	expect(t, form, http.StatusOK, `<option value="`+ring+`" data-have="6 pcs" data-have-base="6" data-placeholder="e.g. 2" data-unit="piece" selected>`)
-	expectNot(t, form, `<option value="`+itoa(pads)+`" data-have="1 pcs" data-have-base="1" data-placeholder="e.g. 2" data-unit="piece" selected>`)
+	expect(t, form, http.StatusOK, `<input type="hidden" name="part_item" value="`+ring+`" data-item-id>`)
+	expectNot(t, form, `<input type="hidden" name="part_item" value="`+itoa(pads)+`" data-item-id>`)
 }
 
 func TestQuickAdjustRowKeepsChipsHidden(t *testing.T) {
@@ -606,7 +606,7 @@ func TestRefusedFormsKeepNewFields(t *testing.T) {
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_distance" value="2000"`, `name="inter_interval_months" value="6"`)
-	if !regexp.MustCompile(`(?s)id="inter-lines".*?value="` + itoa(oil) + `"[^>]* selected.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
+	if !regexp.MustCompile(`(?s)id="inter-lines".*?name="inter_line_item" value="` + itoa(oil) + `" data-item-id>.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
 		t.Error("the kit form lost the intermediate part")
 	}
 }

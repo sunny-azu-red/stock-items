@@ -768,7 +768,14 @@
     color: var(--text); background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--radius);
     & li { padding: 7px 10px; border-radius: var(--radius-xs); cursor: pointer; }
-    & li:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
+    & li[role="option"]:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
+    /* A group's heading (a vehicle's items, then the others), as a
+       select's optgroup: not an entry, so worded like the sidebar's
+       headings (.nav-title), close over its entries. */
+    & .combo-group {
+      font-size: var(--text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--muted); padding: 10px 10px 4px; cursor: default;
+    }
     /* A stock item's entry: its name, cut short, and its stock badge (24px)
        at the end, the entry as tall as one without. */
     & li:has(> .badge) { display: flex; align-items: center; gap: 8px; padding-block: 5px; }

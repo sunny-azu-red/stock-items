@@ -8,14 +8,17 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
-// lineRow is one item + quantity row of a kit or service form.
+// lineRow is one item + quantity row of a kit or service form: the item
+// picked or named (ItemID), and Text, its name as typed or shown.
 type lineRow struct {
 	ItemID int64
+	Text   string
 	Qty    string
 	Unit   string     // sub-unit chosen next to Qty; "" means the item's base unit
 	Badge  stockBadge // the chosen item's stock badge (describeRows)
@@ -36,7 +39,8 @@ func partRow(itemID int64, qty float64, u stock.Unit) lineRow {
 	return row
 }
 
-// describeRows fills in each row's stock badge. withNeed (a service's
+// describeRows fills in each row's stock badge, and the name of a row's
+// item where nothing was typed (a saved row). withNeed (a service's
 // parts, which saving takes from stock) compares what the rows ask for
 // with what is in stock: the rows of one item together, as saving takes
 // them all. An amount that can't be read asks for nothing; saving says why.
@@ -55,11 +59,14 @@ func describeRows(rows []lineRow, items []stock.Item, withNeed bool) {
 	for i := range rows {
 		if it, ok := byID[rows[i].ItemID]; ok {
 			rows[i].Badge = newStockBadge(it, need[rows[i].ItemID], true)
+			if rows[i].Text == "" {
+				rows[i].Text = it.DisplayName()
+			}
 		}
 	}
 }
 
-// itemGroup groups items in a <select> (vehicle items first).
+// itemGroup is a part of the part rows' item list (vehicle items first).
 type itemGroup struct {
 	Label string
 	Items []stock.Item
@@ -110,14 +117,20 @@ func itemOptions(items []stock.Item, vehicle *stock.Vehicle) []itemGroup {
 	return out
 }
 
-// parseLines reads parallel <prefix>_item / <prefix>_qty / <prefix>_unit
-// fields. A unit typed into the quantity wins over the unit select.
+// parseLines reads parallel <prefix>_item / <prefix>_item_text /
+// <prefix>_qty / <prefix>_unit fields: the item picked (its id) or named
+// (lineItem), and its quantity. A unit typed into the quantity wins over
+// the unit select. A form from before the item text posts no text.
 func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs stock.Errors) ([]lineRow, []stock.KitLineInput) {
-	ids, qtys, units := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_qty"], r.PostForm[prefix+"_unit"]
+	ids, texts := r.PostForm[prefix+"_item"], r.PostForm[prefix+"_item_text"]
+	qtys, units := r.PostForm[prefix+"_qty"], r.PostForm[prefix+"_unit"]
 	var rows []lineRow
 	var lines []stock.KitLineInput
 	for i, raw := range ids {
 		row := lineRow{}
+		if i < len(texts) {
+			row.Text = strings.TrimSpace(texts[i])
+		}
 		if i < len(qtys) {
 			row.Qty = qtys[i]
 		}
@@ -125,13 +138,13 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			row.Unit = units[i]
 		}
 		id, _ := strconv.ParseInt(raw, 10, 64)
-		row.ItemID = id
-		it, ok := items[id]
+		it, msg := lineItem(id, row.Text, items)
+		row.ItemID = it.ID
 		switch {
-		case id == 0 && row.Qty == "":
+		case id == 0 && row.Text == "" && row.Qty == "":
 			continue // empty row
-		case !ok:
-			row.Error = "Choose an item"
+		case msg != "":
+			row.Error = msg
 		default:
 			q, err := stock.ParseAmount(row.Qty, it.Unit, row.Unit)
 			switch {
@@ -142,7 +155,7 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 			case q <= 0:
 				row.Error = "Quantity must be greater than zero"
 			default:
-				lines = append(lines, stock.KitLineInput{ItemID: id, Quantity: q, Unit: it.Unit})
+				lines = append(lines, stock.KitLineInput{ItemID: it.ID, Quantity: q, Unit: it.Unit})
 			}
 		}
 		if row.Error != "" {
@@ -155,6 +168,34 @@ func parseLines(r *http.Request, prefix string, items map[int64]stock.Item, errs
 		rows = append(rows, row)
 	}
 	return rows, lines
+}
+
+// lineItem is the item of a part row: the one picked (id) while the text
+// still names it or is empty (a form from before the text), else the one
+// active item the text names (stock.NamesItem), as the list offers no
+// archived ones but a row's own. Otherwise msg says why there is none: a
+// part must be an item in stock.
+func lineItem(id int64, text string, items map[int64]stock.Item) (it stock.Item, msg string) {
+	if it, ok := items[id]; ok && (text == "" || stock.NamesItem(text, it.Brand, it.Name)) {
+		return it, ""
+	}
+	if text == "" {
+		return stock.Item{}, "Choose an item"
+	}
+	var named []stock.Item
+	for _, it := range items {
+		if !it.Archived() && stock.NamesItem(text, it.Brand, it.Name) {
+			named = append(named, it)
+		}
+	}
+	switch len(named) {
+	case 1:
+		return named[0], ""
+	case 0:
+		return stock.Item{}, "No item is called “" + text + "”: pick one from the list"
+	default:
+		return stock.Item{}, strconv.Itoa(len(named)) + " items are called “" + text + "”: pick one from the list"
+	}
 }
 
 func itemsByID(items []stock.Item) map[int64]stock.Item {
@@ -193,7 +234,7 @@ type kitFormPage struct {
 
 func hasRowInput(rows []lineRow) bool {
 	for _, r := range rows {
-		if r.ItemID != 0 || r.Qty != "" || r.Error != "" {
+		if r.ItemID != 0 || r.Text != "" || r.Qty != "" || r.Error != "" {
 			return true
 		}
 	}

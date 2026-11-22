@@ -948,24 +948,12 @@
     if (now !== (document.documentElement.getAttribute("data-working-on") || "") && !dirty) location.reload();
   });
 
-  // The phone's More sheet (the sidebar) and Switch tray (popovers) close
-  // on the way out, so a page that Back brings from the page cache doesn't
-  // come with one open.
+  // The phone's More sheet (the sidebar, a popover, with Appearance in it)
+  // closes on the way out, so a page that Back brings from the page cache
+  // doesn't come with it open.
   window.addEventListener("pagehide", function () {
-    ["more", "switch"].forEach(function (id) {
-      var p = document.getElementById(id);
-      if (p && p.matches(":popover-open")) p.hidePopover();
-    });
-  });
-  // The Switch tray hangs from the bar's padding edge (it covers the bar's
-  // bottom border with its own), and the grey starts there (app.css). The
-  // bar is sticky, so measure it as it is when the tray opens.
-  var switchTray = document.getElementById("switch");
-  if (switchTray) switchTray.addEventListener("beforetoggle", function (e) {
-    var bar = switchTray.closest(".working-on");
-    if (e.newState !== "open" || !bar) return;
-    var border = parseFloat(getComputedStyle(bar).borderBottomWidth) || 0;
-    switchTray.style.setProperty("--switch-top", Math.round(bar.getBoundingClientRect().bottom - border) + "px");
+    var p = document.getElementById("more");
+    if (p && p.matches(":popover-open")) p.hidePopover();
   });
 
   // ---- Keyboard shortcuts -------------------------------------------------

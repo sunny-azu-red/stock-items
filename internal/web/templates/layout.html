@@ -100,7 +100,10 @@
 {{define "appearance"}}{{$t := or .Theme "system"}}{{$h := 280}}{{$i := 100}}{{with .Accent}}{{$h = .Hue}}{{$i = .Intensity}}{{end}}
 <button class="icon-btn appearance-btn" type="button" popovertarget="appearance" title="Appearance" aria-label="Appearance">{{icon "palette"}}</button>
 <div class="appearance" id="appearance" popover aria-labelledby="appearance-title">
-  <h2 id="appearance-title">Appearance</h2>
+  <div class="appearance-head">
+    <button class="icon-btn appearance-btn appearance-back" type="button" popovertarget="appearance" popovertargetaction="hide" title="Back to More" aria-label="Back to More">{{icon "arrow-left"}}</button>
+    <h2 id="appearance-title">Appearance</h2>
+  </div>
   <form class="theme-pick" method="post" action="/theme">
     <fieldset>
       <legend>Theme</legend>
@@ -126,26 +129,22 @@
 </div>{{end}}
 
 {{/* The vehicles to work on, as buttons: tapping one works on it, tapping
-     the one worked on stops. dict "View" View "Label" (id of its label), and
-     "Others" true to leave out the one worked on (the bar's Switch). See
-     working.go. */}}
-{{define "work-on"}}{{$on := .View.WorkingOn}}{{$others := .Others}}<form class="chips work-on" method="post" action="/working-on" role="group" aria-labelledby="{{.Label}}">
-  {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}{{if not (and $others $this)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}{{end}}
+     the one worked on stops. dict "View" View "Label" (id of its label).
+     See working.go. */}}
+{{define "work-on"}}{{$on := .View.WorkingOn}}<form class="chips work-on" method="post" action="/working-on" role="group" aria-labelledby="{{.Label}}">
+  {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}
 </form>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so (its name opens the vehicle's page), switches to another (Switch, on
-     a phone, opens a tray under the bar, a popover: Esc and a tap outside
-     close it; a desktop has the sidebar's Work on chips), or stops (All
-     vehicles, an ×). It is the pages' vehicle control: their vehicle chips
-     are hidden meanwhile. */}}
+     so (its name opens the vehicle's page) or stops (All vehicles, an ×).
+     Another vehicle is chosen in the sidebar's Work on list (on a phone, in
+     More). It is the pages' vehicle control: their vehicle chips are hidden
+     meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
   {{/* The name opens the vehicle's page, except on that page. */}}
   {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
   {{else}}<a class="working-name" href="/vehicles/{{.ID}}">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></a>{{end}}
   <span class="working-actions">
-    <button class="btn btn-sm working-switch" type="button" popovertarget="switch" title="Switch">{{icon "arrow-left-right"}}<span class="working-btn-label">Switch</span></button>
-    <div class="working-pick" id="switch" popover aria-label="Switch"><span class="sr-only" id="switch-title">Work on</span>{{template "work-on" (dict "View" $ "Label" "switch-title" "Others" true)}}</div>
     <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>
 </section>{{end}}{{end}}

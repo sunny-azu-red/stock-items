@@ -976,20 +976,13 @@ test("work on a vehicle", async ({ page }, testInfo) => {
   await expect(page.locator("#vehicle_id")).toHaveCount(0);
 
   // Switch, then Back: the page from before the switch shows the bar, and
-  // its vehicle, as they are now. A phone switches
-  // in the bar (it lists the other vehicles only); a desktop with the
-  // sidebar's Work on chips, so its bar has no Switch.
+  // its vehicle, as they are now. Desktop and phone switch in the
+  // sidebar's Work on list (on a phone, in More): the bar only stops.
   await page.goto("/stock");
   await expect(page).toHaveURL(/v=\d+/);
   const k390 = new URL(page.url()).searchParams.get("v");
-  if (phone(testInfo)) {
-    await bar.getByRole("button", { name: "Switch" }).click();
-    await expect(page.locator("#switch").getByRole("button", { name: "KTM 390" })).toHaveCount(0);
-    await page.locator("#switch").getByRole("button", { name: "KTM 1290" }).click();
-  } else {
-    await expect(bar.getByRole("button", { name: "Switch" })).toBeHidden();
-    await page.locator(".sidebar .work-on").getByRole("button", { name: "KTM 1290" }).click();
-  }
+  await expect(bar.getByRole("button")).toHaveCount(1);
+  await (await sidebar(page)).locator(".work-on").getByRole("button", { name: "KTM 1290" }).click();
   await expect(bar).toContainText("Working on KTM 1290");
   await expect(page.locator("main h1")).toHaveText("Stock");
   // Back brings the KTM 390's stock from before the switch: it reloads, and
@@ -1100,12 +1093,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await page.locator(".working-on a.working-name").click();
   await expect(page.locator("main h1")).toHaveText("KTM 390");
   // Switching on its page opens the one now worked on.
-  if (mobile) {
-    await page.locator(".working-on").getByRole("button", { name: "Switch" }).click();
-    await page.locator("#switch").getByRole("button", { name: "KTM 1290" }).click();
-  } else {
-    await page.locator(".sidebar .work-on").getByRole("button", { name: "KTM 1290" }).click();
-  }
+  await (await sidebar(page)).locator(".work-on").getByRole("button", { name: "KTM 1290" }).click();
   await expect(page).toHaveURL(/\/vehicles\/\d+$/);
   await expect(page.locator("main h1")).toHaveText("KTM 1290");
   // The dashboard leaves out its Vehicles panel meanwhile.
@@ -1119,8 +1107,8 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await expect(page.locator("a.vehicle-card").filter({ hasText: "KTM 390" })).toBeVisible();
 });
 
-test("a phone's More and Switch grey the page, not what opened them", async ({ page }, testInfo) => {
-  test.skip(!phone(testInfo), "More and Switch are a phone's");
+test("a phone's More sheet greys the page, and Appearance takes its place", async ({ page }, testInfo) => {
+  test.skip(!phone(testInfo), "More is a phone's");
   await workingCookie(page, testInfo.project.use.baseURL as string, "KTM 390");
   await page.goto("/shopping");
   // Taps in the middle of what a selector finds. The grey (the popover's
@@ -1131,25 +1119,29 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   };
   const more = page.locator(".tabbar").getByRole("button", { name: "More" });
   const sheet = page.locator("#more");
-  const bar = page.locator(".working-on");
-  const tray = page.locator("#switch");
+  const panel = page.locator("#appearance");
   const stockTab = page.locator(".tabbar a[href='/stock']");
+  const width = await page.evaluate(() => document.documentElement.clientWidth);
+  const height = await page.evaluate(() => window.innerHeight);
 
-  // More: the bar under the grey only closes it.
+  // The tab bar is on the screen's bottom edge, edge to edge.
+  const tabs = (await page.locator(".tabbar").boundingBox())!;
+  expect(tabs.x === 0 && tabs.width === width && tabs.y + tabs.height === height, `tab bar at ${JSON.stringify(tabs)} in ${width}×${height}`).toBe(true);
+
+  // More: the sheet rests on the tab bar, edge to edge, rounded at the top
+  // (design.md#6-layout); measured once it has slid into place.
   await more.click();
   await expect(sheet).toBeVisible();
-  // It floats just above the tab bar, as wide, rounded on every corner
-  // (design.md#6-layout); measured once it has slid into place.
   await settled(sheet);
   const sh = (await sheet.boundingBox())!;
-  const tabs = (await page.locator(".tabbar").boundingBox())!;
-  expect(Math.round(tabs.y - (sh.y + sh.height)), "the sheet's gap above the tab bar").toBe(8);
-  expect(sh.x === tabs.x && sh.width === tabs.width, `sheet at ${JSON.stringify(sh)}, tab bar ${JSON.stringify(tabs)}`).toBe(true);
-  await expect(sheet).toHaveCSS("border-radius", "14px");
+  expect(sh.y + sh.height, "the sheet's bottom").toBe(tabs.y);
+  expect(sh.x === 0 && sh.width === width, `sheet at ${JSON.stringify(sh)} in ${width}px`).toBe(true);
+  await expect(sheet).toHaveCSS("border-radius", "16px 16px 0px 0px");
   // The build isn't in it: it is the logo's title (and /healthz).
   await expect(sheet.locator(".sidebar-foot")).toBeHidden();
   // More is lit while it is open, as the current tab (Shop) is.
   await expect(more).toHaveCSS("color", await page.locator(".tabbar a[href='/shopping']").evaluate((e) => getComputedStyle(e).color));
+  // The bar under the grey only closes it.
   await tap(".working-on a.working-name");
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
@@ -1164,30 +1156,36 @@ test("a phone's More and Switch grey the page, not what opened them", async ({ p
   await page.goto("/shopping");
   await expect(stockTab).toBeVisible();
 
-  // Switch: the tray hangs under the bar, as wide, rounded at the bottom,
-  // over the bar's bottom border, so the two join without a seam.
-  await bar.getByRole("button", { name: "Switch" }).click();
-  await expect(tray).toBeVisible();
-  await settled(tray);
-  const b = (await bar.boundingBox())!;
-  const t = (await tray.boundingBox())!;
-  expect(t.y, "the tray's top").toBe(b.y + b.height - 1);
-  expect(t.x === 0 && t.width === b.width, `tray at ${JSON.stringify(t)}, bar ${JSON.stringify(b)}`).toBe(true);
-  await expect(tray).toHaveCSS("border-radius", "0px 0px 14px 14px");
-  // Everything below is grey, the tab bar too: a tap only closes it.
-  await tap(".tabbar a[href='/stock']");
-  await expect(tray).toBeHidden();
-  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
-  // Esc closes it too.
-  await bar.getByRole("button", { name: "Switch" }).click();
-  await expect(tray).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(tray).toBeHidden();
-  // The bar isn't grey: its name opens the vehicle.
-  await bar.getByRole("button", { name: "Switch" }).click();
+  // Appearance, from the sheet's palette button, takes the sheet's place:
+  // the sheet is out of sight under it, and the page isn't grey, so a
+  // colour shows on it.
+  await more.click();
+  await sheet.getByRole("button", { name: "Appearance" }).click();
+  await expect(panel).toBeVisible();
+  await settled(panel);
+  const ap = (await panel.boundingBox())!;
+  expect(ap.y + ap.height, "Appearance's bottom").toBe(tabs.y);
+  expect(ap.x === 0 && ap.width === width, `Appearance at ${JSON.stringify(ap)} in ${width}px`).toBe(true);
+  await expect(sheet.locator(".nav")).toBeHidden();
+  const backdrop = () => sheet.evaluate((e) => getComputedStyle(e, "::backdrop").opacity);
+  await expect.poll(backdrop).toBe("0");
+  // Still out of reach: a tap on the page closes both, and opens nothing.
   await tap(".working-on a.working-name");
-  await expect(page.locator("main h1")).toHaveText("KTM 390");
-  await expect(tray).toBeHidden();
+  await expect(panel).toBeHidden();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  // Back to More: the sheet again, and the grey.
+  await more.click();
+  await sheet.getByRole("button", { name: "Appearance" }).click();
+  await panel.getByRole("button", { name: "Back to More" }).click();
+  await expect(panel).toBeHidden();
+  await expect(sheet.locator(".nav")).toBeVisible();
+  await expect.poll(backdrop).toBe("1");
+  // Esc closes it too.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  // The bar has no Switch: the sheet's Work on list switches.
+  await expect(page.locator(".working-on").getByRole("button")).toHaveCount(1);
 });
 
 test("Ctrl-click or middle-click on Copy as text opens the text", async ({ page, context }) => {
@@ -1411,20 +1409,9 @@ test("no page scrolls sideways", async ({ page }) => {
     expect(overflow, `horizontal overflow on ${p}`).toBeLessThanOrEqual(0);
   };
   for (const p of paths) await overflows(p);
-  // The bar while working on a vehicle, with its Switch open.
+  // The bar while working on a vehicle.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 1290");
   for (const p of ["/", "/stock", "/services", "/activity", "/shopping"]) await overflows(p);
-  // Switch is a phone's: a desktop switches in the sidebar.
-  const switchButton = page.locator(".working-on").getByRole("button", { name: "Switch" });
-  if (!(await switchButton.isVisible())) return;
-  await switchButton.click();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "horizontal overflow with Switch open").toBeLessThanOrEqual(0);
-  // Nor past the left edge, which scrollWidth doesn't count: the list
-  // once hung from the Switch button and stuck out on a phone.
-  const pick = await page.locator(".working-pick").boundingBox();
-  const width = await page.evaluate(() => document.documentElement.clientWidth);
-  expect(pick && pick.x >= 0 && pick.x + pick.width <= width, `Switch list at ${JSON.stringify(pick)} in ${width}px`).toBe(true);
 });
 
 // The item names of the table's rows, with repeats next to each other
@@ -1735,8 +1722,7 @@ async function misaligned(page: Page) {
       const d = caps(t) - middle(bar);
       if (Math.abs(d) > 0.3) out.push(`heading of ${name(bar)} ${d.toFixed(2)}px off its middle`);
     }
-    // Chips you pick or tap (the filter bars, the Switch tray) are a small
-    // button's height; the sidebar's Work on and Stock by vehicle are list
+    // Chips you pick or tap (the filter bars) are a small button's height; the sidebar's Work on and Stock by vehicle are list
     // rows, as tall as the nav's (design.md#10-chips-vs-badges).
     const tap = ".chip-toggle, .work-on .chip, .nav-vehicles .chip";
     for (const el of document.querySelectorAll(`.chip:not(${tap}), .badge:not(.kit-start .badge)`)) {
@@ -1785,8 +1771,10 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   // Every page's offenders, so one run shows them all.
   const problems: string[] = [];
   const check = async (where: string) => {
-    // Once what slides or fades in (a flash, a sheet) has come to rest.
-    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)));
+    // Once what slides or fades in (a flash, a sheet) has come to rest; a
+    // transition cut short (the sheet hidden as Appearance takes its place)
+    // is at rest too.
+    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
     for (const box of await offGrid(page)) problems.push(`${where}: ${box}`);
     for (const text of await misaligned(page)) problems.push(`${where}: ${text}`);
   };
@@ -1829,19 +1817,20 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.getByLabel("Use an intermediate schedule").check();
   await page.getByRole("button", { name: "More about Intermediate months" }).click();
   await check(kit + "/edit with intermediate schedule and hint open");
-  // Working on a vehicle: the bar on every page, and its Switch open.
+  // Working on a vehicle: the bar on every page.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 390");
   for (const p of ["/", "/stock", "/stock?v=all", "/services", "/activity", "/shopping", item]) {
     await page.goto(p);
     await check(`${p} working on a vehicle`);
   }
-  if (await page.locator(".working-on").getByRole("button", { name: "Switch" }).isVisible()) {
-    await page.locator(".working-on").getByRole("button", { name: "Switch" }).click();
-    await check("the Switch open");
-    // A phone's More sheet, working on a vehicle and not.
+  if (await page.locator(".tabbar").isVisible()) {
+    // A phone's More sheet, and Appearance in its place, working on a
+    // vehicle and not.
     await page.goto("/shopping");
     await sidebar(page);
     await check("the More sheet open");
+    await appearance(page);
+    await check("Appearance open in the More sheet");
     await page.context().clearCookies({ name: "working_on" });
     await page.goto("/shopping");
     await sidebar(page);
@@ -1998,8 +1987,8 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       const name = (el: Element) => el.tagName.toLowerCase() + [...el.classList].map((c) => "." + c).join("");
       const main = document.querySelector(".main") as HTMLElement;
       // The same space on the page's sides and under it as above it (and
-      // on a phone the floating tab bar's space: its height and the 10px
-      // under it), and nothing at the end adding a margin: the main column
+      // on a phone the tab bar's space: its height, the safe area in it),
+      // and nothing at the end adding a margin: the main column
       // fitted to its content, its last box ends at its padding.
       const pt = px(main, "padding-top"), pb = px(main, "padding-bottom");
       const tabbar = desktop ? 0 : Math.round(window.innerHeight - document.querySelector(".tabbar")!.getBoundingClientRect().top);

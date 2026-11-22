@@ -152,8 +152,8 @@
   :root[data-theme="light"] { color-scheme: light; }
   :root[data-theme="dark"] { color-scheme: dark; }
   @media (width <= 820px) {
-    /* The tab bar floats 10px above the screen's bottom edge. */
-    :root { --inset: 14px; --page: 14px; --tabbar-space: calc(var(--tabbar) + 10px + env(safe-area-inset-bottom)); }
+    /* The tab bar's space at the bottom: the bar and the safe area. */
+    :root { --inset: 14px; --page: 14px; --tabbar-space: calc(var(--tabbar) + env(safe-area-inset-bottom)); }
   }
 }
 
@@ -289,11 +289,13 @@
     .main { padding-bottom: calc(var(--tabbar-space) + var(--page)); }
     h1 { font-size: 1.4375rem; }
 
+    /* Fixed to the screen's bottom edge, edge to edge, a hairline on top;
+       the safe area (a gesture bar, a notch on its side) is its padding. */
     .tabbar {
       display: grid; grid-template-columns: repeat(5, 1fr);
-      position: fixed; z-index: 30; left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right));
-      bottom: calc(10px + env(safe-area-inset-bottom)); height: var(--tabbar);
-      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      position: fixed; z-index: 30; inset: auto 0 0 0; height: var(--tabbar-space);
+      padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background: var(--surface); border-top: 1px solid var(--border);
       & :is(a, button) {
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
         position: relative; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
@@ -312,18 +314,21 @@
     body:has(#more:popover-open) .tabbar button { color: var(--text); }
     body:has(#more:popover-open) .tabbar button .icon { background: var(--accent-soft); color: var(--accent-strong); }
 
-    /* More opens the sidebar as a sheet that floats just above the tab
-       bar, without what the tab bar has already or what needs a keyboard. */
+    /* More opens the sidebar as a sheet resting on the tab bar, edge to
+       edge and rounded at the top, its rows --page from the screen's edges
+       as on a desktop, without what the tab bar has already or what needs a
+       keyboard. */
     .sidebar:popover-open {
-      display: flex; position: fixed; inset: auto calc(10px + env(safe-area-inset-right)) calc(var(--tabbar-space) + 8px) calc(10px + env(safe-area-inset-left));
-      height: auto; max-height: calc(100dvh - var(--tabbar-space) - 72px);
-      padding: 16px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      display: flex; position: fixed; inset: auto 0 var(--tabbar-space) 0;
+      height: auto; max-height: calc(100dvh - var(--tabbar-space) - 64px);
+      padding: 16px calc(var(--page) + env(safe-area-inset-right)) 18px calc(var(--page) + env(safe-area-inset-left));
+      background: var(--surface); border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
       transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
       @starting-style { translate: 0 16px; opacity: 0; }
     }
     .sidebar .tab-dup, .sidebar .sidebar-foot { display: none; }
     /* Behind the phone's popovers the page goes grey. */
-    :is(.sidebar, .working-pick)::backdrop {
+    .sidebar::backdrop {
       background: var(--scrim);
       transition: opacity .25s, display .25s allow-discrete, overlay .25s allow-discrete;
     }
@@ -331,9 +336,7 @@
     /* What is grey is out of reach: a tap there only closes the popover
        (the ::backdrop takes no taps, so they would reach the link under it).
        Never on the popover's own ancestors: it inherits this. */
-    body:has(#more:popover-open) .main,
-    body:has(#switch:popover-open) .main > :not(.working-on),
-    body:has(#switch:popover-open) .tabbar { pointer-events: none; }
+    body:has(#more:popover-open) .main { pointer-events: none; }
   }
 }
 
@@ -543,8 +546,10 @@
   /* ---- Appearance (theme and accent, theme.go) --------------------- */
   /* The sidebar's palette button opens it: theme, then the accent's hue
      and intensity, with presets. A popover: Esc and a tap outside close
-     it. On a desktop it opens under the button; on a phone, from inside
-     the More sheet, it takes the sheet's place above the tab bar. */
+     it. On a desktop it opens under the button. On a phone the button is
+     in the More sheet, and the sheet becomes Appearance: in its place, with
+     a back button to More, and the page above no longer grey, so a colour
+     shows on the real page as it is tried. */
   .appearance-btn {
     width: var(--control-h); height: var(--control-h); background: transparent; color: var(--muted);
     &:hover { background: var(--surface-2); color: var(--text); }
@@ -559,9 +564,22 @@
     & legend { font-size: var(--text-sm); font-weight: 600; color: var(--muted); margin-bottom: 8px; }
     & fieldset { display: grid; gap: 12px; }
     @media (width <= 820px) {
-      inset: auto calc(10px + env(safe-area-inset-right)) calc(var(--tabbar-space) + 8px) calc(10px + env(safe-area-inset-left)); width: auto;
-      &:popover-open { @starting-style { translate: 0 16px; opacity: 0; } }
+      inset: auto 0 var(--tabbar-space) 0; width: auto; max-height: calc(100dvh - var(--tabbar-space) - 64px);
+      padding: 12px calc(var(--page) + env(safe-area-inset-right)) 18px calc(var(--page) + env(safe-area-inset-left));
+      border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
+      &:popover-open { @starting-style { translate: 0; opacity: 0; } }
     }
+  }
+  .appearance-head { display: flex; align-items: center; gap: 6px; }
+  /* Back to More: a phone's, where Appearance is the sheet. */
+  .appearance-back { display: none; }
+  @media (width <= 820px) {
+    .appearance-back { display: inline-grid; margin-left: -10px; }
+    /* The sheet that opened it is under it, out of sight, and the grey
+       lifts off the page (which stays out of reach). */
+    .sidebar:has(#appearance:popover-open) { visibility: hidden; }
+    .appearance { visibility: visible; }
+    body:has(#appearance:popover-open) .sidebar::backdrop { opacity: 0; }
   }
   /* System / Light / Dark: one pressed, like a segmented control. */
   .theme-pick .pick {
@@ -1009,24 +1027,10 @@
     & .btn { padding-inline: 8px; }
   }
   .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  /* Switch is the phone's: a desktop switches with the sidebar's chips. */
-  .working-switch { display: none; }
-  body:has(#switch:popover-open) .working-switch { background: var(--surface); }
+  /* On a phone the bar stays in view: what scrolls into view (a field
+     taking the focus) stops under it. */
   @media (width <= 820px) {
-    .working-switch { display: inline-flex; }
     html:has(.working-on) { scroll-padding-top: 56px; }
-    /* Switch opens a tray under the bar, as wide and as tinted, rounded at
-       the bottom. --switch-top is the bar's bottom edge (app.js measures it). */
-    .working-pick .work-on { justify-content: flex-end; }
-    .working-pick:popover-open {
-      position: fixed; inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 42px)) 0 auto; width: auto; margin: 0;
-      color: inherit; padding: 12px var(--page); border: 0; border-bottom: 1px solid var(--border); border-radius: 0 0 14px 14px;
-      background: color-mix(in oklab, var(--chip) 12%, var(--surface));
-      transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
-      @starting-style { translate: 0 -12px; opacity: 0; }
-    }
-    .working-pick::backdrop { inset: var(--switch-top, calc(env(safe-area-inset-top, 0px) + 42px)) 0 0; }
-    .working-pick:popover-open::backdrop { @starting-style { opacity: 0; } }
   }
   .work-on .chip[aria-pressed="true"] {
     background: color-mix(in oklab, var(--chip) 26%, var(--surface)); border-color: var(--chip);

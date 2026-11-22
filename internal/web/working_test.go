@@ -468,13 +468,14 @@ func TestWorkingOnPages(t *testing.T) {
 		expect(t, rec, http.StatusOK, `action="/working-on"`,
 			`name="vehicle" value="" aria-pressed="true"`, `name="vehicle" value="`+itoa(k1290)+`" aria-pressed="false"`)
 		expectNot(t, rec, "Stock by vehicle")
-		// The bar's Switch lists the others only; the sidebar's chip of the
-		// one worked on is pressed, and tapping it stops.
+		// The sidebar's Work on list is the one place to choose (on a phone,
+		// in More): the chip of the one worked on is pressed, and tapping it
+		// stops.
 		if n := strings.Count(rec.Body.String(), `value="" aria-pressed="true"`); n != 1 {
 			t.Errorf("the vehicle worked on is offered %d times, want once (the sidebar)", n)
 		}
-		if n := strings.Count(rec.Body.String(), `name="vehicle" value="`+itoa(k1290)+`"`); n != 2 {
-			t.Errorf("the other vehicle is offered %d times, want twice (the sidebar and Switch)", n)
+		if n := strings.Count(rec.Body.String(), `name="vehicle" value="`+itoa(k1290)+`"`); n != 1 {
+			t.Errorf("the other vehicle is offered %d times, want once (the sidebar)", n)
 		}
 		rec = a.get("/trash")
 		expect(t, rec, http.StatusOK, `name="vehicle" value="`+w+`" aria-pressed="false"`)
@@ -511,8 +512,11 @@ func TestWorkingOnNav(t *testing.T) {
 	rec = a.getWorking("/activity?general=1&v="+w, w)
 	expect(t, rec, http.StatusOK, `<div class="sidebar" id="more" popover`, `popovertarget="more" class="current"`, `href="/stock" class="tab-dup"`)
 	expectNot(t, a.get("/vehicles"), `href="/activity"><svg`, `Trash (`)
-	// The phone's Switch is a popover too: its tray, under the bar.
-	expect(t, rec, http.StatusOK, `popovertarget="switch"`, `<div class="working-pick" id="switch" popover`)
+	// One place to choose the vehicle, the sidebar's Work on list (in More
+	// on a phone): the bar only stops, and Appearance, in the sheet, has
+	// its way back to More.
+	expect(t, rec, http.StatusOK, `<form class="chips work-on"`, `popovertarget="appearance" popovertargetaction="hide"`)
+	expectNot(t, rec, `id="switch"`, `popovertarget="switch"`)
 	expectNot(t, a.get("/shopping"), `popovertarget="more" class="current"`)
 }
 

@@ -2165,14 +2165,14 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
       // Cards, sections, tiles and columns side by side or one under the
       // other are --gap apart.
       const block = ".card, .split > *, .grid > *, .tiles > *, .stack > *";
-      // A results heading ("13 items") is nearer what it heads: 18px above
-      // it, 10px below.
+      // A results heading ("13 items" and its buttons) sits evenly between
+      // the boxes around it: --gap above it and below.
       for (const h of document.querySelectorAll(".results-head")) {
         const above = h.previousElementSibling, below = h.nextElementSibling, r = h.getBoundingClientRect();
-        if (above && shown(above) && Math.round(r.top - above.getBoundingClientRect().bottom) !== 18)
-          out.push(`a results heading is ${Math.round(r.top - above.getBoundingClientRect().bottom)}px below ${name(above)}, not 18`);
-        if (below && shown(below) && Math.round(below.getBoundingClientRect().top - r.bottom) !== 10)
-          out.push(`${name(below)} is ${Math.round(below.getBoundingClientRect().top - r.bottom)}px below its results heading, not 10`);
+        if (above && shown(above) && Math.round(r.top - above.getBoundingClientRect().bottom) !== gap)
+          out.push(`a results heading is ${Math.round(r.top - above.getBoundingClientRect().bottom)}px below ${name(above)}, not ${gap}`);
+        if (below && shown(below) && Math.round(below.getBoundingClientRect().top - r.bottom) !== gap)
+          out.push(`${name(below)} is ${Math.round(below.getBoundingClientRect().top - r.bottom)}px below its results heading, not ${gap}`);
       }
       for (const b of document.querySelectorAll(block)) {
         const a = b.previousElementSibling;

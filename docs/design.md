@@ -119,7 +119,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Under the page header | 18px | 18px | `.page-head` |
 | Between the header's line and its buttons, in a narrow column | 12px | 12px | `.page-head .actions` |
 | Under the Working on bar (or its offer) | 18px, a flash under it too | `--page` (it runs edge to edge) | `.working-on` |
-| Above / below a results heading ("24 items" and its buttons) | 18px / 10px | the same | `.results-head` |
+| Above / below a results heading ("24 items" and its buttons): even, so its buttons sit evenly between the boxes | 12px / 12px | the same | `--gap`, `.results-head` |
 | Under a flash (the page header: 18px under whichever band is right above it). A flash is the bar's box, 42px, its icon, text and Undo in line with the bar's icon, text and × | 18px | 18px | `.flash` |
 | Between table columns | 12px each side; `--inset` at the table's edges | the same | `.table` |
 | A page that is a form | at most `--form-width` 980px, its header and flash too | the page's width | `.page-form` |

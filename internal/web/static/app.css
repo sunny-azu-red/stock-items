@@ -343,19 +343,20 @@
 @layer components {
 
   /* ---- Page header ------------------------------------------------- */
-  /* The heading and the record's buttons share the first row, at least a
+  /* layout.html writes it on every page, from the page's head-* blocks:
+     the heading and the record's buttons share the first row, at least a
      button tall, with the heading centred in it; the line under it
-     (Archived, chips, badges, then text) runs the full width. .page-title
-     and .vehicle-hero only group the markup: their children are the grid's
-     items. */
+     (Archived, chips, badges, then text) runs the full width. */
   .page-head {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(var(--control-h), auto);
     column-gap: var(--gap); row-gap: 4px; align-items: center; margin-bottom: 18px;
     & h1 { grid-row: 1; grid-column: 1; }
     & .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-    & .sub { grid-column: 1 / -1; color: var(--muted); }
-    & .sub.flex { gap: 6px; }
-    &:has(.vehicle-hero) {
+    & .sub {
+      grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      margin: 0; color: var(--muted);
+    }
+    &:has(> .avatar) {
       grid-template-columns: auto minmax(0, 1fr) auto;
       & h1 { grid-column: 2; }
       & .actions { grid-column: 3; }
@@ -371,27 +372,24 @@
       & .actions > * { min-width: 0; }
       & .actions :is(.btn, form, .inline-form) { width: 100%; }
       & .actions form .btn { width: 100%; }
-      &:has(.vehicle-hero) {
+      &:has(> .avatar) {
         grid-template-columns: auto minmax(0, 1fr);
         & .actions { grid-column: 1 / -1; }
         & .sub { min-height: 0; }
       }
     }
-  }
-  .page-title, .vehicle-hero { display: contents; }
-  /* The vehicle page: its kind icon in a tile of its colour, spanning the
-     heading row and the line. */
-  .vehicle-hero {
-    --chip: var(--accent);
-    & .avatar {
+    /* The vehicle page (head-lead): its kind icon in a tile of its colour,
+       spanning the heading row and the line. */
+    & > .avatar {
+      --chip: var(--accent);
       grid-row: 1 / span 2; grid-column: 1; align-self: start;
       width: 64px; height: 64px; border-radius: 12px; display: grid; place-items: center;
       background: color-mix(in oklab, var(--chip) 16%, var(--surface)); color: var(--chip);
       & .icon { width: 34px; height: 34px; }
-    }
-    @container main (width < 680px) {
-      & .avatar { width: 52px; height: 52px; align-self: center; border-radius: 10px; }
-      & .avatar .icon { width: 28px; height: 28px; }
+      @container main (width < 680px) {
+        width: 52px; height: 52px; align-self: center; border-radius: 10px;
+        & .icon { width: 28px; height: 28px; }
+      }
     }
   }
 

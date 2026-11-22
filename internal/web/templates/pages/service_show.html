@@ -1,22 +1,18 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}{{.Data.Title}}{{end}}
+{{define "head-line"}}{{$s := .Data}}
+{{template "chip-link" $s.VehicleChip}}
+{{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if $s.KitIntermediate}} · Intermediate{{end}}</a>{{end}}
+{{end}}
+{{define "head-actions"}}{{$s := .Data}}
+<a class="btn btn-ghost" href="/services">{{icon "arrow-left"}} Services</a>
+<a class="btn" href="/services/{{$s.ID}}/edit">{{icon "pencil"}} Edit</a>
+<form class="inline-form" method="post" action="/services/{{$s.ID}}/delete">
+  <input type="hidden" name="version" value="{{$s.Version}}">
+  <button class="btn btn-danger" type="submit" title="{{if $s.Parts}}Its parts go back in stock. {{end}}You can undo it.">{{icon "trash-2"}} Delete</button>
+</form>
+{{end}}
 {{define "content"}}{{$s := .Data}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>{{$s.Title}}</h1>
-    <div class="sub flex">
-      {{template "chip-link" $s.VehicleChip}}
-      {{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if $s.KitIntermediate}} · Intermediate{{end}}</a>{{end}}
-    </div>
-  </div>
-  <div class="actions">
-    <a class="btn btn-ghost" href="/services">{{icon "arrow-left"}} Services</a>
-    <a class="btn" href="/services/{{$s.ID}}/edit">{{icon "pencil"}} Edit</a>
-    <form class="inline-form" method="post" action="/services/{{$s.ID}}/delete">
-      <input type="hidden" name="version" value="{{$s.Version}}">
-      <button class="btn btn-danger" type="submit" title="{{if $s.Parts}}Its parts go back in stock. {{end}}You can undo it.">{{icon "trash-2"}} Delete</button>
-    </form>
-  </div>
-</div>
-
 <div class="split">
   <section class="card">
     <div class="card-head"><h2>{{icon "package"}} Parts used</h2>{{if $s.Parts}}<span class="meta">{{plural (len $s.Parts) "part"}}</span>{{end}}</div>

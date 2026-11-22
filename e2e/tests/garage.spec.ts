@@ -1856,9 +1856,12 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   // heading centred in it, and the line under it (Archived, chips, badges,
   // then text) runs the full width, under the buttons too: 4px under the
   // row. In a main column under 680px (a phone, a narrow window) the heading
-  // is at the top, the line 4px below, then the buttons. The item page once
-  // centred its heading against its buttons, 3px lower than the rest, with
-  // its badges 15px below.
+  // is at the top, the line 4px below, then the buttons 12px below that.
+  // What follows starts 18px under the header. The item page once centred
+  // its heading against its buttons, 3px lower than the rest, with its
+  // badges 15px below; nine pages wrote the line as a <p>, whose margin put
+  // 30px under the header instead of 18. layout.html now writes the header
+  // (TestPageHeads keeps pages from writing their own).
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
@@ -1879,7 +1882,7 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   const archivedVehicle = await maybe("/vehicles?archived=1", "a.vehicle-card");
   const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
-    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/no-such-page", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
   const problems: string[] = [];
   // And the pages that show the Working on bar: the header starts below it.
   const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
@@ -1899,11 +1902,13 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
       const contentTop = bar
         ? bar.getBoundingClientRect().bottom + parseFloat(getComputedStyle(bar).marginBottom)
         : main.getBoundingClientRect().top + parseFloat(getComputedStyle(main).paddingTop);
-      const h1 = document.querySelector(".page-head h1");
-      if (!h1) return null;
+      const heads = document.querySelectorAll(".page-head");
+      const head = heads[0];
+      const h1 = head?.querySelector(":scope > h1");
+      if (!head || !h1) return null;
       const r = h1.getBoundingClientRect();
-      const sub = h1.parentElement?.querySelector(":scope > .sub") ?? null;
-      const actions = document.querySelector(".page-head .actions");
+      const sub = head.querySelector(":scope > .sub");
+      const actions = head.querySelector(":scope > .actions");
       // The line's order: Archived 0, chips 1, other badges 2, text 3.
       const rank = (el: Element) => {
         if (el.classList.contains("badge") && /^\s*Archived/.test(el.textContent ?? "")) return 0;
@@ -1911,33 +1916,41 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
         if (el.matches(".badge")) return 2;
         return 3;
       };
-      const ranks = sub && sub.matches(".flex") ? [...sub.children].map(rank) : [];
+      const ranks = sub ? [...sub.children].map(rank) : [];
+      // The first box after the header that takes up room.
+      let next = head.nextElementSibling;
+      while (next && (getComputedStyle(next).display === "none" || !next.getClientRects().length)) next = next.nextElementSibling;
+      const above = sub ?? h1;
       return {
         narrow,
         // The heading row is a button tall: the heading's line (32px)
         // centred in 36px. A phone's smaller heading starts the column.
         want: narrow ? { top: 0, gap: 4 } : { top: (36 - Math.round(r.height)) / 2, gap: 4 + (36 - Math.round(r.height)) / 2 },
-        inTitle: h1.parentElement?.classList.contains("page-title") ?? false,
+        count: heads.length,
+        inMain: head.parentElement === main,
         top: Math.round(r.top - contentTop),
         gap: sub ? Math.round(sub.getBoundingClientRect().top - r.bottom) : null,
         ordered: ranks.every((x, i) => i === 0 || ranks[i - 1] <= x),
         ranks: ranks.join(""),
-        badgeInText: [...document.querySelectorAll(".page-head p.sub")].some((p) => p.querySelector(".chip, .badge")),
+        // Text on the line is in a <span>, so it lines up with the chips.
+        bareText: sub ? [...sub.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim()) : false,
+        under: next ? { name: next.className || next.tagName.toLowerCase(), gap: Math.round(next.getBoundingClientRect().top - head.getBoundingClientRect().bottom) } : null,
         underButtons: sub && actions ? Math.round(sub.getBoundingClientRect().right) >= Math.round(actions.getBoundingClientRect().right) : null,
-        buttonsAfter: sub && actions ? actions.getBoundingClientRect().top >= sub.getBoundingClientRect().bottom : null,
+        buttonsGap: actions ? Math.round(actions.getBoundingClientRect().top - above.getBoundingClientRect().bottom) : null,
       };
     });
     if (!m) {
       problems.push(`${entry}: no .page-head h1`);
       continue;
     }
-    if (!m.inTitle) problems.push(`${entry}: the h1 is not in .page-title`);
+    if (m.count !== 1 || !m.inMain) problems.push(`${entry}: ${m.count} page headers${m.inMain ? "" : ", not in .main"}; want the layout's one`);
     if (m.top !== m.want.top) problems.push(`${entry}: the heading is ${m.top}px below the top of the content, not ${m.want.top}`);
     if (m.gap !== null && m.gap !== m.want.gap) problems.push(`${entry}: the line under the heading is ${m.gap}px below it, not ${m.want.gap}`);
     if (!m.ordered) problems.push(`${entry}: the line is out of order (${m.ranks}; want Archived 0, chips 1, badges 2, text 3)`);
-    if (m.badgeInText) problems.push(`${entry}: a chip or badge inside a <p class="sub"> sentence`);
+    if (m.bareText) problems.push(`${entry}: text on the line outside a <span>`);
+    if (m.under && m.under.gap !== 18) problems.push(`${entry}: ${m.under.name} is ${m.under.gap}px under the header, not 18`);
     if (!m.narrow && m.underButtons === false) problems.push(`${entry}: the line stops short of the buttons instead of running under them`);
-    if (m.narrow && m.buttonsAfter === false) problems.push(`${entry}: in a narrow column the buttons come before the line`);
+    if (m.narrow && m.buttonsGap !== null && m.buttonsGap !== 12) problems.push(`${entry}: in a narrow column the buttons are ${m.buttonsGap}px under the line, not 12`);
   }
   expect(problems).toEqual([]);
 });

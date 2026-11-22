@@ -1,11 +1,7 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}Bought {{.Data.Entry.Title}}{{end}}
+{{define "head-line"}}<span>{{if .Data.Entry.ItemID}}This adds the amount to stock and takes it off the list. If you bought less than listed, the rest stays on the list.{{else}}This isn't an item in stock yet.{{end}}</span>{{end}}
 {{define "content"}}{{$d := .Data}}{{$m := $d.Move}}{{$e := $m.Errors}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>Bought {{$d.Entry.Title}}</h1>
-    {{if $d.Entry.ItemID}}<p class="sub">This adds the amount to stock and takes it off the list. If you bought less than listed, the rest stays on the list.</p>
-    {{else}}<p class="sub">This isn't an item in stock yet.</p>{{end}}
-  </div>
-</div>
 {{if not $d.Entry.ItemID}}
 {{if $d.Matches}}{{template "shopping-matches" (dict "EntryID" $d.Entry.ID "Version" $d.Entry.Version "Matches" $d.Matches "V" $d.V)}}{{end}}
 <div class="card card-body{{if $d.Matches}} mt{{end}}">

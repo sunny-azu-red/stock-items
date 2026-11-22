@@ -1,17 +1,14 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}Edit {{.Data.Name}}{{end}}
+{{define "head-line"}}{{$d := .Data}}{{$m := $d.Movement}}
+{{if $m.ItemID}}<span class="badge badge-muted">{{icon "package"}} {{$m.ItemName}}</span>{{end}}
+{{with $d.Item}}{{if .ID}}{{template "stock-badge" (stockBadge . true)}}{{end}}{{end}}
+{{if not $d.Gone}}<span>Saving adjusts the stock by the difference.</span>{{end}}
+{{end}}
+{{define "head-actions"}}{{$d := .Data}}{{$m := $d.Movement}}
+{{if not $d.Gone}}<form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete"><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit" title="The stock changes by {{$d.Undo}}; you can undo it">{{icon "trash-2"}} Delete</button></form>{{end}}
+{{end}}
 {{define "content"}}{{$d := .Data}}{{$m := $d.Movement}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>Edit {{$d.Name}}</h1>
-    <div class="sub flex">
-      {{if $m.ItemID}}<span class="badge badge-muted">{{icon "package"}} {{$m.ItemName}}</span>{{end}}
-      {{with $d.Item}}{{if .ID}}{{template "stock-badge" (stockBadge . true)}}{{end}}{{end}}
-      {{if not $d.Gone}}<span>Saving adjusts the stock by the difference.</span>{{end}}
-    </div>
-  </div>
-  {{if not $d.Gone}}<div class="actions">
-    <form class="inline-form" method="post" action="/movements/{{$m.ID}}/delete"><input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$m.Version}}"><button class="btn btn-danger" type="submit" title="The stock changes by {{$d.Undo}}; you can undo it">{{icon "trash-2"}} Delete</button></form>
-  </div>{{end}}
-</div>
 <form class="card page-form form card-body" method="post" action="/movements/{{$m.ID}}" novalidate>
   <input type="hidden" name="back" value="{{$d.Back}}"><input type="hidden" name="version" value="{{$f.Version}}">
   {{template "form-key" $f.FormKey}}

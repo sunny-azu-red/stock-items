@@ -53,8 +53,42 @@ type View struct {
 	// after this response (see workingFor).
 	WorkingOn     *stock.Vehicle
 	WorkingCookie string
+	// Head is the page header, which the layout writes from the page's
+	// head-* blocks (see renderHead).
+	Head PageHead
 	// Data is the page specific payload.
 	Data any
+}
+
+// PageHead is a page's header, rendered from its template's blocks:
+// head-title (required), head-line, head-actions and head-lead. The layout
+// writes the header's markup once (docs/design.md#7-page-headers), so every
+// page gets the same one; a block that renders nothing leaves no element.
+type PageHead struct {
+	Lead, Title, Line, Actions template.HTML
+}
+
+// renderHead renders the page's head-* blocks with v, trimmed.
+func renderHead(t *template.Template, v View) (PageHead, error) {
+	var h PageHead
+	for _, b := range []struct {
+		name string
+		dst  *template.HTML
+	}{{"head-lead", &h.Lead}, {"head-title", &h.Title}, {"head-line", &h.Line}, {"head-actions", &h.Actions}} {
+		if t.Lookup(b.name) == nil {
+			if b.name == "head-title" {
+				return h, errors.New("the page has no head-title block")
+			}
+			continue
+		}
+		var buf bytes.Buffer
+		if err := t.ExecuteTemplate(&buf, b.name, v); err != nil {
+			return h, err
+		}
+		//nolint:gosec // html/template's own output, escaped
+		*b.dst = template.HTML(strings.TrimSpace(buf.String()))
+	}
+	return h, nil
 }
 
 // Flash is a one-time message shown after a redirect.
@@ -241,6 +275,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	if n, err := s.store.CountTrash(r.Context()); err == nil {
 		v.TrashCount = n
 	}
+	head, err := renderHead(t, v)
+	if err != nil {
+		s.serverError(w, r, fmt.Errorf("render %s header: %w", page, err))
+		return
+	}
+	v.Head = head
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", v); err != nil {
 		s.serverError(w, r, fmt.Errorf("render %s: %w", page, err))

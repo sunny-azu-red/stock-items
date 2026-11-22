@@ -1,35 +1,29 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-lead"}}{{$v := .Data.Vehicle}}<span class="avatar" style="{{chipStyle $v.Color}}">{{icon $v.Kind.Icon}}</span>{{end}}
+{{define "head-title"}}{{.Data.Vehicle.Name}}{{end}}
+{{define "head-line"}}{{$v := .Data.Vehicle}}
+{{if $v.Archived}}{{template "archived-date-badge" $v.ArchivedAt}}{{end}}
+<span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
+{{end}}
+{{define "head-actions"}}{{$d := .Data}}{{$v := $d.Vehicle}}
+{{/* The way to the list. While a vehicle is worked on, the list and the
+     other vehicles are out of view (working.go): this is its page, and
+     the bar's × leads back to them. */}}
+{{if not .WorkingOn}}<a class="btn btn-ghost" href="/vehicles{{if $v.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Vehicles</a>{{end}}
+<a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
+{{if not $v.Archived}}
+<a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
+<a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
+{{end}}
+{{if $v.Archived}}
+<form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/restore"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
+{{else if or $d.ServiceCount $d.KitCount}}
+<form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/archive"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn" type="submit" title="It has {{plural $d.ServiceCount "service"}} and {{plural $d.KitCount "kit"}}, so it is archived, not deleted: it leaves the vehicle lists and reminders, keeps its services and kits, and you can restore it">{{icon "archive"}} Archive</button></form>
+{{else}}
+<form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/delete"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn btn-danger" type="submit" title="Its items stay in stock; you can undo it">{{icon "trash-2"}} Delete</button></form>
+{{end}}
+{{end}}
 {{define "content"}}{{$d := .Data}}{{$v := $d.Vehicle}}
-<div class="page-head">
-  <div class="vehicle-hero" style="{{chipStyle $v.Color}}">
-    <span class="avatar">{{icon $v.Kind.Icon}}</span>
-    <div class="page-title">
-      <h1>{{$v.Name}}</h1>
-      <div class="sub flex">
-        {{if $v.Archived}}{{template "archived-date-badge" $v.ArchivedAt}}{{end}}
-        <span>{{with $v.Subtitle}}{{.}} · {{end}}{{$v.Kind.Label}}</span>
-      </div>
-    </div>
-  </div>
-  <div class="actions">
-    {{/* The way to the list. While a vehicle is worked on, the list and the
-         other vehicles are out of view (working.go): this is its page, and
-         the bar's × leads back to them. */}}
-    {{if not .WorkingOn}}<a class="btn btn-ghost" href="/vehicles{{if $v.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Vehicles</a>{{end}}
-    <a class="btn" href="/vehicles/{{$v.ID}}/edit">{{icon "pencil"}} Edit</a>
-    {{if not $v.Archived}}
-    <a class="btn" href="/services/new?vehicle={{$v.ID}}">{{icon "wrench"}} Log service</a>
-    <a class="btn btn-primary" href="/items/new?vehicle={{$v.ID}}">{{icon "plus"}} Add item</a>
-    {{end}}
-    {{if $v.Archived}}
-    <form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/restore"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
-    {{else if or $d.ServiceCount $d.KitCount}}
-    <form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/archive"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn" type="submit" title="It has {{plural $d.ServiceCount "service"}} and {{plural $d.KitCount "kit"}}, so it is archived, not deleted: it leaves the vehicle lists and reminders, keeps its services and kits, and you can restore it">{{icon "archive"}} Archive</button></form>
-    {{else}}
-    <form class="inline-form" method="post" action="/vehicles/{{$v.ID}}/delete"><input type="hidden" name="version" value="{{$v.Version}}"><button class="btn btn-danger" type="submit" title="Its items stay in stock; you can undo it">{{icon "trash-2"}} Delete</button></form>
-    {{end}}
-  </div>
-</div>
-
 <div class="split">
   <div class="stack">
     <section class="card">

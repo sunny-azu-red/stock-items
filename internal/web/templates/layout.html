@@ -64,6 +64,14 @@
   <main class="main" id="main" tabindex="-1">
     {{template "working-on" .}}
     {{template "flash" .Flash}}
+    {{/* The page header, the same on every page (docs/design.md#7-page-headers):
+         a page only defines its head-* blocks (render.go, renderHead). */}}
+    <div class="page-head" id="page-head">
+      {{.Head.Lead}}
+      <h1>{{.Head.Title}}</h1>
+      {{with .Head.Line}}<div class="sub">{{.}}</div>{{end}}
+      {{with .Head.Actions}}<div class="actions">{{.}}</div>{{end}}
+    </div>
     {{template "content" .}}
   </main>
 </div>

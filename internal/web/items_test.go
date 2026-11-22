@@ -123,7 +123,7 @@ func TestStockFilterDetails(t *testing.T) {
 	expect(t, a.get("/stock?v="+itoa(k390)+"&v="+itoa(k390)+"&match=all"), http.StatusOK, "Rear Brake Pads")
 	// The parts htmx swaps out of band are always present.
 	rec := a.get("/stock?v=" + itoa(k390) + "&v=" + itoa(k1290))
-	expect(t, rec, http.StatusOK, `id="stock-head"`, `id="filter-all"`, `id="match-toggle"`, "Fits all")
+	expect(t, rec, http.StatusOK, `id="page-head"`, `id="filter-all"`, `id="match-toggle"`, "Fits all")
 }
 
 func TestItemEditFormDoesNotUndoStockChanges(t *testing.T) {
@@ -532,7 +532,7 @@ func TestArchivedLeadsTheLine(t *testing.T) {
 		rec := a.get(path)
 		expect(t, rec, http.StatusOK)
 		body := rec.Body.String()
-		head := body[strings.Index(body, `<div class="page-head">`):]
+		head := body[strings.Index(body, `<div class="page-head"`):]
 		head = head[:strings.Index(head, `<div class="actions">`)]
 		archived := strings.Index(head, "Archived ")
 		if archived < 0 {

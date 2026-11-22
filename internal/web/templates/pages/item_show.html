@@ -1,31 +1,27 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}{{.Data.Item.DisplayName}}{{end}}
+{{define "head-line"}}{{$d := .Data}}{{$it := $d.Item}}
+{{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
+{{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
+{{with $it.Category}}<span class="badge badge-muted">{{icon "tag"}} {{.}}</span>{{end}}
+{{template "stock-badge" (stockBadge $it false)}}
+{{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
+{{if $it.Archived}}<span>Left out of stock, part lists and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
+{{end}}
+{{define "head-actions"}}{{$d := .Data}}{{$it := $d.Item}}
+<a class="btn btn-ghost" href="/stock{{if $it.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Stock</a>
+<a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
+<a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
+{{if $it.Archived}}
+<form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
+{{else if $d.Usage.InUse}}
+<form class="inline-form" method="post" action="/items/{{$it.ID}}/archive"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn" type="submit" title="It is used in {{$d.Usage}}, so it is archived, not deleted: it leaves the stock list{{if $d.OnShopping}} and the shopping list{{end}}, stays in {{$d.Usage}}, and you can restore it">{{icon "archive"}} Archive</button></form>
+{{end}}
+{{if not $d.Usage.InUse}}
+<form class="inline-form" method="post" action="/items/{{$it.ID}}/delete"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
+{{end}}
+{{end}}
 {{define "content"}}{{$d := .Data}}{{$it := $d.Item}}{{$m := $d.Move}}{{$e := $m.Errors}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>{{$it.DisplayName}}</h1>
-    <div class="sub flex">
-      {{if $it.Archived}}{{template "archived-date-badge" $it.ArchivedAt}}{{end}}
-      {{template "vehicle-chips" (dict "IDs" $it.VehicleIDs "Vehicles" $d.VehicleMap)}}
-      {{with $it.Category}}<span class="badge badge-muted">{{icon "tag"}} {{.}}</span>{{end}}
-      {{template "stock-badge" (stockBadge $it false)}}
-      {{if $d.ExpiryState}}{{template "expiry-badge" $it}}{{end}}
-      {{if $it.Archived}}<span>Left out of stock, part lists and suggestions. Its history is kept{{with $d.Usage.String}}, and so are the {{.}} it is part of{{end}}.</span>{{end}}
-    </div>
-  </div>
-  <div class="actions">
-    <a class="btn btn-ghost" href="/stock{{if $it.Archived}}?archived=1{{end}}">{{icon "arrow-left"}} Stock</a>
-    <a class="btn" href="/items/{{$it.ID}}/edit">{{icon "pencil"}} Edit</a>
-    <a class="btn" href="/items/new?from={{$it.ID}}" title="Start a similar item">{{icon "copy"}} Duplicate</a>
-    {{if $it.Archived}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/restore"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
-    {{else if $d.Usage.InUse}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/archive"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn" type="submit" title="It is used in {{$d.Usage}}, so it is archived, not deleted: it leaves the stock list{{if $d.OnShopping}} and the shopping list{{end}}, stays in {{$d.Usage}}, and you can restore it">{{icon "archive"}} Archive</button></form>
-    {{end}}
-    {{if not $d.Usage.InUse}}
-    <form class="inline-form" method="post" action="/items/{{$it.ID}}/delete"><input type="hidden" name="version" value="{{$it.Version}}"><button class="btn btn-danger" type="submit">{{icon "trash-2"}} Delete</button></form>
-    {{end}}
-  </div>
-</div>
-
 <div class="split">
   <div class="stack">
     <section class="card">

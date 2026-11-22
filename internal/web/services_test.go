@@ -901,8 +901,8 @@ func TestServiceFormHeader(t *testing.T) {
 	}
 	// From the vehicle, the form's Vehicle field still chooses it: no chip.
 	page = a.get("/services/new?vehicle=" + itoa(k390))
-	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `<p class="sub">The parts below are taken from stock when you save.</p>`)
-	expectNot(t, page, `<div class="sub flex">`, "<h1>Log service · ", "<title>Log service · KTM 390")
+	expect(t, page, http.StatusOK, "<h1>Log service</h1>", `<div class="sub"><span>The parts below are taken from stock when you save.</span></div>`)
+	expectNot(t, page, "<h1>Log service · ", "<title>Log service · KTM 390")
 }
 
 // A kit with an intermediate schedule, the same item in both parts lists,

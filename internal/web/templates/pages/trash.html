@@ -1,16 +1,13 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}Trash{{end}}
+{{define "head-line"}}<span>Everything you deleted stays here until you empty it, and can be put back as it was.</span>{{end}}
+{{define "head-actions"}}
+{{if .Data}}
+<button class="btn btn-danger" type="button" commandfor="confirm-empty" command="show-modal">{{icon "trash-2"}} Empty trash</button>
+{{template "confirm-dialog" (dict "ID" "confirm-empty" "Title" "Empty the trash?" "Text" "Everything here is deleted permanently. It can't be restored after that." "Action" "/trash/empty" "Button" "Empty trash")}}
+{{end}}
+{{end}}
 {{define "content"}}{{$entries := .Data}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>Trash</h1>
-    <p class="sub">Everything you deleted stays here until you empty it, and can be put back as it was.</p>
-  </div>
-  {{if $entries}}
-  <div class="actions">
-    <button class="btn btn-danger" type="button" commandfor="confirm-empty" command="show-modal">{{icon "trash-2"}} Empty trash</button>
-    {{template "confirm-dialog" (dict "ID" "confirm-empty" "Title" "Empty the trash?" "Text" "Everything here is deleted permanently. It can't be restored after that." "Action" "/trash/empty" "Button" "Empty trash")}}
-  </div>
-  {{end}}
-</div>
 <section class="card">
   {{if $entries}}
   <ul class="list">

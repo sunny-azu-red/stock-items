@@ -1,10 +1,6 @@
+{{/* The page header (layout.html writes it from these). */}}
+{{define "head-title"}}{{$d := .Data}}{{if $d.IsNew}}Add item{{else}}Edit {{$d.Form.Stored}}{{end}}{{end}}
 {{define "content"}}{{$d := .Data}}{{$f := $d.Form}}{{$e := $f.Errors}}
-<div class="page-head">
-  <div class="page-title">
-    <h1>{{if $d.IsNew}}Add item{{else}}Edit {{$f.Stored}}{{end}}</h1>
-  </div>
-</div>
-
 {{if $d.Matches}}<div class="mb">{{template "shopping-matches" (dict "EntryID" $f.ShoppingID "Version" $d.ShoppingVersion "Matches" $d.Matches)}}</div>{{end}}
 <form class="card page-form" method="post" action="{{if $d.IsNew}}/items{{else}}/items/{{$f.ID}}{{end}}" novalidate>
   {{/* Enter submits with the first submit button in the form: make that a plain save, not "Save & add another". Out of sight, focus and the accessibility tree. */}}

@@ -806,20 +806,20 @@
     & input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
     :is(.filters-row, .results-head) & :is(label, a) { padding: 6px 11px; }
     /* On a form it is a field: it fills its field like an input, the
-       options sized to their labels, and when the field is short the
-       longest label is cut with "…" (its text is a .seg-text; the label's
-       title says it whole). A long one spans two columns (.span-2, at
-       .form-grid); Counted in has a line of its own, at its natural size
-       (.own-line). */
+       options sized to their labels. A long one spans two columns
+       (.span-2, at .form-grid); Counted in has a line of its own, at its
+       natural size (.own-line). The options are grid columns, which grow
+       evenly from nothing up to their label's width: when the field is
+       short, the short labels stay whole and the longest is cut with "…"
+       (the label's title says it whole); with room to spare, each gets an
+       even share of it. The label text (.seg-text) is a whole number of
+       pixels wide, so each option is too. */
     .field > & {
-      display: flex;
-      & :is(label, a) { flex: 1 1 auto; min-width: 0; justify-content: center; }
+      display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, auto);
+      & :is(label, a) { width: auto; min-width: 0; justify-content: center; }
     }
-    .field.own-line > & {
-      display: inline-flex; justify-self: start;
-      & :is(label, a) { flex: 0 1 auto; }
-    }
-    & .seg-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .field.own-line > & { display: inline-grid; justify-self: start; }
+    & .seg-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; width: calc-size(fit-content, round(up, size, 1px)); }
     /* Apart from the actions beside it: 12px with the bar's 8px gap. */
     .results-head & { margin-right: 4px; }
   }

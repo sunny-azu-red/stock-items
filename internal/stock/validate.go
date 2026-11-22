@@ -655,7 +655,7 @@ func (in *ShoppingInput) Normalize() {
 func (in ShoppingInput) Validate() Errors {
 	errs := Errors{}
 	if in.ItemID == nil && in.FreeText == "" {
-		errs.Add("free_text", "Pick an item or describe what to buy")
+		errs.Add("item", "Choose an item or type what to buy")
 	}
 	if in.Quantity != nil && *in.Quantity <= 0 {
 		errs.Add("quantity", "Quantity must be greater than zero")
@@ -664,7 +664,7 @@ func (in ShoppingInput) Validate() Errors {
 		errs.Add("quantity", "Unknown unit")
 	}
 	if utf8.RuneCountInString(in.FreeText) > maxShortText {
-		errs.Add("free_text", "That is too long (max 200 characters)")
+		errs.Add("item", "That is too long (max 200 characters)")
 	}
 	limitText(errs, maxShortText, "Note", in.Note)
 	return errs

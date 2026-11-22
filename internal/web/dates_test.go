@@ -98,7 +98,7 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 
 	t.Run("deleted today is the local day", func(t *testing.T) {
 		for _, name := range []string{"Chain lube", "Brake fluid"} {
-			expect(t, a.post("/shopping", url.Values{"free_text": {name}}), http.StatusSeeOther)
+			expect(t, a.post("/shopping", url.Values{"item": {name}}), http.StatusSeeOther)
 		}
 		entries, err := a.store.ListShopping(ctx)
 		if err != nil || len(entries) != 2 {

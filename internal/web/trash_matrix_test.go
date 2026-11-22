@@ -80,7 +80,7 @@ func trashKinds() []struct {
 		{store.TrashService, fromRecord(rs[3])},
 		{store.TrashMovement, fromRecord(rs[4])},
 		{store.TrashShopping, func(t *testing.T, a *testApp) trashRecord {
-			expect(t, a.post("/shopping", url.Values{"free_text": {"Zip ties"}}), http.StatusSeeOther)
+			expect(t, a.post("/shopping", url.Values{"item": {"Zip ties"}}), http.StatusSeeOther)
 			list := mustShopping(t, a)
 			del := "/shopping/" + itoa(list[0].ID) + "/delete"
 			// Its stale form is the remove button itself.

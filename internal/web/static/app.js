@@ -202,7 +202,6 @@
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
     if (e.target.matches("select[data-part-unit]")) updateStockBadges(e.target);
-    if (e.target.matches("select[data-unit-source]")) followItemUnits(e.target, e.target.form);
     if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
     if (e.target.matches("#vehicle_id")) showKitStarts(e.target);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
@@ -356,7 +355,7 @@
   function updatePartNote(sel) {
     var row = sel.closest(".row-line");
     if (!row) return;
-    followItemUnits(sel, row);
+    followItemUnits(sel.value ? sel.options[sel.selectedIndex] : null, row);
     updateStockBadges(row);
   }
 
@@ -410,9 +409,29 @@
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, cfg.sep);
     return parts.join(".") + " " + small;
   }
-  function updateStockBadges(el) {
+  // stockBadgeFor is the stock badge of an item's <option> (data-have,
+  // data-have-base, data-low, data-min, data-unit) when need (base units, 0
+  // for none) is asked of it: a copy of the page's template, filled in.
+  function stockBadgeFor(opt, need) {
     var tpl = document.getElementById("stock-badges");
-    if (!tpl) return;
+    if (!tpl) return null;
+    var have = parseFloat(opt.getAttribute("data-have-base")) || 0;
+    var level = have <= 0 ? "out" : need > have ? "short" : opt.hasAttribute("data-low") ? "low" : "ok";
+    var badge = tpl.content.querySelector('[data-stock-level="' + level + '"]');
+    if (!badge) return null;
+    badge = badge.cloneNode(true);
+    var fill = function (s) {
+      return s.replace("{have}", opt.getAttribute("data-have"))
+        .replace("{need}", formatQty(need, opt.getAttribute("data-unit")))
+        .replace("{min}", opt.getAttribute("data-min") || "");
+    };
+    var last = badge.lastChild;
+    if (last && last.nodeType === 3) last.nodeValue = fill(last.nodeValue);
+    if (badge.title) badge.title = fill(badge.title);
+    return badge;
+  }
+  function updateStockBadges(el) {
+    if (!document.getElementById("stock-badges")) return;
     var group = el.closest("[data-stock-need]");
     var row = el.closest(".part-line");
     var rows = group ? group.querySelectorAll(".part-line") : row ? [row] : [];
@@ -426,7 +445,7 @@
       var base = opt ? opt.getAttribute("data-unit") : "";
       var q = opt && group && qty ? readAmount(qty.value, unit ? unit.value : "", base) : null;
       if (q) need[sel.value] = Math.round(((need[sel.value] || 0) + q) * 100) / 100;
-      picked.push({ row: r, opt: opt, id: sel ? sel.value : "", base: base });
+      picked.push({ row: r, opt: opt, id: sel ? sel.value : "" });
     });
     picked.forEach(function (p) {
       var slot = p.row.querySelector("[data-stock-badge]");
@@ -434,21 +453,11 @@
       slot.textContent = "";
       var short = false;
       if (p.opt) {
-        var have = parseFloat(p.opt.getAttribute("data-have-base")) || 0;
         var n = need[p.id] || 0;
-        var level = have <= 0 ? "out" : n > have ? "short" : p.opt.hasAttribute("data-low") ? "low" : "ok";
-        short = level === "short" || (level === "out" && n > 0);
-        var badge = tpl.content.querySelector('[data-stock-level="' + level + '"]');
+        var badge = stockBadgeFor(p.opt, n);
         if (badge) {
-          badge = badge.cloneNode(true);
-          var fill = function (s) {
-            return s.replace("{have}", p.opt.getAttribute("data-have"))
-              .replace("{need}", formatQty(n, p.base))
-              .replace("{min}", p.opt.getAttribute("data-min") || "");
-          };
-          var last = badge.lastChild;
-          if (last && last.nodeType === 3) last.nodeValue = fill(last.nodeValue);
-          if (badge.title) badge.title = fill(badge.title);
+          var level = badge.getAttribute("data-stock-level");
+          short = level === "short" || (level === "out" && n > 0);
           slot.appendChild(badge);
         }
       }
@@ -460,11 +469,11 @@
     });
   }
 
-  // Next to an item select, the quantity's hint and unit select follow the
-  // chosen item: only its units are offered, preferring the larger one (L, kg).
-  function followItemUnits(sel, scope) {
+  // Next to an item picker, the quantity's hint and unit select follow the
+  // chosen item's <option> (null for none): only its units are offered,
+  // preferring the larger one (L, kg).
+  function followItemUnits(opt, scope) {
     if (!scope) return;
-    var opt = sel.options[sel.selectedIndex];
     var qty = scope.querySelector("input[data-part-qty]");
     if (qty) {
       // Keep the generic hint while no item is chosen.
@@ -490,14 +499,29 @@
   // datalist popup cannot be styled and mixes in autofill history. Without
   // JS the plain datalist still works. The list is a
   // popover so cards with overflow: clip do not cut it off.
+  // An option for a stock item (data-have, as the part rows' options) shows
+  // its stock badge. With data-new-entry ("Something new: “{text}”") on the
+  // input, the list ends with that entry for text that names no option.
+  // Picking an entry fires "combo-pick" on the input, its <option> (null
+  // for the new entry) as the detail, before "input" and "change".
   var comboSeed = 0;
+  // namesOption is stock.NamesItem for an <option>: the text is its name
+  // (data-name, else its value) or "brand name", ignoring case and spaces.
+  function namesOption(text, opt) {
+    var t = text.trim().toLowerCase();
+    if (!t) return false;
+    var name = opt.hasAttribute("data-name") ? opt.getAttribute("data-name") : opt.value;
+    var brand = opt.getAttribute("data-brand") || "";
+    return t === name.trim().toLowerCase() || t === (brand + " " + name).trim().toLowerCase();
+  }
   function enhanceCombo(input) {
     var list = document.getElementById(input.getAttribute("list"));
     if (!list) return;
     if (input.closest(".combo")) return;
     if (!input.id) input.id = "combo-" + (++comboSeed);
-    var values = Array.prototype.map.call(list.options, function (o) { return o.value; });
-    if (!values.length) return; // no chevron that opens nothing
+    var entries = Array.prototype.slice.call(list.options);
+    if (!entries.length) return; // no chevron that opens nothing
+    var newEntry = input.getAttribute("data-new-entry");
     var wrap = document.createElement("div");
     wrap.className = "combo";
     input.parentNode.insertBefore(wrap, input);
@@ -525,14 +549,31 @@
     function show(filter) {
       var q = filter.trim().toLowerCase();
       box.textContent = "";
-      values.forEach(function (v, i) {
-        if (q && v.toLowerCase().indexOf(q) < 0) return;
+      entries.forEach(function (o, i) {
+        if (q && o.value.toLowerCase().indexOf(q) < 0) return;
         var li = document.createElement("li");
         li.id = box.id + "-" + i;
         li.setAttribute("role", "option");
-        li.textContent = v;
+        li.setAttribute("data-entry", i);
+        var badge = o.hasAttribute("data-have") && stockBadgeFor(o, 0);
+        if (badge) {
+          var text = document.createElement("span");
+          text.className = "combo-text";
+          text.textContent = o.value;
+          li.append(text, badge);
+        } else {
+          li.textContent = o.value;
+        }
         box.appendChild(li);
       });
+      if (newEntry && q && !entries.some(function (o) { return namesOption(filter, o); })) {
+        var li = document.createElement("li");
+        li.id = box.id + "-new";
+        li.className = "combo-new";
+        li.setAttribute("role", "option");
+        li.textContent = newEntry.replace("{text}", filter.trim());
+        box.appendChild(li);
+      }
       if (!box.children.length) return hide();
       if (!isOpen()) box.showPopover({ source: input }); // app.css anchors it there
       input.setAttribute("aria-expanded", "true");
@@ -557,7 +598,10 @@
       }
     }
     function pick(li) {
-      input.value = li.textContent;
+      var opt = li.hasAttribute("data-entry") ? entries[Number(li.getAttribute("data-entry"))] : null;
+      if (opt) input.value = opt.value;
+      else input.value = input.value.trim(); // the new entry: what was typed
+      input.dispatchEvent(new CustomEvent("combo-pick", { bubbles: true, detail: opt }));
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       hide();
@@ -592,6 +636,41 @@
       show("");
     });
   }
+
+  // ---- Shopping's Item -----------------------------------------------------
+  // <input data-item-pick="datalist-id"> is a stock item or something new:
+  // the item picked from its list while the text still names it, else the
+  // one item the text names, as shoppingItem decides on the server. Its
+  // form's item_id, the quantity's units and the line under the field
+  // ([data-item-status]: the item's stock badge, or [data-new-status])
+  // follow.
+  function pickedItem(input) {
+    var list = document.getElementById(input.getAttribute("data-item-pick"));
+    var opts = list ? Array.prototype.slice.call(list.options) : [];
+    var id = input.form.elements.item_id.value;
+    var picked = id && opts.find(function (o) { return o.getAttribute("data-id") === id; });
+    if (picked && namesOption(input.value, picked)) return picked;
+    var named = opts.filter(function (o) { return namesOption(input.value, o); });
+    return named.length === 1 ? named[0] : null;
+  }
+  function followItem(input) {
+    var opt = pickedItem(input);
+    input.form.elements.item_id.value = opt ? opt.getAttribute("data-id") : "";
+    followItemUnits(opt, input.form);
+    var status = input.closest(".field").querySelector("[data-item-status]");
+    if (!status) return;
+    status.querySelectorAll(".badge").forEach(function (b) { b.remove(); });
+    var badge = opt && stockBadgeFor(opt, 0);
+    if (badge) status.appendChild(badge);
+    status.querySelector("[data-new-status]").hidden = !!opt || !input.value.trim();
+  }
+  document.addEventListener("combo-pick", function (e) {
+    if (!e.target.matches("input[data-item-pick]")) return;
+    e.target.form.elements.item_id.value = e.detail ? e.detail.getAttribute("data-id") : "";
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.matches("input[data-item-pick]")) followItem(e.target);
+  });
 
   // ---- Clipboard ----------------------------------------------------------
   // navigator.clipboard only exists on HTTPS or localhost, so fall back to
@@ -849,6 +928,7 @@
     root.querySelectorAll("form").forEach(syncUnits);
     root.querySelectorAll("select[data-part-item]").forEach(updatePartNote);
     root.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
+    root.querySelectorAll("input[data-item-pick]").forEach(followItem);
   }
   document.addEventListener("DOMContentLoaded", function () {
     init(document);

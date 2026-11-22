@@ -38,7 +38,7 @@ func TestMessagesNameWhatTheyActedOn(t *testing.T) {
 
 	// The shopping list.
 	flash(a.post(itemPath(pads)+"/shopping", nil), "Added OEM Rear Brake Pads to the shopping list")
-	flash(a.post("/shopping", url.Values{"free_text": {"Chain lube"}}), "Added Chain lube to the shopping list")
+	flash(a.post("/shopping", url.Values{"item": {"Chain lube"}}), "Added Chain lube to the shopping list")
 	list, err := a.store.ListShopping(ctx)
 	if err != nil {
 		t.Fatal(err)

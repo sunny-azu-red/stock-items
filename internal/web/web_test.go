@@ -428,7 +428,7 @@ func TestHostileInput(t *testing.T) {
 		{"NaN suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"NaN"}}, 303},
 		{"huge suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"1e20"}}, 303},
 		{"gone suggestion", "/shopping/suggestions", url.Values{"item_id": {"999999"}, "qty": {"1"}}, 303},
-		{"huge shopping qty", "/shopping", url.Values{"free_text": {"Lube"}, "quantity": {"1e12"}}, 422},
+		{"huge shopping qty", "/shopping", url.Values{"item": {"Lube"}, "quantity": {"1e12"}}, 422},
 		{"tiny suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"0.0001"}}, 303},
 	}
 	for _, c := range cases {
@@ -712,10 +712,10 @@ func TestAccessibilityDetails(t *testing.T) {
 	edit := a.get(rec.Header().Get("Location") + "/edit")
 	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`">`)
 	expectNot(t, edit, `for="vehicle_id"`, `id="vehicle_id"`)
-	// The item picker is marked when it is what's wrong.
+	// The item field is marked when it is what's wrong.
 	expect(t, a.post("/shopping", url.Values{"item_id": {"999999"}}), http.StatusUnprocessableEntity,
-		`<div class="field has-error">
-            <label for="item_id">`)
+		`<div class="field span-2 has-error">
+            <div class="label-row"><label for="item">`, `aria-invalid="true" aria-describedby="item-err item-tip item-status"`)
 	// A field's error is tied to it: the field says it is invalid and points
 	// at the message, beside its hint; a field without one says it is valid.
 	rec = a.post("/items", url.Values{"name": {""}, "unit": {"piece"}, "min_quantity": {"x"}})

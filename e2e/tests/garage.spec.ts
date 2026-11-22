@@ -266,7 +266,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
 test("buy something new from the shopping list", async ({ page }) => {
   await page.goto("/shopping");
-  await page.getByLabel("Something new").fill("Chain lube");
+  await field(page, "Item").fill("Chain lube");
   await page.getByLabel("Quantity").fill("2");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.locator(".list li").filter({ hasText: "Chain lube" }).getByRole("link", { name: "Bought" }).click();
@@ -285,6 +285,54 @@ test("buy something new from the shopping list", async ({ page }) => {
   await expect(page.locator("#item-qty")).toHaveText("2 pcs");
   await expect(page.locator('dt:text-is("Last price") + dd')).toHaveText("29.90 EUR / piece");
   await expect(page.locator('dt:text-is("Purchases") + dd')).toHaveText("1");
+});
+
+test("Shopping's Item suggests your stock, and the units and the badge follow it", async ({ page }) => {
+  await page.goto("/shopping");
+  await expect(page.locator(".list li").filter({ hasText: "KTM Fuel Filter" })).toHaveCount(0);
+  const item = field(page, "Item");
+  const form = page.locator('form[action="/shopping"]');
+  const itemID = form.locator('input[name="item_id"]');
+  const unit = form.locator('select[name="quantity_unit"]');
+  const status = page.locator("[data-item-status]");
+
+  // Typing lists the stock items it matches, with their stock, then
+  // "Something new".
+  await item.pressSequentially("silko");
+  const list = page.getByRole("listbox");
+  const oil = list.getByRole("option", { name: /^Silkolene 15W50 PRO 4 XP/ });
+  await expect(oil.locator(".badge")).toContainText("in stock");
+  await expect(list.getByRole("option").last()).toHaveText("Something new: “silko”");
+  await expect(status).toHaveText("Not in stock: added as something new");
+
+  // Picked: that item, its units and its stock badge.
+  await oil.click();
+  await expect(list).toBeHidden();
+  await expect(item).toHaveValue("Silkolene 15W50 PRO 4 XP");
+  await expect(itemID).not.toHaveValue("");
+  await expect(unit).toHaveValue("l");
+  await expect(unit.locator('option[value="pcs"]')).toBeDisabled();
+  await expect(status.locator(".badge")).toContainText("in stock");
+
+  // Changed: something new again.
+  await item.pressSequentially(" synthetic");
+  await expect(itemID).toHaveValue("");
+  await expect(status).toHaveText("Not in stock: added as something new");
+  await expect(unit.locator('option[value="pcs"]')).toBeEnabled();
+
+  // An item's exact name is that item, picked or not.
+  await item.fill("ktm fuel filter");
+  await expect(itemID).not.toHaveValue("");
+  await expect(unit).toHaveValue("pcs");
+  await expect(status.locator(".badge")).toBeVisible();
+  await expect(list.getByRole("option", { name: /^Something new/ })).toHaveCount(0);
+  await page.getByLabel("Quantity").fill("1");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".flash-success")).toContainText("Added KTM Fuel Filter to the shopping list");
+  const entry = page.locator(".list li").filter({ hasText: "KTM Fuel Filter" });
+  await expect(entry.getByRole("link", { name: "KTM Fuel Filter" })).toHaveAttribute("href", /^\/items\/\d+$/);
+  await entry.getByRole("button", { name: "Remove KTM Fuel Filter" }).click();
+  await expect(entry).toHaveCount(0);
 });
 
 test("edit and delete items", async ({ page }) => {
@@ -356,7 +404,7 @@ test("undo a deleted service", async ({ page }) => {
 
 test("restore a shopping entry from the trash", async ({ page }) => {
   await page.goto("/shopping");
-  await page.getByLabel("Something new").fill("Zip ties");
+  await field(page, "Item").fill("Zip ties");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Remove Zip ties" }).click();
   await expect(page.locator(".list li").filter({ hasText: "Zip ties" })).toHaveCount(0);
@@ -603,7 +651,7 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
   // The border and a 1px shadow in the ring colour, then the pale glow.
   const ring = (c: string) => new RegExp(`^${c.replace(/[()]/g, "\\$&")} 0px 0px 0px 1px, `);
 
-  const name = field(page, "Something new");
+  const name = field(page, "Item");
   await name.click();
   await expect(name).toHaveCSS("border-top-color", accent);
   await expect(name).toHaveCSS("box-shadow", ring(accent));
@@ -618,7 +666,7 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
 
   // A field with an error rings red, not purple around a red border.
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator(".has-error").getByLabel("Something new")).toBeVisible();
+  await expect(field(page.locator(".has-error"), "Item")).toBeVisible();
   await name.click();
   const danger = await colour("--danger");
   await expect(name).toHaveCSS("border-top-color", danger);
@@ -1439,7 +1487,7 @@ test("screenshots", async ({ page }, testInfo) => {
   const movement = await link("/activity", 'a[href^="/movements/"]');
   // The earlier tests leave the shopping list empty: put something on it.
   await page.goto("/shopping");
-  await page.getByLabel("Something new").fill("Chain wax");
+  await field(page, "Item").fill("Chain wax");
   await page.getByLabel("Quantity").fill("1");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator('a[href$="/bought"]')).toHaveCount(1);
@@ -1687,7 +1735,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   // Something on the shopping list, and the flash that says so.
   await page.goto("/shopping");
   if ((await page.locator('a[href$="/bought"]').count()) === 0) {
-    await page.getByLabel("Something new").fill("Chain wax");
+    await field(page, "Item").fill("Chain wax");
     await page.getByLabel("Quantity").fill("1");
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.locator(".flash")).toBeVisible();

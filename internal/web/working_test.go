@@ -633,8 +633,8 @@ func TestWorkingOnShopping(t *testing.T) {
 			">Filter</a>", "Short for the Air Filter kit")
 		expectNot(t, rec, ">Grips</a>", "Short for the Oil service kit", `aria-label="Filter by vehicle"`, chip("Alpha"), chip("Bravo"))
 		// The form adds what shows here: Alpha's and General items.
-		expect(t, rec, http.StatusOK, ">Pads (", ">Chain lube (", ">Oil (")
-		expectNot(t, rec, ">Grips (", ">Filter (")
+		expect(t, rec, http.StatusOK, `<option value="Pads"`, `<option value="Chain lube"`, `<option value="Oil"`)
+		expectNot(t, rec, `<option value="Grips"`, `<option value="Filter"`)
 		// Every count is the part's: the sidebar, the tab bar, the dashboard.
 		if n := strings.Count(rec.Body.String(), `<span class="count">3</span>`); n != 2 {
 			t.Errorf("the sidebar and the tab bar say 3 %d times, want twice", n)
@@ -686,12 +686,12 @@ func TestWorkingOnShopping(t *testing.T) {
 		// comes back to it: its forms and the Bought page carry it (v).
 		rec := a.get("/shopping?v=" + b)
 		expect(t, rec, http.StatusOK, `<input type="hidden" name="v" value="`+b+`">`, `/bought?v=`+b+`"`)
-		expectRedirect(t, a.post("/shopping", url.Values{"free_text": {"Gloves"}, "quantity": {"2"}, "v": {b}}), "/shopping?v="+b)
-		expectRedirect(t, a.post("/shopping", url.Values{"free_text": {"Gloves"}, "quantity": {"2"}}), "/shopping")
+		expectRedirect(t, a.post("/shopping", url.Values{"item": {"Gloves"}, "quantity": {"2"}, "v": {b}}), "/shopping?v="+b)
+		expectRedirect(t, a.post("/shopping", url.Values{"item": {"Gloves"}, "quantity": {"2"}}), "/shopping")
 		// A failed add comes back on that part, with its items.
-		rec = a.post("/shopping", url.Values{"free_text": {""}, "v": {b}})
-		expect(t, rec, http.StatusUnprocessableEntity, "<h1>Bravo shopping</h1>", ">Grips (")
-		expectNot(t, rec, ">Pads (")
+		rec = a.post("/shopping", url.Values{"item": {""}, "v": {b}})
+		expect(t, rec, http.StatusUnprocessableEntity, "<h1>Bravo shopping</h1>", `<option value="Grips"`)
+		expectNot(t, rec, `<option value="Pads"`)
 		list, err := a.store.ListShopping(ctx)
 		if err != nil {
 			t.Fatal(err)

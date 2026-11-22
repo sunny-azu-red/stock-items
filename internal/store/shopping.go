@@ -285,13 +285,6 @@ func (s *Store) ItemsNamed(ctx context.Context, text string) ([]stock.Item, erro
 	return s.ListItems(ctx, ItemFilter{IDs: ids})
 }
 
-// namesItem reports whether text is just an item's name or "brand name",
-// ignoring case and surrounding spaces, as ItemsNamed matches it.
-func namesItem(text, brand, name string) bool {
-	text = strings.TrimSpace(text)
-	return strings.EqualFold(text, strings.TrimSpace(name)) || strings.EqualFold(text, strings.TrimSpace(brand+" "+name))
-}
-
 // LinkShopping turns a free-text entry into an entry for an existing item,
 // restoring the item if it was archived, and returns the entry to mark
 // bought. If the item is on the list already, the free-text entry is
@@ -329,7 +322,7 @@ func (s *Store) LinkShopping(ctx context.Context, entryID int64, version int, it
 		}
 		// The text said what to buy: unless it is just the item's name, keep
 		// it in the note, as adding an item with text does.
-		if !namesItem(text, brand, name) {
+		if !stock.NamesItem(text, brand, name) {
 			note = strings.TrimSuffix(text+"; "+note, "; ")
 		}
 		// Looked up again under the item's lock, like ArchiveItem: locking

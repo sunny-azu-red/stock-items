@@ -35,7 +35,7 @@ func TestMalformedFormsAre400(t *testing.T) {
 		{"/vehicles", "application/x-www-form-urlencoded", "name=%zz"},
 		{"/vehicles/" + itoa(k390), "application/x-www-form-urlencoded", "name=a&notes=%"},
 		{"/items", "application/x-www-form-urlencoded", "name=%G0"},
-		{"/shopping", ";;;", "free_text=Oil"},
+		{"/shopping", ";;;", "item=Oil"},
 	} {
 		req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
 		req.Header.Set("Content-Type", tt.contentType)

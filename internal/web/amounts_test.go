@@ -70,7 +70,7 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 		{"service: 1.234567 kg", "/services", service(grease, "1.234567", "kg"), kg},
 		{"service: 1.0004 pieces", "/services", service(pads, "1.0004", "pcs"), whole},
 		{"service: 0.001 L", "/services", service(oil, "0.000001", "l"), "0.000001 L is 0.001 ml"},
-		{"shopping: 0.234 g", "/shopping", url.Values{"free_text": {"Paste"}, "quantity": {"0.234"}, "quantity_unit": {"g"}}, twoG},
+		{"shopping: 0.234 g", "/shopping", url.Values{"item": {"Paste"}, "quantity": {"0.234"}, "quantity_unit": {"g"}}, twoG},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := a.post(tt.path, tt.form)

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,11 +14,13 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
+// shoppingForm is Add to the list: Item is what was typed or picked, and
+// ItemID the stock item it is (0 for something new).
 type shoppingForm struct {
-	ItemID                         int64
-	FreeText, Quantity, Note, Unit string
-	FormKey                        string // see itemForm
-	Errors                         stock.Errors
+	ItemID                     int64
+	Item, Quantity, Note, Unit string
+	FormKey                    string // see itemForm
+	Errors                     stock.Errors
 }
 
 // shoppingPage is the shopping list, all of it or a vehicle's part
@@ -206,31 +209,33 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return err
 	}
-	f := shoppingForm{FreeText: formText(r, "free_text"), Quantity: formText(r, "quantity"), Unit: formText(r, "quantity_unit"),
-		Note: formText(r, "note"), FormKey: parseFormKey(r), Errors: stock.Errors{}}
+	// A form opened before Item replaced them posts free_text or item_id.
+	f := shoppingForm{Item: cmp.Or(formText(r, "item"), formText(r, "free_text")), Quantity: formText(r, "quantity"),
+		Unit: formText(r, "quantity_unit"), Note: formText(r, "note"), FormKey: parseFormKey(r), Errors: stock.Errors{}}
 	if done, err := s.savedBefore(w, r, f.FormKey, "", nil, shoppingListPath(r)); done || err != nil {
 		return err
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	in := stock.ShoppingInput{FreeText: f.FreeText, Note: f.Note, FormKey: f.FormKey}
-	title := in.FreeText // for the message
-	if id := parseOptID(formText(r, "item_id")); id != nil {
-		it, err := s.store.GetItem(r.Context(), *id)
-		if err != nil {
-			f.Errors.Add("item_id", "That item no longer exists")
-		} else {
-			f.ItemID, in.ItemID, in.Unit = *id, id, it.Unit
-			title = it.DisplayName()
-			if in.FreeText != "" {
-				// Both filled in: keep the text as a note rather than drop it.
-				if in.Note == "" {
-					in.Note = in.FreeText
-				} else {
-					in.Note = in.FreeText + "; " + in.Note
-				}
-			}
-			in.FreeText = ""
-		}
+	// The form posts to /shopping: it was the part of the vehicle worked
+	// on, or the one its chip chose (v).
+	vid, err := s.working(r)
+	if err != nil {
+		return err
+	}
+	if vid == 0 {
+		vid = listVehicle(r)
+	}
+	in := stock.ShoppingInput{FreeText: f.Item, Note: f.Note, FormKey: f.FormKey}
+	title := strings.TrimSpace(f.Item) // for the message
+	it, gone, err := s.shoppingItem(r, f.Item, vid)
+	switch {
+	case err != nil:
+		return err
+	case gone:
+		f.Errors.Add("item", "That item was archived or deleted meanwhile")
+	case it != nil:
+		f.ItemID, in.ItemID, in.Unit, in.FreeText = it.ID, &it.ID, it.Unit, ""
+		title = it.DisplayName()
 	}
 	switch {
 	case in.ItemID != nil:
@@ -268,19 +273,11 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 				f.Errors.Add(k, v)
 			}
 		case errors.Is(err, store.ErrNotFound):
-			f.Errors.Add("item_id", "That item was archived or deleted meanwhile")
+			f.ItemID = 0
+			f.Errors.Add("item", "That item was archived or deleted meanwhile")
 		default:
 			return err
 		}
-	}
-	// The form posts to /shopping: it was the part of the vehicle worked
-	// on, or the one its chip chose (v).
-	vid, err := s.working(r)
-	if err != nil {
-		return err
-	}
-	if vid == 0 {
-		vid = listVehicle(r)
 	}
 	p, err := s.loadShopping(r, f, vid)
 	if err != nil {
@@ -288,6 +285,41 @@ func (s *Server) shoppingAdd(w http.ResponseWriter, r *http.Request) error {
 	}
 	s.renderShopping(w, r, http.StatusUnprocessableEntity, p)
 	return nil
+}
+
+// shoppingItem is the stock item Add to the list's Item is, nil for
+// something new: the picked one (item_id) while the text still names it or
+// is empty (a form from before Item, which had a select); else the one
+// item the text names (stock.NamesItem) among those the form offers
+// (active, and on a vehicle's part its own and the General ones), so what
+// the line under the field said is what is saved. Several are something
+// new too, and Bought offers them. gone reports a picked item deleted or
+// archived meanwhile.
+func (s *Server) shoppingItem(r *http.Request, text string, vid int64) (it *stock.Item, gone bool, err error) {
+	if id := parseOptID(formText(r, "item_id")); id != nil {
+		picked, err := s.store.GetItem(r.Context(), *id)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, true, nil
+		} else if err != nil {
+			return nil, false, err
+		}
+		if strings.TrimSpace(text) == "" || stock.NamesItem(text, picked.Brand, picked.Name) {
+			return &picked, picked.Archived(), nil
+		}
+		// Picked, then changed: the text says what to buy.
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil, false, nil
+	}
+	named, err := s.store.ItemsNamed(r.Context(), text)
+	if err != nil {
+		return nil, false, err
+	}
+	named = slices.DeleteFunc(named, func(it stock.Item) bool { return it.Archived() || (vid != 0 && !it.Fits(vid)) })
+	if len(named) != 1 {
+		return nil, false, nil
+	}
+	return &named[0], false, nil
 }
 
 // shoppingAddSuggestions adds one or more suggestions (item_id + qty + note

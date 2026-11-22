@@ -47,6 +47,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `data-confirm`, use: `the "confirm-dialog" partial (a <dialog> opened with commandfor)`, uiOnly: true},
 		// Asking first; the photo's viewer (item_show.html) asks nothing.
 		{re: `<button[^>]*command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html", unless: `commandfor="photo-view"`},
+		{re: `>\s*(Something new|Item in stock)\s*<`, use: `"Item": one field that suggests your stock and takes anything else as something new`, uiOnly: true},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},
 		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}

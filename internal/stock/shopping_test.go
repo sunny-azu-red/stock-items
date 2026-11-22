@@ -181,3 +181,23 @@ func TestShoppingEntryFor(t *testing.T) {
 		t.Errorf("ShoppingFor(0) = %d shown, %d others", len(shown), others)
 	}
 }
+
+func TestNamesItem(t *testing.T) {
+	tests := []struct {
+		text, brand, name string
+		want              bool
+	}{
+		{"Oil Filter", "KTM", "Oil Filter", true},
+		{"  ktm oil filter ", "KTM", "Oil Filter", true},
+		{"KTM Oil Filter", "", "KTM Oil Filter", true},
+		{"Oil", "KTM", "Oil Filter", false},
+		{"KTM", "KTM", "Oil Filter", false},
+		{"", "", "", false},
+		{"  ", "KTM", " ", false},
+	}
+	for _, tt := range tests {
+		if got := NamesItem(tt.text, tt.brand, tt.name); got != tt.want {
+			t.Errorf("NamesItem(%q, %q, %q) = %v, want %v", tt.text, tt.brand, tt.name, got, tt.want)
+		}
+	}
+}

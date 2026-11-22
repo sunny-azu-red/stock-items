@@ -654,6 +654,12 @@
   .field-error { display: flex; gap: 4px; align-items: center; margin: 0; color: var(--danger); font-size: var(--text-sm); font-weight: 600; }
   .req { color: var(--danger); font-size: var(--text-sm); }
   .req-note .req { font-size: inherit; }
+  /* Under Shopping's Item: the item's stock badge, or that it is something
+     new; nothing while the field is empty. */
+  .item-status {
+    display: flex; min-width: 0; margin: 0;
+    &:not(:has(> :not([hidden]))) { display: none; }
+  }
   /* Hints that apply only while the form's "Counted in" is pieces. */
   .pieces-only { display: inline-flex; }
   form:not(:has(input[name="unit"][value="piece"]:checked)) .pieces-only { display: none; }
@@ -763,6 +769,13 @@
     border: 1px solid var(--border); border-radius: var(--radius);
     & li { padding: 7px 10px; border-radius: var(--radius-xs); cursor: pointer; }
     & li:is(:hover, [aria-selected="true"]) { background: var(--surface-2); }
+    /* A stock item's entry: its name, cut short, and its stock badge (24px)
+       at the end, the entry as tall as one without. */
+    & li:has(> .badge) { display: flex; align-items: center; gap: 8px; padding-block: 5px; }
+    & .combo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & .badge { flex: none; }
+    /* "Something new: “…”", after the items, as tall as they are. */
+    & .combo-new { color: var(--accent-strong); font-weight: 600; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-xs) var(--radius-xs); padding-top: 6px; }
   }
   @position-try --combo-below { position-area: bottom span-right; max-height: calc(100% - 12px); }
   @position-try --tip-end { position-area: bottom span-left; margin: 6px -4px 0 0; }

@@ -15,7 +15,7 @@ func TestBuySomethingNewFromShoppingList(t *testing.T) {
 	a := newApp(t)
 	a.seed()
 	ctx := context.Background()
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Chain lube"}, "quantity": {"2"}, "note": {"the white one"}}), http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{"item": {"Chain lube"}, "quantity": {"2"}, "note": {"the white one"}}), http.StatusSeeOther)
 	list, _ := a.store.ListShopping(ctx)
 	if len(list) != 1 {
 		t.Fatalf("shopping = %+v", list)
@@ -106,8 +106,8 @@ func TestSuggestionKeepsItsReason(t *testing.T) {
 
 func TestFreeTextShoppingUnits(t *testing.T) {
 	a := newApp(t)
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Coolant"}, "quantity": {"4 L"}}), http.StatusSeeOther)
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Grease"}, "quantity": {"2 bananas"}}), http.StatusUnprocessableEntity, "Unknown unit &#34;bananas&#34;: use pcs, ml, L, g or kg")
+	expect(t, a.post("/shopping", url.Values{"item": {"Coolant"}, "quantity": {"4 L"}}), http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{"item": {"Grease"}, "quantity": {"2 bananas"}}), http.StatusUnprocessableEntity, "Unknown unit &#34;bananas&#34;: use pcs, ml, L, g or kg")
 	list, _ := a.store.ListShopping(context.Background())
 	if len(list) != 1 {
 		t.Fatalf("shopping = %+v", list)
@@ -153,14 +153,14 @@ func TestShoppingListNeeds(t *testing.T) {
 	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(oil)}, "quantity": {"1"}, "quantity_unit": {"ml"}}), http.StatusSeeOther)
 	expect(t, a.get("/shopping"), http.StatusOK, "1 ml already listed")
 
-	// A bare number takes the unit select; text typed next to an item becomes its note.
-	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(pads)}, "free_text": {"sintered ones"}, "quantity": {"2"}, "quantity_unit": {"pcs"}}),
+	// A bare number takes the unit select.
+	expect(t, a.post("/shopping", url.Values{"item_id": {itoa(pads)}, "item": {"OEM Rear Brake Pads"}, "quantity": {"2"}, "quantity_unit": {"pcs"}}),
 		http.StatusSeeOther)
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Coolant"}, "quantity": {"4"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{"item": {"Coolant"}, "quantity": {"4"}, "quantity_unit": {"l"}}), http.StatusSeeOther)
 	for _, e := range mustShopping(t, a) {
 		switch e.Title() {
 		case "OEM Rear Brake Pads":
-			if e.Note != "sintered ones" || *e.Quantity != 2 {
+			if e.Note != "" || *e.Quantity != 2 {
 				t.Errorf("pads entry = %+v", e)
 			}
 		case "Coolant":
@@ -169,6 +169,111 @@ func TestShoppingListNeeds(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestShoppingItemField is Add to the list's one Item field: a stock item,
+// picked or named, or something new (shoppingItem).
+func TestShoppingItemField(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	ctx := context.Background()
+	oil, pads, filter := itemID(t, a.store, "Silkolene"), itemID(t, a.store, "Rear Brake"), itemID(t, a.store, "Hiflofiltro")
+	// add posts the form to an empty list and returns the entry it made.
+	add := func(t *testing.T, form url.Values) stock.ShoppingEntry {
+		t.Helper()
+		for _, e := range mustShopping(t, a) {
+			if _, err := a.store.DeleteShopping(ctx, e.ID, e.Version); err != nil {
+				t.Fatal(err)
+			}
+		}
+		expect(t, a.post("/shopping", form), http.StatusSeeOther)
+		list := mustShopping(t, a)
+		if len(list) != 1 {
+			t.Fatalf("shopping = %+v, want one entry", list)
+		}
+		return list[0]
+	}
+	linked := func(t *testing.T, e stock.ShoppingEntry, id int64) {
+		t.Helper()
+		if e.ItemID == nil || *e.ItemID != id || e.FreeText != "" {
+			t.Errorf("entry = %+v, want item %d", e, id)
+		}
+	}
+	free := func(t *testing.T, e stock.ShoppingEntry, text string) {
+		t.Helper()
+		if e.ItemID != nil || e.FreeText != text {
+			t.Errorf("entry = %+v, want something new %q", e, text)
+		}
+	}
+
+	t.Run("picked", func(t *testing.T) {
+		e := add(t, url.Values{"item": {"Silkolene 15W50 PRO 4 XP"}, "item_id": {itoa(oil)}, "quantity": {"1"}, "quantity_unit": {"l"}})
+		linked(t, e, oil)
+		if *e.Quantity != 1000 {
+			t.Errorf("quantity = %v, want 1000 ml", *e.Quantity)
+		}
+	})
+	t.Run("typed exact name", func(t *testing.T) {
+		linked(t, add(t, url.Values{"item": {"  silkolene 15w50 pro 4 xp "}}), oil)
+		linked(t, add(t, url.Values{"item": {"rear brake pads"}, "quantity": {"2"}}), pads) // the name alone
+	})
+	t.Run("picked then changed", func(t *testing.T) {
+		free(t, add(t, url.Values{"item": {"Silkolene 10W40"}, "item_id": {itoa(oil)}}), "Silkolene 10W40")
+	})
+	t.Run("something new with a unit", func(t *testing.T) {
+		e := add(t, url.Values{"item": {"Coolant"}, "quantity": {"4 L"}})
+		free(t, e, "Coolant")
+		if e.ItemUnit != stock.UnitML || *e.Quantity != 4000 {
+			t.Errorf("coolant = %+v, want 4 L", e)
+		}
+	})
+	t.Run("a vehicle's part names only its items", func(t *testing.T) {
+		free(t, add(t, url.Values{"item": {"Hiflofiltro Oil Filter"}, "v": {itoa(k390)}}), "Hiflofiltro Oil Filter")
+		linked(t, add(t, url.Values{"item": {"Hiflofiltro Oil Filter"}}), filter)
+	})
+	t.Run("a form from before Item", func(t *testing.T) {
+		free(t, add(t, url.Values{"free_text": {"Chain lube"}}), "Chain lube")
+		linked(t, add(t, url.Values{"free_text": {"OEM Rear Brake Pads"}}), pads)
+		linked(t, add(t, url.Values{"item_id": {itoa(pads)}, "quantity": {"2"}}), pads)
+	})
+	t.Run("empty", func(t *testing.T) {
+		before := len(mustShopping(t, a))
+		rec := a.post("/shopping", url.Values{"item": {"  "}, "quantity": {"3"}, "note": {"the white one"}})
+		expect(t, rec, http.StatusUnprocessableEntity, `<div class="field span-2 has-error">`, `id="item-err"`, `value="3"`, `value="the white one"`)
+		if n := strings.Count(rec.Body.String(), "Choose an item or type what to buy"); n != 1 {
+			t.Errorf("the error shows %d times, want once", n)
+		}
+		if n := len(mustShopping(t, a)); n != before {
+			t.Errorf("entries = %d, want %d", n, before)
+		}
+	})
+	t.Run("repeated", func(t *testing.T) {
+		form := url.Values{"item": {"Chain wax"}, "form_key": {newFormKey()}}
+		e := add(t, form)
+		expectSavedAlready(t, a.post("/shopping", form), "/shopping")
+		if list := mustShopping(t, a); len(list) != 1 || list[0].ID != e.ID {
+			t.Errorf("shopping = %+v, want Chain wax once", list)
+		}
+	})
+	t.Run("two items of that name", func(t *testing.T) {
+		in := stock.ItemInput{Brand: "KTM", Name: "Oil Filter", Unit: stock.UnitPiece}
+		in.Normalize()
+		ktm, err := a.store.CreateItem(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		free(t, add(t, url.Values{"item": {"Oil Filter"}}), "Oil Filter") // Bought offers both
+		linked(t, add(t, url.Values{"item": {"KTM Oil Filter"}}), ktm)
+	})
+	t.Run("archived", func(t *testing.T) {
+		if _, err := a.store.ArchiveItem(ctx, filter, cur(t, a.store, store.WhatItem, filter)); err != nil {
+			t.Fatal(err)
+		}
+		e := add(t, url.Values{"item": {"Hiflofiltro Oil Filter"}})
+		free(t, e, "Hiflofiltro Oil Filter")
+		expect(t, a.get("/shopping/"+itoa(e.ID)+"/bought"), http.StatusOK, "Restore and add to it")
+		expectNot(t, a.get("/shopping"), `<option value="Hiflofiltro Oil Filter"`)
+	})
 }
 
 func mustShopping(t *testing.T, a *testApp) []stock.ShoppingEntry {

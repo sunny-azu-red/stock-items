@@ -19,6 +19,14 @@ type Suggestion struct {
 	VehicleIDs []int64
 }
 
+// NamesItem reports whether text is just an item's name or "brand name",
+// ignoring case and surrounding spaces: a shopping entry's text that is
+// that item (store.ItemsNamed matches the same way).
+func NamesItem(text, brand, name string) bool {
+	text = strings.TrimSpace(text)
+	return text != "" && (strings.EqualFold(text, strings.TrimSpace(name)) || strings.EqualFold(text, strings.TrimSpace(brand+" "+name)))
+}
+
 // ShortNote is the reason a part goes on the shopping list: "Short for the
 // Air Filter kit", or "Short for the Oil change service". It names what
 // needs the part, never its vehicle: the list shows that as a chip. The

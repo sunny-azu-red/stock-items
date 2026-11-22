@@ -373,7 +373,7 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"item note with zero starting stock", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: "spare"}.Validate(), "quantity"},
 		{"vehicle purchase odometer above kept odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(5000), OdometerAtPurchase: ptr(6000), KeepOdometer: true}.Validate(), "odometer_at_purchase"},
 		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
-		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "free_text"},
+		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "item"},
 	}
 	for _, tt := range tests {
 		if _, ok := tt.errs[tt.field]; !ok {

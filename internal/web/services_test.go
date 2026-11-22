@@ -67,8 +67,8 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	}
 
 	// Free text entries and suggestions.
-	expect(t, a.post("/shopping", url.Values{"free_text": {"Chain lube"}, "quantity": {"2"}}), http.StatusSeeOther)
-	expect(t, a.post("/shopping", url.Values{}), http.StatusUnprocessableEntity, "Pick an item or describe")
+	expect(t, a.post("/shopping", url.Values{"item": {"Chain lube"}, "quantity": {"2"}}), http.StatusSeeOther)
+	expect(t, a.post("/shopping", url.Values{}), http.StatusUnprocessableEntity, "Choose an item or type what to buy")
 	expect(t, a.post("/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"2"}}), http.StatusSeeOther)
 	expect(t, a.get("/shopping"), http.StatusOK, "Chain lube", "OEM Rear Brake Pads")
 

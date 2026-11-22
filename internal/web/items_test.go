@@ -531,9 +531,7 @@ func TestArchivedLeadsTheLine(t *testing.T) {
 	for _, path := range []string{"/items/" + itoa(oil), "/kits/" + itoa(kit), "/vehicles/" + itoa(k390)} {
 		rec := a.get(path)
 		expect(t, rec, http.StatusOK)
-		body := rec.Body.String()
-		head := body[strings.Index(body, `<div class="page-head"`):]
-		head = head[:strings.Index(head, `<div class="actions">`)]
+		head := pageHead(t, rec)
 		archived := strings.Index(head, "Archived ")
 		if archived < 0 {
 			t.Errorf("%s: no Archived badge in the header", path)

@@ -21,8 +21,9 @@ func TestPageHeads(t *testing.T) {
 	if err != nil || len(pages) == 0 {
 		t.Fatalf("no page templates: %v", err)
 	}
-	// What only the layout writes.
-	own := regexp.MustCompile(`class="[^"]*\b(page-head|page-title|vehicle-hero)\b|<h1\b|class="sub\b`)
+	// What only the layout writes: the header's classes (whole names, anywhere
+	// in the list) and the heading.
+	own := regexp.MustCompile(`class="(?:[^"]*\s)?(?:page-head|page-title|vehicle-hero|sub)(?:\s[^"]*)?"|<h1\b`)
 	for _, p := range pages {
 		name := strings.TrimSuffix(path.Base(p), ".html")
 		if tmpl.pages[name].Lookup("head-title") == nil {

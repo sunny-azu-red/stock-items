@@ -13,23 +13,45 @@ import (
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
-// pageHead is the page's heading and the line under it: from .page-head to
-// its buttons (.actions) or, without buttons, to its closing tag, the first
-// </div> at the start of a line (the ones inside are indented).
+// pageHead is the page's heading and the line under it: the .page-head
+// element layout.html writes, up to its buttons (.actions).
 func pageHead(t *testing.T, rec *httptest.ResponseRecorder) string {
 	t.Helper()
-	body := rec.Body.String()
-	i := strings.Index(body, `<div class="page-head"`)
-	if i < 0 {
-		t.Fatalf("no page header in\n%s", truncate(body))
+	head := headElement(rec.Body.String())
+	if head == "" {
+		t.Fatalf("no page header in\n%s", truncate(rec.Body.String()))
 	}
-	head := body[i:]
-	for _, end := range []string{`<div class="actions">`, "\n</div>"} {
-		if j := strings.Index(head, end); j >= 0 {
-			head = head[:j]
-		}
+	if j := strings.Index(head, `<div class="actions">`); j >= 0 {
+		head = head[:j]
 	}
 	return head
+}
+
+// headElement is the page's .page-head element, from its opening tag to its
+// own closing </div> (the divs inside counted), or "" without one.
+func headElement(body string) string {
+	i := strings.Index(body, `<div class="page-head"`)
+	if i < 0 {
+		return ""
+	}
+	depth := 0
+	for j := i; j < len(body); {
+		open, end := strings.Index(body[j:], "<div"), strings.Index(body[j:], "</div>")
+		switch {
+		case end < 0:
+			return ""
+		case open >= 0 && open < end:
+			depth++
+			j += open + len("<div")
+		default:
+			depth--
+			j += end + len("</div>")
+			if depth == 0 {
+				return body[i:j]
+			}
+		}
+	}
+	return ""
 }
 
 // A chip or badge is a link only when it goes up to the record the page

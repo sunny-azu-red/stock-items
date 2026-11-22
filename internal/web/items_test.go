@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -607,5 +608,26 @@ func TestRefusedFormsKeepNewFields(t *testing.T) {
 	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_distance" value="2000"`, `name="inter_interval_months" value="6"`)
 	if !regexp.MustCompile(`(?s)id="inter-lines".*?value="` + itoa(oil) + `"[^>]* selected.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
 		t.Error("the kit form lost the intermediate part")
+	}
+}
+
+// A brand, category, location or shop typed in another case than one in
+// use is saved as the list spells it (store/spellings.go), so the list and
+// the stock show one "Motorex".
+func TestItemFormTakesTheSpellingInUse(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	rec := a.post("/items", url.Values{"name": {"Chain Clean"}, "brand": {"motorex"}, "unit": {"ml"}, "quantity": {"500"},
+		"total_price": {"9"}, "supplier": {"louis"}})
+	expect(t, rec, http.StatusSeeOther)
+	page := a.get(rec.Header().Get("Location"))
+	expect(t, page, http.StatusOK, "Motorex Chain Clean")
+	expectNot(t, page, "motorex")
+	// Then a shop in use: the next purchase's "LOUIS" is that "louis".
+	expect(t, a.post("/items", url.Values{"name": {"Chain Wax"}, "unit": {"piece"}, "quantity": {"1"}, "total_price": {"5"}, "supplier": {"LOUIS"}}),
+		http.StatusSeeOther)
+	shops, err := a.store.Suppliers(context.Background())
+	if err != nil || !slices.Equal(shops, []string{"louis"}) {
+		t.Errorf("shops = %v, %v; want louis once", shops, err)
 	}
 }

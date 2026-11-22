@@ -313,7 +313,8 @@ func TestSuppliers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Louis", "Moto24"}
+	// "Moto24" was saved as the "moto24" in use already (spellings_test.go).
+	want := []string{"Louis", "moto24"}
 	if !slices.Equal(got, want) {
 		t.Errorf("Suppliers = %v, want %v", got, want)
 	}

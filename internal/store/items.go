@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -232,6 +233,9 @@ func (s *Store) CreateItemFromShopping(ctx context.Context, entryID int64, versi
 
 // createItem inserts an item with its starting stock, SKUs and tags.
 func createItem(ctx context.Context, tx pgx.Tx, in stock.ItemInput) (int64, error) {
+	if err := spellItem(ctx, tx, 0, &in); err != nil {
+		return 0, err
+	}
 	var id int64
 	err := tx.QueryRow(ctx, `
 		INSERT INTO items (name, brand, category, unit, min_quantity, expires_on, location, notes)
@@ -292,6 +296,9 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 				return &ConflictError{Field: "unit", Message: "The unit cannot be changed once the item has stock history or is used in a kit or on the shopping list, including in the trash"}
 			}
 		}
+		if err := spellItem(ctx, tx, id, &in); err != nil {
+			return err
+		}
 		// A new version: a form opened before this save is stale now.
 		_, err = tx.Exec(ctx, `
 			UPDATE items SET version = version + 1, name = $2, brand = $3, category = $4, unit = $5, min_quantity = $6,
@@ -308,6 +315,25 @@ func (s *Store) UpdateItem(ctx context.Context, id int64, in stock.ItemInput, on
 		}
 		return replaceSKUsAndTags(ctx, tx, id, in)
 	})
+}
+
+// spellItem spells an item's brand, category and location, and its SKUs'
+// brands, as their suggestion lists do (spell), leaving out the item self
+// (0 for a new one). A SKU's brand that is the item's takes its spelling.
+func spellItem(ctx context.Context, q queryRower, self int64, in *stock.ItemInput) error {
+	err := spellEach(ctx, q, self, map[*string]string{&in.Brand: brandSpellings, &in.Category: categorySpellings, &in.Location: locationSpellings})
+	if err != nil {
+		return err
+	}
+	in.SKUs = slices.Clone(in.SKUs) // the caller's stay as they were
+	for i := range in.SKUs {
+		if strings.EqualFold(in.SKUs[i].Brand, in.Brand) {
+			in.SKUs[i].Brand = in.Brand
+		} else if in.SKUs[i].Brand, err = spell(ctx, q, brandSpellings, self, in.SKUs[i].Brand); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func replaceSKUsAndTags(ctx context.Context, tx pgx.Tx, id int64, in stock.ItemInput) error {
@@ -485,35 +511,15 @@ func (s *Store) RestoreItem(ctx context.Context, id int64, version int) error {
 
 // Categories returns the distinct categories in use, plus common defaults.
 func (s *Store) Categories(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `
-		SELECT DISTINCT ON (lower(c)) c FROM (
-			SELECT category AS c, 0 AS pref FROM items WHERE category <> ''
-			UNION SELECT unnest(ARRAY['Oil & Fluids', 'Filters', 'Brakes', 'Gaskets & O-Rings', 'Chain & Sprockets',
-			                          'Electrical', 'Tyres', 'Cleaning & Care', 'Hardware', 'Tools',
-			                          'Maintenance Kits', 'Bearings & Seals', 'Controls & Cables', 'Suspension']), 1
-		) x ORDER BY lower(c), pref, c COLLATE "C"`)
+	return s.suggestions(ctx, categorySpellings)
 }
 
 // Brands returns the distinct brands in use across items and SKUs.
 func (s *Store) Brands(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `
-		SELECT DISTINCT ON (lower(b)) b FROM (
-			SELECT brand AS b FROM items WHERE brand <> ''
-			UNION
-			SELECT brand AS b FROM item_skus WHERE brand <> ''
-		) x
-		ORDER BY lower(b), b COLLATE "C"`)
+	return s.suggestions(ctx, brandSpellings)
 }
 
 // Locations returns the distinct storage locations in use.
 func (s *Store) Locations(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `SELECT DISTINCT location FROM items WHERE location <> '' ORDER BY location`)
-}
-
-func (s *Store) distinct(ctx context.Context, sql string) ([]string, error) {
-	rows, err := s.pool.Query(ctx, sql)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[string])
+	return s.suggestions(ctx, locationSpellings)
 }

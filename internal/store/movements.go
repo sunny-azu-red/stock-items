@@ -59,11 +59,15 @@ func applyMovement(ctx context.Context, tx pgx.Tx, in stock.MovementInput) (int6
 	if in.OccurredOn != nil {
 		occurred = *in.OccurredOn
 	}
+	supplier, err := spell(ctx, tx, supplierSpellings, 0, in.Supplier)
+	if err != nil {
+		return 0, err
+	}
 	var id int64
 	err = tx.QueryRow(ctx, `
 		INSERT INTO stock_movements (item_id, kind, delta, total_price, supplier, note, occurred_on, service_record_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-		in.ItemID, in.Kind, in.Delta, in.TotalPrice, in.Supplier, in.Note, occurred, in.ServiceRecordID).Scan(&id)
+		in.ItemID, in.Kind, in.Delta, in.TotalPrice, supplier, in.Note, occurred, in.ServiceRecordID).Scan(&id)
 	return id, err
 }
 
@@ -390,6 +394,9 @@ func (s *Store) UpdateMovement(ctx context.Context, id int64, e stock.MovementEd
 		if err := reviseMovement(ctx, tx, m, in.Delta); err != nil {
 			return err
 		}
+		if in.Supplier, err = spell(ctx, tx, supplierSpellings, id, in.Supplier); err != nil {
+			return err
+		}
 		// A new version: an edit form opened before this one is stale now.
 		_, err = tx.Exec(ctx, `
 			UPDATE stock_movements SET version = version + 1, kind = $2, delta = $3, total_price = $4, supplier = $5,
@@ -535,9 +542,5 @@ func (s *Store) LastUnitPrice(ctx context.Context, itemID int64) (*float64, erro
 
 // Suppliers returns the distinct suppliers in use across stock movements.
 func (s *Store) Suppliers(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `
-		SELECT DISTINCT ON (lower(supplier)) supplier
-		FROM stock_movements
-		WHERE supplier <> ''
-		ORDER BY lower(supplier), supplier COLLATE "C"`)
+	return s.suggestions(ctx, supplierSpellings)
 }

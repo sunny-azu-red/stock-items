@@ -53,6 +53,9 @@ func vehicleConflict(err error) error {
 func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64, error) {
 	var id int64
 	err := s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
+		if err := spellEach(ctx, tx, 0, map[*string]string{&in.Make: makeSpellings, &in.Model: modelSpellings}); err != nil {
+			return err
+		}
 		err := tx.QueryRow(ctx, `
 			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer, purchased_on, odometer_at_purchase, notes)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
@@ -92,6 +95,9 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 			if err := checkVehiclePurchasedOn(ctx, tx, id, *in.PurchasedOn); err != nil {
 				return err
 			}
+		}
+		if err := spellEach(ctx, tx, id, map[*string]string{&in.Make: makeSpellings, &in.Model: modelSpellings}); err != nil {
+			return err
 		}
 		// A new version: a form opened before this save is stale now.
 		tag, err := tx.Exec(ctx, `
@@ -329,10 +335,10 @@ func (s *Store) RestoreVehicle(ctx context.Context, id int64, version int) error
 
 // Makes returns the distinct vehicle makes in use.
 func (s *Store) Makes(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `SELECT DISTINCT ON (lower(make)) make FROM vehicles WHERE make <> '' ORDER BY lower(make), make COLLATE "C"`)
+	return s.suggestions(ctx, makeSpellings)
 }
 
 // Models returns the distinct vehicle models in use.
 func (s *Store) Models(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `SELECT DISTINCT ON (lower(model)) model FROM vehicles WHERE model <> '' ORDER BY lower(model), model COLLATE "C"`)
+	return s.suggestions(ctx, modelSpellings)
 }

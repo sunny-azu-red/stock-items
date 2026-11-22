@@ -122,7 +122,12 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := checkArchivedParts(ctx, tx, 0, in.Parts); err != nil {
 			return err
 		}
-		err := tx.QueryRow(ctx, `
+		title, err := spell(ctx, tx, serviceTitleSpellings, 0, in.Title)
+		if err != nil {
+			return err
+		}
+		in.Title = title
+		err = tx.QueryRow(ctx, `
 			INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, odometer_at_log, title, labor_cost, notes)
 			VALUES ($1, $2, $3, $4, $5,
 			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer FROM vehicles WHERE id = $1) END,
@@ -216,6 +221,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// movement ids): a form opened before this save is stale now.
 		// odometer_at_log stays as it was logged: a reading added now wins
 		// over it, and removing that reading again falls back to it.
+		if in.Title, err = spell(ctx, tx, serviceTitleSpellings, id, in.Title); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `
 			UPDATE service_records SET version = version + 1, kit_id = $2, kit_intermediate = $3, performed_on = $4, odometer = $5,
 			       title = $6, labor_cost = $7, notes = $8

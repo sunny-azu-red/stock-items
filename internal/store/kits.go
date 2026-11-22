@@ -166,7 +166,12 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
-		err := tx.QueryRow(ctx, `
+		name, err := spell(ctx, tx, kitNameSpellings, 0, in.Name)
+		if err != nil {
+			return err
+		}
+		in.Name = name
+		err = tx.QueryRow(ctx, `
 			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months, notes)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
 			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InterIntervalDistance, in.InterIntervalMonths, in.Notes).Scan(&id)
@@ -238,6 +243,11 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 				return &ConflictError{Field: "form", Message: target + " is archived; restore it first."}
 			}
 		}
+		name, err := spell(ctx, tx, kitNameSpellings, id, in.Name)
+		if err != nil {
+			return err
+		}
+		in.Name = name
 		// A new version (its lines count as part of the kit): a form opened
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
@@ -404,15 +414,7 @@ func (s *Store) RestoreKit(ctx context.Context, id int64, version int) error {
 
 // KitNames returns the distinct kit names and service titles in use, plus common defaults.
 func (s *Store) KitNames(ctx context.Context) ([]string, error) {
-	return s.distinct(ctx, `
-		SELECT DISTINCT ON (lower(n)) n FROM (
-			SELECT name AS n, 0 AS pref FROM service_kits WHERE name <> ''
-			UNION
-			SELECT title AS n, 0 AS pref FROM service_records WHERE title <> ''
-			UNION SELECT unnest(ARRAY['Oil Service', 'Air Filter', 'Brake Pads (Front)', 'Brake Pads (Rear)',
-			                          'Brake Fluid', 'Cabin Filter', 'Clutch Fluid', 'Coolant',
-			                          'Spark Plugs', 'Valve Check']), 1
-		) x ORDER BY lower(n), pref, n COLLATE "C"`)
+	return s.suggestions(ctx, kitNameSpellings)
 }
 
 // ServiceTitles returns the distinct service titles and kit names in use, plus common defaults.

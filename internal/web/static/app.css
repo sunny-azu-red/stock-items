@@ -601,11 +601,19 @@
   /* ---- Forms ------------------------------------------------------- */
   .form { display: grid; gap: var(--gap); }
   /* At most four fields a row: no lone field on a second row of a wide one. */
-  .form-grid { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(max(min(200px, 100%), round(down, (100% - 3 * var(--gap)) / 4, 1px)), 1fr)); }
-  /* A field two columns wide (a long pick-one) once the grid has two
-     (two 200px columns and the gap); the fields after it fill in beside
-     what comes before it rather than leaving a hole. */
-  .form-grid:has(> .span-2) { container: form-grid / inline-size; grid-auto-flow: row dense; }
+  .form-grid {
+    --form-col: minmax(max(min(200px, 100%), round(down, (100% - 3 * var(--gap)) / 4, 1px)), 1fr);
+    display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, var(--form-col));
+  }
+  /* A field two columns wide (a long pick-one: vehicle Type, Counted in)
+     once the grid has two (two 200px columns and the gap). The empty
+     columns stay (auto-fill), so one alone in its row is two columns, not
+     the row; the fields after it fill in beside what comes before it
+     rather than leaving a hole. */
+  .form-grid:has(> .span-2) {
+    container: form-grid / inline-size; grid-auto-flow: row dense;
+    grid-template-columns: repeat(auto-fill, var(--form-col));
+  }
   @container form-grid (width >= 412px) { .form-grid > .span-2 { grid-column: span 2; } }
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
@@ -807,8 +815,7 @@
     :is(.filters-row, .results-head) & :is(label, a) { padding: 6px 11px; }
     /* On a form it is a field: it fills its field like an input, the
        options sized to their labels. A long one spans two columns
-       (.span-2, at .form-grid); Counted in has a line of its own, at its
-       natural size (.own-line). The options are grid columns, which grow
+       (.span-2, at .form-grid). The options are grid columns, which grow
        evenly from nothing up to their label's width: when the field is
        short, the short labels stay whole and the longest is cut with "…"
        (the label's title says it whole); with room to spare, each gets an
@@ -818,7 +825,6 @@
       display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, auto);
       & :is(label, a) { width: auto; min-width: 0; justify-content: center; }
     }
-    .field.own-line > & { display: inline-grid; justify-self: start; }
     & .seg-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; width: calc-size(fit-content, round(up, size, 1px)); }
     /* Apart from the actions beside it: 12px with the bar's 8px gap. */
     .results-head & { margin-right: 4px; }

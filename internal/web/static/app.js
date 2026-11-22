@@ -955,6 +955,26 @@
     var p = document.getElementById("more");
     if (p && p.matches(":popover-open")) p.hidePopover();
   });
+  // While Appearance is in the More sheet's place, the tab bar's More goes
+  // back to More, as ← does. A tap there is outside Appearance, which closes
+  // it (light dismiss, on pointerup); the click that follows would then
+  // toggle More shut too, so it is cancelled. Whether Appearance was open
+  // is noted as the tap starts; a key (a click without a pointer, detail 0)
+  // finds it still open and closes it here.
+  var moreTab = document.querySelector('.tabbar [popovertarget="more"]');
+  var appearancePanel = document.getElementById("appearance");
+  if (moreTab && appearancePanel) {
+    var fromAppearance = false;
+    moreTab.addEventListener("pointerdown", function () {
+      fromAppearance = appearancePanel.matches(":popover-open");
+    });
+    moreTab.addEventListener("click", function (e) {
+      var open = appearancePanel.matches(":popover-open");
+      if (!open && !(fromAppearance && e.detail > 0)) return;
+      e.preventDefault();
+      if (open) appearancePanel.hidePopover();
+    });
+  }
 
   // ---- Keyboard shortcuts -------------------------------------------------
   // "/" focuses search (opening the stock page when this page has none),

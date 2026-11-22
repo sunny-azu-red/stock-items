@@ -1078,7 +1078,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await expect(page.locator("main h1")).toHaveText("KTM 390");
   if (mobile) {
     await expect(sheet).toBeHidden();
-    const current = page.locator(".tabbar .current:visible");
+    const current = page.locator(".tabbar .current");
     await expect(current).toHaveText("More");
     // Still while Appearance is open in More's place: the page is the same.
     await appearance(page);
@@ -1192,7 +1192,7 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   await expect(panel).toBeHidden();
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
-  // Back to More, by ←, by the tab bar's More and by Esc: the sheet again,
+  // Back to More, by ←, by the tab bar's More (a tap or a key) and by Esc: the sheet again,
   // and its grey. The two swap at once: nothing of Appearance lingers in
   // or out (a fade shows the page through it; its grey left on More's is
   // twice as dark).
@@ -1201,6 +1201,7 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   for (const back of [
     () => panel.getByRole("button", { name: "Back to More" }).click(),
     () => more.click(),
+    async () => { await more.focus(); await page.keyboard.press("Enter"); },
     () => page.keyboard.press("Escape"),
   ]) {
     await sheet.getByRole("button", { name: "Appearance" }).click();

@@ -580,13 +580,6 @@
        Appearance's own takes its place, so the swap shows no change. */
     .sidebar:has(#appearance:popover-open), .sidebar:has(#appearance:popover-open)::backdrop { visibility: hidden; }
     .appearance { visibility: visible; }
-    /* Meanwhile the tab bar's More goes back to More, as ← does: a button
-       of its own, which hides Appearance only. */
-    .tabbar .tab-back { display: none; }
-    body:has(#appearance:popover-open) .tabbar {
-      & .tab-back { display: flex; }
-      & [popovertarget="more"] { display: none; }
-    }
   }
   /* System / Light / Dark: one pressed, like a segmented control. */
   .theme-pick .pick {

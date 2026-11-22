@@ -52,10 +52,10 @@
   <div class="form-section">
     <h2>Quantity</h2>
     <div class="form-grid">
-      <fieldset class="field{{if index $e "unit"}} has-error{{end}}"{{with index $e "unit"}} aria-describedby="unit-err"{{end}}>
+      <fieldset class="field own-line{{if index $e "unit"}} has-error{{end}}"{{with index $e "unit"}} aria-describedby="unit-err"{{end}}>
         <legend>Counted in</legend>
         <span class="segmented">
-          {{range $d.Units}}<label><input type="radio" name="unit" value="{{.}}" {{if eq (print .) $f.Unit}}checked{{end}}>{{.Label}}</label>{{end}}
+          {{range $d.Units}}<label title="{{.Label}}"><input type="radio" name="unit" value="{{.}}" {{if eq (print .) $f.Unit}}checked{{end}}><span class="seg-text">{{.Label}}</span></label>{{end}}
         </span>
         {{template "field-err" (fieldErr (index $e "unit") "unit")}}
       </fieldset>

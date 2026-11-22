@@ -93,7 +93,7 @@ A box is anything with its text centred in a background, a border or a bar: butt
 | Card (panel) | — | `--radius` 8px |
 | Field, button | `--control-h` 36px (a 20px or 16px line in its padding and border) | `--radius-sm` 6px |
 | Small button, icon button, toggle, chip you pick | `--control-sm` 30px | 6px |
-| Pick one (`.segmented`): one joined control, its options sharing their edges | 36px on a form; 30px in a bar (filters, results head) | 6px on its outer corners |
+| Pick one (`.segmented`): one joined control, its options sharing their edges. On a form it is a field: it fills its field like an input, options sized to their labels, the longest cut with "…" when short; a long one spans two columns (`.span-2`), Counted in has a line of its own at its natural size (`.own-line`). In a bar it keeps its natural size | 36px on a form; 30px in a bar (filters, results head) | 6px on its outer corners |
 | Chip (vehicle) | 24px | pill |
 | Badge (state) | 24px | `--radius-xs` 4px |
 | Status disc | 28px | round |

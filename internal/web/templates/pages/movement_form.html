@@ -24,8 +24,8 @@
     <fieldset class="field">
       <legend>The adjustment</legend>
       <span class="segmented">
-        <label><input type="radio" name="direction" value="added" {{if not $f.Removed}}checked{{end}}>Added stock</label>
-        <label><input type="radio" name="direction" value="removed" {{if $f.Removed}}checked{{end}}>Took stock away</label>
+        <label title="Added"><input type="radio" name="direction" value="added" {{if not $f.Removed}}checked{{end}}><span class="seg-text">Added</span></label>
+        <label title="Took away"><input type="radio" name="direction" value="removed" {{if $f.Removed}}checked{{end}}><span class="seg-text">Took away</span></label>
       </span>
     </fieldset>
     {{end}}

@@ -489,6 +489,9 @@
     font-size: var(--text-sm); font-weight: 600; --lh: 1.25;
     padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--field-border);
     background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap;
+    /* A whole number of pixels wide, so what sits beside it (right-aligned
+       above all) starts on a whole pixel and its text stays on its icon. */
+    width: calc-size(fit-content, round(up, size, 1px));
     transition: background-color .15s, border-color .15s, color .15s, scale .1s;
     &:hover { background: var(--surface-2); }
     &:active:not([disabled]) { scale: .98; }
@@ -599,6 +602,11 @@
   .form { display: grid; gap: var(--gap); }
   /* At most four fields a row: no lone field on a second row of a wide one. */
   .form-grid { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(max(min(200px, 100%), round(down, (100% - 3 * var(--gap)) / 4, 1px)), 1fr)); }
+  /* A field two columns wide (a long pick-one) once the grid has two
+     (two 200px columns and the gap); the fields after it fill in beside
+     what comes before it rather than leaving a hole. */
+  .form-grid:has(> .span-2) { container: form-grid / inline-size; grid-auto-flow: row dense; }
+  @container form-grid (width >= 412px) { .form-grid > .span-2 { grid-column: span 2; } }
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
   .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
@@ -617,7 +625,8 @@
 
   .field { display: grid; gap: 5px; align-content: start; min-width: 0; }
   :is(.field > label, .label-row > label, .label, legend) { font-weight: 600; font-size: var(--text-sm); }
-  legend { margin-bottom: 6px; }
+  /* The field's gap: a fieldset's legend isn't one of its grid items. */
+  legend { margin-bottom: 5px; }
   /* A field label followed by a "?" hint; the hint opens below the label. */
   .label-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
   .hint { color: var(--muted); font-size: var(--text-sm); margin: 0; }
@@ -767,8 +776,9 @@
     .tabs ~ .card-body > & { border-top: 1px solid var(--band-line); border-bottom: 0; }
   }
 
-  /* Pick one: one joined control, 36px (Type, Counted in, Schedule, the
-     adjustment); 30px in a bar (Fits any/all, sort direction, Grouped/List).
+  /* Pick one: one joined control, 36px on a form (Type, Counted in,
+     Schedule, the adjustment); 30px in a bar (Fits any/all, sort direction,
+     Grouped/List), at its natural size.
      The options are radio labels, or links where the choice is in the
      address (aria-current). -of-type: the sort direction starts with
      hidden inputs. */
@@ -776,8 +786,11 @@
     display: inline-flex; max-width: 100%;
     & :is(label, a) {
       display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 9px 14px; --lh: 1.25;
-      border: 1px solid var(--field-border); border-radius: 0; font-size: var(--text-sm); font-weight: 500; background: var(--surface);
+      border: 1px solid var(--field-border); border-radius: 0; font-size: var(--text-sm); font-weight: 600; background: var(--surface);
       color: inherit; text-decoration: none; white-space: nowrap;
+      /* Whole pixels wide, as a .btn; and one weight, picked or not, so
+         picking moves nothing. */
+      width: calc-size(fit-content, round(up, size, 1px));
       transition: background-color .15s, border-color .15s, color .15s;
       &:first-of-type { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
       &:last-of-type { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
@@ -785,13 +798,28 @@
       &:hover { background: var(--surface-2); }
       &:has(input:checked), &[aria-current="page"] {
         position: relative; z-index: 1;
-        border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); font-weight: 600;
+        border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong);
       }
       &:has(input:focus-visible), &:focus-visible { position: relative; z-index: 2; outline: 2px solid var(--accent); outline-offset: 2px; }
     }
     & .icon { width: 16px; height: 16px; }
     & input { position: absolute; margin: 0; opacity: 0; pointer-events: none; }
     :is(.filters-row, .results-head) & :is(label, a) { padding: 6px 11px; }
+    /* On a form it is a field: it fills its field like an input, the
+       options sized to their labels, and when the field is short the
+       longest label is cut with "…" (its text is a .seg-text; the label's
+       title says it whole). A long one spans two columns (.span-2, at
+       .form-grid); Counted in has a line of its own, at its natural size
+       (.own-line). */
+    .field > & {
+      display: flex;
+      & :is(label, a) { flex: 1 1 auto; min-width: 0; justify-content: center; }
+    }
+    .field.own-line > & {
+      display: inline-flex; justify-self: start;
+      & :is(label, a) { flex: 0 1 auto; }
+    }
+    & .seg-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     /* Apart from the actions beside it: 12px with the bar's 8px gap. */
     .results-head & { margin-right: 4px; }
   }

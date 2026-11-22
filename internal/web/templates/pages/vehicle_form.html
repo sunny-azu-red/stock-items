@@ -16,10 +16,10 @@
         <input class="input" id="name" name="name" value="{{$f.Name}}" required maxlength="80" placeholder="e.g. KTM 390" autofocus {{invalid (index $e "name") "name" "name-tip"}}>
         {{template "field-err" (fieldErr (index $e "name") "name")}}
       </div>
-      <fieldset class="field{{if index $e "kind"}} has-error{{end}}"{{with index $e "kind"}} aria-describedby="kind-err"{{end}}>
+      <fieldset class="field span-2{{if index $e "kind"}} has-error{{end}}"{{with index $e "kind"}} aria-describedby="kind-err"{{end}}>
         <legend>Type</legend>
         <span class="segmented">
-          {{range $d.Kinds}}<label><input type="radio" name="kind" value="{{.}}" {{if eq (print .) $f.Kind}}checked{{end}}>{{icon .Icon}} {{.Label}}</label>{{end}}
+          {{range $d.Kinds}}<label title="{{.Label}}"><input type="radio" name="kind" value="{{.}}" {{if eq (print .) $f.Kind}}checked{{end}}>{{icon .Icon}}<span class="seg-text">{{.Label}}</span></label>{{end}}
         </span>
         {{template "field-err" (fieldErr (index $e "kind") "kind")}}
       </fieldset>

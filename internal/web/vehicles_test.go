@@ -114,7 +114,7 @@ func TestDistanceUnit(t *testing.T) {
 	t.Cleanup(func() { stock.DistanceUnit = old })
 	stock.DistanceUnit = "mi"
 	a := newApp(t)
-	expect(t, a.get("/vehicles/new"), http.StatusOK, "Odometer (mi)", "Purchased at (mi)")
+	expect(t, a.get("/vehicles/new"), http.StatusOK, "Odometer (mi)", "Odometer at purchase (mi)", "<h2>Odometer</h2>")
 	rec := a.post("/vehicles", url.Values{
 		"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#2563eb"}, "odometer": {"12000"},
 	})

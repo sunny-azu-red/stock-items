@@ -481,13 +481,13 @@ test("Log service offers the chosen vehicle's kits and keeps what was typed", as
   // What was changed comes along: the date, odometer and labour.
   await page.goto("/services/new");
   await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
-  await page.getByLabel("Date", { exact: true }).fill("2026-10-05");
+  await page.getByLabel("Done on", { exact: true }).fill("2026-10-05");
   await odometer.fill("12345");
   await page.getByLabel(/^Labour cost/).fill("80");
   await kit.click();
   await expect(page).toHaveURL(/\/services\/new\?kit=\d+&performed_on=2026-10-05&odometer=12345&labor_cost=80$/);
   await expect(page.getByLabel("Work performed")).toHaveValue(/^Oil Service/);
-  await expect(page.getByLabel("Date", { exact: true })).toHaveValue("2026-10-05");
+  await expect(page.getByLabel("Done on", { exact: true })).toHaveValue("2026-10-05");
   await expect(odometer).toHaveValue("12345");
   await expect(page.getByLabel(/^Labour cost/)).toHaveValue("80");
 });
@@ -574,7 +574,7 @@ test("a form's sections have a line between them, and none above the first", asy
   await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
   await page.locator("#kit-starts").getByRole("link", { name: "Oil Service" }).click();
   await expect(page).toHaveURL(/\/services\/new\?kit=\d+$/);
-  await page.getByLabel("Date", { exact: true }).fill("");
+  await page.getByLabel("Done on", { exact: true }).fill("");
   await page.getByRole("button", { name: "Save service" }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   problems.push(...(await lines()).map((p) => `Log service from a kit, with errors: ${p}`));

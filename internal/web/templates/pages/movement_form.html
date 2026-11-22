@@ -22,7 +22,7 @@
   <div class="form-grid">
     {{if eq $m.Kind "adjusted"}}
     <fieldset class="field">
-      <legend>The adjustment</legend>
+      <legend>Adjustment</legend>
       <span class="segmented">
         <label title="Added"><input type="radio" name="direction" value="added" {{if not $f.Removed}}checked{{end}}><span class="seg-text">Added</span></label>
         <label title="Took away"><input type="radio" name="direction" value="removed" {{if $f.Removed}}checked{{end}}><span class="seg-text">Took away</span></label>
@@ -30,7 +30,7 @@
     </fieldset>
     {{end}}
     <div class="field{{if index $e "amount"}} has-error{{end}}">
-      <div class="label-row"><label for="amount">{{if eq $m.Kind "used"}}Amount used{{else if eq $m.Kind "adjusted"}}By how much?{{else if eq $m.Kind "bought"}}Amount bought{{else}}Amount{{end}}</label>{{template "req"}}</div>
+      <div class="label-row"><label for="amount">{{if eq $m.Kind "used"}}Amount used{{else if eq $m.Kind "adjusted"}}Amount{{else if eq $m.Kind "bought"}}Amount bought{{else}}Amount{{end}}</label>{{template "req"}}</div>
       <div class="qty-input">
         <input class="input" id="amount" name="amount" value="{{$f.Amount}}" inputmode="decimal" placeholder="{{placeholderFor $m.ItemUnit}}" required autofocus {{invalid (index $e "amount") "amount"}}>
         <select class="input" name="amount_unit" aria-label="Unit">{{range $d.Units}}<option value="{{.Value}}" {{if eq .Value $f.AmountUnit}}selected{{end}}>{{.Label}}</option>{{end}}</select>
@@ -50,7 +50,7 @@
     </div>
     {{end}}
     <div class="field{{if index $e "occurred_on"}} has-error{{end}}">
-      <label for="occurred_on">{{if eq $m.Kind "bought"}}Bought on{{else if eq $m.Kind "used"}}Used on{{else if eq $m.Kind "adjusted"}}Adjusted on{{else}}Date{{end}}</label>
+      <label for="occurred_on">{{if eq $m.Kind "bought"}}Bought on{{else if eq $m.Kind "used"}}Used on{{else if eq $m.Kind "adjusted"}}Adjusted on{{else}}Started on{{end}}</label>
       <input class="input" type="date" id="occurred_on" name="occurred_on" value="{{$f.OccurredOn}}" {{invalid (index $e "occurred_on") "occurred_on"}}>
       {{template "field-err" (fieldErr (index $e "occurred_on") "occurred_on")}}
     </div>

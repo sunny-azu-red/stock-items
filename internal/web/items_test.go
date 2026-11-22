@@ -222,7 +222,7 @@ func TestSKUErrorsLandOnTheirRow(t *testing.T) {
 
 func TestNewItemBoughtJustNow(t *testing.T) {
 	a := newApp(t)
-	expect(t, a.get("/items/new"), http.StatusOK, "Bought it just now?", `name="bought_on" value="2026-10-29"`, `name="bought_note"`)
+	expect(t, a.get("/items/new"), http.StatusOK, "<h2>Purchase</h2>", "Bought it just now?", `name="bought_on" value="2026-10-29"`, `name="bought_note"`)
 
 	form := url.Values{"name": {"M3.0 Ready To Use"}, "brand": {"Motorex"}, "unit": {"ml"}, "quantity": {"1"}, "quantity_unit": {"l"},
 		"total_price": {"67"}, "supplier": {"moto24"}, "bought_on": {"2026-10-29"}, "bought_note": {"promo pack"}}
@@ -253,7 +253,7 @@ func TestItemEditForm(t *testing.T) {
 	path := "/items/" + itoa(id)
 	rec := a.get(path + "/edit")
 	expect(t, rec, http.StatusOK)
-	expectNot(t, rec, "Bought it just now?", `name="total_price"`)
+	expectNot(t, rec, "<h2>Purchase</h2>", "Bought it just now?", `name="total_price"`)
 
 	// A blank quantity must not silently empty the stock.
 	form := url.Values{"name": {"15W50 PRO 4 XP"}, "brand": {"Silkolene"}, "unit": {"ml"}, "quantity": {""},

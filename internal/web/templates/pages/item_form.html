@@ -15,7 +15,6 @@
   {{template "form-banners" $f}}
 
   <div class="form-section">
-    <h2>What is it?</h2>
     <div class="form-grid">
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
@@ -36,21 +35,21 @@
   </div>
 
   <div class="form-section">
-    <h2>Fits these vehicles</h2>
+    <h2>Vehicles</h2>
     {{if $d.Vehicles}}
+    <p class="hint mb">Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).</p>
     <div class="chips" role="group" aria-label="Vehicles">
       {{range $d.Vehicles}}
       <label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="checkbox" name="vehicle" value="{{.ID}}" {{if hasID $f.VehicleIDs .ID}}checked{{end}}><span class="dot"></span>{{.Name}}</label>
       {{end}}
     </div>
-    <p class="hint mt">Pick every vehicle the item fits. Leave all empty for general stock (cleaners, tools…).</p>
     {{else}}
     <p class="hint">No vehicles yet. <a href="/vehicles/new">Add one</a> to tag items with it.</p>
     {{end}}
   </div>
 
   <div class="form-section">
-    <h2>Quantity</h2>
+    <h2>Stock</h2>
     <div class="form-grid">
       <fieldset class="field span-2{{if index $e "unit"}} has-error{{end}}"{{with index $e "unit"}} aria-describedby="unit-err"{{end}}>
         <legend>Counted in</legend>
@@ -96,8 +95,8 @@
 
   {{if $d.IsNew}}
   <div class="form-section">
-    <h2>Bought it just now?</h2>
-    <p class="hint mb">With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
+    <h2>Purchase</h2>
+    <p class="hint mb">Bought it just now? With a price or shop, the stock above is recorded as a purchase, so the item gets a last price and counts in your spending. Leave empty for stock you already had.</p>
     <div class="form-grid">
       <div class="field{{if index $e "total_price"}} has-error{{end}}">
         <div class="label-row"><label for="total_price">Total price ({{.Currency}})</label><span class="pieces-only">{{template "tip" (dict "For" "Total price" "ID" "price-tip" "Text" "For all the pieces together, not the price of one.")}}</span></div>
@@ -123,7 +122,7 @@
   {{end}}
 
   <div class="form-section">
-    <h2>SKUs / part numbers</h2>
+    <h2>SKUs</h2>
     <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
     {{template "err" (index $e "skus")}}
     <div class="rows" id="sku-rows">

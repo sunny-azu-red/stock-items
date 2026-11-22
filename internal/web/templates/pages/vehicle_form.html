@@ -44,14 +44,48 @@
         <input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke" list="models" autocomplete="off">
         {{template "datalist" (dict "ID" "models" "Options" $d.Models)}}
       </div>
-      <div class="field{{if index $e "year"}} has-error{{end}}"><label for="year">Year</label><input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>{{template "field-err" (fieldErr (index $e "year") "year")}}</div>
-      {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}<div class="field{{if index $e "odometer"}} has-error{{end}}"><label for="odometer">Odometer ({{distUnit}})</label><input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>{{template "field-err" (fieldErr (index $e "odometer") "odometer")}}</div>
-      <div class="field{{if index $e "purchased_on"}} has-error{{end}}"><div class="label-row"><label for="purchased_on">Purchased on</label>{{template "tip" (dict "For" "Purchased on" "ID" "purchased-tip" "Text" "Starting date for reminders when no service has been logged yet.")}}</div><input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" {{invalid (index $e "purchased_on") "purchased_on" "purchased-tip"}}>{{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}</div>
-      <div class="field{{if index $e "odometer_at_purchase"}} has-error{{end}}"><div class="label-row"><label for="odometer_at_purchase">Purchased at ({{distUnit}})</label>{{template "tip" (dict "For" "Purchased at" "ID" "odometer-at-purchase-tip" "Text" "Starting odometer for reminders. 0 for a brand new vehicle.")}}</div><input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase" "odometer-at-purchase-tip"}}>{{template "field-err" (fieldErr (index $e "odometer_at_purchase") "odometer_at_purchase")}}</div>
-      <div class="field"><label for="plate">Plate</label><input class="input" id="plate" name="plate" value="{{$f.Plate}}" placeholder="e.g. B 123 ABC" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
-      <div class="field"><label for="vin">VIN</label><input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+      <div class="field{{if index $e "year"}} has-error{{end}}">
+        <label for="year">Year</label>
+        <input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>
+        {{template "field-err" (fieldErr (index $e "year") "year")}}
+      </div>
+      <div class="field">
+        <label for="plate">Plate</label>
+        <input class="input" id="plate" name="plate" value="{{$f.Plate}}" placeholder="e.g. B 123 ABC" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="field span-2">
+        <label for="vin">VIN</label>
+        <input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      </div>
     </div>
-    <div class="field mt"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Tyre sizes, oil capacity, torque specs…">{{$f.Notes}}</textarea></div>
+  </div>
+  <div class="form-section">
+    <h2>Odometer</h2>
+    <p class="hint mb">Reminders count from the purchase until a service is logged. 0 for a brand new vehicle.</p>
+    {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
+    <div class="form-grid">
+      <div class="field{{if index $e "odometer"}} has-error{{end}}">
+        <label for="odometer">Odometer ({{distUnit}})</label>
+        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>
+        {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}
+      </div>
+      <div class="field{{if index $e "purchased_on"}} has-error{{end}}">
+        <label for="purchased_on">Purchased on</label>
+        <input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" {{invalid (index $e "purchased_on") "purchased_on"}}>
+        {{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}
+      </div>
+      <div class="field{{if index $e "odometer_at_purchase"}} has-error{{end}}">
+        <label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>
+        <input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase"}}>
+        {{template "field-err" (fieldErr (index $e "odometer_at_purchase") "odometer_at_purchase")}}
+      </div>
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="field">
+      <label for="notes">Notes</label>
+      <textarea class="input" id="notes" name="notes" placeholder="Tyre sizes, oil capacity, torque specs…">{{$f.Notes}}</textarea>
+    </div>
   </div>
   <div class="form-section form-actions">
     {{template "req-note"}}

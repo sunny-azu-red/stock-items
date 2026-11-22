@@ -2,7 +2,6 @@
 <div class="page-head">
   <div class="page-title">
     <h1>{{if $d.IsNew}}Add kit{{else}}Edit {{$f.Stored}}{{end}}</h1>
-    <p class="sub">The parts a recurring job needs. You will see at a glance what is on the shelf and what to buy.</p>
   </div>
 </div>
 
@@ -23,7 +22,7 @@
       {{if not $byBar}}
       <div class="field{{if index $e "vehicle_id"}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" required {{invalid (index $e "vehicle_id") "vehicle_id"}}>
+        <select class="input" id="vehicle_id" name="vehicle_id" required{{if not $f.VehicleID}} autofocus{{end}} {{invalid (index $e "vehicle_id") "vehicle_id"}}>
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}" {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
@@ -32,14 +31,15 @@
       {{end}}
       <div class="field{{if index $e "name"}} has-error{{end}}">
         <div class="label-row"><label for="name">Name</label>{{template "req"}}</div>
-        <input class="input" id="name" name="name" value="{{$f.Name}}" required placeholder="e.g. Oil Service" list="kit-names" autocomplete="off" {{if not $f.Name}}autofocus{{end}} {{invalid (index $e "name") "name"}}>
+        <input class="input" id="name" name="name" value="{{$f.Name}}" required placeholder="e.g. Oil Service" list="kit-names" autocomplete="off" {{if and $f.VehicleID (not $f.Name)}}autofocus{{end}} {{invalid (index $e "name") "name"}}>
         {{template "datalist" (dict "ID" "kit-names" "Options" $d.KitNames)}}
         {{template "field-err" (fieldErr (index $e "name") "name")}}
       </div>
     </div>
   </div>
   <div class="form-section">
-    <h2>Repeat every</h2>
+    <h2>Schedule</h2>
+    <p class="hint mb">Repeat every this distance or this many months, whichever comes first. The dashboard reminds you when the job is due.</p>
     <div class="form-grid">
       <div class="field{{if index $e "interval_distance"}} has-error{{end}}">
         <label for="interval_distance">Distance ({{distUnit}})</label>
@@ -52,10 +52,10 @@
         {{template "field-err" (fieldErr (index $e "interval_months") "interval_months")}}
       </div>
     </div>
-    <p class="hint mt">Whichever comes first. You get a reminder on the dashboard when the job is due.</p>
   </div>
   <div class="form-section">
     <h2>Parts</h2>
+    <p class="hint mb">The parts the job needs, so you see at a glance what is on the shelf and what to buy. Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="kit-lines">
       {{template "part-line-head"}}
@@ -64,14 +64,13 @@
     {{template "stock-badge-templates"}}
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
-    <p class="hint mt">Quantities accept units, e.g. <code>1.7 L</code> or <code>500 ml</code>. Missing an item? Save the kit, <a href="/items/new{{with $f.VehicleID}}?vehicle={{.}}{{end}}" target="_blank">add the item</a> (with 0 in stock), then edit the kit to include it.</p>
   </div>
   {{/* The intermediate schedule shows while its box is ticked (CSS). The
        server drops its fields when it isn't, so nothing needs clearing. */}}
   <div class="form-section inter-schedule">
     <h2>Intermediate schedule</h2>
+    <p class="hint mb">For a lighter job between full services (like a mid-interval oil &amp; filter change), with its own, smaller set of parts. It alternates with the schedule above.</p>
     <label class="toggle"><input type="checkbox" id="has_inter" name="has_inter" value="1"{{if $f.ShowInter}} checked{{end}}> Use an intermediate schedule</label>
-    <p class="hint mt">For half-interval jobs (like a mid-interval oil &amp; filter change) that use a smaller set of parts between full services.</p>
     <div class="inter-fields" id="inter-section">
       <div class="form-grid">
         <div class="field{{if index $e "inter_interval_distance"}} has-error{{end}}">
@@ -85,7 +84,6 @@
           {{template "field-err" (fieldErr (index $e "inter_interval_months") "inter_interval_months")}}
         </div>
       </div>
-      <p class="hint mt">Alternates with the full schedule above. Leave months empty when the full service has a strict calendar deadline (like a dealer warranty).</p>
       <h3 class="mt">Intermediate parts</h3>
       {{template "err" (index $e "inter_lines")}}
       <div class="rows" id="inter-lines">

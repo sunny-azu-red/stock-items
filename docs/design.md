@@ -155,6 +155,15 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
   Only the shell (tab bar, More sheet, Switch tray, the sticky Working on bar, toasts) follows the window, at 820px.
 * **Confirmations** (only the trash's permanent deletes ask) are a modal `<dialog>`, the `confirm-dialog` partial: centred, 420px at most, on the grey `--scrim`; its button opens it itself (`commandfor`), Cancel has the focus first, and Esc or a click outside closes it. The page behind doesn't scroll while it or the photo viewer is open: `overscroll-behavior: contain` on the dialog and its `::backdrop`, never `overflow: hidden` on the page, which would take its scrollbar away and shift it sideways.
 * **Hints** (the "?" after a label, the `tip` partial) are `popover="hint"`s in the top layer, so no card clips them, and need no JavaScript: hovering or focusing the "?" shows one for as long as it lasts (`interestfor`, after .15s), a click or tap keeps it open (`popovertarget`, action `show`), Esc or a click elsewhere closes it. It is washed in the accent's soft tint with a faint accent edge and no shadow, so it stands apart from the fields it covers. CSS anchor positioning puts it 6px under its "?", starting just left of it; near the screen's edge it ends at the "?" instead, or centres under it, 8px inside the screen. A suggestion list is anchored the same way (`app.js` opens it with its field as the source): under its field and as wide, above it when the whole list fits there and not below.
+* **Forms.** Every form is laid out the same way:
+  - **A page that is a form** (`form.card.page-form`: item, vehicle, kit, service) is a run of `.form-section`s. The **first has no heading**: the page's `<h1>` (Add item, Edit KTM 390, Log service) names it. **Every later section has an `<h2>`**, a short noun in sentence case (Vehicles, Stock, Purchase, SKUs, Details, Odometer, Schedule, Parts, Parts used), never a question. The one exception is a shortcut before the form proper (Log service's **Start from a kit**), which keeps its heading.
+  - **A section's hint goes right under its heading**, before its fields (`<p class="hint mb">`, one at most); a hint about one field goes behind a "?" at its label (`tip`).
+  - **No field stands alone in a short last row** where it can be helped: a long code takes two columns instead (`.span-2`: the vehicle's VIN beside nothing, under Make, Model, Year and Plate).
+  - **Notes is the last section**, on its own and without a heading: its label says it.
+  - **The record's own fields come first** (what it is and what it's called), and a new form has the focus on the first field to type in.
+  - **Dates say what happened on them**: Bought on, Used on, Adjusted on, Started on (starting stock), Done on, Purchased on.
+  - **A form of one section** (editing a stock change, Bought, the item page's Bought / Used / Adjust, Add to the list) has no section headings: `.form card-body`.
+  - **A sub-line under a form's title says what saving does** (Log service: the parts are taken from stock), never what the record is.
 * **Popovers and sheets** (More, Switch, Appearance, suggestion lists) are `popover`s: Esc and a tap outside close them, without JavaScript. On a phone the page behind goes grey (`--scrim`); what is grey is out of reach (a tap there only closes the popover). More and Appearance float just above the tab bar, rounded on all corners; the Switch tray hangs under the Working on bar, as wide and as tinted, rounded at the bottom.
 
 ---
@@ -228,7 +237,7 @@ Chips and badges do different jobs and look different, but are both **24px** tal
 * **Dot**: an 8px `.dot` in the vehicle's colour (`--chip`, from `chipStyle`).
 * **Size**: 24px (`--text-xs`, weight 600, an 18px line in 2px padding and the border).
 * **Hover (as a link)**: the border takes the full colour. **No underline.**
-* **Chips you pick** (`.chip-toggle`: the filter bars, Fits these vehicles) are 30px, `--text-sm`, with a 6px radius like the other toggles; picked, they take the vehicle's colour.
+* **Chips you pick** (`.chip-toggle`: the filter bars, the item form's Vehicles) are 30px, `--text-sm`, with a 6px radius like the other toggles; picked, they take the vehicle's colour.
 * **In the sidebar** (and the More sheet), **Work on** and **Stock by vehicle** are a list like the nav above them: 36px rows, the vehicle's dot where the nav has its icon, the name where its labels start; the one worked on is lit in its colour. The phone's Switch tray keeps them as 30px chips.
 * **Placement in rows**: in compound rows (`.kit-row`), the chip sits on the title line (`.title-row`), leaving the meta line plain. Inside a vehicle's scope (below), a row leaves out that vehicle's chip.
 * **Vehicle entity titles**: where the vehicle itself is the record (the `/vehicles` cards, the dashboard's Vehicles card), it is a title with its kind icon in its colour (`.vehicle-title`, `.vehicle-card .name`), not a chip.

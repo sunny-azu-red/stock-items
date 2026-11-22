@@ -57,7 +57,7 @@
       {{if not (or $f.KitID $f.ID $byBar)}}
       <div class="field{{if or (index $e "vehicle_id") (index $e "kit_id")}} has-error{{end}}">
         <div class="label-row"><label for="vehicle_id">Vehicle</label>{{template "req"}}</div>
-        <select class="input" id="vehicle_id" name="vehicle_id" required {{invalid (index $e "vehicle_id") "vehicle_id"}}>
+        <select class="input" id="vehicle_id" name="vehicle_id" required{{if not $f.VehicleID}} autofocus{{end}} {{invalid (index $e "vehicle_id") "vehicle_id"}}>
           <option value="">Choose…</option>
           {{range $d.Vehicles}}<option value="{{.ID}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} {{if eq .ID $f.VehicleID}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
@@ -76,12 +76,12 @@
       {{end}}
       <div class="field{{if index $e "title"}} has-error{{end}}">
         <div class="label-row"><label for="title">Work performed</label>{{template "req"}}</div>
-        <input class="input" id="title" name="title" value="{{$f.Title}}" required placeholder="e.g. Oil Service" list="service-titles" autocomplete="off" {{invalid (index $e "title") "title"}}>
+        <input class="input" id="title" name="title" value="{{$f.Title}}" required placeholder="e.g. Oil Service" list="service-titles" autocomplete="off"{{if and $f.VehicleID (not (or $f.ID $f.Title))}} autofocus{{end}} {{invalid (index $e "title") "title"}}>
         {{template "datalist" (dict "ID" "service-titles" "Options" $d.ServiceTitles)}}
         {{template "field-err" (fieldErr (index $e "title") "title")}}
       </div>
       <div class="field{{if index $e "performed_on"}} has-error{{end}}">
-        <div class="label-row"><label for="performed_on">Date</label>{{template "req"}}</div>
+        <div class="label-row"><label for="performed_on">Done on</label>{{template "req"}}</div>
         <input class="input" type="date" id="performed_on" name="performed_on" value="{{$f.PerformedOn}}" required {{invalid (index $e "performed_on") "performed_on"}}>
         {{template "field-err" (fieldErr (index $e "performed_on") "performed_on")}}
       </div>
@@ -104,6 +104,7 @@
       <button class="btn btn-sm" type="submit" form="service-short-form" title="Put the missing parts on the shopping list">{{icon "shopping-cart"}} Add missing</button>
       {{end}}
     </div>
+    <p class="hint mb">Remove rows for parts you did not use, or that did not come from your stock.</p>
     {{template "err" (index $e "lines")}}
     <div class="rows" id="part-lines" data-stock-need>
       {{template "part-line-head"}}
@@ -122,7 +123,6 @@
     {{template "stock-badge-templates"}}
     <template id="part-line-template">{{template "line-row" (dict "Row" (emptyLine) "Groups" $d.ItemGroups "Prefix" "part")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="part-line-template" data-rows="part-lines">{{icon "plus"}} Add part</button>
-    <p class="hint mt">Remove rows for parts you did not use, or that did not come from your stock.</p>
   </div>
   <div class="form-section">
     <div class="field"><label for="notes">Notes</label><textarea class="input" id="notes" name="notes" placeholder="Anything worth remembering for next time">{{$f.Notes}}</textarea></div>

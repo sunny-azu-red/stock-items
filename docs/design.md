@@ -100,7 +100,7 @@ A box is anything with its text centred in a background, a border or a bar: butt
 | Heading bar (card head, section head) | 45px with its rule | — |
 | Card footer | 47px with its rule | — |
 | Nav row, Work on row | 36px | 6px |
-| Tab bar (phone) | 58px (and the safe area), on the bottom edge | — |
+| Tab bar (phone) | 57px: 56px tabs and the hairline on top (and the safe area), on the bottom edge | — |
 
 Every height that something is centred against is even, so centring lands on whole pixels (§16).
 
@@ -371,7 +371,7 @@ Where focus is always shows, the way browsers decide it (`:focus-visible`). A ne
 ## 15. Motion
 
 * **Page changes are instant**: no cross-fade (no `@view-transition`), so following a link and an in-place update (the stock's filters) feel the same.
-* **Popovers and dialogs come in**: More and Appearance slide a few pixels and fade (Appearance, taking the phone's sheet's place, only fades), a confirmation and a hint fade (and grow) in (`@starting-style`), and go out the same way (`overlay`, `display` with `allow-discrete`). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
+* **Popovers and dialogs come in**: More and Appearance slide a few pixels and fade (on a phone Appearance takes the sheet's place at once, no fade), a confirmation and a hint fade (and grow) in (`@starting-style`), and go out the same way (`overlay`, `display` with `allow-discrete`). Toasts rise in; a flash fades in; a stock row flashes the accent's soft tint after a quick +/-.
 * **Short and quiet**: .15–.3s, ease-out. Hover states fade in .15s.
 * **Less motion when asked.** Under `prefers-reduced-motion: reduce` every transition and animation ends at once.
 

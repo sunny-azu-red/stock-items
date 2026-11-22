@@ -103,7 +103,10 @@
 <button class="icon-btn appearance-btn" type="button" popovertarget="appearance" title="Appearance" aria-label="Appearance">{{icon "palette"}}</button>
 <div class="appearance" id="appearance" popover aria-labelledby="appearance-title">
   <div class="appearance-head">
-    <button class="icon-btn appearance-btn appearance-back" type="button" popovertarget="appearance" popovertargetaction="hide" title="Back to More" aria-label="Back to More">{{icon "arrow-left"}}</button>
+    {{/* A phone's: Appearance is the More sheet there. Focus moves to it as
+         Appearance opens (the palette button goes out of sight with the
+         sheet), and back to the palette button as it closes (app.js). */}}
+    <button class="icon-btn appearance-btn appearance-back" type="button" popovertarget="appearance" popovertargetaction="hide" title="Back to More" aria-label="Back to More" autofocus>{{icon "arrow-left"}}</button>
     <h2 id="appearance-title">Appearance</h2>
   </div>
   <form class="theme-pick" method="post" action="/theme">

@@ -20,7 +20,7 @@ type ItemSpec = {
 const exact = (s: string) => new RegExp(`^\\s*${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
 
 // The projects (playwright.config.ts): a phone has the tab bar and its
-// sheets; desktop and laptop the sidebar.
+// More sheet; desktop and laptop the sidebar.
 const phone = (t: TestInfo) => !!t.project.use.isMobile;
 
 // A field by its label. Exact, since a label's "?" hint is a button named
@@ -1135,6 +1135,11 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   // The tab bar is on the screen's bottom edge, edge to edge.
   const tabs = (await page.locator(".tabbar").boundingBox())!;
   expect(tabs.x === 0 && tabs.width === width && tabs.y + tabs.height === height, `tab bar at ${JSON.stringify(tabs)} in ${width}×${height}`).toBe(true);
+  // Its icons (and the current one's soft box) sit on whole pixels, which
+  // the whole-pixel test doesn't see: it skips what is inside an <svg>, and
+  // only lines icons up with text beside them.
+  const tabIcons = await page.locator(".tabbar .icon").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().y));
+  expect(tabIcons.filter((y) => y !== Math.round(y)), "tab icons off whole pixels").toEqual([]);
 
   // More: the sheet rests on the tab bar, edge to edge, rounded at the top
   // (design.md#6-layout); measured once it has slid into place.
@@ -1206,12 +1211,18 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   ]) {
     await sheet.getByRole("button", { name: "Appearance" }).click();
     expect(await lingers(), "Appearance fading in").toEqual([]);
+    // Focus goes to ← (the palette button is out of sight with the sheet).
+    await expect(panel.getByRole("button", { name: "Back to More" })).toBeFocused();
     await back();
     expect(await lingers(), "Appearance fading out").toEqual([]);
     await expect(panel).toBeHidden();
     await expect(sheet.locator(".nav")).toBeVisible();
     expect(await grey(sheet), "More's grey again").toBe(scrim);
   }
+  // From ←, focus is back on the palette button.
+  await sheet.getByRole("button", { name: "Appearance" }).click();
+  await panel.getByRole("button", { name: "Back to More" }).click();
+  await expect(sheet.getByRole("button", { name: "Appearance" })).toBeFocused();
   // Then Esc, or More, closes it.
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
@@ -1756,8 +1767,9 @@ async function misaligned(page: Page) {
       const d = caps(t) - middle(bar);
       if (Math.abs(d) > 0.3) out.push(`heading of ${name(bar)} ${d.toFixed(2)}px off its middle`);
     }
-    // Chips you pick or tap (the filter bars) are a small button's height; the sidebar's Work on and Stock by vehicle are list
-    // rows, as tall as the nav's (design.md#10-chips-vs-badges).
+    // Chips you pick (the filter bars) are a small button's height; the
+    // sidebar's Work on and Stock by vehicle are list rows, as tall as the
+    // nav's (design.md#10-chips-vs-badges).
     const tap = ".chip-toggle, .work-on .chip, .nav-vehicles .chip";
     for (const el of document.querySelectorAll(`.chip:not(${tap}), .badge:not(.kit-start .badge)`)) {
       const h = el.getBoundingClientRect().height;

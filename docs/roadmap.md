@@ -47,7 +47,6 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 Pitbox targets current Chrome ([AGENTS.md](../AGENTS.md#browser-support-and-the-web-platform)) and uses HTML and CSS before JavaScript. A few things stay in `app.js` or as they are, waiting on the platform or on a better design:
 
-- **The Switch tray's grey from CSS alone.** The tray could be anchored under the Working on bar, but its `::backdrop` (the grey, which starts at the bar) can't be, so `app.js` measures the bar when the tray opens (`--switch-top`).
 - **Toasts as popovers.** A `popover="manual"` toast would sit in the top layer above the sheets, but a live region that is shown rather than changed isn't announced reliably by screen readers. They stay a plain `role="status"` box.
 - **Focus on the first error from the server.** An `autofocus` on the first invalid field would need every form's handler to know its field order; two lines of `app.js` do it now.
 - **Capitals trimmed with `text-box`.** `text-box: trim-both cap alphabetic` would centre text in its box at any font size, but its boxes are a fraction of a pixel tall (.735em), which the whole-pixel rule forbids. The type scale uses the sizes Chrome centres instead ([design.md](design.md#text-centred-in-its-box)).

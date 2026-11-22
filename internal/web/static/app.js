@@ -974,6 +974,16 @@
       e.preventDefault();
       if (open) appearancePanel.hidePopover();
     });
+    // Back in More (by ← or Esc), focus returns to the palette button. The
+    // browser tries as Appearance closes, while the button is still out of
+    // sight with the sheet under it, and leaves focus on the hidden ←.
+    var palette = document.querySelector('.sidebar-head [popovertarget="appearance"]:not(.appearance-back)');
+    appearancePanel.addEventListener("toggle", function (e) {
+      var more = document.getElementById("more");
+      if (e.newState !== "closed" || !palette || !more || !more.matches(":popover-open")) return;
+      var at = document.activeElement;
+      if (at === document.body || appearancePanel.contains(at)) palette.focus();
+    });
   }
 
   // ---- Keyboard shortcuts -------------------------------------------------

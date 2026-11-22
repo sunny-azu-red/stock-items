@@ -138,7 +138,7 @@
     --control-h: 36px;
     --control-sm: 30px;
     --sidebar: 220px;
-    --tabbar: 58px;
+    --tabbar: 57px; /* the phone's tab bar: 56px tabs and the hairline on top */
 
     /* Spacing (design.md#5-spacing): --gap between cards, sections, tiles and
        columns; --inset inside a card, left and right, for every part of it;
@@ -300,9 +300,11 @@
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
         position: relative; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
         color: var(--muted); font-size: var(--text-xs); font-weight: 600;
+        &:focus-visible { outline-offset: -2px; }
       }
-      /* The current tab's icon sits in a soft box (More while its sheet is
-         open, or on the pages it leads to). */
+      /* The current tab's icon sits in a soft box (More on the pages it
+         leads to). A focus ring is drawn inside the tab, as the bar runs
+         to the screen's edges. */
       & .icon {
         box-sizing: content-box; width: 20px; height: 20px; padding: 3px 14px; border-radius: 8px;
         transition: background-color .2s, color .2s;
@@ -319,7 +321,7 @@
     .sidebar:popover-open {
       display: flex; position: fixed; inset: auto 0 var(--tabbar-space) 0;
       height: auto; max-height: calc(100dvh - var(--tabbar-space) - 64px);
-      padding: 16px calc(var(--page) + env(safe-area-inset-right)) 18px calc(var(--page) + env(safe-area-inset-left));
+      padding: 16px calc(var(--page) + env(safe-area-inset-right)) 16px calc(var(--page) + env(safe-area-inset-left));
       background: var(--surface); border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
       transition: translate .25s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .25s allow-discrete, overlay .25s allow-discrete;
       @starting-style { translate: 0 16px; opacity: 0; }
@@ -556,14 +558,18 @@
     position: fixed; inset: calc(var(--page) + var(--control-h) + 6px) auto auto 10px; margin: 0; width: min(320px, calc(100vw - 20px));
     padding: 16px; flex-direction: column; gap: 16px;
     color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    /* It slides and fades in, and fades out the same way as it closes:
+       without its closed look it would stay as it was for the transition,
+       then vanish, a lag after the click. */
+    opacity: 0; translate: 0 -8px;
     transition: translate .2s cubic-bezier(.2, .8, .2, 1), opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete;
-    &:popover-open { display: flex; @starting-style { translate: 0 -8px; opacity: 0; } }
+    &:popover-open { display: flex; opacity: 1; translate: 0; @starting-style { translate: 0 -8px; opacity: 0; } }
     & h2 { font-size: 1rem; }
     & legend { font-size: var(--text-sm); font-weight: 600; color: var(--muted); margin-bottom: 8px; }
     & fieldset { display: grid; gap: 12px; }
     @media (width <= 820px) {
       inset: auto 0 var(--tabbar-space) 0; width: auto; max-height: calc(100dvh - var(--tabbar-space) - 64px);
-      padding: 12px calc(var(--page) + env(safe-area-inset-right)) 18px calc(var(--page) + env(safe-area-inset-left));
+      padding: 16px calc(var(--page) + env(safe-area-inset-right)) 16px calc(var(--page) + env(safe-area-inset-left));
       border: 0; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
       /* It swaps with the sheet at once, both ways: a fade would show the
          page through it, and its grey lingering on the way out would lie
@@ -950,9 +956,9 @@
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  /* Chips you pick (filters) and chips that stand on their own (Work on,
-     Stock by vehicle): 30px, a small button's height, easier to tap. */
-  .chip-toggle, .work-on .chip, .nav-vehicles .chip {
+  /* Chips you pick (filters) and chips that stand on their own (Stock by
+     vehicle): 30px, a small button's height, easier to tap. */
+  .chip-toggle, .nav-vehicles .chip {
     font-size: var(--text-sm); --lh: 1.25; padding: 6px 12px; gap: 8px;
   }
   .chip-toggle {
@@ -1032,14 +1038,10 @@
   @media (width <= 820px) {
     html:has(.working-on) { scroll-padding-top: 56px; }
   }
-  .work-on .chip[aria-pressed="true"] {
-    background: color-mix(in oklab, var(--chip) 26%, var(--surface)); border-color: var(--chip);
-    box-shadow: inset 0 0 0 1px var(--chip);
-  }
   /* In the sidebar (and the More sheet), Work on and Stock by vehicle are a
      list like the nav above them: 36px rows (a 20px line in 7px padding and
      the border), the dot where the nav has its icon; the vehicle worked on
-     is lit in its colour. The phone's Switch tray keeps the chips. */
+     is lit in its colour. */
   .sidebar :is(.work-on, .nav-vehicles) {
     flex-direction: column; align-items: stretch; gap: 2px; padding: 0;
     & .chip {

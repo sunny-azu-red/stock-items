@@ -64,9 +64,9 @@
             {{template "field-err" (fieldErr (index $e "item") "item")}}
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">
-            <div class="label-row"><label for="quantity">Quantity</label>{{template "req"}}</div>
+            <label for="quantity">Quantity</label>
             <div class="qty-input">
-              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" required placeholder="e.g. 2 or 4 L" data-part-qty {{invalid (index $e "quantity") "quantity"}}>
+              <input class="input" id="quantity" name="quantity" value="{{$f.Quantity}}" placeholder="e.g. 2 or 4 L" data-part-qty {{invalid (index $e "quantity") "quantity"}}>
               <select class="input" name="quantity_unit" aria-label="Unit" data-part-unit>
                 <option value="" data-base="">unit</option>
                 {{range subUnits}}<option value="{{.Value}}" data-base="{{.Base}}" {{if eq .Value $f.Unit}}selected{{end}}>{{.Label}}</option>{{end}}

@@ -693,6 +693,9 @@
   .form-grid > .field:has(> .field-error) { margin-bottom: -5px; }
 
   .field { display: grid; gap: 5px; align-content: start; min-width: 0; }
+  /* A text in a field (the vehicle page's reading and its note) is spaced
+     by the field's gap, not a paragraph's margin. */
+  .field > p { margin: 0; }
   :is(.field > label, .label-row > label, .label, legend) { font-weight: 600; font-size: var(--text-sm); }
   /* The field's gap: a fieldset's legend isn't one of its grid items. */
   legend { margin-bottom: 5px; }
@@ -708,8 +711,9 @@
      nothing while it is no item. The name gives way (… while the field
      isn't focused, its title says it whole); the badge never does. The
      box is the .input, so the ring is its own (:focus-within, at .input)
-     and so is the error border. */
-  .item-box {
+     and so is the error border; the field fills its height (.input.item-box
+     to outweigh .input's padding). */
+  .input.item-box {
     display: flex; align-items: center; gap: 8px; height: var(--control-h); padding-block: 0; min-width: 0;
     /* width 0: the text's own width (about 20 characters) never widens
        the box past its column; it takes what the badge leaves. */
@@ -719,8 +723,10 @@
       &::placeholder { color: color-mix(in oklab, var(--muted) 80%, transparent); font-weight: 500; }
     }
   }
+  /* Its badges keep their titles on hover; a click on them is a click in
+     the field (app.js). */
   .item-status {
-    display: flex; flex: none; gap: 6px; pointer-events: none;
+    display: flex; flex: none; gap: 6px;
     &:not(:has(> :not([hidden]))) { display: none; }
   }
   /* Hints that apply only while the form's "Counted in" is pieces. */
@@ -825,9 +831,8 @@
   .combo { position: relative; }
   .combo-toggle { position: absolute; inset: 0 0 0 auto; width: 34px; border: 0; padding: 0; background: none; cursor: pointer; }
   /* Anchored to its input, or an item field's box (app.js opens it with
-     that as the source): below
-     it, as wide; above it when the whole list fits there and not below;
-     else below, as tall as the room lets it be. */
+     that as the source): below it, as wide; above it when the whole list
+     fits there and not below; else below, as tall as the room lets it be. */
   .combo-list {
     position: fixed; inset: auto; margin: 4px 0; padding: 4px; overflow-y: auto;
     position-area: bottom span-right; width: anchor-size(width); max-height: 256px;
@@ -968,9 +973,14 @@
     .rows { gap: var(--gap); }
     .row-head { margin-bottom: -7px; }
     /* A part row starts with its item's box here (its heading is left
-       out): a note over the rows 12px, an error 5px. */
+       out): over the rows, a note 12px, a heading 13px (a heading's line
+       keeps about 4px under its letters), an error 5px. */
     .form-section > .hint:has(+ .rows > .part-line) { margin-bottom: var(--gap); }
-    .form-section > .field-error:has(+ .rows > .part-line) { margin-bottom: 5px; }
+    .form-section :is(h2, h3):has(+ .rows > .part-line) { margin-bottom: 13px; }
+    .form-section .field-error:has(+ .rows > .part-line) { margin-bottom: 5px; }
+    /* A row's error is on its first line here, not its last: the next
+       row stays 12px from this one's second line. */
+    .rows > .row-line:has(.field-error) { margin-bottom: 0; }
     .row-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .row-end { display: contents; }
     .row-remove { grid-area: 1 / 2; justify-self: end; margin-left: 0; }

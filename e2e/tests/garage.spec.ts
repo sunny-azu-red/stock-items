@@ -315,6 +315,10 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
     await expect(badge.locator('[aria-hidden="true"]')).toHaveText("New");
     await expect(badge.locator(".sr-only")).toHaveText("Not in stock: added as something new");
     await expect(badge).toHaveAttribute("title", "Not in stock: added as something new");
+    // Hovered, it shows that title: nothing over it takes the pointer.
+    const r = (await badge.boundingBox())!;
+    expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("[data-new-status]") !== null, [r.x + r.width / 2, r.y + r.height / 2])).toBe(true);
+    await expect(badge).not.toHaveCSS("pointer-events", "none");
   };
 
   // Typing lists the stock items it matches, with their stock, then
@@ -336,7 +340,10 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   await expect(status.locator("[data-stock-level]")).toContainText("in stock");
   await expect(status.locator("[data-new-status], [data-many-status]")).toHaveCount(2);
   await expect(status.locator("[data-new-status]")).toBeHidden();
-  await expect(item).toHaveAttribute("title", "Silkolene 15W50 PRO 4 XP");
+  // Its whole name on hover, on the box (the field's own title would be
+  // read twice by a screen reader).
+  await expect(item.locator("xpath=..")).toHaveAttribute("title", "Silkolene 15W50 PRO 4 XP");
+  await expect(item).not.toHaveAttribute("title", /./);
 
   // Changed: something new again, and the unit the item chose goes back.
   await item.pressSequentially(" synthetic");
@@ -576,6 +583,8 @@ test("part rows show the item's stock badge, red when the rows ask for more", as
   await first.locator('select[name="part_unit"]').selectOption("l");
   await expect(badge(0)).toHaveAttribute("data-stock-level", "short");
   await expect(badge(0)).toHaveAttribute("title", /^Need \d/);
+  // Its title shows on hover: the badge takes the pointer.
+  await expect(badge(0)).not.toHaveCSS("pointer-events", "none");
   await first.locator('select[name="part_unit"]').selectOption("ml");
   await expect(badge(0)).toHaveAttribute("data-stock-level", /^(ok|low)$/);
 
@@ -2196,14 +2205,25 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
   const vehicle = await link("/vehicles", "a.vehicle-card");
   const kit = await link("/services", "a.kit-row");
   const service = await link("/services", 'a.title[href^="/services/"]');
+  const movement = await link("/activity", 'a[href^="/movements/"]');
   const submit = (name: string) => async () => { await page.getByRole("button", { name, exact: true }).first().click(); };
   const pages: [string, string, (() => Promise<void>)?][] = [
     ["/items/new", "Add item"], ["/items/new", "Add item with errors", submit("Save item")], [item + "/edit", "Edit item"],
     ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
     ["/kits/new", "Add kit", async () => { await page.locator("#has_inter").check(); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
     ["/services/new", "Log service", async () => { await page.locator("#vehicle_id").selectOption({ label: "KTM 390" }); }], [service + "/edit", "Edit service"],
+    ["/services/new", "Log service with a part that names no item", async () => {
+      await page.locator("#vehicle_id").selectOption({ label: "KTM 390" });
+      await page.getByRole("button", { name: "Add part" }).click();
+      const rows = page.locator("#part-lines .part-line:not(.row-head)");
+      await rows.nth(0).locator('input[name="part_item_text"]').fill("No such part");
+      await rows.nth(0).locator('input[name="part_qty"]').fill("1");
+      await page.getByRole("button", { name: "Save service" }).click();
+      await expect(rows.nth(0).locator(".field-error")).toBeVisible();
+    }],
     ["/shopping", "Shopping"], ["/shopping", "Shopping with errors", submit("Add")],
     [item, "an item's Bought"], [item, "an item's Used", async () => { await page.getByRole("tab", { name: "Used" }).click(); }],
+    [item, "an item's Adjust", async () => { await page.getByRole("tab", { name: "Adjust" }).click(); }], [movement, "a stock change's edit form"],
   ];
   const problems: string[] = [];
   for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
@@ -2253,10 +2273,34 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
         };
         for (const sec of document.querySelectorAll(".form-section:not(.form-actions)")) {
           if (!shown(sec)) continue;
-          const head = sec.querySelector(":scope > :is(h2, h3, .flex)");
-          if (head && shown(head)) check(head, next(head), 17, "under a heading");
-          for (const note of sec.querySelectorAll(":scope > p.hint:not(.req-note)")) if (shown(note)) check(note, next(note), 17, "under a section's note");
-          for (const err of sec.querySelectorAll(":scope > .field-error")) if (shown(err)) check(err, next(err), 10, "an error over its rows");
+          // Its headings (a heading beside a button is their row), notes and
+          // errors over rows, wherever they are in it but inside a field.
+          for (const h of sec.querySelectorAll("h2, h3")) {
+            const head = h.parentElement?.matches(".flex") ? h.parentElement : h;
+            if (shown(head)) check(head, next(head), 17, "under a heading");
+          }
+          for (const note of sec.querySelectorAll("p.hint:not(.req-note)")) if (shown(note) && !note.closest(".field")) check(note, next(note), 17, "under a section's note");
+          for (const err of sec.querySelectorAll(".field-error")) if (shown(err) && !err.closest(".field, .row-line")) check(err, next(err), 10, "an error over its rows");
+        }
+        // Row to row: what you see between two rows is the rows' own gap
+        // (boxes: 8px on one line, 12px on two), an error in a row too.
+        for (const rows of document.querySelectorAll(".rows")) {
+          const rowEls = [...rows.querySelectorAll(":scope > .row-line:not(.row-head)")].filter(shown);
+          const want = parseFloat(getComputedStyle(rows).rowGap);
+          const edge = (row: Element, side: "top" | "bottom") => {
+            let best = side === "top" ? Infinity : -Infinity;
+            for (const c of row.querySelectorAll(`${TEXT}, ${BOX}`)) {
+              if (!shown(c) || c.closest(".item-box, .qty-input") !== null && !c.matches(".item-box, .qty-input")) continue;
+              const r = c.getBoundingClientRect();
+              const y = side === "top" ? (isText(c) ? r.top + lines(c).cap : r.top) : (isText(c) ? r.bottom - lines(c).lh + lines(c).base : r.bottom);
+              best = side === "top" ? Math.min(best, y) : Math.max(best, y);
+            }
+            return best;
+          };
+          for (let i = 0; i + 1 < rowEls.length; i++) {
+            const gap = edge(rowEls[i + 1], "top") - edge(rowEls[i], "bottom");
+            if (Math.abs(gap - want) > 1) out.push(`between rows: "${say(rowEls[i])}" → "${say(rowEls[i + 1])}" is ${Math.round(gap * 10) / 10}px as you see it, not ${want}px`);
+          }
         }
         for (const field of document.querySelectorAll(".field")) {
           if (!shown(field)) continue;

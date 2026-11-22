@@ -290,8 +290,8 @@
 {{define "line-row"}}{{$row := .Row}}
 <div class="row-line part-line{{if or $row.Error $row.Short}} has-error{{end}}"{{if $row.Short}} data-short{{end}}>
   <div class="field">
-    <div class="input item-box">
-      <input name="{{.Prefix}}_item_text" value="{{$row.Text}}"{{if $row.ItemID}} title="{{$row.Text}}"{{end}} placeholder="Choose an item…" aria-label="Item" list="part-items" autocomplete="off" data-item-pick="part-items">
+    <div class="input item-box"{{if $row.ItemID}} title="{{$row.Text}}"{{end}}>
+      <input name="{{.Prefix}}_item_text" value="{{$row.Text}}" placeholder="Choose an item…" aria-label="Item" list="part-items" autocomplete="off" data-item-pick="part-items">
       <span class="item-status" data-stock-badge>{{template "stock-badge" $row.Badge}}</span>
     </div>
     <input type="hidden" name="{{.Prefix}}_item" value="{{with $row.ItemID}}{{.}}{{end}}" data-item-id>

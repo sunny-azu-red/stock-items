@@ -54,8 +54,8 @@
                the same on the server. */}}
           <div class="field span-2{{if index $e "item"}} has-error{{end}}">
             <div class="label-row"><label for="item">Item</label>{{template "req"}}{{template "tip" (dict "For" "Item" "ID" "item-tip" "Text" "Pick from your stock, or type something new.")}}</div>
-            <div class="input item-box">
-              <input id="item" name="item" value="{{$f.Item}}"{{if $f.ItemID}} title="{{$f.Item}}"{{end}} required placeholder="e.g. Chain lube" list="shopping-items" autocomplete="off" data-item-pick="shopping-items" data-new-entry="Something new: “{text}”" {{invalid (index $e "item") "item" "item-tip" "item-status"}}>
+            <div class="input item-box"{{if $f.ItemID}} title="{{$f.Item}}"{{end}}>
+              <input id="item" name="item" value="{{$f.Item}}" required placeholder="e.g. Chain lube" list="shopping-items" autocomplete="off" data-item-pick="shopping-items" data-new-entry="Something new: “{text}”" {{invalid (index $e "item") "item" "item-tip" "item-status"}}>
               <span class="item-status" id="item-status" aria-live="polite" data-item-status><span class="badge badge-accent" data-new-status title="Not in stock: added as something new" hidden><span aria-hidden="true">New</span><span class="sr-only">Not in stock: added as something new</span></span><span class="badge badge-warn" data-many-status title="{n} items have this name: pick one, or it's added as something new" hidden><span aria-hidden="true">{n} matches</span><span class="sr-only">{n} items have this name: pick one, or it's added as something new</span></span></span>
             </div>
             <input type="hidden" name="item_id" value="{{with $f.ItemID}}{{.}}{{end}}" data-item-id>

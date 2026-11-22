@@ -704,8 +704,9 @@
   // Item, a part row's item): the one picked from its list while the text
   // still names it, else the one item the text names, as the server
   // decides (shoppingItem, lineItem). Its id goes in the [data-item-id]
-  // beside it, in its .field, and its name in the field's title (the box
-  // may cut it short). A part row's units and stock badge follow
+  // beside it, in its .field, and its name in its box's title (the box
+  // may cut it short; on the box, not the field, so a screen reader
+  // doesn't read the name twice). A part row's units and stock badge follow
   // (updatePartNote); Shopping's units and the end of its box
   // ([data-item-status]: the item's stock badge, [data-new-status] or
   // [data-many-status]) too.
@@ -726,7 +727,8 @@
     var p = pickedItem(input);
     var opt = p.opt;
     field.querySelector("[data-item-id]").value = opt ? opt.getAttribute("data-id") : "";
-    input.title = opt ? input.value : "";
+    var itemBox = input.closest(".item-box");
+    if (itemBox) itemBox.title = opt ? input.value : "";
     if (input.closest(".row-line")) return updatePartNote(input);
     followItemUnits(opt, input.form);
     var status = field.querySelector("[data-item-status]");

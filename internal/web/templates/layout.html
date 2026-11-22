@@ -150,7 +150,7 @@
   {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
   {{else}}<a class="working-name" href="/vehicles/{{.ID}}">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></a>{{end}}
   <span class="working-actions">
-    <form class="inline-form" method="post" action="/working-on"><button class="btn btn-sm" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
+    <form class="inline-form" method="post" action="/working-on"><button class="close-btn" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>
 </section>{{end}}{{end}}
 

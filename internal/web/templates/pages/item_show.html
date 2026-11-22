@@ -72,7 +72,7 @@
       {{if $it.HasPhoto}}{{/* The photo, large, over the page (no script): Close, Esc, Back or a tap outside closes it. */}}
       <dialog class="lightbox" id="photo-view" closedby="any" aria-label="Photo of {{$it.DisplayName}}">
         <img src="/items/{{$it.ID}}/photo" alt="Photo of {{$it.DisplayName}}">
-        <button class="icon-btn" type="button" commandfor="photo-view" command="close" aria-label="Close" title="Close" autofocus>{{icon "x"}}</button>
+        <button class="close-btn" type="button" commandfor="photo-view" command="close" aria-label="Close" title="Close" autofocus>{{icon "x"}}</button>
       </dialog>
       {{end}}
       {{if not $it.Archived}}

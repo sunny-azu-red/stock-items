@@ -533,6 +533,19 @@
     &:hover { background: var(--accent-soft); color: var(--accent-strong); }
     &[disabled] { opacity: .4; cursor: not-allowed; background: var(--surface-2); color: var(--muted); }
   }
+  /* A close ×: round, 30px, no fill, in the colour of what it sits on, and
+     red only on hover. On the Working on bar it takes the vehicle's colour;
+     over the photo it sits on a small frosted disc, so any picture shows it. */
+  .close-btn {
+    display: inline-grid; place-items: center; width: var(--control-sm); height: var(--control-sm); padding: 0;
+    border-radius: 50%; border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    transition: background-color .15s, color .15s;
+    & .icon { width: 16px; height: 16px; }
+    &:hover { background: color-mix(in oklab, var(--danger-soft) 85%, transparent); color: var(--danger); }
+    .working-on & { color: color-mix(in oklab, var(--chip) 70%, var(--text)); }
+    .lightbox & { position: absolute; top: 8px; right: 8px; background: color-mix(in oklab, var(--surface) 72%, transparent); backdrop-filter: blur(8px); }
+    :is(.working-on, .lightbox) &:hover { background: color-mix(in oklab, var(--danger-soft) 90%, transparent); color: var(--danger); }
+  }
   .inline-form { display: inline; margin: 0; }
 
   /* A key, beside what it does: 22px. */
@@ -1069,8 +1082,6 @@
     margin-bottom: 18px; padding: 5px 5px 5px 14px; border-radius: var(--radius);
     border: 1px solid color-mix(in oklab, var(--chip) 35%, transparent);
     background: color-mix(in oklab, var(--chip) 12%, var(--surface));
-    & .btn { background: color-mix(in oklab, var(--surface) 70%, transparent); border-color: transparent; }
-    & .btn:hover { background: var(--surface); }
     @media (width <= 820px) {
       position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
       margin: calc(-1 * var(--page)) calc(-1 * var(--page)) var(--page); padding: 5px var(--page);
@@ -1089,7 +1100,6 @@
   a.working-name:hover strong { color: var(--chip); }
   .working-actions {
     margin-left: auto; display: flex; align-items: center; gap: 4px;
-    & .btn { padding-inline: 8px; }
   }
   .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* On a phone the bar stays in view: what scrolls into view (a field
@@ -1397,11 +1407,10 @@
     & .form-actions { margin-top: 18px; }
   }
   /* The photo, as large as the window allows (never past its 1600px),
-     Close in its corner. */
+     Close (.close-btn) in its corner. */
   .lightbox {
     padding: 0; overflow: hidden; max-width: none; max-height: none;
     & img { display: block; width: auto; height: auto; max-width: calc(100vw - 2 * var(--page)); max-height: calc(100dvh - 2 * var(--page)); object-fit: contain; }
-    & .icon-btn { position: absolute; top: 8px; right: 8px; background: var(--surface); border-color: var(--border); }
   }
   /* The page behind a modal doesn't scroll: a scroll over the backdrop or
      in the dialog stays there (both scroll containers, contained), and the

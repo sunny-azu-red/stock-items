@@ -549,9 +549,13 @@
     &:hover { background: var(--surface-2); }
   }
   .btn-sm { padding: 6px 10px; }
-  /* Full width, icon and label at the left like the nav links (the
-     sidebar's Add item and Log service). */
-  .btn-block { width: 100%; justify-content: flex-start; }
+  /* Full width, icon and label at the left on the nav links' lines (the
+     sidebar's Add item and Log service): their 18px icon 10px in, the
+     text 10px after it. The icon's margin keeps the button 36px. */
+  .btn-block {
+    width: 100%; justify-content: flex-start; padding-left: 9px; gap: 10px;
+    & .icon { width: 18px; height: 18px; margin-block: -1px; }
+  }
   /* Log service's kit starts: the kit's status is the button's end, flush to
      its border behind a divider, standing on the name's baseline. */
   .kit-start {

@@ -303,7 +303,7 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   const oil = list.getByRole("option", { name: /^Silkolene 15W50 PRO 4 XP/ });
   await expect(oil.locator(".badge")).toContainText("in stock");
   await expect(list.getByRole("option").last()).toHaveText("Something new: “silko”");
-  await expect(status).toHaveText("Not in stock: added as something new");
+  await expect(status).toHaveText("Not in stock: added as something new", { useInnerText: true });
 
   // Picked: that item, its units and its stock badge.
   await oil.click();
@@ -314,11 +314,23 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   await expect(unit.locator('option[value="pcs"]')).toBeDisabled();
   await expect(status.locator(".badge")).toContainText("in stock");
 
-  // Changed: something new again.
+  // Changed: something new again, and the unit the item chose goes back.
   await item.pressSequentially(" synthetic");
   await expect(itemID).toHaveValue("");
-  await expect(status).toHaveText("Not in stock: added as something new");
+  await expect(status).toHaveText("Not in stock: added as something new", { useInnerText: true });
   await expect(unit.locator('option[value="pcs"]')).toBeEnabled();
+  await expect(unit).toHaveValue("");
+  // A unit picked by hand stays.
+  await item.fill("Silkolene 15W50 PRO 4 XP");
+  await expect(unit).toHaveValue("l");
+  await unit.selectOption("ml");
+  await item.fill("Chain wax");
+  await expect(unit).toHaveValue("ml");
+
+  // A name two items have: neither, until one is picked.
+  await item.fill("oil filter");
+  await expect(itemID).toHaveValue("");
+  await expect(status).toHaveText("2 items have this name: pick one, or it's added as something new", { useInnerText: true });
 
   // An item's exact name is that item, picked or not.
   await item.fill("ktm fuel filter");

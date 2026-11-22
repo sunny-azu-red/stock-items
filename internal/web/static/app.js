@@ -155,7 +155,7 @@
       if (container && container.querySelectorAll(".row-line:not(.row-head)").length <= 1) {
         row.classList.remove("has-error");
         row.querySelectorAll("input").forEach(function (i) { i.value = ""; });
-        row.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; });
+        row.querySelectorAll("select").forEach(function (s) { s.selectedIndex = 0; delete s.dataset.before; });
         row.querySelectorAll("[data-stock-badge]").forEach(function (n) { n.textContent = ""; });
         row.querySelectorAll(".has-error").forEach(function (el) { el.classList.remove("has-error"); });
         row.querySelectorAll(".field-error").forEach(function (el) { el.remove(); });
@@ -201,7 +201,10 @@
   document.addEventListener("change", function (e) {
     if (e.target.matches('input[name="unit"]')) syncUnits(e.target.form);
     if (e.target.matches("select[data-part-item]")) updatePartNote(e.target);
-    if (e.target.matches("select[data-part-unit]")) updateStockBadges(e.target);
+    if (e.target.matches("select[data-part-unit]")) {
+      delete e.target.dataset.before; // picked by hand: it stays (followItemUnits)
+      updateStockBadges(e.target);
+    }
     if (e.target.matches("input[data-kit-tier]")) switchKitTier(e.target);
     if (e.target.matches("#vehicle_id")) showKitStarts(e.target);
     if (e.target.matches("input[data-autosubmit]")) sendPhoto(e.target);
@@ -471,7 +474,9 @@
 
   // Next to an item picker, the quantity's hint and unit select follow the
   // chosen item's <option> (null for none): only its units are offered,
-  // preferring the larger one (L, kg).
+  // preferring the larger one (L, kg). A unit the item chose goes back to
+  // the one before it once no item is chosen; one picked by hand stays
+  // (data-before holds the unit to go back to while the item's applies).
   function followItemUnits(opt, scope) {
     if (!scope) return;
     var qty = scope.querySelector("input[data-part-qty]");
@@ -491,7 +496,13 @@
       if (ok && o.value) last = o;
     });
     var cur = unit.options[unit.selectedIndex];
-    if (base && (!cur || cur.disabled || !cur.value)) unit.value = last ? last.value : "";
+    if (base && (!cur || cur.disabled || !cur.value)) {
+      if (unit.dataset.before === undefined) unit.dataset.before = unit.value;
+      unit.value = last ? last.value : "";
+    } else if (!base && unit.dataset.before !== undefined) {
+      unit.value = unit.dataset.before;
+    }
+    if (!base) delete unit.dataset.before;
   }
 
   // ---- Suggestion lists ---------------------------------------------------
@@ -644,17 +655,21 @@
   // form's item_id, the quantity's units and the line under the field
   // ([data-item-status]: the item's stock badge, or [data-new-status])
   // follow.
+  // pickedItem is the item the field is ({opt}), or null with the number
+  // of items the text names ({named}: several only when it names more
+  // than one, which is something new unless one is picked).
   function pickedItem(input) {
     var list = document.getElementById(input.getAttribute("data-item-pick"));
     var opts = list ? Array.prototype.slice.call(list.options) : [];
     var id = input.form.elements.item_id.value;
     var picked = id && opts.find(function (o) { return o.getAttribute("data-id") === id; });
-    if (picked && namesOption(input.value, picked)) return picked;
+    if (picked && namesOption(input.value, picked)) return { opt: picked, named: 1 };
     var named = opts.filter(function (o) { return namesOption(input.value, o); });
-    return named.length === 1 ? named[0] : null;
+    return { opt: named.length === 1 ? named[0] : null, named: named.length };
   }
   function followItem(input) {
-    var opt = pickedItem(input);
+    var p = pickedItem(input);
+    var opt = p.opt;
     input.form.elements.item_id.value = opt ? opt.getAttribute("data-id") : "";
     followItemUnits(opt, input.form);
     var status = input.closest(".field").querySelector("[data-item-status]");
@@ -662,7 +677,14 @@
     status.querySelectorAll(".badge").forEach(function (b) { b.remove(); });
     var badge = opt && stockBadgeFor(opt, 0);
     if (badge) status.appendChild(badge);
-    status.querySelector("[data-new-status]").hidden = !!opt || !input.value.trim();
+    var many = status.querySelector("[data-many-status]");
+    var several = !opt && p.named > 1;
+    if (many) {
+      if (many.dataset.text === undefined) many.dataset.text = many.textContent;
+      many.textContent = many.dataset.text.replace("{n}", p.named);
+      many.hidden = !several;
+    }
+    status.querySelector("[data-new-status]").hidden = !!opt || several || !input.value.trim();
   }
   document.addEventListener("combo-pick", function (e) {
     if (!e.target.matches("input[data-item-pick]")) return;

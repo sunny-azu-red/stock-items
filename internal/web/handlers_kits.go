@@ -360,7 +360,36 @@ func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 		}
 		f.VehicleID = *id
 	}
+	if id := parseOptID(r.URL.Query().Get("from")); id != nil {
+		// Duplicate: start from another kit's fields; nothing is saved yet.
+		k, err := s.store.GetKit(r.Context(), *id)
+		if err != nil {
+			return err
+		}
+		f = duplicateKitForm(k, wid)
+	}
 	return s.renderKitForm(w, r, http.StatusOK, f, true)
+}
+
+// duplicateKitForm is a new kit's form holding k's name, schedule, parts
+// and notes, usually for another vehicle: the one worked on, else none yet,
+// so the form asks. Parts whose item is archived are left out, as new work
+// doesn't use them.
+func duplicateKitForm(k stock.Kit, vehicleID int64) kitForm {
+	f := kitFormFrom(k)
+	f.ID, f.Version, f.Stored, f.VehicleID = 0, 0, "", vehicleID
+	f.Lines, f.InterLines = nil, nil
+	for _, l := range k.Lines {
+		if !l.Archived {
+			f.Lines = append(f.Lines, partRow(l.ItemID, l.Need, l.Unit))
+		}
+	}
+	for _, l := range k.InterLines {
+		if !l.Archived {
+			f.InterLines = append(f.InterLines, partRow(l.ItemID, l.Need, l.Unit))
+		}
+	}
+	return f
 }
 
 func (s *Server) kitCreate(w http.ResponseWriter, r *http.Request) error {

@@ -54,8 +54,8 @@
 {{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if not $k.Archived}}{{/* An archived vehicle's kit has no reminders: its readiness only, named like any other. */}}{{if not $d.Vehicle.Archived}}{{if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{end}}{{if $k.HasIntermediate}}{{template "schedule-ready-badge" (dict "R" $r "Name" (or (and $d.View.NextInter "Intermediate") "Full"))}}{{else}}{{template "ready-badge" $r}}{{end}}{{if and (not $d.Vehicle.Archived) $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} missing</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} missing</span>{{end}}{{end}}{{end}}
 {{end}}
 {{define "head-actions"}}{{$d := .Data}}{{$k := $d.View.Kit}}
-<a class="btn btn-ghost" href="/vehicles/{{$d.Vehicle.ID}}">{{icon "arrow-left"}} {{$d.Vehicle.Name}}</a>
-<a class="btn" href="/kits/{{$k.ID}}/edit">{{icon "pencil"}} Edit</a>
+<a class="btn" href="/kits/{{$k.ID}}/edit" data-more="3">{{icon "pencil"}} Edit</a>
+<a class="btn" href="/kits/new?from={{$k.ID}}" title="Start a similar kit, for this vehicle or another" data-more="2">{{icon "copy"}} Duplicate</a>
 {{if $k.Archived}}
 <form class="inline-form" method="post" action="/kits/{{$k.ID}}/restore"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn btn-primary" type="submit">{{icon "archive-restore"}} Restore</button></form>
 {{else if $d.Vehicle.Archived}}
@@ -64,9 +64,9 @@
 <a class="btn btn-primary" href="/services/new?kit={{$k.ID}}">{{icon "wrench"}} Log service</a>
 {{end}}
 {{if $k.Archived}}{{else if $d.ServiceCount}}
-<form class="inline-form" method="post" action="/kits/{{$k.ID}}/archive"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn" type="submit" title="Its {{plural $d.ServiceCount "logged service"}} keep it, so it is archived, not deleted: it leaves the lists and reminders, and you can restore it">{{icon "archive"}} Archive</button></form>
+<form class="inline-form" method="post" action="/kits/{{$k.ID}}/archive" data-more="1"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn" type="submit" title="Its {{plural $d.ServiceCount "logged service"}} keep it, so it is archived, not deleted: it leaves the lists and reminders, and you can restore it">{{icon "archive"}} Archive</button></form>
 {{else}}
-<form class="inline-form" method="post" action="/kits/{{$k.ID}}/delete"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn btn-danger" type="submit" title="You can undo it">{{icon "trash-2"}} Delete</button></form>
+<form class="inline-form" method="post" action="/kits/{{$k.ID}}/delete" data-more="1"><input type="hidden" name="version" value="{{$k.Version}}"><button class="btn btn-danger" type="submit" title="You can undo it">{{icon "trash-2"}} Delete</button></form>
 {{end}}
 {{end}}
 {{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}{{$fr := $d.View.FullReadiness}}{{$ir := $d.View.InterReadiness}}

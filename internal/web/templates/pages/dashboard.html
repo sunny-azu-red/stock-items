@@ -2,7 +2,7 @@
 {{define "head-title"}}{{$d := .Data}}{{with $d.TitleName}}{{.}} dashboard{{else}}Dashboard{{end}}{{end}}
 {{define "head-line"}}<span>{{.Today.Format "Monday, 2 January 2006"}}</span>{{end}}
 {{define "head-actions"}}{{$d := .Data}}
-<a class="btn" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "wrench"}} Log service</a>
+<a class="btn" href="/services/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}" data-more="4">{{icon "wrench"}} Log service</a>
 <a class="btn btn-primary" href="/items/new{{with $d.VehicleID}}?vehicle={{.}}{{end}}">{{icon "plus"}} Add item</a>
 {{end}}
 {{define "content"}}{{$d := .Data}}

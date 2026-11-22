@@ -178,7 +178,8 @@ func TestServicesNoLabourNoFooter(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
-	expectNot(t, a.get("/services"), "card-foot")
+	// Its kits card keeps a footer for Add kit, with no total.
+	expectNot(t, a.get("/services"), `<span class="total">`, "Labour in total")
 	// The vehicle page's Service kits keeps its footer for Add kit.
 	expectNot(t, a.get("/vehicles/"+itoa(k390)), `<span class="total">`, "Labour in total")
 }
@@ -810,8 +811,8 @@ func TestKitMissingStates(t *testing.T) {
 		t.Errorf("archived kit: %d rows listed, want 2", n)
 	}
 
-	// A kit of an archived vehicle: no new work, its way back still leads
-	// to the vehicle.
+	// A kit of an archived vehicle: no new work; its chip still leads up to
+	// the vehicle.
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
 		"line_item": {itoa(oil)}, "line_qty": {"2 L"}})
 	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
@@ -825,7 +826,7 @@ func TestKitMissingStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = a.get(otherURL)
-	expect(t, page, http.StatusOK, "1 part · 1 missing", `<a class="btn btn-ghost" href="/vehicles/`+itoa(k1290)+`">`, "Restore KTM 1290 to log this service.")
+	expect(t, page, http.StatusOK, "1 part · 1 missing", `<a class="chip" href="/vehicles/`+itoa(k1290)+`"`, "Restore KTM 1290 to log this service.")
 	expectNot(t, page, `/shortfall"`)
 	// Its readiness names its schedule, as on an active vehicle's kit; with
 	// no reminders, there is no Next.
@@ -1201,4 +1202,54 @@ func TestZeroLabourIsNoLabour(t *testing.T) {
 	}
 	expect(t, a.postV(svc, url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"80"}}), http.StatusSeeOther)
 	expect(t, a.get("/services"), http.StatusOK, "80.00 EUR labour")
+}
+
+// TestKitDuplicate: Duplicate on a kit's page starts a new kit's form from
+// it (name, schedule, parts, notes), for the vehicle chosen on the form
+// (the one worked on, if any), leaving out parts whose item is archived.
+func TestKitDuplicate(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	oil, pads := itemID(t, a.store, "15W50"), itemID(t, a.store, "Rear Brake Pads")
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"},
+		"line_item": {itoa(oil), itoa(pads)}, "line_qty": {"2", "1"}, "line_unit": {"l", ""}, "notes": {"Warm the engine first"}})
+	expect(t, rec, http.StatusSeeOther)
+	src := mustID(t, rec.Header().Get("Location"))
+	dup := "/kits/new?from=" + itoa(src)
+	expect(t, a.get(kitPath(src)), http.StatusOK, `href="`+dup+`"`, "Duplicate")
+	if _, err := a.store.ArchiveItem(context.Background(), pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
+		t.Fatal(err)
+	}
+	form := a.get(dup)
+	expect(t, form, http.StatusOK, "<h1>Add kit</h1>", `value="Oil service"`, `value="5000"`, "Warm the engine first",
+		`name="line_item" value="`+itoa(oil)+`"`)
+	expectNot(t, form, `name="line_item" value="`+itoa(pads)+`"`, `name="version"`, `<option value="`+itoa(k390)+`" selected`)
+	// Saved for the other vehicle: a second kit, the first one unchanged.
+	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Oil service"}, "interval_distance": {"5000"},
+		"line_item": {itoa(oil)}, "line_qty": {"2"}, "line_unit": {"l"}})
+	expect(t, rec, http.StatusSeeOther)
+	if id := mustID(t, rec.Header().Get("Location")); id == src {
+		t.Fatalf("saved over the kit it was duplicated from")
+	}
+	expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Oil service")
+	expect(t, a.get(kitPath(src)), http.StatusOK, "Rear Brake Pads")
+	// While a vehicle is worked on, the copy is for it.
+	expect(t, a.getWorking(dup, itoa(k1290)), http.StatusOK, `name="vehicle_id" value="`+itoa(k1290)+`"`)
+}
+
+// TestServicesAddKitInCard: the Service kits card has its own Add kit in its
+// foot, with kits or none (the header keeps one too), but not for an
+// archived vehicle or on the archived kits.
+func TestServicesAddKitInCard(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	foot := `<div class="card-foot card-actions"><a class="btn btn-sm" href="/kits/new`
+	expect(t, a.get("/services"), http.StatusOK, foot+`">`)
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Chain"}}), http.StatusSeeOther)
+	expect(t, a.get("/services?v="+itoa(k390)), http.StatusOK, foot+`?vehicle=`+itoa(k390)+`">`, "Chain")
+	expectNot(t, a.get("/services?archived=1"), foot)
+	if err := a.store.ArchiveVehicle(context.Background(), k1290, cur(t, a.store, store.WhatVehicle, k1290)); err != nil {
+		t.Fatal(err)
+	}
+	expectNot(t, a.get("/services?v="+itoa(k1290)), foot)
 }

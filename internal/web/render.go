@@ -64,8 +64,11 @@ type View struct {
 // head-title (required), head-line, head-actions and head-lead. The layout
 // writes the header's markup once (docs/design.md#7-page-headers), so every
 // page gets the same one; a block that renders nothing leaves no element.
+// More is set when a button in Actions may go into the ⋯ menu (data-more),
+// so the layout adds the menu only to headers that can use it.
 type PageHead struct {
 	Lead, Title, Line, Actions template.HTML
+	More                       bool
 }
 
 // renderHead renders the page's head-* blocks with v, trimmed.
@@ -88,6 +91,7 @@ func renderHead(t *template.Template, v View) (PageHead, error) {
 		//nolint:gosec // html/template's own output, escaped
 		*b.dst = template.HTML(strings.TrimSpace(buf.String()))
 	}
+	h.More = strings.Contains(string(h.Actions), "data-more=")
 	return h, nil
 }
 

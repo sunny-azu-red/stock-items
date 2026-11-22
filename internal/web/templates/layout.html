@@ -70,7 +70,7 @@
       {{.Head.Lead}}
       <h1>{{.Head.Title}}</h1>
       {{with .Head.Line}}<div class="sub">{{.}}</div>{{end}}
-      {{with .Head.Actions}}<div class="actions">{{.}}</div>{{end}}
+      {{with .Head.Actions}}<div class="actions">{{.}}{{if $.Head.More}}{{template "head-more"}}{{end}}</div>{{end}}
     </div>
     {{template "content" .}}
   </main>
@@ -140,11 +140,19 @@
   {{range .View.NavVehicles}}{{$this := and $on (eq .ID $on.ID)}}<button class="chip" type="submit" name="vehicle" value="{{if not $this}}{{.ID}}{{end}}" aria-pressed="{{if $this}}true{{else}}false{{end}}" style="{{chipStyle .Color}}"><span class="dot"></span>{{.Name}}</button>{{end}}
 </form>{{end}}
 
+{{/* The header's ⋯ (docs/design.md#header-buttons): hidden until a button
+     marked data-more doesn't fit beside the heading; app.js then moves it,
+     least used first, into the menu after it, and back when there is room.
+     The menu is a list of the page's own buttons and links, Tab goes
+     through it; a tap outside or Esc closes it. */}}
+{{define "head-more"}}<button class="btn more-btn" type="button" commandfor="head-more" command="toggle-popover" title="More actions" aria-label="More actions" hidden>{{icon "ellipsis"}}</button><div class="head-more" id="head-more" popover></div>{{end}}
+
 {{/* The bar at the top of every page while a vehicle is worked on: says
      so (its name opens the vehicle's page) or stops (All vehicles, an ×).
      Another vehicle is chosen in the sidebar's Work on list (on a phone, in
-     More). It is the pages' vehicle control: their vehicle chips are hidden
-     meanwhile. */}}
+     More), or on its own page, where the bar's place offers it while no
+     vehicle is worked on (below). It is the pages' vehicle control: their
+     vehicle chips are hidden meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
   {{/* The name opens the vehicle's page, except on that page. */}}
   {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
@@ -152,6 +160,13 @@
   <span class="working-actions">
     <form class="inline-form" method="post" action="/working-on"><button class="close-btn" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>
-</section>{{end}}{{end}}
+</section>{{else}}{{template "work-on-offer" .}}{{end}}{{end}}
+
+{{/* A vehicle's own page while no vehicle is worked on: the bar's place
+     offers to work on it, dashed and quiet; tapping it makes it the bar
+     (working.go brings you back to this page). Only where the sidebar's
+     Work on list is: 2 or more active vehicles (NavVehicles holds only
+     those, so an archived vehicle's page has none). */}}
+{{define "work-on-offer"}}{{if gt (len .NavVehicles) 1}}{{range .NavVehicles}}{{if eq $.Path (print "/vehicles/" .ID)}}<form class="work-on-offer" method="post" action="/working-on"><button class="working-on working-off" type="submit" name="vehicle" value="{{.ID}}" style="{{chipStyle .Color}}" title="The dashboard, Stock, Services, Activity and Shopping show only {{.Name}}"><span class="working-name">{{icon .Kind.Icon}}<span>Work on {{.Name}}</span></span></button></form>{{end}}{{end}}{{end}}{{end}}
 
 {{define "flash"}}{{with .}}<div class="flash flash-{{.Kind}}" role="{{if eq .Kind "error"}}alert{{else}}status{{end}}">{{if eq .Kind "error"}}{{icon "triangle-alert"}}{{else}}{{icon "circle-check"}}{{end}}<span>{{.Message}}</span>{{with .Undo}}<form class="inline-form flash-undo" method="post" action="/trash/{{.}}/restore"><button class="btn btn-sm" type="submit">{{icon "undo-2"}} Undo</button></form>{{end}}</div>{{end}}{{end}}

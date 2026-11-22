@@ -362,3 +362,18 @@ func TestNewItemFromShoppingKeepsMatchesAfterAnError(t *testing.T) {
 	expect(t, a.post("/items", url.Values{"shopping_id": {itoa(free)}, "name": {"Rear Brake Pads"}, "unit": {"piece"}}),
 		http.StatusUnprocessableEntity, "Enter how much you bought", "Already have it?")
 }
+
+// TestShoppingCopyInCard: Copy as text goes with the list it copies, in the
+// "On the list" card's foot, not in the page header; with nothing on the
+// list there is none.
+func TestShoppingCopyInCard(t *testing.T) {
+	a := newApp(t)
+	a.seed()
+	expectNot(t, a.get("/shopping"), "Copy as text")
+	expect(t, a.post("/shopping", url.Values{"item": {"Chain lube"}, "quantity": {"2"}}), http.StatusSeeOther)
+	rec := a.get("/shopping")
+	expect(t, rec, http.StatusOK, `<div class="card-foot card-actions"><a class="btn btn-sm" href="/shopping/export.txt" data-copy-url="/shopping/export.txt">`)
+	if strings.Contains(headActions(t, rec), "Copy as text") || strings.Contains(headActions(t, rec), "actions") {
+		t.Errorf("the shopping list's header has buttons:\n%s", headActions(t, rec))
+	}
+}

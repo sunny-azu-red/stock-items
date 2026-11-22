@@ -2,7 +2,8 @@
 {{define "head-title"}}{{$d := .Data}}{{with $d.Item}}History of {{.DisplayName}}{{else}}{{with $d.TitleName}}{{.}} activity{{else}}{{if and $d.General (not $d.VehicleName)}}General activity{{else}}Activity{{end}}{{end}}{{end}}{{end}}
 {{define "head-line"}}{{$d := .Data}}<span>{{if $d.Item}}Every change to this item's stock{{else if and $d.VehicleName $d.General}}Every change to the stock that fits {{$d.VehicleName}} (General too), except parts other vehicles' services took{{else if $d.VehicleName}}Every change to the items tagged with {{$d.VehicleName}} (shared ones too), except parts other vehicles' services took{{else if $d.General}}Every change to the stock that fits no vehicle{{else}}Every change to your stock{{end}}{{with $d.Year}} in {{.}}{{end}}, {{$d.SortNote}}{{if not $d.Heads.Custom}}.{{end}}</span>{{if $d.Heads.Custom}}<span>·</span><a class="reset-link" href="{{$d.Heads.ResetHref}}" title="Show the newest changes first">Reset order {{icon "x"}}</a>{{end}}{{end}}
 {{define "head-actions"}}{{$d := .Data}}
-<a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>
+{{/* Only with something to export (a page past the end has: the earlier ones). */}}
+{{if or $d.Movements (gt $d.Page 1)}}<a class="btn" href="{{withQuery "/activity/export.csv" ($d.KindQuery $d.Kind)}}" title="Download as CSV">{{icon "download"}} CSV</a>{{end}}
 {{end}}
 {{define "content"}}{{$d := .Data}}
 {{/* While a vehicle is worked on, the Working on bar is the vehicle

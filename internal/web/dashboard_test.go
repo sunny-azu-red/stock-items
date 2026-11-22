@@ -39,3 +39,13 @@ func TestDashboardSpentThisYear(t *testing.T) {
 	// The stock value opens what is in stock.
 	expect(t, rec, http.StatusOK, `<a class="card tile tile-value" href="/stock?instock=1">`)
 }
+
+// TestActivityCSVOnlyWithRows: Activity's CSV shows when there is something
+// to export, and not when the filters find nothing.
+func TestActivityCSVOnlyWithRows(t *testing.T) {
+	a := newApp(t)
+	expectNot(t, a.get("/activity"), "/activity/export.csv")
+	a.seed()
+	expect(t, a.get("/activity"), http.StatusOK, `href="/activity/export.csv"`)
+	expectNot(t, a.get("/activity?kind=bought"), "/activity/export.csv")
+}

@@ -286,9 +286,9 @@ func TestWorkingOnPages(t *testing.T) {
 		expectNot(t, rec, `href="/kits/`+itoa(farKit)+`"`, `href="/services/`+farService+`"`)
 		rec = a.get("/items/" + itoa(ring))
 		expect(t, rec, http.StatusOK, `href="/kits/`+itoa(farKit)+`"`, `href="/services/`+farService+`"`)
-		// The vehicle's page has no way to the list meanwhile: the bar's ×.
-		expectNot(t, a.getWorking(own, w), `<a class="btn btn-ghost" href="/vehicles">`)
-		expect(t, a.get(own), http.StatusOK, `<a class="btn btn-ghost" href="/vehicles">`)
+		// The vehicle's page offers working on it only while none is worked on.
+		expectNot(t, a.getWorking(own, w), "working-off")
+		expect(t, a.get(own), http.StatusOK, `class="working-on working-off"`)
 		// A save from a page opened before isn't new work: it saves, and
 		// lands on the vehicle worked on.
 		v, err := a.store.GetVehicle(ctx, k1290)
@@ -785,4 +785,37 @@ func TestShoppingSoleVehicle(t *testing.T) {
 	expectNot(t, rec, `<span class="dot"></span>Only</span>`, `aria-label="Filter by vehicle"`)
 	rec = a.get("/shopping/export.txt")
 	expect(t, rec, http.StatusOK, "1 pcs - Pads\n", "1 pcs - Tyre [Old]\n")
+}
+
+// TestWorkingOnOffer: a vehicle's own page offers working on it in the
+// bar's place (layout.html, work-on-offer) while no vehicle is worked on,
+// wherever the sidebar's Work on list is (2 or more active vehicles).
+func TestWorkingOnOffer(t *testing.T) {
+	a := newApp(t)
+	k390, k1290 := a.seed()
+	own := "/vehicles/" + itoa(k390)
+	offer := `<button class="working-on working-off" type="submit" name="vehicle" value="` + itoa(k390) + `"`
+	rec := a.get(own)
+	expect(t, rec, http.StatusOK, offer, "Work on KTM 390")
+	expectNot(t, rec, workingBar)
+	// Taking it works on the vehicle and comes back to its page, now with the bar.
+	rec = a.post("/working-on", url.Values{"vehicle": {itoa(k390)}}, "Referer", "http://example.com"+own)
+	expectRedirect(t, rec, own)
+	if c := workingCookieSet(rec); c == nil || c.Value != itoa(k390) {
+		t.Fatalf("cookie %+v", c)
+	}
+	rec = a.getWorking(own, itoa(k390))
+	expect(t, rec, http.StatusOK, workingBar, "Working on <strong>KTM 390</strong>")
+	expectNot(t, rec, "working-off")
+	// Only on the vehicle's own page.
+	for _, path := range []string{own + "/edit", "/stock", "/vehicles", "/"} {
+		expectNot(t, a.get(path), "working-off")
+	}
+	// Not for an archived vehicle, which can't be worked on.
+	if err := a.store.ArchiveVehicle(context.Background(), k1290, cur(t, a.store, store.WhatVehicle, k1290)); err != nil {
+		t.Fatal(err)
+	}
+	expectNot(t, a.get("/vehicles/"+itoa(k1290)), "working-off")
+	// With one active vehicle left there is nothing to choose.
+	expectNot(t, a.get(own), "working-off")
 }

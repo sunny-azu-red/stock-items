@@ -348,12 +348,14 @@
   /* layout.html writes it on every page, from the page's head-* blocks:
      the heading and the record's buttons share the first row, at least a
      button tall, with the heading centred in it; the line under it
-     (Archived, chips, badges, then text) runs the full width. */
+     (Archived, chips, badges, then text) runs the full width. The buttons
+     stay on one line: what doesn't fit goes into ⋯ (app.js, fitHead), and
+     a long heading wraps rather than running under them. */
   .page-head {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(var(--control-h), auto);
     column-gap: var(--gap); row-gap: 4px; align-items: center; margin-bottom: 18px;
-    & h1 { grid-row: 1; grid-column: 1; }
-    & .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    & h1 { grid-row: 1; grid-column: 1; overflow-wrap: break-word; }
+    & .actions { grid-row: 1; grid-column: 2; display: flex; gap: 8px; justify-content: flex-end; }
     & .sub {
       grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
       margin: 0; color: var(--muted);
@@ -364,16 +366,19 @@
       & .actions { grid-column: 3; }
       & .sub { grid-column: 2 / -1; min-height: 24px; }
     }
-    /* Narrow content: the heading, the line, then the buttons. */
+    /* Narrow content: the heading, the line, then the buttons, one row of
+       equal cells (⋯ at its end, a button square): what doesn't fit goes
+       into ⋯. --head-narrow tells app.js which rule decides that. */
     @container main (width < 680px) {
+      --head-narrow: 1;
       grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
-      /* The buttons as an even grid, each filling its cell: tidy rows
-         however many there are, and two share the width. */
-      & .actions { grid-row: auto; grid-column: 1 / -1; order: 1; margin-top: 8px;
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
-      & .actions > * { min-width: 0; }
-      & .actions :is(.btn, form, .inline-form) { width: 100%; }
-      & .actions form .btn { width: 100%; }
+      & .actions { grid-row: auto; grid-column: 1 / -1; order: 1; margin-top: 8px; }
+      /* Every cell starts at a button's padding and border (2 × 14px + 2px),
+         which a link button can't go under and a form holding one could:
+         from there they grow alike, so all are as wide. */
+      & .actions > * { flex: 1 1 30px; min-width: 0; }
+      & .actions > .more-btn { flex: none; }
+      & .actions > .btn:not(.more-btn), & .actions > form .btn { width: 100%; }
       &:has(> .avatar) {
         grid-template-columns: auto minmax(0, 1fr);
         & .actions { grid-column: 1 / -1; }
@@ -393,6 +398,32 @@
         & .icon { width: 28px; height: 28px; }
       }
     }
+  }
+  /* ⋯: a button square (the icon in the button's 9px padding), lit while
+     its menu is open. */
+  .page-head .more-btn {
+    padding: 9px;
+    &:has(+ .head-more:popover-open) { background: var(--surface-2); }
+  }
+  /* The menu of the header's buttons that don't fit: a popover anchored to
+     ⋯, 4px under it and ending at its right edge (above it, or the other
+     way, when there's no room). Its items are the buttons themselves, as
+     rows: no edge of their own, the hover grey, the red of Delete, which a
+     hairline sets apart from what comes before it. Like every popover it
+     takes a card's hairline and no shadow, and fades. */
+  .head-more {
+    position: fixed; inset: auto; margin: 0; margin-block-start: 4px;
+    position-area: block-end span-inline-start; position-try-fallbacks: flip-block, flip-inline;
+    min-width: 180px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); color: var(--text);
+    opacity: 0; translate: 0 -4px;
+    transition: opacity .15s, translate .15s, display .15s allow-discrete, overlay .15s allow-discrete;
+    &:popover-open { display: grid; opacity: 1; translate: 0; @starting-style { opacity: 0; translate: 0 -4px; } }
+    & > :is(a, form) { display: block; }
+    & .btn { width: 100%; justify-content: flex-start; border-color: transparent; background: transparent; }
+    & .btn:hover { background: var(--surface-2); }
+    & .btn-danger:hover { background: var(--danger-soft); }
+    & > :has(.btn-danger):not(:first-child) { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
   }
 
   /* ---- Panels (cards) and page layout ------------------------------ */
@@ -1102,10 +1133,29 @@
     margin-left: auto; display: flex; align-items: center; gap: 4px;
   }
   .working-btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* A vehicle's own page while none is worked on: the bar's place offers
+     it, quietly. The bar's box (30px of content in its padding and border,
+     so as tall), with a dashed edge and no wash, its one line muted, the name
+     too; hovered or focused it shows the bar it becomes. An offer, not a
+     state: on a phone it runs edge to edge like the bar but scrolls away. */
+  .work-on-offer { margin: 0; }
+  .working-off {
+    width: 100%; padding: 5px 14px;
+    border-style: dashed; background: transparent; color: var(--muted);
+    font: inherit; font-size: var(--text-sm); text-align: left; cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
+    /* As tall inside as the bar's ×, so with the same padding and border
+       the box is as tall as the bar's, on a desktop and a phone alike. */
+    & .working-name { min-height: var(--control-sm); }
+    &:is(:hover, :focus-visible) { border-style: solid; background: color-mix(in oklab, var(--chip) 12%, var(--surface)); color: var(--text); }
+    @media (width <= 820px) {
+      position: static; width: calc(100% + 2 * var(--page)); padding: 5px var(--page);
+    }
+  }
   /* On a phone the bar stays in view: what scrolls into view (a field
      taking the focus) stops under it. */
   @media (width <= 820px) {
-    html:has(.working-on) { scroll-padding-top: 56px; }
+    html:has(.working-on:not(.working-off)) { scroll-padding-top: 56px; }
   }
   /* In the sidebar (and the More sheet), Work on and Stock by vehicle are a
      list like the nav above them: 36px rows (a 20px line in 7px padding and
@@ -1419,10 +1469,16 @@
   dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
 
   /* ---- Messages ---------------------------------------------------- */
+  /* The page header is 18px under the band right above it, a flash as the
+     Working on bar (or its offer); two bands, the bar and a flash, are a
+     gap apart, like cards. On a phone the bar's edge-to-edge spacing stays. */
   .flash {
     display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; min-height: 46px;
-    border-radius: var(--radius); margin-bottom: var(--gap); font-weight: 600;
+    border-radius: var(--radius); margin-bottom: 18px; font-weight: 600;
     animation: flash-in .3s ease-out;
+  }
+  @media (width > 820px) {
+    .working-on:has(+ .flash), .work-on-offer:has(+ .flash) > .working-off { margin-bottom: var(--gap); }
   }
   .flash-success { background: var(--ok-soft); color: var(--ok); }
   .flash-error { background: var(--danger-soft); color: var(--danger); }

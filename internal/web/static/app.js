@@ -1040,11 +1040,110 @@
     return true;
   }
 
+  // ---- Header buttons that don't fit (docs/design.md#header-buttons) -----
+  // The header's buttons stay on one line. A button marked data-more moves
+  // into the ⋯ menu while they don't fit, lowest number first (Archive or
+  // Delete, then Duplicate, Edit, other actions), and back to its place
+  // once there is room. Beside the heading they don't fit when the heading
+  // gets less than it needs on one line, up to half the room from it to
+  // the header's end; in a narrow column (one row of equal cells, CSS sets
+  // --head-narrow) when a button's icon and text no longer fit in it with
+  // its own padding (14px a side) around them, before they look squeezed.
+  var headWidths = new WeakMap();
+  var headCanvas = document.createElement("canvas").getContext("2d");
+  function squeezed(b) {
+    var range = document.createRange();
+    range.selectNodeContents(b);
+    var cs = getComputedStyle(b);
+    var edges = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    return range.getBoundingClientRect().width + edges > b.getBoundingClientRect().width + 0.5;
+  }
+  var headObserver = new ResizeObserver(function (entries) {
+    entries.forEach(function (e) {
+      var w = Math.round(e.contentRect.width);
+      if (headWidths.get(e.target) === w) return; // only a height changed
+      headWidths.set(e.target, w);
+      fitHead(e.target);
+    });
+  });
+  function headFits(head, actions) {
+    if (getComputedStyle(head).getPropertyValue("--head-narrow").trim() === "1") {
+      return Array.prototype.every.call(actions.querySelectorAll(":scope > .btn, :scope > form > .btn"), function (b) {
+        return b.hidden || !squeezed(b);
+      });
+    }
+    var h1 = head.querySelector(":scope > h1");
+    if (!h1) return true;
+    // Its width on one line, measured in its font (wrapped, the lines
+    // leave out the spaces they break at).
+    var cs = getComputedStyle(h1);
+    headCanvas.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+    headCanvas.letterSpacing = cs.letterSpacing === "normal" ? "0px" : cs.letterSpacing;
+    var line = headCanvas.measureText(h1.textContent.trim().replace(/\s+/g, " ")).width;
+    var box = h1.getBoundingClientRect();
+    var room = head.getBoundingClientRect().right - box.left;
+    // (2px over the measure: laid out, the text comes out a little wider.)
+    return box.width >= Math.min(line + 2, room / 2);
+  }
+  function fitHead(head) {
+    var actions = head.querySelector(":scope > .actions");
+    var more = actions && actions.querySelector(":scope > .more-btn");
+    if (!more) return;
+    var menu = more.nextElementSibling;
+    var order = function (a, b) { return a.dataset.i - b.dataset.i; };
+    // The first time, number the buttons in their order, to put them back in it.
+    Array.prototype.forEach.call(actions.children, function (el, i) {
+      if (el !== more && el !== menu && !el.dataset.i) el.dataset.i = i;
+    });
+    // Everything back in the row, in order, before ⋯.
+    var all = Array.prototype.filter.call(actions.children, function (el) { return el !== more && el !== menu; })
+      .concat(Array.prototype.slice.call(menu.children)).sort(order);
+    all.forEach(function (el) { actions.insertBefore(el, more); });
+    more.hidden = true;
+    // Then into ⋯, the lowest number first (of two alike, the later one).
+    var queue = all.filter(function (el) { return el.dataset.more; }).sort(function (a, b) {
+      return a.dataset.more - b.dataset.more || b.dataset.i - a.dataset.i;
+    });
+    while (queue.length && !headFits(head, actions)) {
+      var el = queue.shift();
+      var after = Array.prototype.find.call(menu.children, function (m) { return order(m, el) > 0; });
+      menu.insertBefore(el, after || null);
+      more.hidden = false;
+    }
+    if (more.hidden && menu.matches(":popover-open")) menu.hidePopover();
+  }
+  function watchHeads(root) {
+    var heads = root.matches && root.matches(".page-head") ? [root] : root.querySelectorAll(".page-head");
+    Array.prototype.forEach.call(heads, function (head) {
+      if (!head.querySelector(":scope > .actions > .more-btn")) return;
+      headWidths.set(head, Math.round(head.getBoundingClientRect().width));
+      fitHead(head);
+      headObserver.observe(head);
+    });
+  }
+  // The heading's font may load after the first fit.
+  document.fonts.ready.then(function () { document.querySelectorAll(".page-head").forEach(fitHead); });
+  // Opened from the keyboard (a click with no pointer), the menu takes the
+  // focus on its first item; Esc or a tap outside closes it, and the
+  // browser puts the focus back on ⋯.
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest(".more-btn");
+    if (b) b.dataset.keyboard = e.detail === 0 ? "1" : "";
+  }, true);
+  document.addEventListener("toggle", function (e) {
+    var menu = e.target;
+    if (!menu.classList || !menu.classList.contains("head-more") || e.newState !== "open") return;
+    if (menu.previousElementSibling.dataset.keyboard !== "1") return;
+    var first = menu.querySelector("a, button");
+    if (first) first.focus();
+  }, true);
+
   // ---- Init ---------------------------------------------------------------
   function init(root) {
     root.querySelectorAll("form").forEach(syncUnits);
     root.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
     root.querySelectorAll("input[data-item-pick]").forEach(followItem);
+    watchHeads(root);
   }
   document.addEventListener("DOMContentLoaded", function () {
     init(document);

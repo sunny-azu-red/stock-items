@@ -27,6 +27,18 @@ const phone = (t: TestInfo) => !!t.project.use.isMobile;
 // "More about <label>", which a loose match finds too.
 const field = (scope: Page | Locator, label: string) => scope.getByLabel(label, { exact: true });
 
+// A button in the page header, from its ⋯ menu when it went in there
+// because the buttons don't fit (design.md#header-buttons): ⋯ opens first.
+async function headAction(page: Page, role: "link" | "button", name: string | RegExp, exact = false): Promise<Locator> {
+  const head = page.locator(".page-head");
+  const more = head.locator(".more-btn");
+  if (await more.isVisible() && (await head.locator(".head-more").getByRole(role, { name, exact, includeHidden: true }).count()) > 0) {
+    await more.click();
+    await expect(head.locator(".head-more")).toBeVisible();
+  }
+  return head.getByRole(role, { name, exact });
+}
+
 // Picks an item in a part row: types its name and picks it from the list.
 async function pickPart(input: Locator, name: string) {
   await input.fill(name);
@@ -389,13 +401,13 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
 test("edit and delete items", async ({ page }) => {
   await page.goto("/stock?q=Fuel");
   await page.locator(".item-row a.item-name").first().click();
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await (await headAction(page, "link", "Edit", true)).click();
   await page.getByLabel("Location").fill("Garage shelf 2");
   await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".flash-success")).toContainText("Saved");
   await expect(page.locator("main")).toContainText("Garage shelf 2");
 
-  await page.getByRole("button", { name: "Delete" }).click();
+  await (await headAction(page, "button", "Delete")).click();
   await expect(page).toHaveURL(/\/stock$/);
   await expect(page.locator(".flash-success")).toContainText("Deleted KTM Fuel Filter");
   await expect(page.locator("#results")).not.toContainText("Fuel Filter");
@@ -406,8 +418,8 @@ test("archive an item that a service still refers to", async ({ page }) => {
   await page.goto("/stock");
   await filterRow().getByRole("link").first().click();
   const itemURL = page.url();
-  await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Archive" }).click();
+  await expect(page.locator(".page-head").getByRole("button", { name: "Delete", includeHidden: true })).toHaveCount(0);
+  await (await headAction(page, "button", "Archive")).click();
   await expect(page.locator(".flash-success")).toContainText("Archived KTM Oil Filter");
   await expect(page.locator(".page-head")).toContainText("Archived");
 
@@ -420,7 +432,7 @@ test("archive an item that a service still refers to", async ({ page }) => {
   await expect(page.locator("main")).toContainText("KTM Oil Filter");
 
   await page.goto(itemURL);
-  await page.getByRole("button", { name: "Restore" }).click();
+  await (await headAction(page, "button", "Restore")).click();
   await expect(page.locator(".flash-success")).toContainText("Restored KTM Oil Filter");
   await page.goto("/stock");
   await expect(filterRow()).toHaveCount(1);
@@ -430,7 +442,7 @@ test("fix a logged service", async ({ page }) => {
   await page.goto("/activity?kind=service");
   await page.locator('main a[href^="/services/"]').first().click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await (await headAction(page, "link", "Edit", true)).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Edit service");
   await page.getByLabel("Labour cost").fill("120");
   await page.getByRole("button", { name: "Save service" }).click();
@@ -444,7 +456,7 @@ test("undo a deleted service", async ({ page }) => {
   const before = await row(page, "15W50 PRO 4 XP").locator(".qty").textContent();
   await page.goto("/activity?kind=service");
   await page.locator('main a[href^="/services/"]').first().click();
-  await page.getByRole("button", { name: /Delete/ }).click();
+  await (await headAction(page, "button", /Delete/)).click();
   await expect(page.locator(".flash-success")).toContainText("Deleted Oil Service");
   await page.locator(".flash").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".flash-success")).toContainText("Restored Oil Service");
@@ -1997,8 +2009,9 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
       return {
         narrow,
         // The heading row is a button tall: the heading's line (32px)
-        // centred in 36px. A phone's smaller heading starts the column.
-        want: narrow ? { top: 0, gap: 4 } : { top: (36 - Math.round(r.height)) / 2, gap: 4 + (36 - Math.round(r.height)) / 2 },
+        // centred in 36px; a heading of two lines is taller than the row.
+        // A phone's smaller heading starts the column.
+        want: narrow ? { top: 0, gap: 4 } : { top: Math.max(0, (36 - Math.round(r.height)) / 2), gap: 4 + Math.max(0, (36 - Math.round(r.height)) / 2) },
         count: heads.length,
         inMain: head.parentElement === main,
         top: Math.round(r.top - contentTop),
@@ -2010,6 +2023,30 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
         under: next ? { name: next.className || next.tagName.toLowerCase(), gap: Math.round(next.getBoundingClientRect().top - head.getBoundingClientRect().bottom) } : null,
         underButtons: sub && actions ? Math.round(sub.getBoundingClientRect().right) >= Math.round(actions.getBoundingClientRect().right) : null,
         buttonsGap: actions ? Math.round(actions.getBoundingClientRect().top - above.getBoundingClientRect().bottom) : null,
+        // The buttons (design.md#header-buttons): one row, none squeezed
+        // under its own padding, and ⋯ only with something in its menu,
+        // which holds only buttons marked to go there.
+        ...(() => {
+          const row = actions ? [...actions.children].filter((el) => !el.matches(".head-more, dialog") && el.getClientRects().length) : [];
+          const menu = actions?.querySelector(":scope > .head-more");
+          const more = actions?.querySelector(":scope > .more-btn") as HTMLElement | null;
+          const squeezed = row.flatMap((el) => {
+            const b = el.matches(".btn") ? el : el.querySelector(".btn");
+            if (!b) return [];
+            const range = document.createRange();
+            range.selectNodeContents(b);
+            const cs = getComputedStyle(b);
+            const need = range.getBoundingClientRect().width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+            return need > b.getBoundingClientRect().width + 0.5 ? [b.textContent?.trim() || "⋯"] : [];
+          });
+          return {
+            squeezed,
+            rows: new Set(row.map((el) => Math.round(el.getBoundingClientRect().top))).size,
+            moreShown: more ? !more.hidden : null,
+            menuItems: menu ? menu.children.length : 0,
+            menuUnmarked: menu ? [...menu.children].filter((el) => !el.hasAttribute("data-more")).length : 0,
+          };
+        })(),
       };
     });
     if (!m) {
@@ -2024,6 +2061,10 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
     if (m.under && m.under.gap !== 18) problems.push(`${entry}: ${m.under.name} is ${m.under.gap}px under the header, not 18`);
     if (!m.narrow && m.underButtons === false) problems.push(`${entry}: the line stops short of the buttons instead of running under them`);
     if (m.narrow && m.buttonsGap !== null && m.buttonsGap !== 12) problems.push(`${entry}: in a narrow column the buttons are ${m.buttonsGap}px under the line, not 12`);
+    if (m.squeezed.length) problems.push(`${entry}: ${m.squeezed.join(", ")} squeezed under its padding instead of going into ⋯`);
+    if (m.rows > 1) problems.push(`${entry}: the header's buttons are on ${m.rows} rows, not one`);
+    if (m.moreShown !== null && m.moreShown !== m.menuItems > 0) problems.push(`${entry}: ⋯ ${m.moreShown ? "shown" : "hidden"} with ${m.menuItems} buttons in it`);
+    if (m.menuUnmarked) problems.push(`${entry}: ${m.menuUnmarked} buttons in ⋯ without data-more`);
   }
   expect(problems).toEqual([]);
 });
@@ -2456,12 +2497,12 @@ test("an edit saved in another tab first is not overwritten", async ({ page, con
 
   // Deleted and undone in the other tab: the form opened before is stale.
   await other.goto(edit.replace(/\/edit$/, ""));
-  const archive = other.getByRole("button", { name: "Archive" });
+  const archive = other.locator(".page-head").getByRole("button", { name: "Archive", includeHidden: true });
   if (await archive.count()) {
-    await archive.click();
-    await other.getByRole("button", { name: "Restore" }).click();
+    await (await headAction(other, "button", "Archive")).click();
+    await (await headAction(other, "button", "Restore")).click();
   } else {
-    await other.getByRole("button", { name: "Delete" }).click();
+    await (await headAction(other, "button", "Delete")).click();
     await other.locator(".flash").getByRole("button", { name: "Undo" }).click();
   }
   await expect(other.locator(".flash-success")).toContainText("Restored");
@@ -2541,7 +2582,7 @@ test("Enter in the new item form saves the item", async ({ page }) => {
 test("intermediate schedule on a kit alternates with the full schedule", async ({ page }) => {
   await page.goto("/services");
   await page.locator("a.kit-row").first().click();
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await (await headAction(page, "link", "Edit", true)).click();
 
   // Its fields show while the box is ticked.
   await expect(page.getByLabel("Intermediate distance (km)")).toBeHidden();
@@ -2678,4 +2719,82 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
     }
   }
   expect(problems).toEqual([]);
+});
+
+test("a vehicle's page offers Work on in the bar's place", async ({ page }) => {
+  await page.goto("/vehicles");
+  await page.locator("a.vehicle-card").filter({ hasText: "KTM 390" }).first().click();
+  const offer = page.locator(".working-off");
+  await expect(offer).toHaveText(/^\s*Work on KTM 390\s*$/);
+  await expect(page.locator(".working-on:not(.working-off)")).toHaveCount(0);
+  const before = await offer.boundingBox();
+  await offer.click();
+  // Working on it, on its page: the bar is where the offer was, as tall.
+  await expect(page).toHaveURL(/\/vehicles\/\d+$/);
+  const bar = page.locator(".working-on");
+  await expect(bar).toContainText("Working on KTM 390");
+  await expect(page.locator(".working-off")).toHaveCount(0);
+  const after = await bar.boundingBox();
+  expect([after?.y, after?.height]).toEqual([before?.y, before?.height]);
+  await bar.getByRole("button", { name: "All vehicles" }).click();
+  await expect(page).toHaveURL(/\/vehicles$/);
+  await expect(page.locator(".working-on")).toHaveCount(0);
+});
+
+test("header buttons go into ⋯ only when they don't fit", async ({ page }, testInfo) => {
+  await page.goto("/vehicles");
+  await page.locator("a.vehicle-card").filter({ hasText: "KTM 1290" }).first().click();
+  const head = page.locator(".page-head");
+  const more = head.locator(".more-btn");
+  const menu = head.locator(".head-more");
+  const row = () => head.locator(":scope > .actions > :not(.head-more, .more-btn)").allInnerTexts();
+  const original = page.viewportSize();
+  if (!phone(testInfo)) {
+    // Room for them all, in their order.
+    await expect(more).toBeHidden();
+    expect((await row()).map((t) => t.trim())).toEqual(["Edit", "Log service", "Add item", expect.stringMatching(/^(Archive|Delete)$/)]);
+    await page.setViewportSize({ width: 430, height: original?.height ?? 900 });
+  }
+  // A phone's column: the least used go into ⋯, Archive or Delete first,
+  // then Edit; the main button stays.
+  await expect(more).toBeVisible();
+  expect((await row()).map((t) => t.trim())).toEqual(["Log service", "Add item"]);
+  await expect(menu.getByRole("link", { name: "Edit", includeHidden: true })).toHaveCount(1);
+  await more.click();
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("button", { name: /^(Archive|Delete)$/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  if (!phone(testInfo) && original) {
+    // Back in the row, in order, once there is room again.
+    await page.setViewportSize(original);
+    await expect(more).toBeHidden();
+    expect((await row()).map((t) => t.trim())).toEqual(["Edit", "Log service", "Add item", expect.stringMatching(/^(Archive|Delete)$/)]);
+    await page.setViewportSize({ width: 430, height: original.height });
+    await expect(more).toBeVisible();
+  }
+  // What is in ⋯ works from there.
+  await (await headAction(page, "link", "Edit", true)).click();
+  await expect(page).toHaveURL(/\/vehicles\/\d+\/edit$/);
+});
+
+test("duplicate a kit for another vehicle", async ({ page }) => {
+  await page.goto("/services");
+  await page.locator('a[href^="/kits/"]:not([href^="/kits/new"])').first().click();
+  const name = (await page.locator(".page-head h1").innerText()).trim();
+  await (await headAction(page, "link", "Duplicate")).click();
+  await expect(page).toHaveURL(/\/kits\/new\?from=\d+$/);
+  await expect(page.locator("main h1")).toHaveText("Add kit");
+  await expect(field(page, "Name")).toHaveValue(name);
+  await expect(field(page, "Vehicle")).toHaveValue("");
+  const parts = await page.locator('input[name="line_item"]').evaluateAll((l) => l.filter((i) => (i as HTMLInputElement).value).length);
+  expect(parts).toBeGreaterThan(0);
+  await field(page, "Vehicle").selectOption({ label: "KTM 1290" });
+  await page.getByRole("button", { name: "Save kit" }).click();
+  await expect(page).toHaveURL(/\/kits\/\d+$/);
+  await expect(page.locator(".page-head h1")).toHaveText(name);
+  await expect(page.locator(".page-head .chip")).toHaveText("KTM 1290");
+  // The copy goes again, so the pages and screenshots stay as they were.
+  await (await headAction(page, "button", "Delete")).click();
+  await expect(page.locator(".flash-success")).toContainText("Deleted");
 });

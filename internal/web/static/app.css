@@ -311,8 +311,6 @@
       & :is(a[aria-current="page"], .current) .icon { background: var(--accent-soft); color: var(--accent-strong); }
       & .count { position: absolute; top: 4px; left: calc(50% + 8px); margin: 0; font-size: var(--text-xs); padding: 0 5px; }
     }
-    body:has(#more:popover-open) .tabbar button { color: var(--text); }
-    body:has(#more:popover-open) .tabbar button .icon { background: var(--accent-soft); color: var(--accent-strong); }
 
     /* More opens the sidebar as a sheet resting on the tab bar, edge to
        edge and rounded at the top, its rows --page from the screen's edges

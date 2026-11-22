@@ -1139,8 +1139,11 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   await expect(sheet).toHaveCSS("border-radius", "16px 16px 0px 0px");
   // The build isn't in it: it is the logo's title (and /healthz).
   await expect(sheet.locator(".sidebar-foot")).toBeHidden();
-  // More is lit while it is open, as the current tab (Shop) is.
-  await expect(more).toHaveCSS("color", await page.locator(".tabbar a[href='/shopping']").evaluate((e) => getComputedStyle(e).color));
+  // The tab bar's highlight says where you are: Shop stays lit, and More
+  // isn't for being open, as a tab that isn't current (Stock).
+  const look = (l: Locator) => l.evaluate((e) => `${getComputedStyle(e).color} ${getComputedStyle(e.querySelector(".icon")!).backgroundColor}`);
+  expect(await look(more), "More while open").toBe(await look(stockTab));
+  expect(await look(page.locator(".tabbar a[href='/shopping']")), "Shop while More is open").not.toBe(await look(stockTab));
   // The bar under the grey only closes it.
   await tap(".working-on a.working-name");
   await expect(sheet).toBeHidden();

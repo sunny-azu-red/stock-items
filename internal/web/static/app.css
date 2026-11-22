@@ -378,7 +378,7 @@
          from there they grow alike, so all are as wide. */
       & .actions > * { flex: 1 1 30px; min-width: 0; }
       & .actions > .more-btn { flex: none; }
-      & .actions > .btn:not(.more-btn), & .actions > form .btn { width: 100%; }
+      & .actions > .btn:not(.more-btn), & .actions > form .btn { width: 100%; overflow: hidden; }
       &:has(> .avatar) {
         grid-template-columns: auto minmax(0, 1fr);
         & .actions { grid-column: 1 / -1; }
@@ -419,10 +419,9 @@
     opacity: 0; translate: 0 -4px;
     transition: opacity .15s, translate .15s, display .15s allow-discrete, overlay .15s allow-discrete;
     &:popover-open { display: grid; opacity: 1; translate: 0; @starting-style { opacity: 0; translate: 0 -4px; } }
-    & > :is(a, form) { display: block; }
     & .btn { width: 100%; justify-content: flex-start; border-color: transparent; background: transparent; }
     & .btn:hover { background: var(--surface-2); }
-    & .btn-danger:hover { background: var(--danger-soft); }
+    & .btn-danger:hover { background: var(--danger-soft); border-color: transparent; }
     & > :has(.btn-danger):not(:first-child) { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
   }
 

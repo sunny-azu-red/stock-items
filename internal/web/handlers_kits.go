@@ -366,7 +366,12 @@ func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		f = duplicateKitForm(k, wid)
+		// Another vehicle's kit is out of view while one is worked on, as
+		// its own page is.
+		if done, err := s.elsewhere(w, r, k.VehicleID, vehiclePath); done || err != nil {
+			return err
+		}
+		f = duplicateKitForm(k, f.VehicleID)
 	}
 	return s.renderKitForm(w, r, http.StatusOK, f, true)
 }

@@ -979,11 +979,10 @@
   });
 
   // The phone's More sheet (the sidebar, a popover, with Appearance in it)
-  // closes on the way out, so a page that Back brings from the page cache
-  // doesn't come with it open.
+  // and the header's ⋯ menu close on the way out, so a page that Back brings
+  // from the page cache doesn't come with one open.
   window.addEventListener("pagehide", function () {
-    var p = document.getElementById("more");
-    if (p && p.matches(":popover-open")) p.hidePopover();
+    document.querySelectorAll("#more:popover-open, .head-more:popover-open").forEach(function (p) { p.hidePopover(); });
   });
   // While Appearance is in the More sheet's place, the tab bar's More goes
   // back to More, as ← does. A tap there is outside Appearance, which closes
@@ -1049,7 +1048,7 @@
   // the header's end; in a narrow column (one row of equal cells, CSS sets
   // --head-narrow) when a button's icon and text no longer fit in it with
   // its own padding (14px a side) around them, before they look squeezed.
-  var headWidths = new WeakMap();
+  var headWidths = new WeakMap(); // the header's width, the one before, and when a fit last moved buttons
   var headCanvas = document.createElement("canvas").getContext("2d");
   function squeezed(b) {
     var range = document.createRange();
@@ -1060,9 +1059,14 @@
   }
   var headObserver = new ResizeObserver(function (entries) {
     entries.forEach(function (e) {
-      var w = Math.round(e.contentRect.width);
-      if (headWidths.get(e.target) === w) return; // only a height changed
-      headWidths.set(e.target, w);
+      var w = Math.round(e.contentRect.width), was = headWidths.get(e.target) || {};
+      if (was.w === w) return; // only a height changed
+      headWidths.set(e.target, { w: w, prev: was.w, moved: was.moved });
+      // A width that undoes the last one, by a scrollbar's width (up to
+      // 24px), the moment a fit moved buttons is the page's scrollbar coming
+      // and going because of that fit (a heading that wraps makes the page
+      // taller): keep the fit, or the two would take turns for ever.
+      if (w === was.prev && Math.abs(w - was.w) <= 24 && was.moved && performance.now() - was.moved < 100) return;
       fitHead(e.target);
     });
   });
@@ -1091,6 +1095,7 @@
     if (!more) return;
     var menu = more.nextElementSibling;
     var order = function (a, b) { return a.dataset.i - b.dataset.i; };
+    var before = menu.children.length;
     // The first time, number the buttons in their order, to put them back in it.
     Array.prototype.forEach.call(actions.children, function (el, i) {
       if (el !== more && el !== menu && !el.dataset.i) el.dataset.i = i;
@@ -1111,18 +1116,21 @@
       more.hidden = false;
     }
     if (more.hidden && menu.matches(":popover-open")) menu.hidePopover();
+    var state = headWidths.get(head);
+    if (state && menu.children.length !== before) state.moved = performance.now();
   }
   function watchHeads(root) {
     var heads = root.matches && root.matches(".page-head") ? [root] : root.querySelectorAll(".page-head");
     Array.prototype.forEach.call(heads, function (head) {
       if (!head.querySelector(":scope > .actions > .more-btn")) return;
-      headWidths.set(head, Math.round(head.getBoundingClientRect().width));
+      headWidths.set(head, { w: Math.round(head.getBoundingClientRect().width) });
       fitHead(head);
       headObserver.observe(head);
+      // The first fit laid the header out, which starts loading its font:
+      // fit again once that is in (it changes the widths, not the header's).
+      document.fonts.ready.then(function () { fitHead(head); });
     });
   }
-  // The heading's font may load after the first fit.
-  document.fonts.ready.then(function () { document.querySelectorAll(".page-head").forEach(fitHead); });
   // Opened from the keyboard (a click with no pointer), the menu takes the
   // focus on its first item; Esc or a tap outside closes it, and the
   // browser puts the focus back on ⋯.

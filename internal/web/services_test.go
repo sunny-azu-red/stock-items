@@ -1233,8 +1233,12 @@ func TestKitDuplicate(t *testing.T) {
 	}
 	expect(t, a.get("/vehicles/"+itoa(k1290)), http.StatusOK, "Oil service")
 	expect(t, a.get(kitPath(src)), http.StatusOK, "Rear Brake Pads")
-	// While a vehicle is worked on, the copy is for it.
-	expect(t, a.getWorking(dup, itoa(k1290)), http.StatusOK, `name="vehicle_id" value="`+itoa(k1290)+`"`)
+	// A vehicle asked for is chosen.
+	expect(t, a.get(dup+"&vehicle="+itoa(k1290)), http.StatusOK, `<option value="`+itoa(k1290)+`" selected`)
+	// While a vehicle is worked on, the copy is for it, and another
+	// vehicle's kit is out of view, as its page is.
+	expect(t, a.getWorking(dup, itoa(k390)), http.StatusOK, `name="vehicle_id" value="`+itoa(k390)+`"`)
+	expectRedirect(t, a.getWorking(dup, itoa(k1290)), "/vehicles/"+itoa(k1290))
 }
 
 // TestServicesAddKitInCard: the Service kits card has its own Add kit in its

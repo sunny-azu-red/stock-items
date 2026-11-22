@@ -1151,7 +1151,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   // The dashboard leaves out its Vehicles panel meanwhile.
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toHaveCount(0);
-  // Stopping on a vehicle's page lists them all, with the way back.
+  // Stopping on a vehicle's page lists them all.
   await page.goto("/vehicles");
   await page.locator(".working-on").getByRole("button", { name: "All vehicles" }).click();
   await expect(page).toHaveURL(/\/vehicles$/);
@@ -2220,7 +2220,8 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
           out.push(`the Appearance button is ${Math.round(t.height)}px tall ending at ${Math.round(t.right)}px, the nav's rows ${Math.round(n.height)}px ending at ${Math.round(n.right)}px`);
       }
       // The sidebar's logo is level with the page heading's row, a control
-      // (36px) tall.
+      // (36px) tall, unless a bar (Working on, or its offer on a vehicle's
+      // page) pushes the header down.
       const mark = document.querySelector(".sidebar .app-brand-mark");
       const head = document.querySelector(".page-head");
       if (desktop && mark && head && !document.querySelector(".working-on")) {
@@ -2763,6 +2764,11 @@ test("header buttons go into ⋯ only when they don't fit", async ({ page }, tes
   await more.click();
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("button", { name: /^(Archive|Delete)$/ })).toBeVisible();
+  // Under ⋯, 4px down, ending at its right edge, once it has slid in.
+  await expect.poll(async () => {
+    const [b, mb] = [await more.boundingBox(), await menu.boundingBox()];
+    return [Math.round((mb?.y ?? 0) - ((b?.y ?? 0) + (b?.height ?? 0))), Math.round((mb?.x ?? 0) + (mb?.width ?? 0) - ((b?.x ?? 0) + (b?.width ?? 0)))];
+  }).toEqual([4, 0]);
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
   if (!phone(testInfo) && original) {
@@ -2778,7 +2784,7 @@ test("header buttons go into ⋯ only when they don't fit", async ({ page }, tes
   await expect(page).toHaveURL(/\/vehicles\/\d+\/edit$/);
 });
 
-test("duplicate a kit for another vehicle", async ({ page }) => {
+test("duplicate a kit for another vehicle", async ({ page }, testInfo) => {
   await page.goto("/services");
   await page.locator('a[href^="/kits/"]:not([href^="/kits/new"])').first().click();
   const name = (await page.locator(".page-head h1").innerText()).trim();
@@ -2796,5 +2802,19 @@ test("duplicate a kit for another vehicle", async ({ page }) => {
   await expect(page.locator(".page-head .chip")).toHaveText("KTM 1290");
   // The copy goes again, so the pages and screenshots stay as they were.
   await (await headAction(page, "button", "Delete")).click();
-  await expect(page.locator(".flash-success")).toContainText("Deleted");
+  const flash = page.locator(".flash-success");
+  await expect(flash).toContainText("Deleted");
+  // The header is 18px under the flash, as under the bar; the bar (here
+  // the vehicle page's offer) is a gap above the flash, on a phone its
+  // edge-to-edge spacing.
+  // (Once it has slid in.)
+  const gaps = () => flash.evaluate((f) => {
+    const r = f.getBoundingClientRect(), bar = document.querySelector(".working-on");
+    return {
+      head: Math.round((document.querySelector(".page-head")?.getBoundingClientRect().top ?? 0) - r.bottom),
+      bar: bar ? Math.round(r.top - bar.getBoundingClientRect().bottom) : null,
+    };
+  });
+  const barGap = (await gaps()).bar === null ? null : phone(testInfo) ? 14 : 12;
+  await expect.poll(gaps).toEqual({ head: 18, bar: barGap });
 });

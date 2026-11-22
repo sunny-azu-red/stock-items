@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -8,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 // TestPageHeads keeps the page header in one place (docs/design.md#7-page-headers):
@@ -65,9 +68,11 @@ func TestHeadActions(t *testing.T) {
 	}
 	// The block runs to the next one (its {{if}}s have {{end}}s of their own).
 	block := regexp.MustCompile(`(?s)\{\{define "head-actions"\}\}(.*?)(?:\{\{define |\z)`)
-	// A button at the top of the block: a link or a lone button, or the form
-	// holding one; its first line is enough (the form's tag holds data-more).
-	button := regexp.MustCompile(`(?m)^<(?:a class="btn|button class="btn|form class="inline-form)[^\n]*`)
+	// A button of the block: a link or a button, or the form holding one
+	// (its button left out: the form's tag holds data-more), wherever it
+	// starts, after an {{if}} on the same line too.
+	inForm := regexp.MustCompile(`(?s)(<form\b[^>]*>).*?</form>`)
+	button := regexp.MustCompile(`<(?:a class="btn|button class="btn|form class="inline-form)[^>]*>(?: btn-primary| command="show-modal")*`)
 	for _, p := range pages {
 		b, err := fs.ReadFile(templateFS, p)
 		if err != nil {
@@ -77,7 +82,16 @@ func TestHeadActions(t *testing.T) {
 		if m == nil {
 			continue
 		}
-		src := string(m[1])
+		// A form keeps whether its button is the main one or opens a dialog.
+		src := inForm.ReplaceAllStringFunc(string(m[1]), func(f string) string {
+			tag := inForm.FindStringSubmatch(f)[1]
+			for _, mark := range []string{"btn-primary", `command="show-modal"`} {
+				if strings.Contains(f, mark) {
+					tag += " " + mark
+				}
+			}
+			return tag
+		})
 		if strings.Contains(src, "btn-ghost") || strings.Contains(src, `"arrow-left"`) {
 			t.Errorf("%s: a back button in the header: the nav and the line's chips lead up, the browser's Back goes back", p)
 		}
@@ -101,7 +115,8 @@ func truncateLine(s string) string {
 }
 
 // TestHeadMore: the header has ⋯ and its menu only when a button may go
-// into it, one main button at most, and Archive, Delete or Restore last.
+// into it, one main button at most, and Archive, Delete or Restore after
+// every other button.
 func TestHeadMore(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
@@ -125,11 +140,30 @@ func TestHeadMore(t *testing.T) {
 		if n := strings.Count(actions, "btn-primary"); n > 1 {
 			t.Errorf("%s: %d main buttons:\n%s", c.path, n, actions)
 		}
-		last := strings.LastIndex(actions, `<a class="btn`)
-		for _, end := range []string{`/archive"`, `/delete"`, `/restore"`} {
-			if i := strings.Index(actions, end); i >= 0 && i < last {
-				t.Errorf("%s: %s before another button:\n%s", c.path, end, actions)
+		// The row's buttons in order (⋯ and its menu after them), each
+		// lifecycle (archive, delete, restore) or not.
+		row, _, _ := strings.Cut(actions, `class="btn more-btn"`)
+		lifecycle := false
+		for _, b := range headButton.FindAllString(row, -1) {
+			isEnd := lifecycleAction.MatchString(b)
+			if lifecycle && !isEnd {
+				t.Errorf("%s: %s after Archive, Delete or Restore:\n%s", c.path, b, actions)
 			}
+			lifecycle = lifecycle || isEnd
 		}
 	}
+	// An archived item no longer in use: Restore, then Delete.
+	pads := itemID(t, a.store, "Rear Brake Pads")
+	if _, err := a.store.ArchiveItem(context.Background(), pads, cur(t, a.store, store.WhatItem, pads)); err != nil {
+		t.Fatal(err)
+	}
+	actions := headActions(t, a.get(item))
+	if r, d := strings.Index(actions, `/restore"`), strings.Index(actions, `/delete"`); r < 0 || d < r || strings.Contains(actions[d:], `<a class="btn`) {
+		t.Errorf("archived item: want Edit, Duplicate, Restore, Delete:\n%s", actions)
+	}
 }
+
+var (
+	headButton      = regexp.MustCompile(`<(?:a class="btn[^"]*"|form class="inline-form")[^>]*>`)
+	lifecycleAction = regexp.MustCompile(`action="[^"]*/(?:archive|delete|restore)"`)
+)

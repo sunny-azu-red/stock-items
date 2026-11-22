@@ -267,7 +267,6 @@
     &.count-muted { background: var(--surface-3); color: var(--muted); }
   }
   .nav-title { font-size: var(--text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 10px; margin-bottom: 8px; }
-  .nav-vehicles, .sidebar .work-on { padding: 0 10px; gap: 6px; }
   .sidebar-foot { margin-top: auto; }
   .sidebar-actions {
     display: grid; gap: 6px;
@@ -706,15 +705,18 @@
      it when that runs off the screen; else centred under it, kept 8px
      inside the screen. Washed in the accent, like its open "?", with a
      faint accent edge: in the card's own surface it ran into the fields
-     it covers. The tint sets it apart, so it has no shadow. */
+     it covers. The tint sets it apart, so it has no shadow. It fades in,
+     and out as it closes: without its closed look it would stay as it was
+     for the transition, then vanish. */
   .tip-text {
     position: fixed; inset: auto; margin: 6px 0 0 -4px; width: max-content; max-width: min(340px, calc(100vw - 16px));
     position-area: bottom span-right; position-try-fallbacks: --tip-end, --tip-centre;
     padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); border-radius: var(--radius);
     background: color-mix(in oklab, var(--accent-soft) 75%, var(--surface));
     color: var(--text); font-size: var(--text-sm); font-weight: 500; --lh: 1.5; letter-spacing: 0; text-transform: none;
+    opacity: 0;
     transition: opacity .15s, display .15s allow-discrete, overlay .15s allow-discrete;
-    &:popover-open { @starting-style { opacity: 0; } }
+    &:popover-open { opacity: 1; @starting-style { opacity: 0; } }
   }
 
   /* Fields: 36px, a light border, the ring on any focus (design.md#14-focus-rings):
@@ -956,12 +958,10 @@
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip, var(--muted)); flex: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  /* Chips you pick (filters) and chips that stand on their own (Stock by
-     vehicle): 30px, a small button's height, easier to tap. */
-  .chip-toggle, .nav-vehicles .chip {
-    font-size: var(--text-sm); --lh: 1.25; padding: 6px 12px; gap: 8px;
-  }
+  /* Chips you pick (filters): 30px, a small button's height, easier to
+     tap. */
   .chip-toggle {
+    font-size: var(--text-sm); --lh: 1.25; padding: 6px 12px; gap: 8px;
     position: relative; cursor: pointer; border-radius: var(--radius-sm);
     background: var(--surface); color: var(--text); border-color: var(--field-border);
     &:hover { border-color: var(--chip); background: var(--surface-2); }

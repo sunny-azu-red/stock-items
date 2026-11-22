@@ -126,7 +126,7 @@
     <p class="hint mb">Add every number you might search for: the OEM part number, the manufacturer number, one per pack size (1 L, 4 L…).</p>
     {{template "err" (index $e "skus")}}
     <div class="rows" id="sku-rows">
-      <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Brand</span><span>Pack size</span><span></span></div>
+      <div class="row-line sku-line row-head"><span>Code</span><span>Type</span><span>Brand</span><span>Pack size</span></div>
       {{range $f.SKUs}}{{template "sku-row" (dict "Row" . "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}{{end}}
     </div>
     <template id="sku-template">{{template "sku-row" (dict "Kinds" $d.SKUKinds "SubUnits" $d.SubUnits)}}</template>
@@ -159,6 +159,7 @@
     {{range .Kinds}}<option value="{{.}}" {{if and $r (eq (print .) $r.Kind)}}selected{{end}}>{{.Label}}</option>{{end}}
   </select>
   <input class="input" name="sku_brand" value="{{if $r}}{{$r.Brand}}{{end}}" placeholder="Brand (e.g. KTM, Motorex)" list="brands" autocomplete="off" aria-label="SKU brand">
+  <div class="row-end">
   <div class="qty-input">
     <input class="input" name="sku_pack" value="{{if $r}}{{$r.Pack}}{{end}}" inputmode="decimal" placeholder="e.g. 1" aria-label="Pack size">
     <select class="input" name="sku_pack_unit" data-subunit aria-label="Pack unit">
@@ -166,5 +167,6 @@
     </select>
   </div>
   <button class="icon-btn row-remove" type="button" data-remove-row aria-label="Remove SKU">{{icon "x"}}</button>
+  </div>
 </div>
 {{end}}

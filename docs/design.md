@@ -148,7 +148,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Form buttons share the width | 520px | the card |
 | Kit rows: badges under the name | 500px | the card |
 | Stock rows: 60px quantity column | 540px | the card |
-| SKU and part rows: two lines | 620px | the card |
+| SKU and part rows: two lines (under four fields a row) | 868px | the card |
 | Sort by on its own line | 620px | the card |
 | A table keeps 640px and scrolls inside its card | 660px | the card |
 
@@ -159,6 +159,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
   - **A page that is a form** (`form.card.page-form`: item, vehicle, kit, service) is a run of `.form-section`s. The **first has no heading**: the page's `<h1>` (Add item, Edit KTM 390, Log service) names it. **Every later section has an `<h2>`**, a short noun in sentence case (Vehicles, Stock, Purchase, SKUs, Details, Odometer, Schedule, Parts, Parts used), never a question. The one exception is a shortcut before the form proper (Log service's **Start from a kit**), which keeps its heading.
   - **A section's hint goes right under its heading**, before its fields (`<p class="hint mb">`, one at most); a hint about one field goes behind a "?" at its label (`tip`).
   - **No field stands alone in a short last row** where it can be helped: a long code takes two columns instead (`.span-2`: the vehicle's VIN beside nothing, under Make, Model, Year and Plate).
+  - **Repeating rows keep the form's columns** (`.row-line`: four equal ones at the `.form-grid`'s gap), so every box of a row stands under a field above it: a SKU is Code · Type · Brand · Pack size and its ×; a part is its item (two columns, as wide as one of two fields) · Quantity · its stock badge and ×. Under four fields a row they take two lines.
   - **Notes is the last section**, on its own and without a heading: its label says it.
   - **The record's own fields come first** (what it is and what it's called), and a new form has the focus on the first field to type in.
   - **Dates say what happened on them**: Bought on, Used on, Adjusted on, Started on (starting stock), Done on, Purchased on.

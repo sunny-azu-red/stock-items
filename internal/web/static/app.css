@@ -830,23 +830,40 @@
     .results-head & { margin-right: 4px; }
   }
 
-  /* Repeating rows (SKUs, kit and service parts). */
+  /* Repeating rows (SKUs, kit and service parts) keep the form's columns:
+     the four equal ones .form-grid has once it is that wide, at its gap,
+     so each box of a row stands under a field above it. A SKU is Code,
+     Type, Brand, then Pack size with its remove button; a part is the
+     item (two columns, as wide as one of two fields), the quantity, then
+     its stock badge with the remove button. */
   .rows { display: grid; gap: 8px; }
   .row-line {
-    display: grid; gap: 8px; align-items: start;
+    display: grid; gap: 8px var(--gap); align-items: start;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     & .icon-btn { margin-top: 3px; }
   }
   .row-head { font-size: var(--text-sm); font-weight: 600; margin-bottom: -2px; }
-  .sku-line { grid-template-columns: minmax(120px, 1.3fr) minmax(110px, .9fr) minmax(100px, 1fr) minmax(80px, .7fr) var(--control-sm); }
-  .part-line { grid-template-columns: minmax(160px, 2fr) minmax(150px, 1fr) 160px var(--control-sm); }
+  .row-end {
+    display: flex; gap: 8px; align-items: start; min-width: 0;
+    & > .qty-input { flex: 1; min-width: 0; }
+    & > .row-remove { margin-left: auto; }
+  }
+  .part-line > :first-child { grid-column: span 2; }
   /* The stock badge (24px), centred against the 36px fields. */
   .part-stock { display: flex; min-width: 0; margin-top: 6px; }
-  @container (width < 620px) {
-    .sku-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .sku-line .row-remove { grid-column: 2; justify-self: end; }
+  /* Under four fields a row (.form-grid: four 200px columns, three gaps
+     and the card's inset), rows take two lines. */
+  @container (width < 868px) {
+    /* The remove button ends the first line, as on a part row. */
+    .sku-line { grid-template-columns: repeat(2, minmax(0, 1fr)) var(--control-sm); }
+    .sku-line .row-end { display: contents; }
+    .sku-line .qty-input { grid-column: 2; grid-row: 2; }
+    .sku-line .row-remove { grid-column: 3; grid-row: 1; margin-left: 0; }
     .part-line { grid-template-columns: minmax(0, 1fr) var(--control-sm); }
+    .part-line > :first-child { grid-column: 1; }
+    .part-line .row-end { display: contents; }
     .part-line .qty-input { grid-column: 1; grid-row: 2; }
-    .part-line .row-remove { grid-column: 2; grid-row: 1; }
+    .part-line .row-remove { grid-column: 2; grid-row: 1; margin-left: 0; }
     .part-line .part-stock { grid-column: 1 / -1; grid-row: 3; margin-top: 0; }
     .row-head { display: none; }
   }

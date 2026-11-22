@@ -31,6 +31,12 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 - **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetVehicleStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
 
+## Renaming a spelling many records share
+
+**Now:** fields with suggestions keep one spelling of each name (`store/spellings.go`): text typed in another case than a spelling in use is saved in that spelling, not counting the record being saved. So the only record with a spelling can change it, but when several share one ("Hiflo" on five items and their SKUs), each edit takes the spelling the others still have, and nothing changes. Renaming it to something else ("Hiflofiltro") means editing every record that has it.
+
+**If it is wanted:** a rename action on a suggestion list's spellings (Brand, Category, Location, Shop, Make, Model, kit names and service titles): pick a spelling, type the new one, and every record that has it (items and SKUs for a brand, purchases for a shop, …) changes in one transaction. It would bump each changed record's version (an edit form opened before is stale), go to the trash as one entry so Undo puts the old spelling back, and merge into an existing spelling when the new one differs from it only in case.
+
 ## A vehicle for free-text shopping entries
 
 **Now:** which vehicles a shopping entry is for is worked out from its item's tags and the kits that use it (`stock.ShoppingEntry.For`), never stored. A free-text entry ("Chain lube") has no item, so it is on every vehicle's part of the list, like General stock. Storing a vehicle on entries would need a link table (an item has one entry, and a shared item two vehicles need is one line), with its own trash, version and lock rules, and it would go stale when an item is retagged.

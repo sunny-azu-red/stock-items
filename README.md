@@ -33,7 +33,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Undo everything:** every delete (and Bought) has an Undo, and the trash keeps it all until you empty it or permanently delete an entry.
 - **Nothing disappears by accident:** items used in services, kits or purchases, vehicles with services or kits, and kits with logged services are archived instead of deleted, so history and spending stay correct, and they can be restored.
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
-- **Suggestions as you type:** brands, categories, makes and models, shops and service names you've used before.
+- **Suggestions as you type:** the item to buy or a part's item, with what's in stock, and the brands, categories, locations, makes and models, shops and service names you've used before, each kept in one spelling (`ktm` is saved as the `KTM` in use).
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service).
 - **Appearance per device:** light, dark or the system's theme, and the accent colour picked from presets or a hue wheel with an intensity slider, remembered on each device.

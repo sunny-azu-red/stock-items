@@ -118,9 +118,9 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | Inside a card, left and right, for every part of it | 16px | 14px | `--inset` |
 | Under the page header | 18px | 18px | `.page-head` |
 | Between the header's line and its buttons, in a narrow column | 12px | 12px | `.page-head .actions` |
-| Under the Working on bar (or its offer) | 18px; 12px to a flash under it | `--page` (it runs edge to edge) | `.working-on` |
+| Under the Working on bar (or its offer) | 18px, a flash under it too | `--page` (it runs edge to edge) | `.working-on` |
 | Above / below a results heading ("24 items" and its buttons) | 18px / 10px | the same | `.results-head` |
-| Under a flash (the page header: 18px under whichever band is right above it) | 18px | 18px | `.flash` |
+| Under a flash (the page header: 18px under whichever band is right above it). A flash is the bar's box, 42px, its icon, text and Undo in line with the bar's icon, text and × | 18px | 18px | `.flash` |
 | Between table columns | 12px each side; `--inset` at the table's edges | the same | `.table` |
 | A page that is a form | at most `--form-width` 980px, its header and flash too | the page's width | `.page-form` |
 | A form's fields | 4, 2 or 1 a row (never 3), at least 200px each | one a row | `.form-grid` |

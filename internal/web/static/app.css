@@ -225,12 +225,15 @@
   .shell { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100dvh; }
 
   /* The sidebar sits on the page's background, no edge: the panels are
-     what stand out. On a phone it is the More sheet (a popover), so it
-     undoes the browser's popover box here. */
+     what stand out. With no edge of its own, its rows are --page from the
+     window's edge, and the main column's --page padding is the space on
+     their other side: none on its right, or that side would show more.
+     On a phone it is the More sheet (a popover), so it undoes the
+     browser's popover box here. */
   .sidebar {
     position: sticky; inset: 0 auto auto; height: 100dvh; width: auto; margin: 0; overflow-y: auto;
     color: inherit; background: var(--bg); border: 0;
-    padding: var(--page) 10px; display: flex; flex-direction: column; gap: 20px;
+    padding: var(--page) 0 var(--page) var(--page); display: flex; flex-direction: column; gap: 20px;
   }
   /* As tall as the page's heading row and as far down, so the logo is
      level with the heading. */

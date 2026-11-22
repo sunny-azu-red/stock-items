@@ -306,7 +306,16 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   const form = page.locator('form[action="/shopping"]');
   const itemID = form.locator('input[name="item_id"]');
   const unit = form.locator('select[name="quantity_unit"]');
+  // What the text is, at the end of the box: the item's stock badge, New,
+  // or "2 matches" (a sentence for screen readers, and in the title).
   const status = page.locator("[data-item-status]");
+  const isNew = async () => {
+    const badge = status.locator("[data-new-status]");
+    await expect(badge).toBeVisible();
+    await expect(badge.locator('[aria-hidden="true"]')).toHaveText("New");
+    await expect(badge.locator(".sr-only")).toHaveText("Not in stock: added as something new");
+    await expect(badge).toHaveAttribute("title", "Not in stock: added as something new");
+  };
 
   // Typing lists the stock items it matches, with their stock, then
   // "Something new".
@@ -315,7 +324,7 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   const oil = list.getByRole("option", { name: /^Silkolene 15W50 PRO 4 XP/ });
   await expect(oil.locator(".badge")).toContainText("in stock");
   await expect(list.getByRole("option").last()).toHaveText("Something new: “silko”");
-  await expect(status).toHaveText("Not in stock: added as something new", { useInnerText: true });
+  await isNew();
 
   // Picked: that item, its units and its stock badge.
   await oil.click();
@@ -324,12 +333,15 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   await expect(itemID).not.toHaveValue("");
   await expect(unit).toHaveValue("l");
   await expect(unit.locator('option[value="pcs"]')).toBeDisabled();
-  await expect(status.locator(".badge")).toContainText("in stock");
+  await expect(status.locator("[data-stock-level]")).toContainText("in stock");
+  await expect(status.locator("[data-new-status], [data-many-status]")).toHaveCount(2);
+  await expect(status.locator("[data-new-status]")).toBeHidden();
+  await expect(item).toHaveAttribute("title", "Silkolene 15W50 PRO 4 XP");
 
   // Changed: something new again, and the unit the item chose goes back.
   await item.pressSequentially(" synthetic");
   await expect(itemID).toHaveValue("");
-  await expect(status).toHaveText("Not in stock: added as something new", { useInnerText: true });
+  await isNew();
   await expect(unit.locator('option[value="pcs"]')).toBeEnabled();
   await expect(unit).toHaveValue("");
   // A unit picked by hand stays.
@@ -342,13 +354,18 @@ test("Shopping's Item suggests your stock, and the units and the badge follow it
   // A name two items have: neither, until one is picked.
   await item.fill("oil filter");
   await expect(itemID).toHaveValue("");
-  await expect(status).toHaveText("2 items have this name: pick one, or it's added as something new", { useInnerText: true });
+  const many = status.locator("[data-many-status]");
+  await expect(many).toBeVisible();
+  await expect(status.locator("[data-new-status]")).toBeHidden();
+  await expect(many.locator('[aria-hidden="true"]')).toHaveText("2 matches");
+  await expect(many.locator(".sr-only")).toHaveText("2 items have this name: pick one, or it's added as something new");
+  await expect(many).toHaveAttribute("title", "2 items have this name: pick one, or it's added as something new");
 
   // An item's exact name is that item, picked or not.
   await item.fill("ktm fuel filter");
   await expect(itemID).not.toHaveValue("");
   await expect(unit).toHaveValue("pcs");
-  await expect(status.locator(".badge")).toBeVisible();
+  await expect(status.locator("[data-stock-level]")).toBeVisible();
   await expect(list.getByRole("option", { name: /^Something new/ })).toHaveCount(0);
   await page.getByLabel("Quantity").fill("1");
   await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -718,10 +735,13 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
   // The border and a 1px shadow in the ring colour, then the pale glow.
   const ring = (c: string) => new RegExp(`^${c.replace(/[()]/g, "\\$&")} 0px 0px 0px 1px, `);
 
+  // Item's box holds its text and status: the ring is the box's.
   const name = field(page, "Item");
+  const box = name.locator("xpath=..");
+  await expect(box).toHaveClass(/\bitem-box\b/);
   await name.click();
-  await expect(name).toHaveCSS("border-top-color", accent);
-  await expect(name).toHaveCSS("box-shadow", ring(accent));
+  await expect(box).toHaveCSS("border-top-color", accent);
+  await expect(box).toHaveCSS("box-shadow", ring(accent));
 
   const unit = page.locator('select[name="quantity_unit"]');
   await unit.click();
@@ -736,8 +756,8 @@ test("a clicked field shows a 2px focus ring, red with an error, and an open sel
   await expect(field(page.locator(".has-error"), "Item")).toBeVisible();
   await name.click();
   const danger = await colour("--danger");
-  await expect(name).toHaveCSS("border-top-color", danger);
-  await expect(name).toHaveCSS("box-shadow", ring(danger));
+  await expect(box).toHaveCSS("border-top-color", danger);
+  await expect(box).toHaveCSS("box-shadow", ring(danger));
 });
 
 test("slash focuses search from any page", async ({ page }) => {
@@ -2163,9 +2183,11 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
   // three a row, which four boxes can't line up with. Every field of the
   // form starts and ends on a line of the rows' columns, and so does every
   // box of a row: boxes closer than the gap are one (quantity and unit,
-  // Type and its ×); a remove button alone ends its box, a stock badge
-  // starts its own. The projects' windows give four columns or a phone's
-  // one; 1100px and 900px give the two in between.
+  // Type and its ×); a remove button alone ends its box. A part's item is
+  // its box (.item-box, the stock badge inside); on two lines its quantity
+  // ends where that box does, the × beside both. The projects' windows
+  // give four columns or a phone's one; 1100px and 900px give the two in
+  // between.
   const link = async (url: string, selector: string) => {
     await page.goto(url);
     return (await page.locator(selector).first().getAttribute("href", { timeout: 5_000 })) as string;
@@ -2202,8 +2224,10 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
               if (!on(fr.left) || !on(fr.right)) out.add(`the field "${name}" runs ${at(fr.left)}–${at(fr.right)}px, off ${what} row's columns (${cols})`);
             }
             // Its boxes, line by line (two lines under four fields a row).
-            const pieces = [...row.querySelectorAll("input:not([type=hidden]), select, .row-remove")].filter(shown)
+            const pieces = [...row.querySelectorAll(".item-box, input:not([type=hidden]), select, .row-remove")]
+              .filter((el) => shown(el) && !el.matches(".item-box > *"))
               .map((el) => ({ el, r: el.getBoundingClientRect() }));
+            const itemBox = row.querySelector(".item-box")?.getBoundingClientRect();
             const byLine = new Map<number, typeof pieces>();
             for (const pc of pieces) {
               const key = [...byLine.keys()].find((k) => Math.abs(k - pc.r.top) < 12) ?? pc.r.top;
@@ -2220,9 +2244,11 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
               for (const box of boxes) {
                 const l = box[0].r.left, r = box[box.length - 1].r.right;
                 const removeOnly = box.length === 1 && box[0].el.matches(".row-remove");
-                const label = removeOnly ? "its remove button" : `a box (${box.map((b) => b.el.getAttribute("aria-label") ?? b.el.tagName.toLowerCase()).join(" + ")})`;
+                const name = (el: Element) => (el.matches(".item-box") ? el.querySelector("input") : el)?.getAttribute("aria-label") ?? el.tagName.toLowerCase();
+                const label = removeOnly ? "its remove button" : `a box (${box.map((b) => name(b.el)).join(" + ")})`;
+                const underItem = itemBox && box[0].r.top > itemBox.bottom && Math.abs(r - itemBox.right) < 0.5;
                 if (!removeOnly && !on(l)) out.add(`${what} row: ${label} starts at ${at(l)}px, not on ${cols}`);
-                if (!on(r)) out.add(`${what} row: ${label} ends at ${at(r)}px, not on ${cols}`);
+                if (!on(r) && !underItem) out.add(`${what} row: ${label} ends at ${at(r)}px, not on ${cols}`);
               }
             }
             // Its heading, when shown: one line, each label on a column.
@@ -2234,10 +2260,6 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
                 const x = l.getBoundingClientRect().left;
                 if (!on(x)) out.add(`${what} row's heading "${(l.textContent ?? "").trim()}" starts at ${at(x)}px, not on ${cols}`);
               }
-            }
-            for (const badge of row.querySelectorAll(".part-stock > .badge")) {
-              const l = badge.getBoundingClientRect().left;
-              if (shown(badge) && !on(l)) out.add(`${what} row: its stock badge starts at ${at(l)}px, not on ${cols}`);
             }
           }
         }
@@ -2416,7 +2438,7 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
   // and Labour cost, a purchase's Note and a use's Note were left alone on
   // a second row. So: a page form's first section has no heading, every
   // later one but Notes has one, never a question; a section's hint comes
-  // before its fields; Notes is the last section; a date's label says what
+  // before its fields, 5px under its heading; Notes is the last section; a date's label says what
   // happened on it ("Bought on"), or is Best before. Every form's grid has
   // four columns, two or one, all as wide, and no row ends with one field
   // alone (a field in a grid of its own, like Counted in, is a row of its
@@ -2463,6 +2485,12 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
               let before = hint.previousElementSibling;
               while (before && !before.matches(".form-grid, .rows, .chips, .toggle, .field, .inter-fields")) before = before.previousElementSibling;
               if (before) out.push(`the hint "${text(hint)}" comes after the fields of its section`);
+              // 5px under its heading, as a note under its field.
+              const head = hint.previousElementSibling;
+              if (head?.matches("h2, .flex")) {
+                const gap = hint.getBoundingClientRect().top - head.getBoundingClientRect().bottom;
+                if (Math.abs(gap - 5) > 0.5) out.push(`the hint "${text(hint)}" is ${Math.round(gap * 10) / 10}px under its heading, not 5px`);
+              }
             }
           });
         }

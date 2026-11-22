@@ -544,10 +544,18 @@
     var entries = Array.prototype.slice.call(list.options);
     if (!entries.length) return; // no chevron that opens nothing
     var newEntry = input.getAttribute("data-new-entry");
-    var wrap = document.createElement("div");
-    wrap.className = "combo";
-    input.parentNode.insertBefore(wrap, input);
-    wrap.appendChild(input);
+    // An item field's box (.item-box: the field and its status) is the
+    // combo already, and what the list hangs under.
+    var wrap = input.parentNode.matches(".item-box") ? input.parentNode : null;
+    if (wrap) {
+      wrap.classList.add("combo");
+    } else {
+      wrap = document.createElement("div");
+      wrap.className = "combo";
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+    }
+    var anchor = wrap.matches(".item-box") ? wrap : input;
     var toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "combo-toggle";
@@ -620,7 +628,7 @@
         box.appendChild(li);
       }
       if (!options().length) return hide();
-      if (!isOpen()) box.showPopover({ source: input }); // app.css anchors it there
+      if (!isOpen()) box.showPopover({ source: anchor }); // app.css anchors it there
       input.setAttribute("aria-expanded", "true");
       setActive(-1);
     }
@@ -696,8 +704,9 @@
   // Item, a part row's item): the one picked from its list while the text
   // still names it, else the one item the text names, as the server
   // decides (shoppingItem, lineItem). Its id goes in the [data-item-id]
-  // beside it, in its .field. A part row's units and stock badge follow
-  // (updatePartNote); Shopping's units and the line under the field
+  // beside it, in its .field, and its name in the field's title (the box
+  // may cut it short). A part row's units and stock badge follow
+  // (updatePartNote); Shopping's units and the end of its box
   // ([data-item-status]: the item's stock badge, [data-new-status] or
   // [data-many-status]) too.
   // pickedItem is the item the field is ({opt}), or null with the number
@@ -717,22 +726,38 @@
     var p = pickedItem(input);
     var opt = p.opt;
     field.querySelector("[data-item-id]").value = opt ? opt.getAttribute("data-id") : "";
+    input.title = opt ? input.value : "";
     if (input.closest(".row-line")) return updatePartNote(input);
     followItemUnits(opt, input.form);
     var status = field.querySelector("[data-item-status]");
     if (!status) return;
-    status.querySelectorAll(".badge").forEach(function (b) { b.remove(); });
+    status.querySelectorAll(".badge[data-stock-level]").forEach(function (b) { b.remove(); });
     var badge = opt && stockBadgeFor(opt, 0);
     if (badge) status.appendChild(badge);
     var many = status.querySelector("[data-many-status]");
     var several = !opt && p.named > 1;
     if (many) {
-      if (many.dataset.text === undefined) many.dataset.text = many.textContent;
-      many.textContent = many.dataset.text.replace("{n}", p.named);
+      // {n} in its title and both its texts (the short one shown, the
+      // sentence for screen readers).
+      if (many.dataset.title === undefined) many.dataset.title = many.title;
+      many.title = many.dataset.title.replace("{n}", p.named);
+      many.querySelectorAll("span").forEach(function (s) {
+        if (s.dataset.text === undefined) s.dataset.text = s.textContent;
+        s.textContent = s.dataset.text.replace("{n}", p.named);
+      });
       many.hidden = !several;
     }
     status.querySelector("[data-new-status]").hidden = !!opt || several || !input.value.trim();
   }
+  // A click on an item box's status (or its padding) is a click in the
+  // field.
+  document.addEventListener("mousedown", function (e) {
+    var boxEl = e.target.closest(".item-box");
+    if (!boxEl || e.target.closest("input, button, .combo-list")) return;
+    e.preventDefault();
+    var input = boxEl.querySelector("input[data-item-pick]");
+    if (input) input.focus();
+  });
   document.addEventListener("combo-pick", function (e) {
     if (!e.target.matches("input[data-item-pick]")) return;
     e.target.closest(".field").querySelector("[data-item-id]").value = e.detail ? e.detail.getAttribute("data-id") : "";

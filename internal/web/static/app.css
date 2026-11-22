@@ -666,6 +666,17 @@
     padding: 16px var(--inset);
     .form-section:not([hidden]) ~ & { border-top: 1px solid var(--border); }
     & :is(h2, h3) { margin-bottom: 12px; }
+    /* A section's note sits 5px under its heading, as a field's error or
+       note under its box (and a label over it); then 12px to the fields.
+       A heading with a button beside it (Parts used, Add missing) is a
+       row as tall as the heading, the button hanging over its edges. */
+    & > :is(h2, h3):has(+ .hint) { margin-bottom: 5px; }
+    & > .flex:has(> :is(h2, h3)) {
+      margin-bottom: 12px;
+      &:has(+ .hint) { margin-bottom: 5px; }
+      & > :is(h2, h3) { margin-bottom: 0; }
+      & > .btn-sm { margin-block: -5px; }
+    }
   }
 
   .field { display: grid; gap: 5px; align-content: start; min-width: 0; }
@@ -678,10 +689,25 @@
   .field-error { display: flex; gap: 4px; align-items: center; margin: 0; color: var(--danger); font-size: var(--text-sm); font-weight: 600; }
   .req { color: var(--danger); font-size: var(--text-sm); }
   .req-note .req { font-size: inherit; }
-  /* Under Shopping's Item: the item's stock badge, or that it is something
-     new; nothing while the field is empty. */
+  /* An item field (Shopping's Item, a part row's item) is a box holding
+     the text and, at its end, what the text is: the item's stock badge
+     (24px, centred in the 36px box) or, on Shopping, New or "2 matches";
+     nothing while it is no item. The name gives way (… while the field
+     isn't focused, its title says it whole); the badge never does. The
+     box is the .input, so the ring is its own (:focus-within, at .input)
+     and so is the error border. */
+  .item-box {
+    display: flex; align-items: center; gap: 8px; height: var(--control-h); padding-block: 0; min-width: 0;
+    /* width 0: the text's own width (about 20 characters) never widens
+       the box past its column; it takes what the badge leaves. */
+    & > input {
+      flex: 1; width: 0; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; background: none;
+      outline: none; text-overflow: ellipsis; /* the ring is the box's */
+      &::placeholder { color: color-mix(in oklab, var(--muted) 80%, transparent); font-weight: 500; }
+    }
+  }
   .item-status {
-    display: flex; min-width: 0; margin: 0;
+    display: flex; flex: none; gap: 6px; pointer-events: none;
     &:not(:has(> :not([hidden]))) { display: none; }
   }
   /* Hints that apply only while the form's "Counted in" is pieces. */
@@ -729,13 +755,13 @@
     --ring: var(--accent); --ring-soft: color-mix(in oklab, var(--accent) 22%, transparent);
     transition: border-color .15s, box-shadow .15s;
     &:hover { border-color: color-mix(in oklab, var(--field-border) 60%, var(--text)); }
-    &:focus, &:focus-visible { border-color: var(--ring); outline: 2px solid transparent; outline-offset: 0; box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
+    &:focus, &:focus-visible, &.item-box:focus-within { border-color: var(--ring); outline: 2px solid transparent; outline-offset: 0; box-shadow: 0 0 0 1px var(--ring), 0 0 0 4px var(--ring-soft); }
     &::placeholder { color: color-mix(in oklab, var(--muted) 80%, transparent); font-weight: 500; }
   }
   input.input, select.input { height: var(--control-h); }
   textarea.input { min-height: 80px; resize: vertical; field-sizing: content; max-height: 320px; }
   input[type="color"].input { padding: 3px; width: 60px; }
-  .has-error .input, .input:user-invalid {
+  .has-error .input, .input:user-invalid, .item-box:has(> input:user-invalid) {
     border-color: var(--danger); --ring: var(--danger); --ring-soft: color-mix(in oklab, var(--danger) 22%, transparent);
   }
   /* Dates: Chromium pads the inner fields and draws its calendar icon in
@@ -761,7 +787,7 @@
   }
 
   /* Selects and suggestion inputs share one chevron. */
-  :is(select.input, .combo .input) {
+  :is(select.input, .combo .input, .item-box.combo) {
     appearance: none; padding-right: 32px;
     background: var(--surface) var(--chevron) no-repeat right 9px center / 16px;
   }
@@ -785,7 +811,8 @@
      popover so a card's overflow doesn't cut it off. */
   .combo { position: relative; }
   .combo-toggle { position: absolute; inset: 0 0 0 auto; width: 34px; border: 0; padding: 0; background: none; cursor: pointer; }
-  /* Anchored to its input (app.js opens it with it as the source): below
+  /* Anchored to its input, or an item field's box (app.js opens it with
+     that as the source): below
      it, as wide; above it when the whole list fits there and not below;
      else below, as tall as the room lets it be. */
   .combo-list {
@@ -898,8 +925,8 @@
      the four equal ones .form-grid has once it is that wide, at its gap,
      so each box of a row stands under a field above it. A SKU is Code,
      Type, Brand, then Pack size with its remove button; a part is the
-     item (two columns, as wide as one of two fields), the quantity, then
-     its stock badge with the remove button. */
+     item (three columns, its stock badge in its box: .item-box), then the
+     quantity with the remove button. */
   .rows { display: grid; gap: 8px; }
   .row-line {
     display: grid; gap: 8px var(--gap); align-items: start;
@@ -913,13 +940,11 @@
     & > .qty-input { flex: 1; min-width: 0; }
     & > .row-remove { margin-left: auto; }
   }
-  .part-line > :first-child { grid-column: span 2; }
-  /* The stock badge (24px), centred against the 36px fields. */
-  .part-stock { display: flex; min-width: 0; margin-top: 6px; }
+  .part-line > :first-child { grid-column: span 3; }
   /* Under four fields a row, the form's two columns, at its gap: a SKU is
      Code · Type and its × over Brand · Pack size; a part is its item and
-     its × (the whole line) over Quantity · its stock badge. The remove
-     button ends the first line, inside its last box. */
+     its × (the whole line) over its quantity, as wide as the item's box.
+     The remove button ends the first line, inside its last box. */
   @container (width < 868px) {
     .row-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .row-end { display: contents; }
@@ -932,8 +957,7 @@
     }
     .part-line {
       & > :first-child { grid-column: 1 / -1; grid-row: 1; padding-right: calc(var(--control-sm) + 8px); }
-      & .qty-input { grid-area: 2 / 1; }
-      & .part-stock { grid-area: 2 / 2; }
+      & .qty-input { grid-area: 2 / 1 / auto / -1; padding-right: calc(var(--control-sm) + 8px); }
     }
     /* A part's item picker and unit say what they are; a SKU's heading
        names each column's two boxes, Code · Brand and Type · Pack size. */

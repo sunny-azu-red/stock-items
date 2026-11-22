@@ -57,7 +57,7 @@
   </div>
   <div class="form-section">
     <h2>Odometer</h2>
-    <p class="hint mb">Reminders count from the purchase until a service is logged. 0 for a brand new vehicle.</p>
+    <p class="hint mb">Reminders count from the purchase until a service is logged.</p>
     {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
     <div class="form-grid">
       <div class="field span-2{{if index $e "odometer"}} has-error{{end}}">
@@ -71,8 +71,8 @@
         {{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}
       </div>
       <div class="field{{if index $e "odometer_at_purchase"}} has-error{{end}}">
-        <label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>
-        <input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase"}}>
+        <div class="label-row"><label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>{{template "tip" (dict "For" "Odometer at purchase" "ID" "odometer-at-purchase-tip" "Text" "0 for a brand new vehicle.")}}</div>
+        <input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase" "odometer-at-purchase-tip"}}>
         {{template "field-err" (fieldErr (index $e "odometer_at_purchase") "odometer_at_purchase")}}
       </div>
     </div>

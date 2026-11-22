@@ -48,16 +48,20 @@
           {{/* One field for what to buy: app.js suggests the stock items
                (the datalist) with their stock badge and a last "Something
                new" entry, keeps item_id on the item picked or named, and
-               says under the field which it will be. shoppingItem decides
+               says at the end of the box which it will be: the item's
+               stock badge, New, or "{n} matches" for a name several items
+               have (the item-box, as a part row's). shoppingItem decides
                the same on the server. */}}
           <div class="field span-2{{if index $e "item"}} has-error{{end}}">
-            <div class="label-row"><label for="item">Item</label>{{template "req"}}{{template "tip" (dict "For" "Item" "ID" "item-tip" "Text" "Pick from your stock, or type something new")}}</div>
-            <input class="input" id="item" name="item" value="{{$f.Item}}" required placeholder="e.g. Chain lube" list="shopping-items" autocomplete="off" data-item-pick="shopping-items" data-new-entry="Something new: “{text}”" {{invalid (index $e "item") "item" "item-tip" "item-status"}}>
+            <div class="label-row"><label for="item">Item</label>{{template "req"}}{{template "tip" (dict "For" "Item" "ID" "item-tip" "Text" "Pick from your stock, or type something new.")}}</div>
+            <div class="input item-box">
+              <input id="item" name="item" value="{{$f.Item}}"{{if $f.ItemID}} title="{{$f.Item}}"{{end}} required placeholder="e.g. Chain lube" list="shopping-items" autocomplete="off" data-item-pick="shopping-items" data-new-entry="Something new: “{text}”" {{invalid (index $e "item") "item" "item-tip" "item-status"}}>
+              <span class="item-status" id="item-status" aria-live="polite" data-item-status><span class="badge badge-accent" data-new-status title="Not in stock: added as something new" hidden><span aria-hidden="true">New</span><span class="sr-only">Not in stock: added as something new</span></span><span class="badge badge-warn" data-many-status title="{n} items have this name: pick one, or it's added as something new" hidden><span aria-hidden="true">{n} matches</span><span class="sr-only">{n} items have this name: pick one, or it's added as something new</span></span></span>
+            </div>
             <input type="hidden" name="item_id" value="{{with $f.ItemID}}{{.}}{{end}}" data-item-id>
             <datalist id="shopping-items">
               {{range $d.Items}}<option value="{{.DisplayName}}" data-id="{{.ID}}" data-name="{{.Name}}" data-brand="{{.Brand}}" data-unit="{{.Unit}}" data-placeholder="{{placeholderFor .Unit}}" data-have="{{qty .Quantity .Unit}}" data-have-base="{{num .Quantity}}"{{if .IsLow}} data-low data-min="{{qty (deref .MinQuantity) .Unit}}"{{end}}></option>{{end}}
             </datalist>
-            <p class="item-status" id="item-status" aria-live="polite" data-item-status><span class="hint" data-new-status hidden>Not in stock: added as something new</span><span class="hint" data-many-status hidden>{n} items have this name: pick one, or it's added as something new</span></p>
             {{template "field-err" (fieldErr (index $e "item") "item")}}
           </div>
           <div class="field{{if index $e "quantity"}} has-error{{end}}">

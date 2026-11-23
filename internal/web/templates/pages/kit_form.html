@@ -59,11 +59,11 @@
   </div>
   {{/* The intermediate schedule shows while its box is ticked (CSS). The
        server drops its fields when it isn't, so nothing needs clearing. */}}
-  <div class="form-section inter-schedule">
+  <div class="form-section">
     <h2>Intermediate schedule</h2>
     <p class="hint">For a lighter job between full services (like a mid-interval oil &amp; filter change), with its own, smaller set of parts. It alternates with the schedule above.</p>
     <label class="toggle"><input type="checkbox" id="has_inter" name="has_inter" value="1"{{if $f.ShowInter}} checked{{end}}> Use an intermediate schedule</label>
-    <div class="inter-fields" id="inter-section">
+    <div class="toggled-fields" id="inter-section">
       <div class="form-grid">
         <div class="field{{if index $e "inter_interval_distance"}} has-error{{end}}">
           <label for="inter_interval_distance">Intermediate distance ({{distUnit}})</label>

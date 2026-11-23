@@ -62,10 +62,14 @@ type Vehicle struct {
 	Odometer           *int
 	PurchasedOn        *time.Time
 	OdometerAtPurchase *int
-	Notes              string
-	ItemCount          int
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// WarrantyEndsOn is the last day the warranty covers, and WarrantyEndsAt
+	// the reading it ends past; whichever comes first ends it (Warranty).
+	WarrantyEndsOn *time.Time
+	WarrantyEndsAt *int
+	Notes          string
+	ItemCount      int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -456,6 +460,8 @@ type Kit struct {
 	VehicleOdometer           *int
 	VehiclePurchasedOn        *time.Time
 	VehicleOdometerAtPurchase *int
+	VehicleWarrantyEndsOn     *time.Time
+	VehicleWarrantyEndsAt     *int
 	Name                      string
 	IntervalDistance          *int
 	IntervalMonths            *int

@@ -253,7 +253,13 @@ type VehicleInput struct {
 	Odometer           *int
 	PurchasedOn        *time.Time
 	OdometerAtPurchase *int
-	Notes              string
+	// HasWarranty is the form's Under warranty box: ticked, the warranty
+	// needs an end date, an end reading or both. Unticked, the handler
+	// leaves both nil, which clears a warranty.
+	HasWarranty    bool
+	WarrantyEndsOn *time.Time
+	WarrantyEndsAt *int
+	Notes          string
 	// KeepOdometer says the edit form's odometer was left as it was opened,
 	// so an update keeps the current reading (it may have changed since).
 	KeepOdometer bool
@@ -317,6 +323,26 @@ func (in VehicleInput) Validate() Errors {
 			errs.Add("odometer_at_purchase", "Purchase odometer cannot be higher than the current odometer")
 		} else {
 			errs.Add("odometer", "Current odometer cannot be lower than purchase odometer")
+		}
+	}
+	if in.HasWarranty && in.WarrantyEndsOn == nil && in.WarrantyEndsAt == nil {
+		errs.Add("warranty_ends_on", "Enter when the warranty ends: a date, a reading or both")
+	}
+	if in.WarrantyEndsOn != nil {
+		if y := in.WarrantyEndsOn.Year(); y < 1900 || y > 2100 {
+			errs.Add("warranty_ends_on", "Date year must be between 1900 and 2100")
+		} else if in.PurchasedOn != nil && in.WarrantyEndsOn.Before(*in.PurchasedOn) {
+			errs.Add("warranty_ends_on", "The warranty can't end before the vehicle was purchased")
+		}
+	}
+	if in.WarrantyEndsAt != nil {
+		switch {
+		case *in.WarrantyEndsAt <= 0:
+			errs.Add("warranty_ends_at", "Warranty reading must be more than 0")
+		case *in.WarrantyEndsAt > MaxOdometer:
+			errs.Add("warranty_ends_at", "That is more than "+FormatDistance(MaxOdometer))
+		case in.OdometerAtPurchase != nil && *in.WarrantyEndsAt <= *in.OdometerAtPurchase:
+			errs.Add("warranty_ends_at", "Warranty reading must be higher than the purchase odometer")
 		}
 	}
 	limitText(errs, maxShortText, "Make", in.Make)

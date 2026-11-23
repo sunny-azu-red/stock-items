@@ -22,12 +22,16 @@ type vehicleForm struct {
 	Name, Kind, Make, Model, Year      string
 	Plate, VIN, Color, Odometer, Notes string
 	PurchasedOn, OdometerAtPurchase    string
-	OdometerWas                        string // as the edit form was opened
-	Stored                             string // the saved name while editing, for the heading
-	Version                            int    // as the edit form was opened (see itemForm)
-	Stale                              *staleNote
-	FormKey                            string // see itemForm
-	Errors                             stock.Errors
+	// ShowWarranty is the Under warranty box; WarrantyEndsOn and
+	// WarrantyEndsAt are its fields, shown while it is ticked.
+	ShowWarranty                   bool
+	WarrantyEndsOn, WarrantyEndsAt string
+	OdometerWas                    string // as the edit form was opened
+	Stored                         string // the saved name while editing, for the heading
+	Version                        int    // as the edit form was opened (see itemForm)
+	Stale                          *staleNote
+	FormKey                        string // see itemForm
+	Errors                         stock.Errors
 }
 
 type vehicleFormPage struct {
@@ -40,14 +44,18 @@ type vehicleFormPage struct {
 }
 
 func vehicleFormFrom(v stock.Vehicle) vehicleForm {
-	var pOn string
-	if v.PurchasedOn != nil {
-		pOn = v.PurchasedOn.Format("2006-01-02")
+	day := func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return t.Format("2006-01-02")
 	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
 		Plate: v.Plate, VIN: v.VIN, Color: v.Color, Odometer: optIntString(v.Odometer),
-		PurchasedOn: pOn, OdometerAtPurchase: optIntString(v.OdometerAtPurchase), Notes: v.Notes,
+		PurchasedOn: day(v.PurchasedOn), OdometerAtPurchase: optIntString(v.OdometerAtPurchase),
+		ShowWarranty:   v.WarrantyEndsOn != nil || v.WarrantyEndsAt != nil,
+		WarrantyEndsOn: day(v.WarrantyEndsOn), WarrantyEndsAt: optIntString(v.WarrantyEndsAt), Notes: v.Notes,
 		OdometerWas: optIntString(v.Odometer), Stored: v.Name, Version: v.Version,
 	}
 }
@@ -57,6 +65,7 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
 		Odometer: formText(r, "odometer"), PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
+		ShowWarranty: formText(r, "has_warranty") == "1", WarrantyEndsOn: formText(r, "warranty_ends_on"), WarrantyEndsAt: formText(r, "warranty_ends_at"),
 		Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
@@ -81,6 +90,18 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 		f.Errors.Add("purchased_on", err.Error())
 	} else if in.PurchasedOn != nil && in.PurchasedOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
 		f.Errors.Add("purchased_on", "Date cannot be in the future")
+	}
+	if f.ShowWarranty {
+		in.HasWarranty = true
+		if in.WarrantyEndsOn, err = parseOptDate(f.WarrantyEndsOn); err != nil {
+			f.Errors.Add("warranty_ends_on", err.Error())
+		}
+		if in.WarrantyEndsAt, err = parseOptInt(f.WarrantyEndsAt); err != nil {
+			f.Errors.Add("warranty_ends_at", err.Error())
+		}
+	} else {
+		// Unticked: the warranty is cleared, whatever its fields still hold.
+		f.WarrantyEndsOn, f.WarrantyEndsAt = "", ""
 	}
 	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
 		in.KeepOdometer = optIntString(was) == optIntString(in.Odometer)
@@ -468,6 +489,8 @@ type kitView struct {
 	// count from (stock.Kit.MonthsUncounted); the page asks for the
 	// vehicle's purchase date.
 	MonthsUncounted bool
+	// Warranty is the kit's vehicle's (stock.Kit.Warranty).
+	Warranty stock.Warranty
 	// HideVehicle leaves out the kit's vehicle chip on a page that already
 	// names that vehicle once at the top (see scopeKits).
 	HideVehicle bool
@@ -516,6 +539,9 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			if k.VehicleOdometerAtPurchase == nil {
 				k.VehicleOdometerAtPurchase = v.OdometerAtPurchase
 			}
+			if k.VehicleWarrantyEndsOn == nil && k.VehicleWarrantyEndsAt == nil {
+				k.VehicleWarrantyEndsOn, k.VehicleWarrantyEndsAt = v.WarrantyEndsOn, v.WarrantyEndsAt
+			}
 		}
 		out[i] = kitView{
 			Kit:             k,
@@ -528,6 +554,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			NextInter:       k.NextIsIntermediate(odo, today),
 			VehicleArchived: v.Archived(),
 			MonthsUncounted: k.MonthsUncounted(odo, today),
+			Warranty:        k.Warranty(odo, today),
 		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Due.State.Rank() < out[b].Due.State.Rank() })

@@ -28,6 +28,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	var args sqlArgs
 	sql := `
 		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.purchased_on, v.odometer_at_purchase,
+		       v.warranty_ends_on, v.warranty_ends_at,
 		       k.name, k.interval_distance, k.interval_months, k.inter_interval_distance, k.inter_interval_months, k.notes,
 		       ls.id, ls.performed_on, ls.odometer, ls.odometer_at_log, ls.created_at, ls.kit_intermediate,
 		       (SELECT sr.odometer FROM service_records sr
@@ -81,7 +82,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsInter *bool
 		var ls, lf stock.ServiceRef
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
-			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase,
+			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.InterIntervalDistance, &k.InterIntervalMonths, &k.Notes,
 			&lsID, &lsDate, &ls.Odometer, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometer,
 			&lfID, &lfDate, &lf.Odometer, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometer,

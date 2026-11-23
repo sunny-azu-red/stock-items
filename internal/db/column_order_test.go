@@ -113,7 +113,8 @@ var oldOrder = []struct {
 	cols  []string
 }{
 	{"vehicles", []string{"id", "name", "kind", "make", "model", "year", "plate", "vin", "color", "odometer",
-		"notes", "created_at", "updated_at", "archived_at", "version", "purchased_on", "odometer_at_purchase"}},
+		"notes", "created_at", "updated_at", "archived_at", "version", "purchased_on", "odometer_at_purchase",
+		"warranty_ends_on", "warranty_ends_at"}},
 	{"items", []string{"id", "name", "brand", "category", "unit", "quantity", "min_quantity", "expires_on",
 		"location", "notes", "created_at", "updated_at", "archived_at", "version"}},
 	{"service_kits", []string{"id", "vehicle_id", "name", "interval_distance", "interval_months", "notes",

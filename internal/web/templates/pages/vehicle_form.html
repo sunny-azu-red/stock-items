@@ -78,6 +78,27 @@
       </div>
     </div>
   </div>
+  {{/* The warranty's fields show while its box is ticked (CSS); the server
+       drops them when it isn't, which clears a saved warranty. */}}
+  <div class="form-section">
+    <h2>Warranty</h2>
+    <p class="hint">While it runs, intermediate services never push back the full service.</p>
+    <label class="toggle"><input type="checkbox" id="has_warranty" name="has_warranty" value="1"{{if $f.ShowWarranty}} checked{{end}}> Under warranty</label>
+    <div class="toggled-fields">
+      <div class="form-grid">
+        <div class="field{{if index $e "warranty_ends_on"}} has-error{{end}}">
+          <label for="warranty_ends_on">Warranty ends on</label>
+          <input class="input" type="date" id="warranty_ends_on" name="warranty_ends_on" value="{{$f.WarrantyEndsOn}}" {{invalid (index $e "warranty_ends_on") "warranty_ends_on"}}>
+          {{template "field-err" (fieldErr (index $e "warranty_ends_on") "warranty_ends_on")}}
+        </div>
+        <div class="field{{if index $e "warranty_ends_at"}} has-error{{end}}">
+          <div class="label-row"><label for="warranty_ends_at">Warranty ends at ({{distUnit}})</label>{{template "tip" (dict "For" "Warranty ends at" "ID" "warranty-ends-at-tip" "Text" "The odometer reading it ends at, if it has a limit.")}}</div>
+          <input class="input" id="warranty_ends_at" name="warranty_ends_at" value="{{$f.WarrantyEndsAt}}" inputmode="numeric" placeholder="e.g. 100000" {{invalid (index $e "warranty_ends_at") "warranty_ends_at" "warranty-ends-at-tip"}}>
+          {{template "field-err" (fieldErr (index $e "warranty_ends_at") "warranty_ends_at")}}
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="form-section">
     <div class="field">
       <label for="notes">Notes</label>

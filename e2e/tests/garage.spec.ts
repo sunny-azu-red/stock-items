@@ -53,10 +53,16 @@ async function pickVehicle(page: Page, name: string) {
 // The headings of an open item list, in order.
 const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
 
-async function addVehicle(page: Page, name: string, odometer: string) {
+async function addVehicle(page: Page, name: string, odometer: string, warrantyEndsOn?: string) {
   await page.goto("/vehicles/new");
   await field(page, "Name").fill(name);
   await page.getByLabel("Odometer (km)").fill(odometer);
+  if (warrantyEndsOn) {
+    // Its fields show once the box is ticked.
+    await expect(page.getByLabel("Warranty ends on")).toBeHidden();
+    await page.getByLabel("Under warranty").check();
+    await page.getByLabel("Warranty ends on").fill(warrantyEndsOn);
+  }
   await page.getByRole("button", { name: "Save vehicle" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
@@ -93,7 +99,7 @@ test("set up vehicles and the example inventory", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Welcome to Pitbox")).toBeVisible();
 
-  await addVehicle(page, "KTM 390", "11200");
+  await addVehicle(page, "KTM 390", "11200", "2028-03-01");
   await addVehicle(page, "KTM 1290", "24500");
 
   const ktm390: ItemSpec[] = [
@@ -2314,7 +2320,9 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
   const submit = (name: string) => async () => { await page.getByRole("button", { name, exact: true }).first().click(); };
   const pages: [string, string, (() => Promise<void>)?][] = [
     ["/items/new", "Add item"], ["/items/new", "Add item with errors", submit("Save item")], [item + "/edit", "Edit item"],
-    ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
+    ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")],
+    ["/vehicles/new", "Add vehicle under warranty", async () => { await page.locator("#has_warranty").check(); }],
+    ["/vehicles/new", "Add vehicle under warranty with errors", async () => { await page.locator("#has_warranty").check(); await submit("Save vehicle")(); }], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
     ["/kits/new", "Add kit", async () => { await page.locator("#has_inter").check(); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
     ["/services/new", "Log service", async () => { await pickVehicle(page, "KTM 390"); }], [service + "/edit", "Edit service"],
     ["/services/new", "Log service with a part that names no item", async () => {
@@ -2742,7 +2750,7 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
             if (notes && i !== sections.length - 1) out.push("Notes isn't the last section");
             for (const hint of sec.querySelectorAll(":scope > p.hint")) {
               let before = hint.previousElementSibling;
-              while (before && !before.matches(".form-grid, .rows, .chips, .toggle, .field, .inter-fields")) before = before.previousElementSibling;
+              while (before && !before.matches(".form-grid, .rows, .chips, .toggle, .field, .toggled-fields")) before = before.previousElementSibling;
               if (before) out.push(`the hint "${text(hint)}" comes after the fields of its section`);
             }
           });

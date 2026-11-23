@@ -60,7 +60,8 @@
         <li>
           <span class="grow">
             <a class="title vehicle-title" href="/vehicles/{{.ID}}" style="{{chipStyle .Color}}">{{icon .Kind.Icon}} <span>{{.Name}}</span></a>
-            <span class="meta">{{plural .ItemCount "item"}}{{with .Odometer}} · {{distance .}}{{end}}</span>
+            {{$w := .Warranty $.Today}}{{if eq $w.State "soon"}}<span class="badge-line">{{template "warranty-badge" $w}}</span>{{end}}
+            <span class="meta">{{plural .ItemCount "item"}}{{with .Odometer}} · {{distance .}}{{end}}{{if eq $w.State "soon"}} · warranty ends {{$w.EndsIn}}{{end}}</span>
           </span>
           <a class="btn btn-sm btn-ghost" href="/stock?v={{.ID}}">Stock →</a>
         </li>

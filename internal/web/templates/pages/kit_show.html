@@ -95,6 +95,7 @@
         {{if $due.DueOdometer}}<div><dt>Due at</dt><dd>{{distance $due.DueOdometer}}</dd></div>{{end}}
         {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}
         {{if and $k.HasIntermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueOdometer .DueDate}}<div><dt>Full due</dt><dd>{{with .DueOdometer}}{{distance .}}{{end}}{{if and .DueOdometer .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
+        {{if and (ne $due.State "none") (not $d.Vehicle.Archived)}}{{with $d.View.Warranty}}{{if .Runs}}<div><dt>Warranty ends</dt><dd>{{with .EndsOn}}{{date .}}{{end}}{{if and .EndsOn .EndsAt}} · {{end}}{{with .EndsAt}}{{distance .}}{{end}}{{if eq .State "soon"}} {{template "warranty-badge" .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
         <div><dt>Odometer now</dt><dd>{{distance $d.Vehicle.Odometer}}</dd></div>
         {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}
       </dl>

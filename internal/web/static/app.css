@@ -807,11 +807,11 @@
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
   .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
-  /* A kit's intermediate schedule: its fields show while its box is ticked. */
-  .inter-schedule {
-    & .inter-fields { margin-top: var(--gap); }
-    &:not(:has(#has_inter:checked)) .inter-fields { display: none; }
-  }
+  /* A section's fields that show while its toggle is ticked (a kit's
+     intermediate schedule, a vehicle's warranty). The server drops them
+     when it isn't, so nothing needs clearing. */
+  .toggled-fields { margin-top: var(--gap); }
+  .form-section:has(> .toggle input:not(:checked)) > .toggled-fields { display: none; }
   /* A line between sections: over each one with a section shown before
      it, whatever hidden inputs or hidden sections sit in between. */
   .form-section {
@@ -1429,8 +1429,8 @@
       & span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     }
     & .meta { color: var(--muted); font-size: .75rem; margin-top: 2px; }
-    /* A list row's stock badge, on its own line under the title. */
-    & .stock-line { display: flex; margin-block: 4px; }
+    /* A list row's badge (stock, warranty), on its own line under the title. */
+    & .badge-line { display: flex; margin-block: 4px; }
     & .end { text-align: right; white-space: nowrap; font-weight: 600; }
   }
 

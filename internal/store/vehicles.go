@@ -13,7 +13,7 @@ import (
 
 const vehicleSelect = `
 SELECT v.id, v.version, v.name, v.kind, v.make, v.model, v.year, v.plate, v.vin, v.color, v.odometer,
-       v.purchased_on, v.odometer_at_purchase, v.notes,
+       v.purchased_on, v.odometer_at_purchase, v.warranty_ends_on, v.warranty_ends_at, v.notes,
        (SELECT count(*) FROM item_vehicles iv JOIN items i ON i.id = iv.item_id
         WHERE iv.vehicle_id = v.id AND i.archived_at IS NULL),
        v.created_at, v.updated_at, v.archived_at
@@ -22,7 +22,7 @@ FROM vehicles v`
 func scanVehicle(row pgx.Row) (stock.Vehicle, error) {
 	var v stock.Vehicle
 	err := row.Scan(&v.ID, &v.Version, &v.Name, &v.Kind, &v.Make, &v.Model, &v.Year, &v.Plate, &v.VIN, &v.Color,
-		&v.Odometer, &v.PurchasedOn, &v.OdometerAtPurchase, &v.Notes, &v.ItemCount, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt)
+		&v.Odometer, &v.PurchasedOn, &v.OdometerAtPurchase, &v.WarrantyEndsOn, &v.WarrantyEndsAt, &v.Notes, &v.ItemCount, &v.CreatedAt, &v.UpdatedAt, &v.ArchivedAt)
 	return v, err
 }
 
@@ -57,9 +57,11 @@ func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64
 			return err
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer, purchased_on, odometer_at_purchase, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-			in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.Odometer, in.PurchasedOn, in.OdometerAtPurchase, in.Notes,
+			INSERT INTO vehicles (name, kind, make, model, year, plate, vin, color, odometer, purchased_on, odometer_at_purchase,
+			                      warranty_ends_on, warranty_ends_at, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+			in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.Odometer, in.PurchasedOn, in.OdometerAtPurchase,
+			in.WarrantyEndsOn, in.WarrantyEndsAt, in.Notes,
 		).Scan(&id)
 		return vehicleConflict(err)
 	})
@@ -107,10 +109,11 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 			       name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
 			       color = $9, odometer = CASE WHEN $10 THEN odometer ELSE $11 END,
 			       purchased_on = $12, odometer_at_purchase = $13,
-			       notes = $14, updated_at = now()
+			       warranty_ends_on = $14, warranty_ends_at = $15,
+			       notes = $16, updated_at = now()
 			WHERE id = $1`,
 			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.KeepOdometer, in.Odometer,
-			in.PurchasedOn, in.OdometerAtPurchase, in.Notes)
+			in.PurchasedOn, in.OdometerAtPurchase, in.WarrantyEndsOn, in.WarrantyEndsAt, in.Notes)
 		return checkAffected(tag, vehicleConflict(err))
 	})
 }

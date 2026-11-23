@@ -18,6 +18,7 @@
       <span class="stats">
         <span>{{icon "package"}}<strong>{{$v.ItemCount}}</strong> {{pluralOnly $v.ItemCount "item"}}</span>
         <span>{{icon "list-checks"}}<strong>{{.Kits}}</strong> {{pluralOnly .Kits "kit"}}</span>
+        {{if not $v.Archived}}{{with $v.Warranty $.Today}}{{if eq .State "active"}}<span>{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span>{{icon "shield-alert"}} {{.State.Label}}</span>{{end}}{{end}}{{end}}
       </span>
     </span>
     <span class="card-foot">

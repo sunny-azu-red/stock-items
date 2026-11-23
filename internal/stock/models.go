@@ -467,7 +467,10 @@ type Kit struct {
 	IntervalMonths            *int
 	// InBetween is how many lighter services come between two full ones
 	// (0 to 2): every InterStep, at the full schedule's months.
-	InBetween   int
+	InBetween int
+	// BreakInAt is the reading a new vehicle\'s break-in service is due at
+	// (NextIsBreakIn); nil without one.
+	BreakInAt   *int
 	Notes       string
 	Lines       []KitLine
 	InterLines  []KitLine
@@ -484,6 +487,8 @@ type Kit struct {
 	// one (all of them before the first): once there are InBetween, the
 	// full one is next.
 	InterSinceFull int
+	// HasBreakIn says a break-in was logged with the kit (there is at most one).
+	HasBreakIn bool
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -519,8 +524,36 @@ type ServiceRef struct {
 	// OdometerAtLog is the vehicle's reading when a service without its
 	// own reading was logged, if that was within a week of doing it.
 	OdometerAtLog *int
-	Intermediate  bool
+	Tier          KitTier
 }
+
+// Intermediate reports whether it was an intermediate service.
+func (r ServiceRef) Intermediate() bool { return r.Tier == TierIntermediate }
+
+// KitTier is which of its kit's services a service is.
+type KitTier string
+
+const (
+	TierFull         KitTier = "full"
+	TierIntermediate KitTier = "intermediate"
+	// TierBreakIn is a new vehicle's first service: the full parts, but the
+	// full schedule doesn't count from it (Kit.FullDue).
+	TierBreakIn KitTier = "break_in"
+)
+
+// Label names the tier in a service's title and on its page.
+func (t KitTier) Label() string {
+	switch t {
+	case TierIntermediate:
+		return "Intermediate"
+	case TierBreakIn:
+		return "Break-in"
+	}
+	return "Full"
+}
+
+// Valid reports whether t is one of the tiers.
+func (t KitTier) Valid() bool { return t == TierFull || t == TierIntermediate || t == TierBreakIn }
 
 // KitLine is one item (and needed quantity) of a kit.
 type KitLine struct {
@@ -543,22 +576,22 @@ func (l KitLine) Short() float64 {
 
 // ServiceRecord is a performed service job.
 type ServiceRecord struct {
-	ID              int64
-	Version         int // see Item.Version
-	VehicleID       int64
-	VehicleName     string
-	VehicleColor    string
-	KitID           *int64
-	KitName         string
-	KitIntermediate bool
-	PerformedOn     time.Time
-	Odometer        *int
-	Title           string
-	LaborCost       *float64
-	Notes           string
-	Parts           []ServicePart
-	PartCount       int
-	CreatedAt       time.Time
+	ID           int64
+	Version      int // see Item.Version
+	VehicleID    int64
+	VehicleName  string
+	VehicleColor string
+	KitID        *int64
+	KitName      string
+	KitTier      KitTier // with a kit; TierFull without one
+	PerformedOn  time.Time
+	Odometer     *int
+	Title        string
+	LaborCost    *float64
+	Notes        string
+	Parts        []ServicePart
+	PartCount    int
+	CreatedAt    time.Time
 }
 
 // VehicleChip returns a Vehicle value with the service's vehicle chip fields.

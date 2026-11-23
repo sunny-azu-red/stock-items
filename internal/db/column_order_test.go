@@ -118,9 +118,9 @@ var oldOrder = []struct {
 	{"items", []string{"id", "name", "brand", "category", "unit", "quantity", "min_quantity", "expires_on",
 		"location", "notes", "created_at", "updated_at", "archived_at", "version"}},
 	{"service_kits", []string{"id", "vehicle_id", "name", "interval_distance", "interval_months", "notes",
-		"created_at", "updated_at", "archived_at", "version", "in_between"}},
+		"created_at", "updated_at", "archived_at", "version", "in_between", "break_in_at"}},
 	{"service_records", []string{"id", "vehicle_id", "kit_id", "performed_on", "odometer", "title", "notes",
-		"labor_cost", "created_at", "odometer_before", "odometer_moved", "odometer_at_log", "version", "kit_intermediate"}},
+		"labor_cost", "created_at", "odometer_before", "odometer_moved", "odometer_at_log", "version", "kit_tier"}},
 	{"stock_movements", []string{"id", "item_id", "kind", "delta", "total_price", "supplier", "note",
 		"occurred_on", "service_record_id", "created_at", "version"}},
 	{"shopping_entries", []string{"id", "item_id", "free_text", "quantity", "note", "created_at", "unit", "version"}},
@@ -177,8 +177,8 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, in_between, archived_at)
 			VALUES (1, 'Oil service', 7500, 12, 1, NULL), (1, 'Old kit', NULL, 6, 0, now());
 		INSERT INTO service_kit_lines (kit_id, item_id, quantity, intermediate) VALUES (1, 2, 1700, false), (1, 2, 1000, true);
-		INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, odometer_before, odometer_moved, title, labor_cost)
-			VALUES (1, 1, true, '2026-05-01', 12000, 11000, true, 'Oil service', 80), (2, NULL, false, '2026-05-02', NULL, NULL, false, 'Wash', NULL);
+		INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, odometer_before, odometer_moved, title, labor_cost)
+			VALUES (1, 1, 'intermediate', '2026-05-01', 12000, 11000, true, 'Oil service', 80), (2, NULL, 'full', '2026-05-02', NULL, NULL, false, 'Wash', NULL);
 		INSERT INTO stock_movements (item_id, kind, delta, total_price, supplier, occurred_on, service_record_id) VALUES
 			(1, 'starting', 2, NULL, '', '2026-01-01', NULL), (2, 'bought', 2525.5, 19.90, 'Moto shop', '2026-03-01', NULL),
 			(2, 'service', -1000, NULL, '', '2026-05-01', 1);

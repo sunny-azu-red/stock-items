@@ -93,9 +93,9 @@
      no reminder, like its own page: nothing is due on a vehicle no longer kept. */}}
 {{define "kit-meta"}}
 {{if not .Kit.Archived}}
-{{if or (and (not .VehicleArchived) (or .Due.Summary .Kit.HasIntermediate)) .Kit.LastService}}
+{{if or (and (not .VehicleArchived) (or .Due.Summary .Kit.HasIntermediate .NextBreakIn)) .Kit.LastService}}
 <span class="meta">
-  {{if and (not .VehicleArchived) .Kit.HasIntermediate}}<span>{{if .NextInter}}Intermediate{{else}}Full{{end}}{{if or .Due.Summary .Kit.LastService}} ·{{end}}</span>{{end}}
+  {{if and (not .VehicleArchived) (or .Kit.HasIntermediate .NextBreakIn)}}<span>{{if .NextBreakIn}}Break-in{{else if .NextInter}}Intermediate{{else}}Full{{end}}{{if or .Due.Summary .Kit.LastService}} ·{{end}}</span>{{end}}
   {{if not .VehicleArchived}}{{with .Due.Summary}}<span>{{.}}</span>{{end}}{{end}}
   {{with .Kit.LastService}}<span>{{if and (not $.VehicleArchived) $.Due.Summary}}· {{end}}last {{date .PerformedOn}}</span>{{end}}
 </span>

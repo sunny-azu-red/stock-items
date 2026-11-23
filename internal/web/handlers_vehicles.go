@@ -481,6 +481,7 @@ type kitView struct {
 	FullDue         stock.Due
 	InterDue        stock.Due
 	NextInter       bool
+	NextBreakIn     bool // stock.Kit.NextIsBreakIn
 	VehicleArchived bool
 	// Warranty is the kit's vehicle's (stock.Kit.Warranty).
 	Warranty stock.Warranty
@@ -542,6 +543,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			FullDue:         k.FullDue(odo, today),
 			InterDue:        k.InterDue(odo, today),
 			NextInter:       k.NextIsIntermediate(odo, today),
+			NextBreakIn:     k.NextIsBreakIn(),
 			VehicleArchived: v.Archived(),
 			Warranty:        k.Warranty(odo, today),
 		}

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,22 +15,72 @@ import (
 )
 
 type serviceForm struct {
-	ID              int64 // set when editing a logged service
-	VehicleID       int64
-	KitID           int64
-	KitName         string
-	KitIntermediate bool
-	PerformedOn     string
-	Odometer        string
-	Title           string
-	Notes           string
-	LaborCost       string
-	Parts           []lineRow
-	ShortParts      []shortPart
-	Version         int // as the edit form was opened (see itemForm)
-	Stale           *staleNote
-	FormKey         string // see itemForm
-	Errors          stock.Errors
+	ID          int64 // set when editing a logged service
+	VehicleID   int64
+	KitID       int64
+	KitName     string
+	KitTier     stock.KitTier
+	PerformedOn string
+	Odometer    string
+	Title       string
+	Notes       string
+	LaborCost   string
+	Parts       []lineRow
+	ShortParts  []shortPart
+	Version     int // as the edit form was opened (see itemForm)
+	Stale       *staleNote
+	FormKey     string // see itemForm
+	Errors      stock.Errors
+}
+
+// KitParts says whose parts the form's rows start from: the intermediate
+// ones ("inter") or the full ones ("full", a break-in's too).
+func (f serviceForm) KitParts() string {
+	if f.KitTier == stock.TierIntermediate {
+		return "inter"
+	}
+	return "full"
+}
+
+// tierOption is a tier a service with a kit can be: its parts ("full" or
+// "inter", see serviceForm.KitParts) and the title it gives the service.
+type tierOption struct {
+	Tier         stock.KitTier
+	Label        string
+	Parts, Title string
+	Checked      bool
+}
+
+// kitTitle is the title of a service of the kit named name in tier t:
+// "Oil Service", "Oil Service (Intermediate)", "Oil Service (Break-in)".
+func kitTitle(name string, t stock.KitTier) string {
+	if t == stock.TierFull || t == "" {
+		return name
+	}
+	return name + " (" + t.Label() + ")"
+}
+
+// kitTiers lists the tiers a service of kit k can be: Full; Intermediate
+// with services in between; Break-in for the kit's first service, or on
+// the edit of one when the kit has no break-in yet (there is at most one,
+// store.checkKitTier). The tier the form holds is always among them.
+func kitTiers(k stock.Kit, f serviceForm) []tierOption {
+	tiers := []stock.KitTier{stock.TierFull}
+	if k.HasIntermediate() || f.KitTier == stock.TierIntermediate {
+		tiers = append(tiers, stock.TierIntermediate)
+	}
+	if f.KitTier == stock.TierBreakIn || (f.ID == 0 && k.LastService == nil) || (f.ID != 0 && !k.HasBreakIn) {
+		tiers = append(tiers, stock.TierBreakIn)
+	}
+	var out []tierOption
+	for _, t := range tiers {
+		parts := "full"
+		if t == stock.TierIntermediate {
+			parts = "inter"
+		}
+		out = append(out, tierOption{Tier: t, Label: t.Label(), Parts: parts, Title: kitTitle(k.Name, t), Checked: t == f.KitTier})
+	}
+	return out
 }
 
 type serviceFormPage struct {
@@ -38,7 +89,9 @@ type serviceFormPage struct {
 	Vehicle       *stock.Vehicle
 	Picker        itemPicker // the part rows' items
 	ServiceTitles []string
-	KitHasInter   bool
+	// KitTiers: the tiers of its kit the service can be, when there is a
+	// choice (more than Full).
+	KitTiers      []tierOption
 	KitFullParts  []lineRow
 	KitInterParts []lineRow
 	// Kits: for a new service without a kit, the active kits to start
@@ -100,13 +153,15 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			if f.Errors != nil {
 				f.Errors["form"] = "Its kit " + f.KitName + " was deleted meanwhile. Save to log the service without it."
 			}
-			f.KitID, f.KitName, f.KitIntermediate = 0, "", false
+			f.KitID, f.KitName, f.KitTier = 0, "", stock.TierFull
 		}
 		if err == nil {
 			// The kit's own name, not what the form posted.
 			f.KitName = k.Name
-			p.KitHasInter = k.HasIntermediate() || f.KitIntermediate
-			if f.ID == 0 && p.KitHasInter {
+			if tiers := kitTiers(k, f); len(tiers) > 1 {
+				p.KitTiers = tiers
+			}
+			if f.ID == 0 && len(p.KitTiers) > 1 {
 				p.KitFullParts = kitPartRows(k.Lines)
 				describeRows(p.KitFullParts, items, true)
 				p.KitFullParts = withEmptyRow(p.KitFullParts)
@@ -171,15 +226,25 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 		f.KitID, f.KitName, f.VehicleID, f.Title = k.ID, k.Name, k.VehicleID, k.Name
 		switch q.Get("intermediate") {
 		case "1":
-			f.KitIntermediate = k.HasIntermediate()
+			f.KitTier = stock.TierFull
+			if k.HasIntermediate() {
+				f.KitTier = stock.TierIntermediate
+			}
 		case "0":
-			f.KitIntermediate = false
+			f.KitTier = stock.TierFull
 		default:
-			f.KitIntermediate = k.NextIsIntermediate(k.VehicleOdometer, s.now())
+			switch {
+			case k.NextIsBreakIn():
+				f.KitTier = stock.TierBreakIn
+			case k.NextIsIntermediate(k.VehicleOdometer, s.now()):
+				f.KitTier = stock.TierIntermediate
+			default:
+				f.KitTier = stock.TierFull
+			}
 		}
+		f.Title = kitTitle(k.Name, f.KitTier)
 		lines := k.Lines
-		if f.KitIntermediate {
-			f.Title = k.Name + " (Intermediate)"
+		if f.KitTier == stock.TierIntermediate {
 			lines = k.InterLines
 		}
 		f.Parts = kitPartRows(lines)
@@ -231,11 +296,11 @@ func (s *Server) parseServiceForm(r *http.Request, id int64) (serviceForm, stock
 	f := serviceForm{
 		PerformedOn: formText(r, "performed_on"), Odometer: formText(r, "odometer"), Title: formText(r, "title"),
 		Notes: formText(r, "notes"), LaborCost: formText(r, "labor_cost"), KitName: formText(r, "kit_name"),
-		KitIntermediate: formText(r, "kit_intermediate") == "1",
-		Version:         parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
+		KitTier: stock.KitTier(cmp.Or(formText(r, "kit_tier"), string(stock.TierFull))),
+		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
-	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, KitIntermediate: f.KitIntermediate, Version: f.Version, FormKey: f.FormKey}
+	in := stock.ServiceInput{Title: f.Title, Notes: f.Notes, KitTier: f.KitTier, Version: f.Version, FormKey: f.FormKey}
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID, in.VehicleID = *id, *id
 	}
@@ -370,7 +435,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f := serviceForm{
-		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitIntermediate: rec.KitIntermediate,
+		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitTier: rec.KitTier,
 		PerformedOn: rec.PerformedOn.Format("2006-01-02"), Odometer: optIntString(rec.Odometer),
 		Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
 	}

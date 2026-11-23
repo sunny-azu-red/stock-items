@@ -605,7 +605,7 @@ func TestServiceFormShowsKitError(t *testing.T) {
 	expect(t, a.postV(kitURL, kit), http.StatusSeeOther)
 
 	rec = a.post("/services", url.Values{
-		"vehicle_id": {itoa(k390)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
+		"vehicle_id": {itoa(k390)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_tier": {"intermediate"},
 		"title": {"Oil Service"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(oil)}, "part_qty": {"100 ml"},
 	})
@@ -1024,14 +1024,14 @@ func TestServiceFormFromAKit(t *testing.T) {
 
 	// Refused: no title. The kit name posted is stale.
 	rec = a.post("/services", url.Values{
-		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Old Name"}, "kit_intermediate": {"1"},
+		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Old Name"}, "kit_tier": {"intermediate"},
 		"title": {""}, "performed_on": {"2026-10-20"}, "odometer": {"10600"},
 		"part_item": {itoa(filter), itoa(oil)}, "part_qty": {"1", "750 ml"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity,
 		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`" data-name="KTM 1290">`,
 		`<input type="hidden" name="kit_id" value="`+itoa(kitID)+`">`,
-		`value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil Service" checked`,
+		`value="intermediate" autocomplete="off" data-kit-tier="inter" data-kit-title="Oil Service (Intermediate)" checked`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`, `value="750 ml"`, "Work performed is required")
 	body := rec.Body.String()
 	if h := header(t, body); !strings.Contains(h, chip) || !strings.Contains(h, badge) {
@@ -1043,7 +1043,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 
 	// Saved as Intermediate; the edit shows the same header and the tier.
 	rec = a.post("/services", url.Values{
-		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
+		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_tier": {"intermediate"},
 		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer": {"10600"},
 		"part_item": {itoa(filter)}, "part_qty": {"1"},
 	})
@@ -1051,7 +1051,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	svc := rec.Header().Get("Location")
 	expect(t, a.get(kitPath(kitID)), http.StatusOK, "(intermediate)", "Next up")
 	edit := a.get(svc + "/edit")
-	expect(t, edit, http.StatusOK, `value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil Service" checked`,
+	expect(t, edit, http.StatusOK, `value="intermediate" autocomplete="off" data-kit-tier="inter" data-kit-title="Oil Service (Intermediate)" checked`,
 		`<input type="hidden" name="kit_id" value="`+itoa(kitID)+`">`)
 	if h := header(t, edit.Body.String()); !strings.Contains(h, chip) || !strings.Contains(h, badge) || !strings.Contains(h, "Edit service") {
 		t.Errorf("header of the edit: %s", h)
@@ -1108,7 +1108,7 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 	}
 
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(k.ID)}, "title": {"Oil Service"},
-		"performed_on": {"2026-10-20"}}), http.StatusSeeOther)
+		"performed_on": {"2026-10-20"}, "odometer": {"10000"}}), http.StatusSeeOther)
 	expect(t, a.postV(kitURL+"/archive", nil), http.StatusSeeOther)
 	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Kind != "error" || !strings.Contains(f.Message, "archived") {
 		t.Errorf("Add missing on an archived kit: flash = %+v", f)

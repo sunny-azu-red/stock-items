@@ -106,16 +106,16 @@ func TestVehicleWarrantyShows(t *testing.T) {
 		not          []string // on none of the four
 	}{
 		{name: "runs", endsOn: "2028-03-01", bar: "· Under warranty",
-			page: []string{`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-shield-check"></use></svg> Under warranty</span>`, "Warranty ends", "1 Mar 2028 · 100 000 km"},
+			page: []string{`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-shield-check"></use></svg> Under warranty</span>`, "Warranty ends", "1 Mar 2028 · 100\u202f000 km"},
 			card: []string{`<use href="#i-shield-check"></use></svg> Under warranty</span>`},
 			dash: []string{"· Under warranty</span>"},
-			kit:  []string{"<dt>Warranty ends</dt><dd>1 Mar 2028 · 100 000 km</dd>"},
+			kit:  []string{"<dt>Warranty ends</dt><dd>1 Mar 2028 · 100\u202f000 km</dd>"},
 			not:  []string{"Warranty ends soon"}},
 		{name: "ends soon", endsOn: "2026-12-15", bar: "· Warranty ends soon",
 			page: []string{`<span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
 			card: []string{`<use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
 			dash: []string{"· Warranty ends soon</span>"},
-			kit:  []string{"<dt>Warranty ends</dt><dd>15 Dec 2026 · 100 000 km <span class=\"badge badge-warn\">"}},
+			kit:  []string{"<dt>Warranty ends</dt><dd>15 Dec 2026 · 100\u202f000 km <span class=\"badge badge-warn\">"}},
 		{name: "ended", endsOn: "2026-11-01", bar: "· Warranty ended",
 			page: []string{`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> Warranty ended</span>`, "<dt>Warranty ended</dt><dd>1 Nov 2026 · 100\u202f000 km</dd>"},
 			card: []string{`<use href="#i-shield"></use></svg> Warranty ended</span>`},
@@ -203,7 +203,7 @@ func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	// A late intermediate service, at 8 000 km instead of 7 500.
-	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_intermediate": {"1"},
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"intermediate"},
 		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-08-01"}, "odometer": {"8000"}}), http.StatusSeeOther)
 
 	// Under warranty: the full service is still due at 15 000 km or a year after the purchase.
@@ -237,4 +237,80 @@ func TestVehicleWarrantyRestored(t *testing.T) {
 	if err != nil || v.WarrantyEndsOn == nil || v.WarrantyEndsOn.Format("2006-01-02") != "2028-03-01" || v.WarrantyEndsAt == nil || *v.WarrantyEndsAt != 100000 {
 		t.Errorf("restored warranty = %v, %v (%v)", v.WarrantyEndsOn, v.WarrantyEndsAt, err)
 	}
+}
+
+// A new bike's break-in (the manual's service at or before 1 000 km): the
+// kit reminds it until something is logged with it, Log service starts as
+// it with the full parts, and the full schedule doesn't count from it: the
+// first full service is still 8 000 km or a year from the purchase. A kit
+// has one break-in at most, and a new service with a kit that counts its
+// distance needs a reading.
+func TestBreakIn(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"300"},
+		"purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-05-31"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(mustID(t, rec.Header().Get("Location")))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"8000"}, "interval_months": {"12"},
+		"in_between": {"1"}, "break_in_at": {"1000"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	kitID := mustID(t, kit)
+	expect(t, a.get(kit), http.StatusOK, "Next: Break-in", "<dt>Break-in at</dt><dd>1\u202f000 km</dd>", "<dt>Due at</dt><dd>1\u202f000 km</dd>")
+	expect(t, a.get(kit+"/edit"), http.StatusOK, `name="break_in_at" value="1000"`)
+
+	// Log service from the kit: the break-in, its title, the full parts.
+	form := a.get("/services/new?kit=" + itoa(kitID))
+	expect(t, form, http.StatusOK, `value="break_in" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service (Break-in)" checked`,
+		`value="Oil Service (Break-in)"`, `data-kit-parts="full"`)
+
+	// A new service with this kit needs a reading.
+	service := url.Values{"vehicle_id": {id}, "kit_id": {itoa(kitID)}, "kit_tier": {"break_in"}, "title": {"Oil Service (Break-in)"},
+		"performed_on": {"2026-06-20"}}
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "Enter the reading: this kit counts its distance from it")
+	service.Set("odometer", "960")
+	rec = a.post("/services", service)
+	expect(t, rec, http.StatusSeeOther)
+	breakIn := rec.Header().Get("Location")
+	expect(t, a.get(breakIn), http.StatusOK, "Oil Service · Break-in")
+
+	// Done: the half one next, from it (960 + 4 000); the full one from the
+	// purchase, under warranty: 8 000 km or 1 Jun 2027, not 8 960.
+	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>4\u202f960 km</dd>",
+		"<dt>Full due</dt><dd>8\u202f000 km or 1 Jun 2027</dd>", `(break-in)`)
+	expectNot(t, a.get(kit), "Next: Break-in")
+	// Log service no longer offers a break-in; a second one is refused.
+	expectNot(t, a.get("/services/new?kit="+itoa(kitID)), `value="break_in"`)
+	service.Set("performed_on", "2026-07-01")
+	service.Set("odometer", "1500")
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "This kit has a break-in already")
+
+	// Its edit keeps it a break-in.
+	expect(t, a.get(breakIn+"/edit"), http.StatusOK, `value="break_in" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service (Break-in)" checked`)
+}
+
+// A service logged as Full before break-ins were kept (GreyJoy's first)
+// can be marked one on its edit while the kit has none.
+func TestBreakInMarkedOnEdit(t *testing.T) {
+	a := warrantyApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"12822"},
+		"purchased_on": {"2025-04-04"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2028-04-03"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(mustID(t, rec.Header().Get("Location")))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"}, "in_between": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	first := url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service (First)"},
+		"performed_on": {"2025-04-30"}, "odometer": {"960"}}
+	rec = a.post("/services", first)
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	// Logged as Full: the full schedule counts from it (15 960 km).
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f960 km</dd>", "<dt>Due by</dt><dd>30 Apr 2026</dd>")
+	expect(t, a.get(svc+"/edit"), http.StatusOK, `value="break_in" autocomplete="off"`)
+	first.Set("kit_tier", "break_in")
+	first.Set("title", "Oil Service (Break-in)")
+	expect(t, a.postV(svc, first), http.StatusSeeOther)
+	// A break-in: from the purchase again (15 000 km, 4 Apr 2026).
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f000 km</dd>", "<dt>Due by</dt><dd>4 Apr 2026</dd>")
 }

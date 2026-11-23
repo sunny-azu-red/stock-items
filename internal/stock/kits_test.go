@@ -287,6 +287,13 @@ func TestInterStep(t *testing.T) {
 	}
 }
 
+func tierOf(inter bool) KitTier {
+	if inter {
+		return TierIntermediate
+	}
+	return TierFull
+}
+
 func deref(p *int) any {
 	if p == nil {
 		return nil
@@ -304,7 +311,7 @@ func deref(p *int) any {
 func TestFullAndHalfService(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
+		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Tier: tierOf(inter)}
 	}
 	firstFull := svc(d(2025, 1, 1), 0, false)
 	// kit is the bike bought new on 1 Jan 2024 and fully serviced on
@@ -315,7 +322,7 @@ func TestFullAndHalfService(t *testing.T) {
 			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0)}
 		for _, s := range append([]*ServiceRef{firstFull}, history...) {
 			k.LastService, k.LastOdometer = s, s.Odometer
-			if s.Intermediate {
+			if s.Intermediate() {
 				k.InterSinceFull++
 			} else {
 				k.LastFullService, k.LastFullOdometer, k.InterSinceFull = s, s.Odometer, 0
@@ -359,7 +366,7 @@ func TestFullAndHalfService(t *testing.T) {
 func TestTwoInBetween(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
+		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Tier: tierOf(inter)}
 	}
 	full := svc(d(2025, 1, 1), 0, false)
 	kit := func(warrantyOn time.Time, last *ServiceRef, since int) Kit {
@@ -423,6 +430,60 @@ func TestDueBefore(t *testing.T) {
 		if got := dueBefore(tt.a, tt.b); got != tt.want {
 			t.Errorf("%s: dueBefore = %v, want %v", tt.name, got, tt.want)
 		}
+	}
+}
+
+// A new bike's break-in (1 000 km, "at or before" in its manual) is reminded
+// until something is logged with the kit, takes the full parts, and the full
+// schedule doesn't count from it: under warranty the first full service is
+// still 8 000 km or 12 months from the purchase, not from the break-in.
+func TestBreakIn(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	bought := d(2025, 4, 4)
+	kit := func() Kit {
+		return Kit{VehicleWarrantyEndsOn: ptr(d(2028, 4, 3)), IntervalDistance: ptr(8000), IntervalMonths: ptr(12), InBetween: 1, BreakInAt: ptr(1000),
+			VehiclePurchasedOn: &bought, VehicleOdometerAtPurchase: ptr(0),
+			Lines: []KitLine{{ItemID: 1, Need: 1, Have: 1}}, InterLines: []KitLine{{ItemID: 2, Need: 1, Have: 0}}}
+	}
+	k := kit()
+	if !k.NextIsBreakIn() || k.NextIsIntermediate(ptr(300), d(2025, 4, 20)) {
+		t.Fatal("a new kit with a break-in reading: want the break-in next")
+	}
+	checkNext(t, k, ptr(300), d(2025, 4, 20), "full", DueOK, ptr(1000), "")
+	checkNext(t, k, ptr(600), d(2025, 4, 25), "full", DueSoon, ptr(1000), "")
+	checkNext(t, k, ptr(1100), d(2025, 5, 5), "full", DueOverdue, ptr(1000), "")
+	if r := k.ReadinessAt(ptr(300), d(2025, 4, 20)); !r.Ready() {
+		t.Errorf("the break-in takes the full parts, which are in stock: %+v", r)
+	}
+	// Logged (at 960 km): the half one next, from it; the full one from
+	// the purchase, at 8 000 km or 4 Apr 2026, not 8 960.
+	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: ptr(960), Tier: TierBreakIn}
+	k.LastService, k.LastOdometer, k.HasBreakIn = breakIn, ptr(960), true
+	if k.NextIsBreakIn() {
+		t.Error("after the break-in: want it no longer next")
+	}
+	checkNext(t, k, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4960), "2026-04-30")
+	if f := k.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2026, 4, 4)) {
+		t.Errorf("full due after the break-in = %v / %v, want 8 000 km / 2026-04-04", deref(f.DueOdometer), f.DueDate)
+	}
+	// Without services in between, the same: the full one from the purchase.
+	k.InBetween, k.InterLines = 0, nil
+	checkNext(t, k, ptr(2000), d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
+	// And without a warranty too: the schedule runs from the purchase.
+	k.VehicleWarrantyEndsOn = nil
+	checkNext(t, k, ptr(2000), d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
+
+	// A vehicle bought used, past the break-in reading: no break-in.
+	used := kit()
+	used.VehicleOdometerAtPurchase = ptr(2148)
+	if used.NextIsBreakIn() {
+		t.Error("bought at 2 148 km: want no break-in")
+	}
+	// Archived: none either.
+	archived := kit()
+	archived.ArchivedAt = ptr(d(2025, 5, 1))
+	if archived.NextIsBreakIn() || archived.Due(ptr(300), d(2025, 5, 1)).State != DueNone {
+		t.Error("archived kit: want no break-in")
 	}
 }
 

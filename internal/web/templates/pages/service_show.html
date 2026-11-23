@@ -2,7 +2,7 @@
 {{define "head-title"}}{{.Data.Title}}{{end}}
 {{define "head-line"}}{{$s := .Data}}
 {{template "chip-link" $s.VehicleChip}}
-{{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if $s.KitIntermediate}} · Intermediate{{end}}</a>{{end}}
+{{with $s.KitID}}<a class="badge badge-muted" href="/kits/{{.}}">{{icon "list-checks"}} {{$s.KitName}}{{if ne $s.KitTier "full"}} · {{$s.KitTier.Label}}{{end}}</a>{{end}}
 {{end}}
 {{define "head-actions"}}{{$s := .Data}}
 <a class="btn" href="/services/{{$s.ID}}/edit" data-more="3">{{icon "pencil"}} Edit</a>

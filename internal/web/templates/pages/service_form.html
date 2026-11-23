@@ -54,14 +54,14 @@
       </div>
     </div>
     {{end}}
-    {{if $d.KitHasInter}}
+    {{if gt (len $d.KitTiers) 1}}
     <div class="form-grid">
-      <fieldset class="field span-2">
+      <fieldset class="field span-2{{if index $e "kit_tier"}} has-error{{end}}"{{with index $e "kit_tier"}} aria-describedby="kit_tier-err"{{end}}>
         <legend>Schedule</legend>
         <span class="segmented">
-          <label title="Full"><input type="radio" name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="{{$f.KitName}}" {{if not $f.KitIntermediate}}checked{{end}}><span class="seg-text">Full</span></label>
-          <label title="Intermediate"><input type="radio" name="kit_intermediate" value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="{{$f.KitName}}" {{if $f.KitIntermediate}}checked{{end}}><span class="seg-text">Intermediate</span></label>
+          {{range $d.KitTiers}}<label title="{{.Label}}"><input type="radio" name="kit_tier" value="{{.Tier}}" autocomplete="off" data-kit-tier="{{.Parts}}" data-kit-title="{{.Title}}"{{if .Checked}} checked{{end}}><span class="seg-text">{{.Label}}</span></label>{{end}}
         </span>
+        {{template "field-err" (fieldErr (index $e "kit_tier") "kit_tier")}}
       </fieldset>
     </div>
     {{end}}
@@ -98,11 +98,11 @@
     </div>
     <p class="hint">Remove rows for parts you did not use, or that did not come from your stock.</p>
     {{template "err" (index $e "lines")}}
-    <div class="rows" id="part-lines" data-stock-need>
+    <div class="rows" id="part-lines" data-stock-need data-kit-parts="{{$f.KitParts}}">
       {{template "part-line-head"}}
       {{range $f.Parts}}{{template "line-row" (dict "Row" . "Prefix" "part")}}{{end}}
     </div>
-    {{if and (not $f.ID) $d.KitHasInter}}
+    {{if and (not $f.ID) (gt (len $d.KitTiers) 1)}}
     <template id="kit-full-parts">
       {{template "part-line-head"}}
       {{range $d.KitFullParts}}{{template "line-row" (dict "Row" . "Prefix" "part")}}{{end}}

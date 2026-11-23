@@ -329,34 +329,41 @@
     start.href = url.pathname + url.search;
   });
 
-  // On a new service form for a kit with an intermediate schedule, switching
-  // between Full and Intermediate swaps the pre-filled part rows and title.
-  // The rows of the schedule left are kept, as typed, and come back when it
-  // is chosen again. An edit has no kit templates: its parts and title stay.
+  // On a new service form for a kit with more than one tier (Full,
+  // Intermediate, Break-in), choosing one swaps the pre-filled part rows (a
+  // break-in takes the full ones, data-kit-tier) and the title
+  // (data-kit-title), unless it was changed. The rows left are kept, as
+  // typed, and come back when their parts are chosen again. An edit has no
+  // kit templates: its parts and title stay.
   var keptTierRows = {};
   function switchKitTier(radio) {
     var form = radio.form;
-    var tpl = document.getElementById(radio.value === "1" ? "kit-inter-parts" : "kit-full-parts");
+    var parts = radio.getAttribute("data-kit-tier");
+    var tpl = document.getElementById(parts === "inter" ? "kit-inter-parts" : "kit-full-parts");
     var rows = document.getElementById("part-lines");
     if (!form || !tpl || !rows) return;
-    var left = document.createDocumentFragment();
-    while (rows.firstChild) left.appendChild(rows.firstChild);
-    keptTierRows[radio.value === "1" ? "0" : "1"] = left;
-    if (keptTierRows[radio.value]) {
-      rows.appendChild(keptTierRows[radio.value]);
-      delete keptTierRows[radio.value];
-    } else {
-      rows.appendChild(tpl.content.cloneNode(true));
-      rows.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
-      rows.querySelectorAll("input[data-item-pick]").forEach(followItem);
+    var was = rows.getAttribute("data-kit-parts") || "full";
+    if (was !== parts) {
+      var left = document.createDocumentFragment();
+      while (rows.firstChild) left.appendChild(rows.firstChild);
+      keptTierRows[was] = left;
+      if (keptTierRows[parts]) {
+        rows.appendChild(keptTierRows[parts]);
+        delete keptTierRows[parts];
+      } else {
+        rows.appendChild(tpl.content.cloneNode(true));
+        rows.querySelectorAll('input[list]:not([type="color"])').forEach(enhanceCombo);
+        rows.querySelectorAll("input[data-item-pick]").forEach(followItem);
+      }
+      rows.setAttribute("data-kit-parts", parts);
     }
     var title = form.querySelector("#title");
-    var name = radio.getAttribute("data-kit-name");
-    if (title && name) {
-      var fullTitle = name;
-      var interTitle = name + " (Intermediate)";
-      if (title.value === fullTitle || title.value === interTitle || !title.value.trim()) {
-        title.value = radio.value === "1" ? interTitle : fullTitle;
+    if (title) {
+      var titles = Array.prototype.map.call(form.querySelectorAll("input[data-kit-tier]"), function (r) {
+        return r.getAttribute("data-kit-title");
+      });
+      if (titles.indexOf(title.value) >= 0 || !title.value.trim()) {
+        title.value = radio.getAttribute("data-kit-title");
       }
     }
   }

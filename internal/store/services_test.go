@@ -450,8 +450,11 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 	}
 }
 
+// Services logged with a kit that counts its distance need a reading now;
+// ones logged before without one (made here by clearing it) still count.
 func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
-	s, ctx := newStore(t)
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
@@ -466,8 +469,30 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 		t.Helper()
 		in := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: on, Odometer: reading}
 		in.Normalize()
+		if reading != nil {
+			id, err := s.CreateService(ctx, in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return id
+		}
+		// Without a reading: refused now, so logged at the vehicle's
+		// reading and cleared, as one logged before would be, the
+		// vehicle's reading kept as odometer_at_log.
+		var now int
+		if err := pool.QueryRow(ctx, `SELECT odometer FROM vehicles WHERE id = $1`, v).Scan(&now); err != nil {
+			t.Fatal(err)
+		}
+		var refused *store.ConflictError
+		if _, err := s.CreateService(ctx, in); !errors.As(err, &refused) || refused.Field != "odometer" {
+			t.Fatalf("a new service without a reading: %v, want it refused at the odometer", err)
+		}
+		in.Odometer = &now
 		id, err := s.CreateService(ctx, in)
 		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer = NULL, odometer_at_log = $2 WHERE id = $1`, id, now); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -672,7 +697,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 
 	// Log Full service at 10,000 km on 2026-01-10.
 	fullSvc := stock.ServiceInput{
-		VehicleID: k1290, KitID: &kitID, KitIntermediate: false,
+		VehicleID: k1290, KitID: &kitID, KitTier: stock.TierFull,
 		PerformedOn: today, Odometer: ptr(10000), Title: "Oil service",
 		Parts: []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
 	}
@@ -683,7 +708,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	}
 
 	kit, _ = s.GetKit(ctx, kitID)
-	if kit.LastService == nil || kit.LastService.ID != fullID || kit.LastService.Intermediate {
+	if kit.LastService == nil || kit.LastService.ID != fullID || kit.LastService.Intermediate() {
 		t.Fatalf("LastService = %+v", kit.LastService)
 	}
 	if kit.LastFullService == nil || kit.LastFullService.ID != fullID {
@@ -696,7 +721,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	// Log Intermediate service at 12,000 km on 2026-06-10.
 	interDate := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
 	interSvc := stock.ServiceInput{
-		VehicleID: k1290, KitID: &kitID, KitIntermediate: true,
+		VehicleID: k1290, KitID: &kitID, KitTier: stock.TierIntermediate,
 		PerformedOn: interDate, Odometer: ptr(12000), Title: "Oil service (Intermediate)",
 		Parts: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
 	}
@@ -707,7 +732,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	}
 
 	kit, _ = s.GetKit(ctx, kitID)
-	if kit.LastService == nil || kit.LastService.ID != interID || !kit.LastService.Intermediate {
+	if kit.LastService == nil || kit.LastService.ID != interID || !kit.LastService.Intermediate() {
 		t.Fatalf("LastService = %+v", kit.LastService)
 	}
 	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometer != 10000 {
@@ -734,7 +759,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 
-	// Restoring from trash restores KitIntermediate and odometer.
+	// Restoring from trash restores its tier and the odometer.
 	if _, err := s.RestoreTrash(ctx, trashID); err != nil {
 		t.Fatal(err)
 	}

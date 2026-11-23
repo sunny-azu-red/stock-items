@@ -919,21 +919,21 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
 		`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-list-checks"></use></svg> Oil service</span>`,
 		`<input type="hidden" name="vehicle_id" value="`+itoa(k1290)+`" data-name="KTM 1290">`,
-		`name="kit_intermediate" value="0" autocomplete="off" data-kit-tier="full" data-kit-name="Oil service" checked`,
+		`name="kit_tier" value="full" autocomplete="off" data-kit-tier="full" data-kit-title="Oil service" checked`,
 		`id="title" name="title" value="Oil service"`,
 		`id="kit-full-parts"`, `id="kit-inter-parts"`)
 
 	// Log the Full service at 10,000 km on 2026-01-10.
 	rec = a.post("/services", url.Values{
-		"vehicle_id":       {itoa(k1290)},
-		"kit_id":           {kitID},
-		"kit_name":         {"Oil service"},
-		"kit_intermediate": {"0"},
-		"title":            {"Oil service"},
-		"performed_on":     {"2026-01-10"},
-		"odometer":         {"10000"},
-		"part_item":        {itoa(oil)},
-		"part_qty":         {"3.6 L"},
+		"vehicle_id":   {itoa(k1290)},
+		"kit_id":       {kitID},
+		"kit_name":     {"Oil service"},
+		"kit_tier":     {"full"},
+		"title":        {"Oil service"},
+		"performed_on": {"2026-01-10"},
+		"odometer":     {"10000"},
+		"part_item":    {itoa(oil)},
+		"part_qty":     {"3.6 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 
@@ -942,20 +942,20 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// New service from kit now pre-selects Intermediate and pre-fills Intermediate parts & title.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
-		`name="kit_intermediate" value="1" autocomplete="off" data-kit-tier="inter" data-kit-name="Oil service" checked`,
+		`name="kit_tier" value="intermediate" autocomplete="off" data-kit-tier="inter" data-kit-title="Oil service (Intermediate)" checked`,
 		`id="title" name="title" value="Oil service (Intermediate)"`)
 
 	// Log the Intermediate service at 12,000 km on 2026-06-10.
 	rec = a.post("/services", url.Values{
-		"vehicle_id":       {itoa(k1290)},
-		"kit_id":           {kitID},
-		"kit_name":         {"Oil service"},
-		"kit_intermediate": {"1"},
-		"title":            {"Oil service (Intermediate)"},
-		"performed_on":     {"2026-06-10"},
-		"odometer":         {"12000"},
-		"part_item":        {itoa(hiflo), itoa(oring), itoa(oil)},
-		"part_qty":         {"1", "2", "3.6 L"},
+		"vehicle_id":   {itoa(k1290)},
+		"kit_id":       {kitID},
+		"kit_name":     {"Oil service"},
+		"kit_tier":     {"intermediate"},
+		"title":        {"Oil service (Intermediate)"},
+		"performed_on": {"2026-06-10"},
+		"odometer":     {"12000"},
+		"part_item":    {itoa(hiflo), itoa(oring), itoa(oil)},
+		"part_qty":     {"1", "2", "3.6 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	interSvcPath := rec.Header().Get("Location")

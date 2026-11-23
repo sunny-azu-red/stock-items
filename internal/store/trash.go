@@ -585,7 +585,7 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 		}
 		if gone {
 			rec["kit_id"] = nil
-			rec["kit_intermediate"] = false
+			rec["kit_tier"] = string(stock.TierFull)
 			*dropped++
 		}
 	}

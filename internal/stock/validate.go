@@ -516,7 +516,8 @@ type KitInput struct {
 	Name             string
 	IntervalDistance *int
 	IntervalMonths   *int
-	InBetween        int // see Kit.InBetween
+	InBetween        int  // see Kit.InBetween
+	BreakInAt        *int // see Kit.BreakInAt
 	Notes            string
 	Lines            []KitLineInput
 	InterLines       []KitLineInput
@@ -564,6 +565,17 @@ func (in KitInput) Validate() Errors {
 	case in.InBetween == 0 && len(in.InterLines) > 0:
 		errs.Add("in_between", "Choose how many services come in between")
 	}
+	if in.BreakInAt != nil {
+		switch {
+		case *in.BreakInAt <= 0:
+			errs.Add("break_in_at", "Break-in reading must be more than 0")
+		case in.IntervalDistance == nil:
+			// The break-in comes before the full schedule's first distance.
+			errs.Add("interval_distance", "Enter the distance: the break-in comes before it")
+		case *in.BreakInAt >= *in.IntervalDistance:
+			errs.Add("break_in_at", "The break-in comes before the first "+FormatDistance(*in.IntervalDistance))
+		}
+	}
 	for i, l := range in.Lines {
 		switch {
 		case l.Quantity <= 0:
@@ -597,25 +609,25 @@ func (in KitInput) Validate() Errors {
 
 // ServiceInput is the data needed to log a performed service.
 type ServiceInput struct {
-	Version         int // as the edit form was opened; unused on create
-	VehicleID       int64
-	KitID           *int64
-	KitIntermediate bool
-	PerformedOn     time.Time
-	Odometer        *int
-	Title           string
-	LaborCost       *float64
-	Notes           string
-	Parts           []KitLineInput
-	FormKey         string // see ItemInput.FormKey
+	Version     int // as the edit form was opened; unused on create
+	VehicleID   int64
+	KitID       *int64
+	KitTier     KitTier // with a kit: which of its services; TierFull without one
+	PerformedOn time.Time
+	Odometer    *int
+	Title       string
+	LaborCost   *float64
+	Notes       string
+	Parts       []KitLineInput
+	FormKey     string // see ItemInput.FormKey
 }
 
 // Normalize trims fields and merges duplicate parts.
 func (in *ServiceInput) Normalize() {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Notes = strings.TrimSpace(in.Notes)
-	if in.KitID == nil {
-		in.KitIntermediate = false
+	if in.KitID == nil || in.KitTier == "" {
+		in.KitTier = TierFull
 	}
 	// No labour is stored as none, never 0 (the column's CHECK).
 	if in.LaborCost != nil && *in.LaborCost == 0 {
@@ -627,6 +639,9 @@ func (in *ServiceInput) Normalize() {
 // Validate checks the input. Call Normalize first.
 func (in ServiceInput) Validate() Errors {
 	errs := Errors{}
+	if !in.KitTier.Valid() {
+		errs.Add("kit_tier", "Choose Full, Intermediate or Break-in")
+	}
 	if in.VehicleID == 0 {
 		errs.Add("vehicle_id", "Choose a vehicle")
 	}

@@ -20,7 +20,7 @@ type ServiceFilter struct {
 }
 
 const serviceSelect = `
-SELECT sr.id, sr.version, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.kit_intermediate, sr.performed_on,
+SELECT sr.id, sr.version, sr.vehicle_id, v.name, v.color, sr.kit_id, COALESCE(k.name, ''), sr.kit_tier, sr.performed_on,
        sr.odometer, sr.title, sr.labor_cost::float8, sr.notes,
        (SELECT count(*) FROM stock_movements m WHERE m.service_record_id = sr.id),
        sr.created_at
@@ -30,7 +30,7 @@ LEFT JOIN service_kits k ON k.id = sr.kit_id`
 
 func scanService(row pgx.Row) (stock.ServiceRecord, error) {
 	var r stock.ServiceRecord
-	err := row.Scan(&r.ID, &r.Version, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.KitIntermediate, &r.PerformedOn,
+	err := row.Scan(&r.ID, &r.Version, &r.VehicleID, &r.VehicleName, &r.VehicleColor, &r.KitID, &r.KitName, &r.KitTier, &r.PerformedOn,
 		&r.Odometer, &r.Title, &r.LaborCost, &r.Notes, &r.PartCount, &r.CreatedAt)
 	return r, err
 }
@@ -100,12 +100,13 @@ func (s *Store) GetService(ctx context.Context, id int64) (stock.ServiceRecord, 
 // vehicle's odometer is moved forward to the service reading. The reading
 // it had before is kept, so DeleteService can put it back.
 func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64, error) {
+	in.KitTier = serviceTier(in)
 	var id int64
 	err := s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
-		if err := checkServiceKit(ctx, tx, in); err != nil {
+		if err := checkServiceKit(ctx, tx, in, 0); err != nil {
 			return err
 		}
 		if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
@@ -128,12 +129,12 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		}
 		in.Title = title
 		err = tx.QueryRow(ctx, `
-			INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, odometer_at_log, title, labor_cost, notes)
+			INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, odometer_at_log, title, labor_cost, notes)
 			VALUES ($1, $2, $3, $4, $5,
 			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer FROM vehicles WHERE id = $1) END,
 			        $6, $7, $8)
 			RETURNING id`,
-			in.VehicleID, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes).Scan(&id)
+			in.VehicleID, in.KitID, in.KitTier, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -165,13 +166,13 @@ func partIDs(parts []stock.KitLineInput) []int64 {
 // still adds up. A service changed or deleted since in.Version fails with
 // a *StaleError.
 func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInput) error {
+	in.KitTier = serviceTier(in)
 	return s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		var kitWas *int64
-		var interWas bool
 		var version int
 		var titleWas string
-		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, kit_intermediate, title FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&version, &in.VehicleID, &kitWas, &interWas, &titleWas)
+		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, title FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&version, &in.VehicleID, &kitWas, &titleWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
 			return err
 		}
@@ -183,13 +184,11 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// The service keeps its kit even if the kit has moved to another
 		// vehicle since; only a newly chosen kit must fit the vehicle.
 		if in.KitID == nil || kitWas == nil || *in.KitID != *kitWas {
-			if err := checkServiceKit(ctx, tx, in); err != nil {
+			if err := checkServiceKit(ctx, tx, in, id); err != nil {
 				return err
 			}
-		} else if in.KitIntermediate && !interWas {
-			if err := checkKitHasIntermediate(ctx, tx, *in.KitID); err != nil {
-				return err
-			}
+		} else if err := checkKitTier(ctx, tx, in, id); err != nil {
+			return err
 		}
 		if err := checkServiceOdometer(ctx, tx, in, id); err != nil {
 			return err
@@ -226,9 +225,9 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 			return err
 		}
 		_, err = tx.Exec(ctx, `
-			UPDATE service_records SET version = version + 1, kit_id = $2, kit_intermediate = $3, performed_on = $4, odometer = $5,
+			UPDATE service_records SET version = version + 1, kit_id = $2, kit_tier = $3, performed_on = $4, odometer = $5,
 			       title = $6, labor_cost = $7, notes = $8
-			WHERE id = $1`, id, in.KitID, in.KitID != nil && in.KitIntermediate, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes)
+			WHERE id = $1`, id, in.KitID, in.KitTier, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -252,16 +251,14 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 // SHARE lock, which archiving doesn't wait for). The caller holds the
 // vehicle; the kit comes after it and before the parts, the order UpdateKit
 // locks in too.
-func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) error {
+func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64) error {
 	if in.KitID == nil {
 		return nil
 	}
 	var kitVehicle int64
-	var archived, hasInter bool
-	err := tx.QueryRow(ctx, `
-		SELECT vehicle_id, archived_at IS NOT NULL, in_between > 0
-		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
-		Scan(&kitVehicle, &archived, &hasInter)
+	var archived bool
+	err := tx.QueryRow(ctx, `SELECT vehicle_id, archived_at IS NOT NULL FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
+		Scan(&kitVehicle, &archived)
 	if err != nil {
 		return notFound(err)
 	}
@@ -271,21 +268,44 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 	if archived {
 		return &ConflictError{Field: "form", Message: "This kit is archived; restore it first."}
 	}
-	if in.KitIntermediate && !hasInter {
-		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate schedule"}
-	}
-	return nil
+	return checkKitTier(ctx, tx, in, serviceID)
 }
 
-func checkKitHasIntermediate(ctx context.Context, tx pgx.Tx, kitID int64) error {
-	var hasInter bool
+// serviceTier is the tier a service is saved with: Full without a kit, or
+// when none is given (stock.ServiceInput.Normalize does the same).
+func serviceTier(in stock.ServiceInput) stock.KitTier {
+	if in.KitID == nil || in.KitTier == "" {
+		return stock.TierFull
+	}
+	return in.KitTier
+}
+
+// checkKitTier checks what a service with a kit needs from it (the kit is
+// locked FOR SHARE, as checkServiceKit does): an intermediate service, that
+// the kit has services in between; a break-in, that the kit has no other
+// (serviceID is the service being saved, 0 for a new one); and, for a new
+// service, a reading when the kit counts its distance (one logged before
+// that was required stays editable without; Kit.Due falls back for it).
+func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64) error {
+	if in.KitID == nil {
+		return nil
+	}
+	var inBetween int
+	var countsDistance, otherBreakIn bool
 	err := tx.QueryRow(ctx, `
-		SELECT in_between > 0 FROM service_kits WHERE id = $1 FOR SHARE`, kitID).Scan(&hasInter)
+		SELECT in_between, interval_distance IS NOT NULL,
+		       EXISTS (SELECT 1 FROM service_records WHERE kit_id = $1 AND kit_tier = 'break_in' AND id <> $2)
+		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID).Scan(&inBetween, &countsDistance, &otherBreakIn)
 	if err != nil {
 		return notFound(err)
 	}
-	if !hasInter {
+	switch {
+	case in.KitTier == stock.TierIntermediate && inBetween == 0:
 		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate schedule"}
+	case in.KitTier == stock.TierBreakIn && otherBreakIn:
+		return &ConflictError{Field: "kit_tier", Message: "This kit has a break-in already"}
+	case serviceID == 0 && countsDistance && in.Odometer == nil:
+		return &ConflictError{Field: "odometer", Message: "Enter the reading: this kit counts its distance from it"}
 	}
 	return nil
 }

@@ -48,7 +48,9 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 	})
 
 	t.Run("a service logged now is logged on the local day", func(t *testing.T) {
-		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"}})
+		// A service logged without a reading, as before readings were
+		// required: with the kit's distance set afterwards.
+		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}})
 		expect(t, rec, http.StatusSeeOther)
 		kit := rec.Header().Get("Location")
 		// Done a week ago, by the local day: the reading when it was logged
@@ -57,6 +59,9 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 		rec = a.post("/services", fields)
 		expect(t, rec, http.StatusSeeOther)
 		svc := rec.Header().Get("Location")
+		if _, err := a.pool.Exec(ctx, `UPDATE service_kits SET interval_distance = 5000`); err != nil {
+			t.Fatal(err)
+		}
 		// Logged now (the database's clock isn't the test's).
 		if _, err := a.pool.Exec(ctx, `UPDATE service_records SET created_at = $1`, now); err != nil {
 			t.Fatal(err)

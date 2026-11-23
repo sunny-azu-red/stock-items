@@ -85,13 +85,18 @@ func TestServicesPageOfAnArchivedVehicle(t *testing.T) {
 func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed() // at 10,000 km
-	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}, "interval_distance": {"5000"}})
+	// Logged without a reading, as before readings were required: with the
+	// kit's distance set afterwards.
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	fields := url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {itoa(mustID(t, kit))}, "title": {"Oil service"}, "performed_on": {"2026-10-29"}}
 	rec = a.post("/services", fields)
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
+	if _, err := a.pool.Exec(context.Background(), `UPDATE service_kits SET interval_distance = 5000`); err != nil {
+		t.Fatal(err)
+	}
 	// Logged on the day it was done, as far as the reminder is concerned
 	// (the test clock is fixed, the database's isn't).
 	if _, err := a.pool.Exec(context.Background(), `UPDATE service_records SET created_at = '2026-10-29 12:00Z'`); err != nil {

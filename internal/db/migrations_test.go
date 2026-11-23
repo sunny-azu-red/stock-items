@@ -412,3 +412,51 @@ func TestKitInBetweenMigration(t *testing.T) {
 		t.Errorf("after Down: Thirds every %v / %v months (%v), want 5 000 / 12", dist, months, err)
 	}
 }
+
+// 00006 turns kit_intermediate into kit_tier, in the trash's services too
+// (so they restore), adds break_in_at, and Down turns a break-in back into
+// a full service.
+func TestServiceKitTierMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0);
+		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, in_between) VALUES (1, 'Oil', 8000, 12, 1);
+		INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, title) VALUES
+			(1, 1, false, '2025-01-01', 'Oil'), (1, 1, true, '2025-06-01', 'Oil (Intermediate)'), (1, NULL, false, '2025-07-01', 'Wash');
+		INSERT INTO trash (kind, label, payload) VALUES ('service', 'Service: Old',
+			'{"service_records": [{"id": 60, "vehicle_id": 1, "kit_id": 1, "kit_intermediate": true, "performed_on": "2025-03-01", "title": "Old"}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+	var tiers string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(kit_tier, ',' ORDER BY id) FROM service_records`).Scan(&tiers); err != nil || tiers != "full,intermediate,full" {
+		t.Errorf("kit_tier = %q (%v), want full,intermediate,full", tiers, err)
+	}
+	var snapshot string
+	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_records' -> 0 ->> 'kit_tier' FROM trash`).Scan(&snapshot); err != nil || snapshot != "intermediate" {
+		t.Errorf("trash snapshot kit_tier = %q (%v), want intermediate", snapshot, err)
+	}
+	if err := refused(t, pool, `UPDATE service_records SET kit_tier = 'half'`); err == nil {
+		t.Error("after Up: an unknown tier was taken")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'break_in' WHERE id = 1; UPDATE service_kits SET break_in_at = 1000`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := provider.DownTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	var inter string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(kit_intermediate::text, ',' ORDER BY id) FROM service_records`).Scan(&inter); err != nil || inter != "false,true,false" {
+		t.Errorf("after Down: kit_intermediate = %q (%v), want false,true,false", inter, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_records' -> 0 ->> 'kit_intermediate' FROM trash`).Scan(&snapshot); err != nil || snapshot != "true" {
+		t.Errorf("after Down: trash snapshot kit_intermediate = %q (%v), want true", snapshot, err)
+	}
+}

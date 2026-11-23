@@ -2688,7 +2688,7 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   // Clicking "Log service" on the kit pre-selects Intermediate and pre-fills the intermediate parts and title.
   await page.locator(".page-head").getByRole("link", { name: "Log service" }).click();
   await expect(page.getByLabel("Work performed")).toHaveValue("Oil Service (Intermediate)");
-  await expect(page.locator('input[name="kit_intermediate"][value="1"]')).toBeChecked();
+  await expect(page.locator('input[name="kit_tier"][value="intermediate"]')).toBeChecked();
 
   // The header names the vehicle (a chip) and the kit (a badge), as plain labels.
   await expect(page.locator(".page-head .chip")).toHaveCount(1);

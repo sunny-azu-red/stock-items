@@ -204,6 +204,7 @@ type kitForm struct {
 	VehicleID                              int64
 	Name, IntervalDistance, IntervalMonths string
 	InBetween                              string // "0" to "2" (stock.Kit.InBetween)
+	BreakInAt                              string
 	Notes                                  string
 	Lines                                  []lineRow
 	InterLines                             []lineRow
@@ -265,8 +266,8 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	f := kitForm{
 		Name: formText(r, "name"), IntervalDistance: formText(r, "interval_distance"), IntervalMonths: formText(r, "interval_months"),
-		InBetween: cmp.Or(formText(r, "in_between"), "0"),
-		Notes:     formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
+		InBetween: cmp.Or(formText(r, "in_between"), "0"), BreakInAt: formText(r, "break_in_at"),
+		Notes: formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
@@ -278,6 +279,9 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	if in.IntervalMonths, err = parseOptInt(f.IntervalMonths); err != nil {
 		f.Errors.Add("interval_months", err.Error())
+	}
+	if in.BreakInAt, err = parseOptInt(f.BreakInAt); err != nil {
+		f.Errors.Add("break_in_at", err.Error())
 	}
 	switch f.InBetween {
 	case "0", "1", "2":
@@ -313,7 +317,7 @@ func kitPath(id int64) string { return fmt.Sprintf("/kits/%d", id) }
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
 		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalDistance: optIntString(k.IntervalDistance),
-		IntervalMonths: optIntString(k.IntervalMonths), InBetween: strconv.Itoa(k.InBetween),
+		IntervalMonths: optIntString(k.IntervalMonths), InBetween: strconv.Itoa(k.InBetween), BreakInAt: optIntString(k.BreakInAt),
 		Notes: k.Notes, Version: k.Version,
 	}
 	for _, l := range k.Lines {

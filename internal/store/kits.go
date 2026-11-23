@@ -29,7 +29,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	sql := `
 		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.purchased_on, v.odometer_at_purchase,
 		       v.warranty_ends_on, v.warranty_ends_at,
-		       k.name, k.interval_distance, k.interval_months, k.inter_interval_distance, k.inter_interval_months, k.notes,
+		       k.name, k.interval_distance, k.interval_months, k.in_between, k.notes,
 		       ls.id, ls.performed_on, ls.odometer, ls.odometer_at_log, ls.created_at, ls.kit_intermediate,
 		       (SELECT sr.odometer FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
@@ -39,6 +39,11 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
 		          AND (sr.performed_on < lf.performed_on OR (sr.performed_on = lf.performed_on AND sr.id <= lf.id))
 		        ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       -- The intermediate services after the last full one, in the
+		       -- order above (a missing reading counts as the lowest).
+		       (SELECT count(*) FROM service_records sr
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_intermediate
+		          AND (lf.id IS NULL OR (sr.performed_on, COALESCE(sr.odometer, -1), sr.id) > (lf.performed_on, COALESCE(lf.odometer, -1), lf.id))),
 		       k.archived_at
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
@@ -83,10 +88,10 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var ls, lf stock.ServiceRef
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
 			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
-			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.InterIntervalDistance, &k.InterIntervalMonths, &k.Notes,
+			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.InBetween, &k.Notes,
 			&lsID, &lsDate, &ls.Odometer, &ls.OdometerAtLog, &lsLogged, &lsInter, &k.LastOdometer,
 			&lfID, &lfDate, &lf.Odometer, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometer,
-			&k.ArchivedAt)
+			&k.InterSinceFull, &k.ArchivedAt)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			if lsInter != nil {
@@ -173,9 +178,9 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 		}
 		in.Name = name
 		err = tx.QueryRow(ctx, `
-			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InterIntervalDistance, in.InterIntervalMonths, in.Notes).Scan(&id)
+			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, in_between, notes)
+			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InBetween, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -254,9 +259,9 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
 			UPDATE service_kits SET version = version + 1, vehicle_id = $2, name = $3, interval_distance = $4,
-			       interval_months = $5, inter_interval_distance = $6, inter_interval_months = $7, notes = $8,
+			       interval_months = $5, in_between = $6, notes = $7,
 			       updated_at = now()
-			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InterIntervalDistance, in.InterIntervalMonths, in.Notes)
+			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.InBetween, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}

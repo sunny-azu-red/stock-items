@@ -189,7 +189,7 @@ func TestVehicleWarrantyArchived(t *testing.T) {
 
 // The warranty decides how an intermediate service counts: while it runs, a
 // late one doesn't move the full service; once it has ended, the full one
-// comes one intermediate step after it.
+// comes a step after it, in distance and in the full months.
 func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	a := warrantyApp(t) // 23 Nov 2026
 	vehicle := url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#dc2626"}, "odometer": {"9000"},
@@ -199,7 +199,7 @@ func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	path := rec.Header().Get("Location")
 	id := itoa(mustID(t, path))
 	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"7500"}})
+		"in_between": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	// A late intermediate service, at 8 000 km instead of 7 500.
@@ -209,15 +209,16 @@ func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	// Under warranty: the full service is still due at 15 000 km or a year after the purchase.
 	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
 
-	// The warranty ended on 1 Nov 2026: the full service comes one intermediate step after it.
+	// The warranty ended on 1 Nov 2026: the full service comes a step after
+	// it, 7 500 km or 12 months on; nothing forces the purchase's year.
 	vehicle.Set("warranty_ends_on", "2026-11-01")
 	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
-	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f500 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f500 km</dd>", "<dt>Due by</dt><dd>1 Aug 2027</dd>")
 
 	// No warranty at all: the same.
 	vehicle.Del("has_warranty")
 	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
-	expect(t, a.get(kit), http.StatusOK, "<dt>Due at</dt><dd>15\u202f500 km</dd>")
+	expect(t, a.get(kit), http.StatusOK, "<dt>Due at</dt><dd>15\u202f500 km</dd>", "<dt>Due by</dt><dd>1 Aug 2027</dd>")
 }
 
 // Delete and Undo bring the warranty back with the vehicle.

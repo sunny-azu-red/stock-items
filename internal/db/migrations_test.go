@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io/fs"
+	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -326,5 +327,88 @@ func TestVehicleRequiredMigration(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE vehicles SET odometer = NULL, purchased_on = NULL, odometer_at_purchase = NULL WHERE name = 'Golf'`); err != nil {
 		t.Errorf("after Down: NULL refused: %v", err)
+	}
+}
+
+// 00005 turns a kit's two intermediate intervals into in_between: it stops,
+// changing nothing, on a kit or a deleted one in the trash that isn't 2 or
+// 3 equal steps of the full distance at its months, converts the rest (the
+// trash's too, so they restore), and Down brings the intervals back.
+func TestKitInBetweenMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0);
+		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months) VALUES
+			(1, 'Oil', 8000, 12, 4000, 12), (1, 'Thirds', 15000, 12, 5000, NULL), (1, 'Plugs', 15000, NULL, NULL, NULL),
+			(1, 'Odd', 15000, 12, 4000, 12)`); err != nil {
+		t.Fatal(err)
+	}
+	stopped := func(when, want string) {
+		t.Helper()
+		_, err := provider.UpTo(ctx, 5)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
+		}
+		if v, err := provider.GetDBVersion(ctx); err != nil || v != 4 {
+			t.Errorf("%s: version %d (%v), want 4", when, v, err)
+		}
+	}
+	stopped("4 000 of 15 000", "kits whose intermediate schedule is not 2 or 3 equal steps of the full distance at its months: KTM 390: Odd")
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE service_kits SET inter_interval_distance = 7500 WHERE name = 'Odd';
+		INSERT INTO trash (kind, label, payload) VALUES ('kit', 'Kit: Gone',
+			'{"service_kits": [{"id": 60, "vehicle_id": 1, "name": "Gone", "interval_distance": 10000, "interval_months": 12, "inter_interval_distance": 5000, "inter_interval_months": 6}], "service_kit_lines": []}')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("a deleted kit with other months", "deleted kits in the trash whose intermediate schedule is not 2 or 3 equal steps of the full distance at its months: Kit: Gone")
+
+	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{service_kits,0,inter_interval_months}', '12')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	rows, err := pool.Query(ctx, `SELECT name, in_between FROM service_kits`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var name string
+		var n int
+		if err := rows.Scan(&name, &n); err != nil {
+			t.Fatal(err)
+		}
+		got[name] = n
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]int{"Oil": 1, "Thirds": 2, "Plugs": 0, "Odd": 1}; !maps.Equal(got, want) {
+		t.Errorf("in_between = %v, want %v", got, want)
+	}
+	var snapshot string
+	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_kits' -> 0 ->> 'in_between' FROM trash`).Scan(&snapshot); err != nil || snapshot != "1" {
+		t.Errorf("trash snapshot in_between = %q (%v), want 1", snapshot, err)
+	}
+	if err := refused(t, pool, `INSERT INTO service_kits (vehicle_id, name, interval_months, in_between) VALUES (1, 'Months only', 12, 1)`); err == nil {
+		t.Error("after Up: in between without a distance was taken")
+	}
+	if err := refused(t, pool, `UPDATE service_kits SET in_between = 3`); err == nil {
+		t.Error("after Up: 3 in between was taken")
+	}
+
+	if _, err := provider.DownTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	var dist, months *int
+	if err := pool.QueryRow(ctx, `SELECT inter_interval_distance, inter_interval_months FROM service_kits WHERE name = 'Thirds'`).Scan(&dist, &months); err != nil ||
+		dist == nil || *dist != 5000 || months == nil || *months != 12 {
+		t.Errorf("after Down: Thirds every %v / %v months (%v), want 5 000 / 12", dist, months, err)
 	}
 }

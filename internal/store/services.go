@@ -259,9 +259,7 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 	var kitVehicle int64
 	var archived, hasInter bool
 	err := tx.QueryRow(ctx, `
-		SELECT vehicle_id, archived_at IS NOT NULL,
-		       (inter_interval_distance IS NOT NULL OR inter_interval_months IS NOT NULL OR
-		        EXISTS (SELECT 1 FROM service_kit_lines WHERE kit_id = $1 AND intermediate))
+		SELECT vehicle_id, archived_at IS NOT NULL, in_between > 0
 		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID).
 		Scan(&kitVehicle, &archived, &hasInter)
 	if err != nil {
@@ -282,9 +280,7 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput) erro
 func checkKitHasIntermediate(ctx context.Context, tx pgx.Tx, kitID int64) error {
 	var hasInter bool
 	err := tx.QueryRow(ctx, `
-		SELECT inter_interval_distance IS NOT NULL OR inter_interval_months IS NOT NULL OR
-		       EXISTS (SELECT 1 FROM service_kit_lines WHERE kit_id = $1 AND intermediate)
-		FROM service_kits WHERE id = $1 FOR SHARE`, kitID).Scan(&hasInter)
+		SELECT in_between > 0 FROM service_kits WHERE id = $1 FOR SHARE`, kitID).Scan(&hasInter)
 	if err != nil {
 		return notFound(err)
 	}

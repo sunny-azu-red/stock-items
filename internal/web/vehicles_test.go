@@ -126,7 +126,7 @@ func TestDistanceUnit(t *testing.T) {
 	expect(t, list, http.StatusOK, "12\u202f000</strong><span>mi</span>")
 	expectNot(t, list, "<span>km</span>")
 	expect(t, a.get("/kits/new?vehicle="+itoa(mustID(t, vPath))), http.StatusOK,
-		"Distance (mi)", "Intermediate distance (mi)")
+		"Distance (mi)")
 	expect(t, a.get("/services/new"), http.StatusOK, "Odometer (mi)")
 }
 

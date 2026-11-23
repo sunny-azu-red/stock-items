@@ -465,12 +465,13 @@ type Kit struct {
 	Name                      string
 	IntervalDistance          *int
 	IntervalMonths            *int
-	InterIntervalDistance     *int
-	InterIntervalMonths       *int
-	Notes                     string
-	Lines                     []KitLine
-	InterLines                []KitLine
-	LastService               *ServiceRef
+	// InBetween is how many lighter services come between two full ones
+	// (0 to 2): every InterStep, at the full schedule's months.
+	InBetween   int
+	Notes       string
+	Lines       []KitLine
+	InterLines  []KitLine
+	LastService *ServiceRef
 	// LastOdometer is the reading of the latest service with this kit
 	// that has one; distance reminders count from it when the last service was
 	// logged without a reading.
@@ -479,6 +480,10 @@ type Kit struct {
 	// with this kit, and LastFullOdometer is the latest full reading.
 	LastFullService  *ServiceRef
 	LastFullOdometer *int
+	// InterSinceFull counts the intermediate services after the last full
+	// one (all of them before the first): once there are InBetween, the
+	// full one is next.
+	InterSinceFull int
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -487,10 +492,18 @@ type Kit struct {
 // Archived reports whether the kit has been archived.
 func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 
-// HasIntermediate reports whether the kit has an intermediate schedule or
-// intermediate parts.
-func (k Kit) HasIntermediate() bool {
-	return k.InterIntervalDistance != nil || k.InterIntervalMonths != nil || len(k.InterLines) > 0
+// HasIntermediate reports whether the kit has services between full ones.
+func (k Kit) HasIntermediate() bool { return k.InBetween > 0 }
+
+// InterStep is the distance from one service to the next when the kit has
+// services in between: the full distance in InBetween + 1 equal steps
+// (rounded down to a whole unit). Nil without them.
+func (k Kit) InterStep() *int {
+	if k.InBetween <= 0 || k.IntervalDistance == nil {
+		return nil
+	}
+	step := *k.IntervalDistance / (k.InBetween + 1)
+	return &step
 }
 
 // VehicleChip returns a Vehicle value with the kit's vehicle chip fields.

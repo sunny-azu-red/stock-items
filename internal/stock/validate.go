@@ -511,17 +511,16 @@ func CheckEventDate(d *time.Time, today time.Time) string {
 
 // KitInput is the data needed to create or update a service kit.
 type KitInput struct {
-	Version               int // as the edit form was opened; unused on create
-	VehicleID             int64
-	Name                  string
-	IntervalDistance      *int
-	IntervalMonths        *int
-	InterIntervalDistance *int
-	InterIntervalMonths   *int
-	Notes                 string
-	Lines                 []KitLineInput
-	InterLines            []KitLineInput
-	FormKey               string // see ItemInput.FormKey
+	Version          int // as the edit form was opened; unused on create
+	VehicleID        int64
+	Name             string
+	IntervalDistance *int
+	IntervalMonths   *int
+	InBetween        int // see Kit.InBetween
+	Notes            string
+	Lines            []KitLineInput
+	InterLines       []KitLineInput
+	FormKey          string // see ItemInput.FormKey
 }
 
 // KitLineInput is one item of a kit.
@@ -556,14 +555,14 @@ func (in KitInput) Validate() Errors {
 	if in.IntervalMonths != nil && *in.IntervalMonths <= 0 {
 		errs.Add("interval_months", "Interval must be greater than zero")
 	}
-	if in.InterIntervalDistance != nil && *in.InterIntervalDistance <= 0 {
-		errs.Add("inter_interval_distance", "Interval must be greater than zero")
-	}
-	if in.InterIntervalMonths != nil && *in.InterIntervalMonths <= 0 {
-		errs.Add("inter_interval_months", "Interval must be greater than zero")
-	}
-	if len(in.InterLines) > 0 && in.InterIntervalDistance == nil && in.InterIntervalMonths == nil {
-		errs.Add("inter_interval_distance", "Enter when the intermediate service is due")
+	switch {
+	case in.InBetween < 0 || in.InBetween > 2:
+		errs.Add("in_between", "Choose none, 1 or 2")
+	case in.InBetween > 0 && in.IntervalDistance == nil:
+		// The services in between are steps of the full distance.
+		errs.Add("interval_distance", "Enter the distance: the services in between are steps of it")
+	case in.InBetween == 0 && len(in.InterLines) > 0:
+		errs.Add("in_between", "Choose how many services come in between")
 	}
 	for i, l := range in.Lines {
 		switch {
@@ -591,24 +590,6 @@ func (in KitInput) Validate() Errors {
 	}
 	if in.IntervalMonths != nil && *in.IntervalMonths > maxIntervalMon {
 		errs.Add("interval_months", "That is more than 20 years")
-	}
-	if in.InterIntervalDistance != nil {
-		if *in.InterIntervalDistance > maxIntervalDistance {
-			errs.Add("inter_interval_distance", "That is more than "+FormatDistance(maxIntervalDistance))
-		} else if in.IntervalDistance == nil {
-			errs.Add("inter_interval_distance", "Enter a full distance interval first")
-		} else if *in.IntervalDistance > 0 && *in.InterIntervalDistance >= *in.IntervalDistance {
-			errs.Add("inter_interval_distance", "Intermediate interval must be shorter than the full interval")
-		}
-	}
-	if in.InterIntervalMonths != nil {
-		if *in.InterIntervalMonths > maxIntervalMon {
-			errs.Add("inter_interval_months", "That is more than 20 years")
-		} else if in.IntervalMonths == nil {
-			errs.Add("inter_interval_months", "Enter a full time interval first")
-		} else if *in.IntervalMonths > 0 && *in.InterIntervalMonths > *in.IntervalMonths {
-			errs.Add("inter_interval_months", "Intermediate interval cannot exceed the full interval")
-		}
 	}
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs

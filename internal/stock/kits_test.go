@@ -267,386 +267,65 @@ func TestSortKitLines(t *testing.T) {
 	}
 }
 
-func TestKitIntermediateSchedules(t *testing.T) {
-	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-	svc := func(id int64, on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: id, PerformedOn: on, Odometer: &odo, Intermediate: inter}
-	}
-
-	// 1. Warranty bike (1290): Full = 4000 km / 12 mo, Intermediate = 2000 km / nil months,
-	// under warranty until 2028.
-	t.Run("warranty mode (the vehicle under warranty)", func(t *testing.T) {
-		k := Kit{
-			VehicleWarrantyEndsOn: ptr(day(2028, 3, 1)),
-			IntervalDistance:      ptr(4000),
-			IntervalMonths:        ptr(12),
-			InterIntervalDistance: ptr(2000),
-			Lines:                 []KitLine{{ItemID: 1, Need: 1, Have: 1}},
-			InterLines:            []KitLine{{ItemID: 2, Need: 1, Have: 0}},
-		}
-		// After Full at 0 km on 2026-01-01: next is Intermediate at 2000 km.
-		full1 := svc(1, day(2026, 1, 1), 0, false)
-		k.LastService, k.LastFullService = full1, full1
-		if !k.NextIsIntermediate(ptr(500), day(2026, 3, 1)) {
-			t.Fatal("want NextIsIntermediate = true after full service")
-		}
-		due := k.Due(ptr(500), day(2026, 3, 1))
-		if due.DueOdometer == nil || *due.DueOdometer != 2000 || due.DueDate != nil {
-			t.Errorf("inter due = %+v, want 2000 km and no date", due)
-		}
-		if r := k.ReadinessAt(ptr(500), day(2026, 3, 1)); r.ShortLines != 1 {
-			t.Errorf("readiness should check InterLines, got %+v", r)
-		}
-
-		// Collision right before warranty deadline (15 Dec 2026, 17 days left, at 2050 km):
-		// Full is DueSoon by warranty date, so Full overrides Intermediate even though Intermediate is overdue by distance.
-		if k.NextIsIntermediate(ptr(2050), day(2026, 12, 15)) {
-			t.Error("Full must override Intermediate when warranty deadline is DueSoon")
-		}
-
-		// After Intermediate at 2000 km on 2026-06-01: next is Full, and DueDate is still 2027-01-01!
-		inter1 := svc(2, day(2026, 6, 1), 2000, true)
-		k.LastService = inter1
-		if k.NextIsIntermediate(ptr(2500), day(2026, 12, 5)) {
-			t.Fatal("want NextIsIntermediate = false after intermediate service")
-		}
-		due = k.Due(ptr(2500), day(2026, 12, 5))
-		if due.State != DueSoon || due.DueOdometer == nil || *due.DueOdometer != 4000 || due.DueDate == nil || !due.DueDate.Equal(day(2027, 1, 1)) {
-			t.Errorf("full due after intermediate = %+v, want DueSoon at 4000 km / 2027-01-01", due)
-		}
-		if r := k.ReadinessAt(ptr(2500), day(2026, 12, 5)); !r.Ready() {
-			t.Errorf("readiness should check Full Lines, got %+v", r)
-		}
-	})
-
-	// 2. Non-warranty bike (390): Full = 4000 km / 12 mo, Intermediate = 2000 km / 12 mo.
-	t.Run("alternating reset mode (no warranty)", func(t *testing.T) {
-		k := Kit{
-			IntervalDistance:      ptr(4000),
-			IntervalMonths:        ptr(12),
-			InterIntervalDistance: ptr(2000),
-			InterIntervalMonths:   ptr(12),
-		}
-		full1 := svc(1, day(2026, 1, 1), 0, false)
-		k.LastService, k.LastFullService = full1, full1
-		// Low mileage (1500 km after 12 months): Intermediate is due by date (2027-01-01).
-		if !k.NextIsIntermediate(ptr(1500), day(2027, 1, 1)) {
-			t.Fatal("want NextIsIntermediate = true at 1500 km / 12 months")
-		}
-		// Log Intermediate at 1500 km on 2027-01-01: resets 12-month clock for Full to 2028-01-01 and km to 3500!
-		inter1 := svc(2, day(2027, 1, 1), 1500, true)
-		k.LastService = inter1
-		if k.NextIsIntermediate(ptr(1600), day(2027, 2, 1)) {
-			t.Fatal("want NextIsIntermediate = false after intermediate service")
-		}
-		due := k.Due(ptr(3000), day(2028, 1, 1))
-		if due.DueOdometer == nil || *due.DueOdometer != 3500 || due.DueDate == nil || !due.DueDate.Equal(day(2028, 1, 1)) {
-			t.Errorf("full due after alternating intermediate = %+v, want 3500 km / 2028-01-01", due)
-		}
-	})
-
-	// Intermediate months shorter than full months: after an intermediate
-	// service the full one is due one intermediate step later, in months as
-	// in distance, not a whole full interval later.
-	t.Run("alternating mode with a shorter intermediate month interval", func(t *testing.T) {
-		k := Kit{
-			IntervalDistance:      ptr(4000),
-			IntervalMonths:        ptr(12),
-			InterIntervalDistance: ptr(2000),
-			InterIntervalMonths:   ptr(6),
-		}
-		full1 := svc(1, day(2026, 1, 1), 0, false)
-		k.LastService, k.LastFullService = full1, full1
-		k.LastService = svc(2, day(2026, 7, 1), 2000, true)
-		due := k.Due(ptr(2500), day(2026, 8, 1))
-		if due.DueOdometer == nil || *due.DueOdometer != 4000 || due.DueDate == nil || !due.DueDate.Equal(day(2027, 1, 1)) {
-			t.Errorf("full due after intermediate = %+v, want 4000 km / 2027-01-01", due)
-		}
-	})
-
-	t.Run("new vehicle baseline with intermediate schedule", func(t *testing.T) {
-		k := Kit{
-			IntervalDistance:          ptr(4000),
-			IntervalMonths:            ptr(12),
-			InterIntervalDistance:     ptr(2000),
-			VehicleOdometerAtPurchase: ptr(0),
-			VehiclePurchasedOn:        ptr(day(2026, 1, 1)),
-		}
-		// At 500 km on 2026-03-01: next is Intermediate at 2000 km.
-		if !k.NextIsIntermediate(ptr(500), day(2026, 3, 1)) {
-			t.Fatal("want NextIsIntermediate = true from new vehicle baseline")
-		}
-		due := k.Due(ptr(500), day(2026, 3, 1))
-		if due.DueOdometer == nil || *due.DueOdometer != 2000 || due.DueDate != nil {
-			t.Errorf("inter due from new = %+v, want 2000 km", due)
-		}
-		// Once intermediate is logged at 2000 km, next is Full at 4000 km and
-		// the annual warranty deadline remains anchored at 2027-01-01.
-		inter1 := svc(1, day(2026, 6, 1), 2000, true)
-		k.LastService = inter1
-		if k.NextIsIntermediate(ptr(2500), day(2026, 7, 1)) {
-			t.Fatal("want NextIsIntermediate = false after intermediate service logged")
-		}
-		fullDue := k.Due(ptr(2500), day(2026, 7, 1))
-		if fullDue.DueOdometer == nil || *fullDue.DueOdometer != 4000 || fullDue.DueDate == nil || !fullDue.DueDate.Equal(day(2027, 1, 1)) {
-			t.Errorf("full due after inter = %+v, want 4000 km / 2027-01-01", fullDue)
-		}
-	})
-
-	t.Run("alternating mode promotes to full when the full odometer target is reached", func(t *testing.T) {
-		k := Kit{
-			IntervalDistance:      ptr(4000),
-			IntervalMonths:        ptr(12),
-			InterIntervalDistance: ptr(2000),
-			InterIntervalMonths:   ptr(12),
-			LastService:           svc(1, day(2026, 1, 1), 0, false),
-			LastFullService:       svc(1, day(2026, 1, 1), 0, false),
-		}
-		// Rode past both intermediate (2000 km) and full (4000 km) without logging intermediate:
-		// Full service must take over.
-		if k.NextIsIntermediate(ptr(4100), day(2026, 6, 1)) {
-			t.Error("want NextIsIntermediate = false when the full service is already overdue by distance")
-		}
-	})
-}
-
-// The schedules of an expensive bike under warranty, and of one whose
-// services simply alternate. Full every 15 000 km or 12 months, intermediate
-// every 7 500 km: while the vehicle's warranty runs, an intermediate service
-// never moves the full service's deadline, which counts from the last full
-// service or the purchase; after it, or without one, each service comes one
-// intermediate step after the other, in distance and, with intermediate
-// months, in months (without, the months count from the last full service).
-// The switch is on the day after the warranty's last day, or past its
-// reading, also for an intermediate service done while it ran. A month
-// deadline with no day to count from is never "On track".
-func TestWarrantyAndAlternatingSchedules(t *testing.T) {
-	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
-	}
-	type want struct {
-		next    string // "full" or "inter"
-		state   DueState
-		dueOdo  int
-		dueDate string // "" for none
-	}
-	tests := []struct {
-		name          string
-		interMonths   *int
-		warrantyOn    *time.Time // the vehicle's warranty ends on; nil: none
-		warrantyAt    *int       // or at this reading
-		boughtOn      *time.Time
-		boughtOdo     *int
-		last, lastFul *ServiceRef
-		odo           int
-		today         time.Time
-		fullWant      want // FullDue, and which schedule is next
-		uncounted     bool // MonthsUncounted
+func TestInterStep(t *testing.T) {
+	for _, tt := range []struct {
+		distance  *int
+		inBetween int
+		want      *int
 	}{
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, new bike: intermediate next, full by the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			odo: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueOK, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, low miles: the full service's year comes first", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			odo: 5000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, low miles, past the year: overdue", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			odo: 5000, today: d(2027, 1, 2), fullWant: want{"full", DueOverdue, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, after an intermediate: the full deadline doesn't move", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, a late intermediate doesn't push the full one back", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, after a full service: counts from it", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 16000, today: d(2027, 2, 1),
-			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, full then intermediate: still from the full one", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2027, 7, 1), 22500, true), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 23000, today: d(2027, 12, 15),
-			fullWant: want{"full", DueSoon, 30000, "2028-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase date only", boughtOn: ptr(d(2026, 1, 1)),
-			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, no purchase date, only an intermediate: not done yet", last: svc(d(2026, 7, 1), 7500, true),
-			odo: 9000, today: d(2027, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase odometer only, only an intermediate: not done yet", boughtOdo: ptr(0), last: svc(d(2026, 7, 1), 7500, true),
-			odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
-		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase odometer only, no service: intermediate still next by distance", boughtOdo: ptr(0),
-			odo: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueNever, 15000, ""}, uncounted: true},
-		{name: "no warranty, alternating, after an intermediate: full one step later", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
-		{name: "no warranty, alternating, after a full: intermediate next", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 16000, today: d(2027, 2, 1),
-			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
-		{name: "warranty, intermediate months too: the full deadline still doesn't move", warrantyOn: ptr(d(2030, 1, 1)), interMonths: ptr(6),
-			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{name: "warranty ended the day before: a late intermediate pushes the distance back", warrantyOn: ptr(d(2026, 10, 31)),
-			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueOK, 15500, "2027-01-01"}},
-		{name: "warranty ends today: still the warranty's deadline", warrantyOn: ptr(d(2026, 11, 1)),
-			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{name: "past the warranty's reading: alternating", warrantyOn: ptr(d(2030, 1, 1)), warrantyAt: ptr(14000),
-			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueOK, 15500, "2027-01-01"}},
-		{name: "no warranty, no intermediate months: the date counts from the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
-			last: svc(d(2026, 8, 1), 8000, true), odo: 9000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15500, "2027-01-01"}},
-		{name: "no warranty, no intermediate months, after a full: the date counts from it",
-			last: svc(d(2027, 7, 1), 22500, true), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 23000, today: d(2027, 8, 1),
-			fullWant: want{"full", DueOK, 30000, "2028-01-01"}},
-		{name: "no warranty, no intermediate months, nothing to count the months from: not done yet", boughtOdo: ptr(0),
-			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			k := Kit{IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(7500), InterIntervalMonths: tt.interMonths,
-				VehicleWarrantyEndsOn: tt.warrantyOn, VehicleWarrantyEndsAt: tt.warrantyAt, VehiclePurchasedOn: tt.boughtOn, VehicleOdometerAtPurchase: tt.boughtOdo, LastService: tt.last, LastFullService: tt.lastFul}
-			odo := tt.odo
-			got := k.FullDue(&odo, tt.today)
-			next := "full"
-			if k.NextIsIntermediate(&odo, tt.today) {
-				next = "inter"
-			}
-			date := ""
-			if got.DueDate != nil {
-				date = got.DueDate.Format(time.DateOnly)
-			}
-			if next != tt.fullWant.next || got.State != tt.fullWant.state || got.DueOdometer == nil || *got.DueOdometer != tt.fullWant.dueOdo || date != tt.fullWant.dueDate {
-				t.Errorf("next %s, full %s at %v by %q; want next %s, full %+v", next, got.State, got.DueOdometer, date, tt.fullWant.next, tt.fullWant)
-			}
-			if u := k.MonthsUncounted(&odo, tt.today); u != tt.uncounted {
-				t.Errorf("MonthsUncounted = %v, want %v", u, tt.uncounted)
-			}
-		})
+		{ptr(8000), 1, ptr(4000)},
+		{ptr(15000), 1, ptr(7500)},
+		{ptr(15000), 2, ptr(5000)},
+		{ptr(8000), 2, ptr(2666)}, // rounded down; the full one comes after 2 by count anyway
+		{ptr(8000), 0, nil},
+		{nil, 1, nil},
+	} {
+		got := Kit{IntervalDistance: tt.distance, InBetween: tt.inBetween}.InterStep()
+		if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
+			t.Errorf("InterStep(%v, %d) = %v, want %v", deref(tt.distance), tt.inBetween, deref(got), deref(tt.want))
+		}
 	}
 }
 
-// Two cases the warranty table doesn't reach. Under warranty, with an
-// intermediate under half the full one (15 000 / 5 000): the second
-// intermediate service, at 10 000 km, is reminded too, while the full one
-// keeps its own deadline. Alternating (no warranty), the intermediate with
-// months but no distance: an intermediate service resets the months, but the
-// full service's distance still counts from the last full one.
-func TestIntermediateScheduleEdges(t *testing.T) {
-	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
+func deref(p *int) any {
+	if p == nil {
+		return nil
 	}
-	odo := func(n int) *int { return &n }
-
-	full := svc(d(2026, 1, 1), 0, false)
-	w := Kit{VehicleWarrantyEndsOn: ptr(d(2030, 1, 1)), IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(5000), LastService: svc(d(2026, 4, 1), 5000, true), LastFullService: full}
-	if !w.NextIsIntermediate(odo(6000), d(2026, 5, 1)) {
-		t.Error("15 000 / 5 000 after the intermediate at 5 000: want the next intermediate (10 000) first")
-	}
-	if due := w.Due(odo(6000), d(2026, 5, 1)); due.DueOdometer == nil || *due.DueOdometer != 10000 {
-		t.Errorf("15 000 / 5 000 due = %+v, want 10 000 km", due)
-	}
-	if f := w.FullDue(odo(6000), d(2026, 5, 1)); f.DueOdometer == nil || *f.DueOdometer != 15000 || f.DueDate == nil || !f.DueDate.Equal(d(2027, 1, 1)) {
-		t.Errorf("15 000 / 5 000 full due = %+v, want 15 000 km / 2027-01-01", f)
-	}
-	w.LastService = svc(d(2026, 7, 1), 10000, true)
-	if w.NextIsIntermediate(odo(11000), d(2026, 8, 1)) {
-		t.Error("after the intermediate at 10 000: want the full service (15 000) next")
-	}
-	// The full one's year comes first: it wins even with an intermediate due sooner by distance.
-	w.LastService = svc(d(2026, 12, 1), 5000, true)
-	if w.NextIsIntermediate(odo(5500), d(2026, 12, 15)) {
-		t.Error("full service due soon by date: want it next")
-	}
-
-	a := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), InterIntervalMonths: ptr(6), LastService: svc(d(2026, 7, 1), 6000, true), LastFullService: full}
-	if due := a.FullDue(odo(10500), d(2026, 10, 1)); due.State != DueOverdue || due.DueOdometer == nil || *due.DueOdometer != 10000 || due.DueDate == nil || !due.DueDate.Equal(d(2027, 1, 1)) {
-		t.Errorf("alternating, intermediate by months only: full due = %+v, want overdue at 10 000 km / 2027-01-01", due)
-	}
-
-	// No warranty, no intermediate months: an intermediate service wouldn't
-	// reset the full service's months, so a full service due soon by date
-	// comes first, though the intermediate one is due sooner by distance.
-	n := Kit{IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(7500), LastService: full, LastFullService: full}
-	if n.NextIsIntermediate(odo(7000), d(2026, 12, 10)) {
-		t.Error("no warranty, no intermediate months, full due soon by date: want the full service next")
-	}
-	if !n.NextIsIntermediate(odo(7000), d(2026, 10, 1)) {
-		t.Error("no warranty, no intermediate months, full not due yet: want the intermediate next")
-	}
-	// With intermediate months, the intermediate service resets them: it comes first.
-	n.InterIntervalMonths = ptr(12)
-	if !n.NextIsIntermediate(odo(7000), d(2026, 12, 10)) {
-		t.Error("no warranty, intermediate months, full due soon by date: want the intermediate next")
-	}
-}
-
-// What the matrix of every warranty, odometer, purchase data and schedule
-// found (2026-11-23): under warranty, after an intermediate service, the
-// next one must not hide behind a full service it can't be compared with
-// in one dimension. The next intermediate comes first when it is due
-// sooner by distance or by date, or in one the full one has no deadline in.
-func TestIntermediateNeverHidden(t *testing.T) {
-	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	inter := func(on time.Time, odo *int) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: odo, Intermediate: true}
-	}
-	kit := func() Kit {
-		return Kit{VehicleWarrantyEndsOn: ptr(d(2035, 1, 1)), IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(5000), InterIntervalMonths: ptr(4)}
-	}
-	// The full distance counts one intermediate step after the intermediate
-	// service (no purchase reading), the same target as the next
-	// intermediate: the dates decide.
-	tie := kit()
-	tie.VehiclePurchasedOn = ptr(d(2025, 1, 1))
-	tie.LastService, tie.LastOdometer = inter(d(2025, 5, 1), ptr(2578)), ptr(2578)
-	// No purchase date and no full service: the full one has no date.
-	noDate := kit()
-	noDate.VehicleOdometerAtPurchase = ptr(1000)
-	noDate.LastService, noDate.LastOdometer = inter(d(2027, 5, 16), ptr(12375)), ptr(12375)
-	// No odometer: the intermediate service has no reading, the full one
-	// no date; only the intermediate's date is known.
-	noOdo := kit()
-	noOdo.VehicleOdometerAtPurchase = ptr(1000)
-	noOdo.LastService = inter(d(2026, 1, 1), nil)
-	tests := []struct {
-		name      string
-		k         Kit
-		odo       *int
-		today     time.Time
-		wantNext  string // "full" or "inter"
-		wantState DueState
-		wantOdo   *int // the next service's odometer target
-		wantDate  string
-	}{
-		{"distance tie: the intermediate's date comes first", tie, ptr(4200), d(2025, 9, 2), "inter", DueOverdue, ptr(7578), "2025-09-01"},
-		{"distance tie, before the intermediate's date", tie, ptr(3000), d(2025, 6, 1), "inter", DueOK, ptr(7578), "2025-09-01"},
-		{"the full one with no date: the intermediate's date counts", noDate, ptr(13900), d(2027, 9, 20), "inter", DueOverdue, ptr(17375), "2027-09-16"},
-		{"the full one with no date, due soon by distance: the full one", noDate, ptr(14600), d(2027, 9, 20), "full", DueSoon, ptr(16000), ""},
-		{"no odometer: the intermediate's date counts", noOdo, nil, d(2026, 5, 10), "inter", DueOverdue, nil, "2026-05-01"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			checkNext(t, tt.k, tt.odo, tt.today, tt.wantNext, tt.wantState, tt.wantOdo, tt.wantDate)
-		})
-	}
+	return *p
 }
 
 // The schedule the app is meant for: an odometer kept up to date, a full
-// service every 8 000 km or 12 months and a half one every 4 000 km or 12
-// months, both counted from a logged service or the purchase. While the
-// warranty runs, the full service comes every 12 months from the last
-// full one, whether a half service was done in between or not; once it has
-// ended, nothing forces a full one: services alternate, the full one a
-// half step after the half one.
+// service every 8 000 km or 12 months and one half-way (4 000 km, the same
+// 12 months), counted from a logged service or the purchase. While the
+// warranty runs, the full service comes every 12 months from the last full
+// one, whether a half service was done in between or not; once it has
+// ended, or without one, nothing forces a full one: services take turns,
+// each a step and 12 months after the one before.
 func TestFullAndHalfService(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
 		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
 	}
-	kit := func(warrantyOn time.Time, last *ServiceRef) Kit {
-		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(4000), InterIntervalMonths: ptr(12),
-			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0),
-			LastFullService: svc(d(2025, 1, 1), 0, false), LastFullOdometer: ptr(0), LastService: svc(d(2025, 1, 1), 0, false), LastOdometer: ptr(0)}
-		if last != nil {
-			k.LastService, k.LastOdometer = last, last.Odometer
+	firstFull := svc(d(2025, 1, 1), 0, false)
+	// kit is the bike bought new on 1 Jan 2024 and fully serviced on
+	// 1 Jan 2025 at 0 km; then the services in history, the last full one
+	// last among the full ones.
+	kit := func(warrantyOn time.Time, history ...*ServiceRef) Kit {
+		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), InBetween: 1,
+			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0)}
+		for _, s := range append([]*ServiceRef{firstFull}, history...) {
+			k.LastService, k.LastOdometer = s, s.Odometer
+			if s.Intermediate {
+				k.InterSinceFull++
+			} else {
+				k.LastFullService, k.LastFullOdometer, k.InterSinceFull = s, s.Odometer, 0
+			}
 		}
 		return k
 	}
 	runs, ended := d(2030, 1, 1), d(2024, 12, 31)
 	half := svc(d(2025, 8, 1), 4000, true)
+	lateHalf := svc(d(2025, 9, 1), 5000, true)
 	tests := []struct {
 		name      string
 		k         Kit
@@ -657,19 +336,93 @@ func TestFullAndHalfService(t *testing.T) {
 		wantOdo   int
 		wantDate  string
 	}{
-		{"warranty, after a full: the half one at 4 000 km", kit(runs, nil), 3000, d(2025, 3, 1), "inter", DueOK, 4000, "2026-01-01"},
+		{"warranty, after a full: the half one at 4 000 km", kit(runs), 3000, d(2025, 3, 1), "inter", DueOK, 4000, "2026-01-01"},
+		{"warranty, low use, no half done: the full one at the year", kit(runs), 3000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
 		{"warranty, after a half: the full one at 8 000 km or its year", kit(runs, half), 6000, d(2025, 9, 1), "full", DueOK, 8000, "2026-01-01"},
-		{"warranty, a half done: the full one still by its year", kit(runs, half), 6000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
-		{"warranty, low use, no half done: the full one at the year", kit(runs, nil), 3000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
-		{"no warranty, low use: the half one at the year, no full one forced", kit(ended, nil), 3000, d(2025, 12, 10), "inter", DueSoon, 4000, "2026-01-01"},
+		{"warranty, a late half doesn't push the full one back", kit(runs, lateHalf), 6000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
+		{"warranty, after the next full: the half one counts from it", kit(runs, half, svc(d(2025, 12, 20), 7900, false)), 8500, d(2026, 2, 1), "inter", DueOK, 11900, "2026-12-20"},
+		{"no warranty, low use: the half one at the year, no full one forced", kit(ended), 3000, d(2025, 12, 10), "inter", DueSoon, 4000, "2026-01-01"},
 		{"no warranty, after a half: the full one a half step later", kit(ended, half), 6000, d(2025, 12, 10), "full", DueOK, 8000, "2026-08-01"},
-		{"no warranty, low use, after a half at the year: the full one a year later", kit(ended, svc(d(2026, 1, 1), 3000, true)), 4500, d(2026, 6, 1), "full", DueOK, 7000, "2027-01-01"},
-		{"warranty ended after the half: the full one no longer by the warranty's year", kit(d(2025, 11, 30), half), 6000, d(2025, 12, 10), "full", DueOK, 8000, "2026-08-01"},
+		{"no warranty, low use, a half at the year: the full one a year later", kit(ended, svc(d(2026, 1, 1), 3000, true)), 4500, d(2026, 6, 1), "full", DueOK, 7000, "2027-01-01"},
+		{"warranty ended after the half: the full one no longer by the warranty's year", kit(d(2025, 11, 30), lateHalf), 6000, d(2025, 12, 10), "full", DueOK, 9000, "2026-09-01"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			checkNext(t, tt.k, &tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
 		})
+	}
+}
+
+// Two services in between (15 000 km: at 5 000 and 10 000), under warranty
+// and without one: the full one comes once both are done, and under
+// warranty still by its own deadline, whatever they did.
+func TestTwoInBetween(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
+		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Intermediate: inter}
+	}
+	full := svc(d(2025, 1, 1), 0, false)
+	kit := func(warrantyOn time.Time, last *ServiceRef, since int) Kit {
+		return Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InBetween: 2,
+			VehiclePurchasedOn: ptr(d(2024, 12, 1)), VehicleOdometerAtPurchase: ptr(0),
+			LastFullService: full, LastFullOdometer: ptr(0), LastService: last, LastOdometer: last.Odometer, InterSinceFull: since}
+	}
+	runs, ended := d(2030, 1, 1), d(2024, 12, 31)
+	first, second := svc(d(2025, 3, 1), 5000, true), svc(d(2025, 6, 1), 10000, true)
+	tests := []struct {
+		name      string
+		k         Kit
+		odo       int
+		today     time.Time
+		wantNext  string
+		wantState DueState
+		wantOdo   int
+		wantDate  string
+	}{
+		{"warranty, after the full: the first at 5 000", kit(runs, full, 0), 1000, d(2025, 2, 1), "inter", DueOK, 5000, "2026-01-01"},
+		{"warranty, after the first: the second at 10 000", kit(runs, first, 1), 6000, d(2025, 4, 1), "inter", DueOK, 10000, "2026-03-01"},
+		{"warranty, after both: the full one by its own deadline", kit(runs, second, 2), 11000, d(2025, 7, 1), "full", DueOK, 15000, "2026-01-01"},
+		{"warranty, after the first, the full one due soon: the full one", kit(runs, first, 1), 6000, d(2025, 12, 10), "full", DueSoon, 15000, "2026-01-01"},
+		{"no warranty, after the first: the second a step later", kit(ended, first, 1), 6000, d(2025, 4, 1), "inter", DueOK, 10000, "2026-03-01"},
+		{"no warranty, after both: the full one a step after the second", kit(ended, second, 2), 11000, d(2025, 7, 1), "full", DueOK, 15000, "2026-06-01"},
+		{"no warranty, after the full: the first, the full one three steps on", kit(ended, full, 0), 1000, d(2025, 2, 1), "inter", DueOK, 5000, "2026-01-01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkNext(t, tt.k, &tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
+		})
+	}
+	// While it isn't its turn, the full one's due counts the steps still to
+	// do: after the full, three steps (15 000 km, 36 months).
+	k := kit(ended, full, 0)
+	if f := k.FullDue(ptr(1000), d(2025, 2, 1)); f.DueOdometer == nil || *f.DueOdometer != 15000 || f.DueDate == nil || !f.DueDate.Equal(d(2028, 1, 1)) {
+		t.Errorf("full due three steps on = %v / %v, want 15 000 km / 2028-01-01", deref(f.DueOdometer), f.DueDate)
+	}
+}
+
+// dueBefore compares two reminders by distance and by date: one comes
+// first when it is earlier in either, or has a deadline in one the other
+// has none in; a tie in one goes by the other, a tie in all to b.
+func TestDueBefore(t *testing.T) {
+	day := func(m time.Month) *time.Time { t := time.Date(2026, m, 1, 0, 0, 0, 0, time.UTC); return &t }
+	due := func(odo *int, date *time.Time) Due { return Due{DueOdometer: odo, DueDate: date} }
+	for _, tt := range []struct {
+		name string
+		a, b Due
+		want bool
+	}{
+		{"sooner by distance", due(ptr(5000), day(9)), due(ptr(8000), day(9)), true},
+		{"later by distance, sooner by date", due(ptr(9000), day(3)), due(ptr(8000), day(9)), true},
+		{"a tie by distance goes by the date", due(ptr(8000), day(3)), due(ptr(8000), day(9)), true},
+		{"a tie in all goes to b", due(ptr(8000), day(9)), due(ptr(8000), day(9)), false},
+		{"later in both", due(ptr(9000), day(10)), due(ptr(8000), day(9)), false},
+		{"b has no date", due(ptr(9000), day(10)), due(ptr(8000), nil), true},
+		{"b has no distance", due(ptr(9000), day(10)), due(nil, day(9)), true},
+		{"a has neither", due(nil, nil), due(ptr(8000), day(9)), false},
+	} {
+		if got := dueBefore(tt.a, tt.b); got != tt.want {
+			t.Errorf("%s: dueBefore = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }
 
@@ -687,11 +440,10 @@ func checkNext(t *testing.T, k Kit, odo *int, today time.Time, wantNext string, 
 	}
 	odoOK := (due.DueOdometer == nil) == (wantOdo == nil) && (wantOdo == nil || *due.DueOdometer == *wantOdo)
 	if next != wantNext || due.State != wantState || !odoOK || date != wantDate {
-		t.Errorf("next %s, due %s at %v by %q; want next %s, %s at %v by %q", next, due.State, due.DueOdometer, date, wantNext, wantState, wantOdo, wantDate)
+		t.Errorf("next %s, due %s at %v by %q; want next %s, %s at %v by %q", next, due.State, deref(due.DueOdometer), date, wantNext, wantState, deref(wantOdo), wantDate)
 	}
 }
 
-// A line is listed when its entry asks for at least what it misses.
 func TestKitLineListed(t *testing.T) {
 	listed := map[int64]float64{1: 2, 2: 1.5, 3: 5}
 	tests := []struct {

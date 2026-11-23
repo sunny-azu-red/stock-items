@@ -373,8 +373,9 @@ func TestTextAndNumberLimits(t *testing.T) {
 			in.Normalize()
 			return in.Validate()
 		}(), "lines"},
-		{"kit intermediate distance without full distance", KitInput{VehicleID: 1, Name: "A", InterIntervalDistance: ptr(2000)}.Validate(), "inter_interval_distance"},
-		{"kit intermediate months without full months", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(4000), InterIntervalMonths: ptr(6)}.Validate(), "inter_interval_months"},
+		{"kit in between without a full distance", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(12), InBetween: 1}.Validate(), "interval_distance"},
+		{"kit in between out of range", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), InBetween: 3}.Validate(), "in_between"},
+		{"kit in-between parts with none in between", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), InterLines: []KitLineInput{{ItemID: 1, Quantity: 1}}}.Validate(), "in_between"},
 		{"service part over the maximum", func() Errors {
 			in := ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), Parts: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
 			in.Normalize()

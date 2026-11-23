@@ -50,6 +50,15 @@ async function pickVehicle(page: Page, name: string) {
   await page.locator("#vehicle_id label.chip-toggle").filter({ hasText: exact(name) }).click();
 }
 
+// Shows a kit form's intermediate services: they are steps of the full
+// distance, so their section shows once it has one; then 1 in between.
+async function showInter(page: Page) {
+  const distance = page.locator("#interval_distance");
+  if (!(await distance.count())) return;
+  if (!(await distance.inputValue())) await distance.fill("8000");
+  await page.locator("#inter-schedule .segmented label").filter({ hasText: "1, half-way" }).click();
+}
+
 // The headings of an open item list, in order.
 const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
 
@@ -1982,11 +1991,10 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   await check("/items/new with errors");
-  // The kit form with its intermediate schedule expanded and its hint open.
+  // The kit form with its intermediate services and their parts.
   await page.goto(kit + "/edit");
-  await page.getByLabel("Use an intermediate schedule").check();
-  await page.getByRole("button", { name: "More about Intermediate months" }).click();
-  await check(kit + "/edit with intermediate schedule and hint open");
+  await showInter(page);
+  await check(kit + "/edit with intermediate services");
   // Working on a vehicle: the bar on every page.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 390");
   for (const p of ["/", "/stock", "/stock?v=all", "/services", "/activity", "/shopping", item]) {
@@ -2337,7 +2345,7 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
     ["/vehicles/new", "Add vehicle"], ["/vehicles/new", "Add vehicle with errors", submit("Save vehicle")],
     ["/vehicles/new", "Add vehicle under warranty", async () => { await page.locator("#has_warranty").check(); }],
     ["/vehicles/new", "Add vehicle under warranty with errors", async () => { await page.locator("#has_warranty").check(); await submit("Save vehicle")(); }], [vehicle + "/edit", "Edit vehicle"], [vehicle, "a vehicle's page"],
-    ["/kits/new", "Add kit", async () => { await page.locator("#has_inter").check(); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
+    ["/kits/new", "Add kit", async () => { await showInter(page); }], ["/kits/new", "Add kit with errors", submit("Save kit")], [kit + "/edit", "Edit kit"],
     ["/services/new", "Log service", async () => { await pickVehicle(page, "KTM 390"); }], [service + "/edit", "Edit service"],
     ["/services/new", "Log service with a part that names no item", async () => {
       await pickVehicle(page, "KTM 390");
@@ -2482,8 +2490,7 @@ test("a form's rows keep its columns", async ({ page }, testInfo) => {
     if (width) await page.setViewportSize({ width, height: 900 });
     for (const p of paths) {
       await page.goto(p);
-      const inter = page.locator("#has_inter");
-      if (await inter.count()) await inter.check();
+      await showInter(page);
       const found = await page.evaluate(() => {
         const out = new Set<string>();
         const shown = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -2661,23 +2668,22 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await page.locator("a.kit-row").first().click();
   await (await headAction(page, "link", "Edit", true)).click();
 
-  // Its fields show while the box is ticked.
-  await expect(page.getByLabel("Intermediate distance (km)")).toBeHidden();
-  await page.getByLabel("Use an intermediate schedule").check();
-  await page.getByLabel("Intermediate distance (km)").fill("3500");
-  await page.getByRole("button", { name: "More about Intermediate months" }).click();
-  await expect(page.locator("#inter-months-tip")).toBeVisible();
+  // Its parts show once there are intermediate services: 1, half-way
+  // (every 3 750 km of the 7 500).
+  await expect(page.locator("#inter-lines")).toBeHidden();
+  await showInter(page);
+  await expect(page.locator("#inter-lines")).toBeVisible();
   const interItems = page.locator('input[name="inter_line_item_text"]');
   const interQtys = page.locator('input[name="inter_line_qty"]');
   await pickPart(interItems.nth(0), "Silkolene 15W50 PRO 4 XP");
   await interQtys.nth(0).fill("1.7 L");
   await page.getByRole("button", { name: "Save kit" }).click();
 
-  // Because a full service was logged at 12 000 km, the next service is Intermediate at 15 500 km.
+  // Because a full service was logged at 12 000 km, the next service is Intermediate at 15 750 km.
   await expect(page.locator(".page-head")).toContainText("Next: Intermediate");
   await expect(page.locator("main")).toContainText("Full parts");
   await expect(page.locator("main")).toContainText("Intermediate parts");
-  await expect(page.locator('dt:text-is("Due at") + dd')).toHaveText("15\u202f500 km");
+  await expect(page.locator('dt:text-is("Due at") + dd')).toHaveText("15\u202f750 km");
 
   // Clicking "Log service" on the kit pre-selects Intermediate and pre-fills the intermediate parts and title.
   await page.locator(".page-head").getByRole("link", { name: "Log service" }).click();

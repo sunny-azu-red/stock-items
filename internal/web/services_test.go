@@ -505,16 +505,15 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 	// (nothing logged and no purchase baseline, so the intermediate schedule has
 	// nothing to count from and NextIsIntermediate is false).
 	rec = a.post("/kits", url.Values{
-		"vehicle_id":              {itoa(k390)},
-		"name":                    {"Warranty service"},
-		"interval_distance":       {"15000"},
-		"interval_months":         {"12"},
-		"has_inter":               {"1"},
-		"inter_interval_distance": {"5000"},
-		"line_item":               {itoa(oil)},
-		"line_qty":                {"500 ml"},
-		"inter_line_item":         {itoa(washerID)},
-		"inter_line_qty":          {"2"},
+		"vehicle_id":        {itoa(k390)},
+		"name":              {"Warranty service"},
+		"interval_distance": {"15000"},
+		"interval_months":   {"12"},
+		"in_between":        {"2"},
+		"line_item":         {itoa(oil)},
+		"line_qty":          {"500 ml"},
+		"inter_line_item":   {itoa(washerID)},
+		"inter_line_qty":    {"2"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
@@ -593,8 +592,8 @@ func TestServiceFormShowsKitError(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 	kit := url.Values{
 		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_distance": {"4000"},
-		"has_inter": {"1"}, "inter_interval_distance": {"2000"},
-		"line_item": {itoa(oil)}, "line_qty": {"100 ml"},
+		"in_between": {"1"},
+		"line_item":  {itoa(oil)}, "line_qty": {"100 ml"},
 	}
 	rec := a.post("/kits", kit)
 	expect(t, rec, http.StatusSeeOther)
@@ -602,8 +601,7 @@ func TestServiceFormShowsKitError(t *testing.T) {
 	kitID := mustID(t, kitURL)
 
 	// Another tab removes the intermediate schedule.
-	kit.Del("has_inter")
-	kit.Del("inter_interval_distance")
+	kit.Del("in_between")
 	expect(t, a.postV(kitURL, kit), http.StatusSeeOther)
 
 	rec = a.post("/services", url.Values{
@@ -630,16 +628,15 @@ func TestKitPerTierShortfall(t *testing.T) {
 	// Kit has Full tier needing 1.7 L oil (1175 ml short)
 	// and Intermediate tier needing 2 spark plugs (2 pcs short)
 	rec = a.post("/kits", url.Values{
-		"vehicle_id":              {itoa(k390)},
-		"name":                    {"Major & Minor"},
-		"interval_distance":       {"15000"},
-		"interval_months":         {"12"},
-		"has_inter":               {"1"},
-		"inter_interval_distance": {"5000"},
-		"line_item":               {itoa(oil)},
-		"line_qty":                {"1.7 L"},
-		"inter_line_item":         {itoa(plugID)},
-		"inter_line_qty":          {"2"},
+		"vehicle_id":        {itoa(k390)},
+		"name":              {"Major & Minor"},
+		"interval_distance": {"15000"},
+		"interval_months":   {"12"},
+		"in_between":        {"2"},
+		"line_item":         {itoa(oil)},
+		"line_qty":          {"1.7 L"},
+		"inter_line_item":   {itoa(plugID)},
+		"inter_line_qty":    {"2"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
@@ -727,14 +724,15 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 	// A kit with two schedules names the one its header counts.
 	rec = a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
-		"line_item": {itoa(oil)}, "line_qty": {"5 L"},
+		"in_between": {"2"},
+		"line_item":  {itoa(oil)}, "line_qty": {"5 L"},
 		"inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	page = a.get(rec.Header().Get("Location"))
 	expect(t, page, http.StatusOK)
-	if head := pageHead(t, page); !strings.Contains(head, "Full: 1 part missing") {
+	// Never done, no warranty: the intermediate one is next.
+	if head := pageHead(t, page); !strings.Contains(head, "Intermediate: 1 part missing") {
 		t.Errorf("the header doesn't name the schedule:\n%s", head)
 	}
 }
@@ -789,16 +787,16 @@ func TestKitMissingStates(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	expect(t, a.getWorking(rec.Header().Get("Location"), cookie), http.StatusOK, "Brake Pads", "Silkolene")
 
-	// Two schedules: the full one is next (overdue by its months since the
-	// purchase) and ready, the intermediate one misses 2 pads (the list
-	// asks for 2 of the 4).
+	// Two schedules: the intermediate one is next (no warranty: they take
+	// turns) and misses 2 pads (the list asks for 2 of the 4); the header
+	// names only it, as the full one is ready.
 	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
-		"line_item": {itoa(oil)}, "line_qty": {"100 ml"}, "inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"}})
+		"in_between": {"2"},
+		"line_item":  {itoa(oil)}, "line_qty": {"100 ml"}, "inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"}})
 	page = a.get(interURL)
 	expect(t, page, http.StatusOK, "1 part · all in stock", "Add 1 missing</button>", `name="intermediate" value="1"`)
 	head := pageHead(t, page)
-	for _, s := range []string{"Next: Full", "Full: parts ready", "Intermediate: 1 part missing"} {
+	for _, s := range []string{"Next: Intermediate", "Intermediate: 1 part missing"} {
 		if !strings.Contains(head, s) {
 			t.Errorf("the header has no %q:\n%s", s, head)
 		}
@@ -827,8 +825,8 @@ func TestKitMissingStates(t *testing.T) {
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
 		"line_item": {itoa(coolant)}, "line_qty": {"2 L"}})
 	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
-		"line_item": {itoa(coolant)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(coolant)}, "inter_line_qty": {"100 ml"}})
+		"in_between": {"2"},
+		"line_item":  {itoa(coolant)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(coolant)}, "inter_line_qty": {"100 ml"}})
 	v, err := a.store.GetVehicle(ctx, k1290)
 	if err != nil {
 		t.Fatal(err)
@@ -843,7 +841,7 @@ func TestKitMissingStates(t *testing.T) {
 	// no reminders, there is no Next.
 	page = a.get(twoURL)
 	expect(t, page, http.StatusOK)
-	if head := pageHead(t, page); !strings.Contains(head, "Full: 1 part missing") || strings.Contains(head, "Next:") {
+	if head := pageHead(t, page); !strings.Contains(head, "Intermediate: parts ready") || strings.Contains(head, "Next:") {
 		t.Errorf("archived vehicle's kit with two schedules: header\n%s", head)
 	}
 }
@@ -862,18 +860,19 @@ func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
 	plugID := mustID(t, rec.Header().Get("Location"))
 	rec = a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
-		"line_item": {itoa(oil)}, "line_qty": {"1.7 L"},
+		"in_between": {"2"},
+		"line_item":  {itoa(oil)}, "line_qty": {"1.7 L"},
 		"inter_line_item": {itoa(plugID)}, "inter_line_qty": {"2"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
 
-	// The full schedule is due next; its oil goes on the list.
+	// Never done, no warranty: the first intermediate service is next; its
+	// plugs go on the list.
 	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Message != "Added 1 missing part to the shopping list" {
 		t.Fatalf("first Add missing: flash = %+v", f)
 	}
-	// Again: the oil is listed already, and the plugs stay off the list.
+	// Again: the plugs are listed already, and the oil stays off the list.
 	if f := flashOf(t, a.post(kitURL+"/shortfall", nil)); f.Message != "Everything missing is already on the shopping list" {
 		t.Errorf("second Add missing: flash = %+v", f)
 	}
@@ -881,8 +880,8 @@ func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].ItemID == nil || *list[0].ItemID != oil {
-		t.Errorf("shopping list = %+v, want only the oil", list)
+	if len(list) != 1 || list[0].ItemID == nil || *list[0].ItemID != plugID {
+		t.Errorf("shopping list = %+v, want only the plugs", list)
 	}
 }
 
@@ -927,8 +926,8 @@ func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
 	ring := itemID(t, a.store, "O-Ring")
 	rec := a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k390)}, "name": {"Oil Service"}, "interval_distance": {"4000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"2000"}, "inter_interval_months": {"6"},
-		"line_item": {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"},
+		"in_between": {"1"},
+		"line_item":  {itoa(oil), itoa(ring)}, "line_qty": {"1.7 L", "1"},
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -941,8 +940,8 @@ func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
 			t.Fatalf("%s: %v", when, err)
 		}
 		if len(k.Lines) != 2 || len(k.InterLines) != 1 || k.InterLines[0].ItemID != oil || k.InterLines[0].Need != 1000 ||
-			k.InterIntervalDistance == nil || *k.InterIntervalDistance != 2000 || k.InterIntervalMonths == nil || *k.InterIntervalMonths != 6 {
-			t.Errorf("%s: kit = lines %+v, intermediate %+v, every %v / %v months", when, k.Lines, k.InterLines, k.InterIntervalDistance, k.InterIntervalMonths)
+			k.InBetween != 1 {
+			t.Errorf("%s: kit = lines %+v, intermediate %+v, %d in between", when, k.Lines, k.InterLines, k.InBetween)
 		}
 	}
 	check("made")
@@ -998,8 +997,8 @@ func TestServiceFormFromAKit(t *testing.T) {
 	filter := itemID(t, a.store, "Hiflofiltro")
 	rec := a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"7500"},
-		"line_item": {itoa(oil)}, "line_qty": {"1 L"},
+		"in_between": {"1"},
+		"line_item":  {itoa(oil)}, "line_qty": {"1 L"},
 		"inter_line_item": {itoa(filter)}, "inter_line_qty": {"1"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -1085,7 +1084,7 @@ func TestServiceFormWhenItsKitIsDeleted(t *testing.T) {
 }
 
 // Smaller holes: the kit form drops an intermediate schedule the page
-// removed even if its fields still come (has_inter=0); "Add missing" from
+// removed even if its parts still come (in_between=0); "Add missing" from
 // a tab opened before the kit was archived does nothing; a vehicle bought
 // before 1990 can say so, but not one bought in the future.
 func TestKitAndVehicleFormEdges(t *testing.T) {
@@ -1095,7 +1094,7 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 	oil := itemID(t, a.store, "10W50")
 	rec := a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k1290)}, "name": {"Oil Service"}, "interval_distance": {"15000"},
-		"has_inter": {"0"}, "inter_interval_distance": {"7500"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
+		"in_between": {"0"}, "inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 		"line_item": {itoa(oil)}, "line_qty": {"4 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -1105,7 +1104,7 @@ func TestKitAndVehicleFormEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if k.HasIntermediate() || len(k.InterLines) != 0 {
-		t.Errorf("has_inter=0 saved an intermediate schedule: every %v, lines %+v", k.InterIntervalDistance, k.InterLines)
+		t.Errorf("in_between=0 saved intermediate services: %d, lines %+v", k.InBetween, k.InterLines)
 	}
 
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(k.ID)}, "title": {"Oil Service"},

@@ -118,7 +118,7 @@ var oldOrder = []struct {
 	{"items", []string{"id", "name", "brand", "category", "unit", "quantity", "min_quantity", "expires_on",
 		"location", "notes", "created_at", "updated_at", "archived_at", "version"}},
 	{"service_kits", []string{"id", "vehicle_id", "name", "interval_distance", "interval_months", "notes",
-		"created_at", "updated_at", "archived_at", "version", "inter_interval_distance", "inter_interval_months"}},
+		"created_at", "updated_at", "archived_at", "version", "in_between"}},
 	{"service_records", []string{"id", "vehicle_id", "kit_id", "performed_on", "odometer", "title", "notes",
 		"labor_cost", "created_at", "odometer_before", "odometer_moved", "odometer_at_log", "version", "kit_intermediate"}},
 	{"stock_movements", []string{"id", "item_id", "kind", "delta", "total_price", "supplier", "note",
@@ -174,8 +174,8 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 		INSERT INTO item_skus (item_id, code, kind, brand, pack_size) VALUES (1, '77-038', 'oem', 'KTM', 2), (2, 'SK-1', 'barcode', '', 1000.5);
 		INSERT INTO item_vehicles (item_id, vehicle_id) VALUES (1, 1), (2, 1), (2, 2);
 		INSERT INTO item_photos (item_id, content_type, image, thumb) VALUES (1, 'image/jpeg', '\xffd8ff', '\xffd8');
-		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months, archived_at)
-			VALUES (1, 'Oil service', 7500, 12, 3750, NULL, NULL), (1, 'Old kit', NULL, 6, NULL, NULL, now());
+		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, in_between, archived_at)
+			VALUES (1, 'Oil service', 7500, 12, 1, NULL), (1, 'Old kit', NULL, 6, 0, now());
 		INSERT INTO service_kit_lines (kit_id, item_id, quantity, intermediate) VALUES (1, 2, 1700, false), (1, 2, 1000, true);
 		INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, odometer_before, odometer_moved, title, labor_cost)
 			VALUES (1, 1, true, '2026-05-01', 12000, 11000, true, 'Oil service', 80), (2, NULL, false, '2026-05-02', NULL, NULL, false, 'Wash', NULL);

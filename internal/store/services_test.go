@@ -645,7 +645,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	kitIn := stock.KitInput{
 		VehicleID: k1290, Name: "Oil service",
 		IntervalDistance: ptr(4000), IntervalMonths: ptr(12),
-		InterIntervalDistance: ptr(2000), InterIntervalMonths: nil,
+		InBetween:  1, // every 2 000 km
 		Lines:      []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
 		InterLines: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
 	}
@@ -713,6 +713,9 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometer != 10000 {
 		t.Fatalf("LastFullService = %+v, odometer = %v", kit.LastFullService, kit.LastFullOdometer)
 	}
+	if kit.InterSinceFull != 1 {
+		t.Errorf("InterSinceFull = %d, want 1", kit.InterSinceFull)
+	}
 	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) {
 		t.Errorf("want NextIsIntermediate = false after intermediate service")
 	}
@@ -727,7 +730,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 {
+	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 || kit.InterSinceFull != 0 {
 		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 

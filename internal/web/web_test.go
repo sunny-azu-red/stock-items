@@ -885,17 +885,15 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km, no months).
 	rec := a.post("/kits", url.Values{
-		"vehicle_id":              {itoa(k1290)},
-		"name":                    {"Oil service"},
-		"interval_distance":       {"4000"},
-		"interval_months":         {"12"},
-		"line_item":               {itoa(oil)},
-		"line_qty":                {"3.6 L"},
-		"has_inter":               {"1"},
-		"inter_interval_distance": {"2000"},
-		"inter_interval_months":   {""},
-		"inter_line_item":         {itoa(hiflo), itoa(oring), itoa(oil)},
-		"inter_line_qty":          {"1", "2", "3.6 L"},
+		"vehicle_id":        {itoa(k1290)},
+		"name":              {"Oil service"},
+		"interval_distance": {"4000"},
+		"interval_months":   {"12"},
+		"line_item":         {itoa(oil)},
+		"line_qty":          {"3.6 L"},
+		"in_between":        {"1"},
+		"inter_line_item":   {itoa(hiflo), itoa(oring), itoa(oil)},
+		"inter_line_qty":    {"1", "2", "3.6 L"},
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
@@ -903,9 +901,8 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule,
 	// its box ticked (CSS shows the fields while it is); a new kit's box is not.
-	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "While the vehicle is under warranty, intermediate services never push back the full service", `value="2000"`,
-		`<input type="checkbox" id="has_inter" name="has_inter" value="1" checked> Use an intermediate schedule`)
-	expect(t, a.get("/kits/new"), http.StatusOK, `<input type="checkbox" id="has_inter" name="has_inter" value="1"> Use an intermediate schedule`)
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`, "1, half-way")
+	expect(t, a.get("/kits/new"), http.StatusOK, `name="in_between" value="0" autocomplete="off" checked`)
 	expectNot(t, a.get("/kits/new"), "data-show-inter", "data-hide-inter")
 
 	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts with package icon.

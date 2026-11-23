@@ -200,37 +200,34 @@ func itemsByID(items []stock.Item) map[int64]stock.Item {
 // ---- Kit form ----
 
 type kitForm struct {
-	ID                                         int64
-	VehicleID                                  int64
-	Name, IntervalDistance, IntervalMonths     string
-	InterIntervalDistance, InterIntervalMonths string
-	Notes                                      string
-	Lines                                      []lineRow
-	InterLines                                 []lineRow
-	ShowInter                                  bool
-	Stored                                     string // the saved name while editing, for the heading
-	Version                                    int    // as the edit form was opened (see itemForm)
-	Stale                                      *staleNote
-	FormKey                                    string // see itemForm
-	Errors                                     stock.Errors
+	ID                                     int64
+	VehicleID                              int64
+	Name, IntervalDistance, IntervalMonths string
+	InBetween                              string // "0" to "2" (stock.Kit.InBetween)
+	Notes                                  string
+	Lines                                  []lineRow
+	InterLines                             []lineRow
+	Stored                                 string // the saved name while editing, for the heading
+	Version                                int    // as the edit form was opened (see itemForm)
+	Stale                                  *staleNote
+	FormKey                                string // see itemForm
+	Errors                                 stock.Errors
 }
 
 type kitFormPage struct {
-	Form     kitForm
-	IsNew    bool
-	Vehicles []stock.Vehicle
-	Picker   itemPicker // the part rows' items
-	KitNames []string
+	Form       kitForm
+	IsNew      bool
+	Vehicles   []stock.Vehicle
+	Picker     itemPicker // the part rows' items
+	KitNames   []string
+	InBetweens []inBetweenOption
 }
 
-func hasRowInput(rows []lineRow) bool {
-	for _, r := range rows {
-		if r.ItemID != 0 || r.Text != "" || r.Qty != "" || r.Error != "" {
-			return true
-		}
-	}
-	return false
-}
+// inBetweenOption is a choice of how many intermediate services come
+// between two full ones.
+type inBetweenOption struct{ Value, Label string }
+
+var inBetweens = []inBetweenOption{{"0", "None"}, {"1", "1, half-way"}, {"2", "2, at thirds"}}
 
 func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status int, f kitForm, isNew bool) error {
 	ctx := r.Context()
@@ -246,8 +243,6 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if err != nil {
 		return err
 	}
-	f.ShowInter = f.ShowInter || f.InterIntervalDistance != "" || f.InterIntervalMonths != "" || hasRowInput(f.InterLines) ||
-		f.Errors["inter_interval_distance"] != "" || f.Errors["inter_interval_months"] != "" || f.Errors["inter_lines"] != ""
 	describeRows(f.Lines, items, false)
 	describeRows(f.InterLines, items, false)
 	f.Lines = withEmptyRow(f.Lines)
@@ -258,7 +253,7 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	}
 	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
 		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), Picker: newItemPicker("part-items", items, vehicles, nil, true),
-		KitNames: names,
+		KitNames: names, InBetweens: inBetweens,
 	}})
 	return nil
 }
@@ -270,8 +265,7 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	}
 	f := kitForm{
 		Name: formText(r, "name"), IntervalDistance: formText(r, "interval_distance"), IntervalMonths: formText(r, "interval_months"),
-		InterIntervalDistance: formText(r, "inter_interval_distance"), InterIntervalMonths: formText(r, "inter_interval_months"),
-		ShowInter: formText(r, "has_inter") == "1",
+		InBetween: cmp.Or(formText(r, "in_between"), "0"),
 		Notes:     formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
@@ -285,11 +279,12 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	if in.IntervalMonths, err = parseOptInt(f.IntervalMonths); err != nil {
 		f.Errors.Add("interval_months", err.Error())
 	}
-	if in.InterIntervalDistance, err = parseOptInt(f.InterIntervalDistance); err != nil {
-		f.Errors.Add("inter_interval_distance", err.Error())
-	}
-	if in.InterIntervalMonths, err = parseOptInt(f.InterIntervalMonths); err != nil {
-		f.Errors.Add("inter_interval_months", err.Error())
+	switch f.InBetween {
+	case "0", "1", "2":
+		in.InBetween = int(f.InBetween[0] - '0')
+	default:
+		f.InBetween = "0"
+		f.Errors.Add("in_between", "Choose none, 1 or 2")
 	}
 	vehicles, err := s.store.ListVehicles(r.Context())
 	if err != nil {
@@ -300,14 +295,11 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	// retagged since is flagged at its row rather than kept.
 	f.Lines, in.Lines = parseLines(r, "line", byID, vehicle, nil, f.Errors)
 	f.InterLines, in.InterLines = parseLines(r, "inter_line", byID, vehicle, nil, f.Errors)
-	if !f.ShowInter {
-		// The intermediate schedule was removed (or never added): its
-		// fields are dropped here, not only blanked by the page's script.
-		f.InterIntervalDistance, f.InterIntervalMonths, f.InterLines = "", "", nil
-		in.InterIntervalDistance, in.InterIntervalMonths, in.InterLines = nil, nil, nil
-		for _, k := range []string{"inter_interval_distance", "inter_interval_months", "inter_lines"} {
-			delete(f.Errors, k)
-		}
+	if in.InBetween == 0 {
+		// No intermediate services (or no longer): their parts are dropped
+		// here, not only hidden by the page.
+		f.InterLines, in.InterLines = nil, nil
+		delete(f.Errors, "inter_lines")
 	}
 	in.Normalize()
 	for k, v := range in.Validate() {
@@ -321,8 +313,7 @@ func kitPath(id int64) string { return fmt.Sprintf("/kits/%d", id) }
 func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
 		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalDistance: optIntString(k.IntervalDistance),
-		IntervalMonths: optIntString(k.IntervalMonths), InterIntervalDistance: optIntString(k.InterIntervalDistance),
-		InterIntervalMonths: optIntString(k.InterIntervalMonths), ShowInter: k.HasIntermediate(),
+		IntervalMonths: optIntString(k.IntervalMonths), InBetween: strconv.Itoa(k.InBetween),
 		Notes: k.Notes, Version: k.Version,
 	}
 	for _, l := range k.Lines {
@@ -335,7 +326,7 @@ func kitFormFrom(k stock.Kit) kitForm {
 }
 
 func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
-	f := kitForm{}
+	f := kitForm{InBetween: "0"}
 	wid, err := s.working(r)
 	if err != nil {
 		return err

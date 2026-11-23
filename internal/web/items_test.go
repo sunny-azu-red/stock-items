@@ -600,10 +600,10 @@ func TestRefusedFormsKeepNewFields(t *testing.T) {
 	// No name: refused.
 	rec := a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k390)}, "interval_distance": {"4000"},
-		"has_inter": {"1"}, "inter_interval_distance": {"2000"}, "inter_interval_months": {"6"},
+		"in_between":      {"1"},
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
-	expect(t, rec, http.StatusUnprocessableEntity, `name="inter_interval_distance" value="2000"`, `name="inter_interval_months" value="6"`)
+	expect(t, rec, http.StatusUnprocessableEntity, `name="in_between" value="1" autocomplete="off" checked`)
 	if !regexp.MustCompile(`(?s)id="inter-lines".*?name="inter_line_item" value="` + itoa(oil) + `" data-item-id>.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
 		t.Error("the kit form lost the intermediate part")
 	}

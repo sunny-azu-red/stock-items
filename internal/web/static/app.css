@@ -82,7 +82,7 @@
     /* Colours are light-dark(light, dark): color-scheme picks, the system
        setting unless data-theme on <html> (the theme cookie) forces one. */
     --bg:            light-dark(oklch(95.6% calc(.008 * var(--tint)) var(--h)), oklch(22% calc(.01 * var(--tint)) var(--h)));
-    --surface:       light-dark(oklch(98.6% calc(.004 * var(--tint)) var(--h)), oklch(25.5% calc(.011 * var(--tint)) var(--h)));
+    --surface:       light-dark(oklch(99.2% calc(.004 * var(--tint)) var(--h)), oklch(26.5% calc(.011 * var(--tint)) var(--h)));
     --surface-2:     light-dark(oklch(94.6% calc(.009 * var(--tint)) var(--h)), oklch(28.5% calc(.012 * var(--tint)) var(--h)));
     --surface-3:     light-dark(oklch(92% calc(.011 * var(--tint)) var(--h)),   oklch(32% calc(.013 * var(--tint)) var(--h)));
     /* Card outlines and the rules between rows. */
@@ -252,7 +252,7 @@
       font-size: var(--text-sm); font-weight: 500; color: var(--muted);
       transition: background-color .15s, color .15s, box-shadow .15s;
       &:hover { background: var(--surface-2); color: var(--text); }
-      &[aria-current="page"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border); }
+      &[aria-current="page"] { background: var(--surface); color: var(--text); font-weight: 600; }
       &[aria-current="page"] .icon { color: var(--accent); }
       & .icon { width: 18px; height: 18px; }
       /* The vehicle worked on: its kind icon in its colour, as on its page. */
@@ -426,12 +426,15 @@
   }
 
   /* ---- Panels (cards) and page layout ------------------------------ */
-  /* Outlined with a hairline in the border colour, no shadow. Each card
-     is a container, so what is in it follows the card's width, not the
-     window's. */
+  /* Set off from the page by their lighter surface alone: no outline, no
+     shadow (printed, they get the hairline). The transparent outline takes
+     no space and shows nothing, but Windows contrast themes, which drop the
+     surface, draw it as the card's edge. Each card is a container, so what
+     is in it follows the card's width, not the window's. */
   .card {
     container-type: inline-size;
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: clip;
+    background: var(--surface); border-radius: var(--radius); overflow: clip;
+    outline: 1px solid transparent;
   }
   .card + .card, .stack > * + * { margin-top: var(--gap); }
   .card-pad {
@@ -464,7 +467,7 @@
   .card-foot {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
     min-height: 47px; padding: 8px var(--inset); border-top: 1px solid var(--border);
-    background: color-mix(in oklab, var(--surface-2) 50%, var(--surface)); font-size: var(--text-sm);
+    font-size: var(--text-sm);
     & .pager { padding: 0; margin-left: -11px; }
     & .total { flex: 1; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
     & .pager + .total { flex: none; }
@@ -1523,6 +1526,6 @@
   @layer pages {
     .sidebar, .tabbar, .working-on, .page-head .actions, .filters, .item-actions, .results-head .btn, .results-head .segmented, .card-actions, .flash, .toasts, .reset-link, .sort-reset, .appearance { display: none; }
     .shell { display: block; }
-    .card { break-inside: avoid; box-shadow: none; border-color: var(--border); }
+    .card { break-inside: avoid; box-shadow: none; border: 1px solid var(--border); }
   }
 }

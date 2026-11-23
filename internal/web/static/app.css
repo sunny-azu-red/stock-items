@@ -646,8 +646,10 @@
      own colours and the accent (two scenes, each with its color-scheme, so
      light-dark() draws them; System is light with dark over its corner).
      The theme in use is ringed and named in the accent. */
+  /* At most 112px each, from the left: on a wide phone sheet they keep
+     their shape instead of stretching across it. */
   .theme-cards {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 112px)); gap: 20px;
     @media (width <= 820px) { gap: 26px; }
     & button {
       display: grid; gap: 8px; padding: 0; border: 0; border-radius: var(--radius); background: none; cursor: pointer;
@@ -680,9 +682,13 @@
   /* Accent: its name and Reset to default (only away from the default) on
      the heading's line, the presets, then Custom, a checkbox drawn as a
      rainbow swatch that opens the sliders. */
-  .accent-group { display: grid; gap: 12px; }
+  /* Spaced by margins, not a gap: the closed sliders must take none. */
+  .accent-group {
+    display: flex; flex-direction: column;
+    & .swatches { margin-top: 8px; }
+  }
   .accent-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: -4px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-size: var(--text-sm); --lh: 1.45;
     & .reset-link { padding: 0; border: 0; background: none; cursor: pointer; }
   }
@@ -722,14 +728,14 @@
     }
   }
   /* The sliders slide open under the swatches while Custom is checked;
-     closed, they take no room (the group's gap too) and no focus. They
-     show what they pick: the whole colour wheel, and the current hue from
-     grey to full colour. */
+     closed, they take no room (their 12px from the swatches too) and no
+     focus. They show what they pick: the whole colour wheel, and the
+     current hue from grey to full colour. */
   .custom-sliders {
-    display: grid; gap: 12px; block-size: 0; margin-top: -12px; visibility: hidden;
+    display: grid; gap: 12px; block-size: 0; margin-top: 0; visibility: hidden;
     overflow: clip; overflow-clip-margin: 4px; interpolate-size: allow-keywords;
     transition: block-size .22s cubic-bezier(.2, .8, .2, 1), margin-top .22s cubic-bezier(.2, .8, .2, 1), visibility .22s allow-discrete;
-    .accent-pick:has(.swatch-custom:checked) & { block-size: auto; margin-top: 0; visibility: visible; }
+    .accent-pick:has(.swatch-custom:checked) & { block-size: auto; margin-top: 12px; visibility: visible; }
     & .accent-save { justify-self: start; }
   }
   .slider {

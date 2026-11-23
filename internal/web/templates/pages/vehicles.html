@@ -12,7 +12,7 @@
     {{icon $v.Kind.Icon "mark"}}
     <span class="body">
       <span class="top">
-        <span class="tile">{{icon $v.Kind.Icon}}</span>
+        <span class="avatar">{{icon $v.Kind.Icon}}</span>
         <span class="who"><span class="name">{{$v.Name}}</span>{{with $v.Subtitle}}<span class="model">{{.}}</span>{{end}}</span>
         <span class="odo"><strong>{{distNum $v.Odometer}}</strong>{{if $v.Odometer}}<span>{{distUnit}}</span>{{end}}</span>
       </span>

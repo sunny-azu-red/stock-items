@@ -1473,10 +1473,10 @@
     }
     & .body { padding: 16px var(--inset) 14px; display: grid; gap: 12px; }
     & .top { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
-    & .tile {
+    & .avatar {
       width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
       background: color-mix(in oklab, var(--chip) 14%, var(--surface)); color: var(--chip);
-      transition: background-color .3s, box-shadow .3s;
+      transition: background-color .3s;
       & .icon { width: 20px; height: 20px; }
     }
     & .who { display: grid; min-width: 0; }
@@ -1498,7 +1498,7 @@
       color: light-dark(color-mix(in oklab, var(--chip) 15%, transparent), color-mix(in oklab, var(--chip) 13%, transparent));
       translate: calc((var(--px) - .5) * -14px) calc((var(--py) - .5) * -10px);
     }
-    &:hover .tile { background: color-mix(in oklab, var(--chip) 22%, var(--surface)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--chip) 8%, transparent); }
+    &:hover .avatar { background: color-mix(in oklab, var(--chip) 22%, var(--surface)); }
     &:hover .go { opacity: 1; translate: 0 0; }
     @media (prefers-reduced-motion: reduce) { &:is(:hover, .touched) > .mark { translate: none; } }
     @container (width < 340px) { & .stats { margin-left: 0; } }

@@ -1445,15 +1445,15 @@
 
   /* ---- Vehicles ---------------------------------------------------- */
   /* Quiet at rest like every card: the vehicle's colour only in its icon's
-     tile and a faint outline of its kind in the corner. Under the cursor it
-     lights up: a soft glow of its colour follows the pointer, the edge
-     lights near it, the outline drifts away from it and an arrow slides in.
-     app.js sets --x/--y (px) and --px/--py (0-1) where the pointer is; a tap
-     on a phone puts the glow under the finger (.touched). All of it is paint
-     and translate, so no box moves off its whole pixels. */
+     tile and a tint in the foot's line. Under the cursor it lights up: a
+     soft glow of its colour follows the pointer, the edge lights near it, the
+     foot's line takes more of it and an arrow slides in. app.js sets --x/--y
+     (px) where the pointer is; a tap on a phone puts the glow under the
+     finger (.touched). All of it is paint and translate, so no box moves off
+     its whole pixels. */
   .vehicle-card {
     --chip: var(--accent);
-    --x: 50%; --y: 50%; --px: .5; --py: .5;
+    --x: 50%; --y: 50%;
     --glow: light-dark(color-mix(in oklab, var(--chip) 8%, transparent), color-mix(in oklab, var(--chip) 12%, transparent));
     position: relative; isolation: isolate;
     display: flex; flex-direction: column;
@@ -1471,11 +1471,6 @@
       background: radial-gradient(200px circle at var(--x) var(--y), color-mix(in oklab, var(--chip) 75%, transparent), transparent 70%);
       mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
       mask-composite: exclude;
-    }
-    & > .mark {
-      position: absolute; z-index: -1; right: -26px; bottom: -34px; width: 150px; height: 150px; stroke-width: 1.4;
-      color: light-dark(color-mix(in oklab, var(--chip) 7%, transparent), color-mix(in oklab, var(--chip) 6%, transparent));
-      transition: color .4s, translate .5s cubic-bezier(.2, .7, .2, 1);
     }
     & .body { padding: 16px var(--inset) 14px; display: grid; gap: 12px; }
     & .top { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
@@ -1506,13 +1501,8 @@
     & .go { margin-left: auto; color: var(--chip); opacity: 0; translate: -4px 0; transition: opacity .3s, translate .3s; }
     &:is(:hover, :focus-visible, .touched)::before { opacity: 1; }
     &:is(:hover, .touched)::after { opacity: 1; }
-    &:is(:hover, .touched) > .mark {
-      color: light-dark(color-mix(in oklab, var(--chip) 15%, transparent), color-mix(in oklab, var(--chip) 13%, transparent));
-      translate: calc((var(--px) - .5) * -14px) calc((var(--py) - .5) * -10px);
-    }
     &:hover .avatar { background: color-mix(in oklab, var(--chip) 22%, var(--surface)); }
     &:hover .go { opacity: 1; translate: 0 0; }
-    @media (prefers-reduced-motion: reduce) { &:is(:hover, .touched) > .mark { translate: none; } }
     @container (width < 340px) { & .stats { margin-left: 0; } }
   }
 

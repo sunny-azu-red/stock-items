@@ -1274,8 +1274,6 @@
     var x = e.clientX - r.left, y = e.clientY - r.top;
     card.style.setProperty("--x", x + "px");
     card.style.setProperty("--y", y + "px");
-    card.style.setProperty("--px", Math.min(1, Math.max(0, x / r.width)).toFixed(3));
-    card.style.setProperty("--py", Math.min(1, Math.max(0, y / r.height)).toFixed(3));
   }
   var glowFrame = 0, glowEvent = null;
   document.addEventListener("pointermove", function (e) {

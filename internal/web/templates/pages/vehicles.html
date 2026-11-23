@@ -9,7 +9,6 @@
   {{/* Quiet at rest; under the cursor it lights up in the vehicle's colour
        (app.js puts the glow where the pointer is; design.md#8-cards-heading-bars-and-footers). */}}
   <a class="card vehicle-card" href="/vehicles/{{$v.ID}}" style="{{chipStyle $v.Color}}">
-    {{icon $v.Kind.Icon "mark"}}
     <span class="body">
       <span class="top">
         <span class="avatar">{{icon $v.Kind.Icon}}</span>

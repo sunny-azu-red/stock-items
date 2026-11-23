@@ -29,7 +29,6 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 ## Small things
 
-- **Dashboard tiles that follow the accent.** Each tile has a fixed colour of its own (`.tile-*`), and Expiring's purple (300°) sits 5° from the default accent (Violet, 295°), so on the default it reads like something you can do. Work each tile's hue out from the accent instead (a fixed offset, kept clear of the status colours, which Low and Spent keep), or at least move Expiring off it.
 - **A purchase dated tomorrow.** Activity lists it at once, while "Spent in YEAR" counts it only from its date (`store.GetVehicleStats` stops at today). That is meant, but the two can disagree for a day. Either leave it, or keep tomorrow's purchases out of the Spent link's list too.
 
 ## Renaming a spelling many records share

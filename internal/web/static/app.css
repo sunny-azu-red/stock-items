@@ -496,32 +496,31 @@
   }
 
   /* ---- Dashboard figures ------------------------------------------- */
-  /* Each figure on a tint of its own colour (--t), so they tell apart at a
-     glance; Low stock and Expiring turn amber and red when they count. */
+  /* Quiet like every card: the icon in the accent, nothing else coloured,
+     so no figure can look like the accent or a status by accident. Low
+     stock and Expiring (.warn, .danger) turn amber and red, the whole
+     tile, only while they count something. */
   .tiles {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--gap); margin-bottom: var(--gap);
     @container main (width < 520px) { grid-template-columns: 1fr 1fr; }
   }
   .tile {
-    --t: var(--accent);
     container-type: normal; box-shadow: none;
     display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;
-    background: color-mix(in oklab, var(--t) 13%, var(--surface));
     transition: background-color .15s;
-    &:hover { background: color-mix(in oklab, var(--t) 20%, var(--surface)); }
-    & .label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; color: color-mix(in oklab, var(--t) 60%, var(--text)); }
-    & .label .icon { width: 14px; height: 14px; }
-    & .value { margin-top: auto; font-size: 1.75rem; font-weight: 650; letter-spacing: -.02em; --lh: 1; white-space: nowrap; color: color-mix(in oklab, var(--t) 40%, var(--text)); }
+    &:hover { background: color-mix(in oklab, var(--accent) 6%, var(--surface)); }
+    & .label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
+    & .label .icon { width: 14px; height: 14px; color: var(--accent); }
+    & .value { margin-top: auto; font-size: 1.75rem; font-weight: 650; letter-spacing: -.02em; --lh: 1; white-space: nowrap; }
     & .value.money { font-size: 1.3125rem; }
-    &.warn .value { color: var(--warn); }
-    &.danger .value { color: var(--danger); }
+    &.warn { --t: var(--warn); --t-soft: var(--warn-soft); }
+    &.danger { --t: var(--danger); --t-soft: var(--danger-soft); }
+    &:is(.warn, .danger) {
+      background: var(--t-soft);
+      &:hover { background: color-mix(in oklab, var(--t) 10%, var(--t-soft)); }
+      & :is(.label, .label .icon, .value) { color: var(--t); }
+    }
   }
-  .tile-items    { --t: oklch(60% .12 200); }
-  .tile-low      { --t: oklch(70% .15 70); }
-  .tile-expiring { --t: oklch(60% .13 300); }
-  .tile-shopping { --t: oklch(60% .14 150); }
-  .tile-value    { --t: oklch(60% .12 250); }
-  .tile-spent    { --t: oklch(62% .14 20); }
 
   /* ---- Buttons ----------------------------------------------------- */
   /* 36px: a 16px line in 9px padding and the border. Small: 30px. */

@@ -20,12 +20,12 @@
 {{end}}
 
 <div class="tiles">
-  <a class="card tile tile-items" href="{{$d.Link "/stock" ""}}"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
-  <a class="card tile tile-low{{if $d.LowItems}} warn{{end}}" href="{{$d.Link "/stock" "low=1"}}"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
-  <a class="card tile tile-expiring{{if $d.Expiring}} danger{{end}}" href="{{$d.Link "/stock" "exp=1"}}"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
-  <a class="card tile tile-shopping" href="{{$d.Link "/shopping" ""}}"><span class="label">{{icon "shopping-cart"}} Shopping list</span><span class="value">{{$d.ShoppingCount}}</span></a>
-  <a class="card tile tile-value" href="{{$d.Link "/stock" "instock=1"}}"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></a>
-  <a class="card tile tile-spent" href="{{$d.Link "/activity" (print "kind=bought&year=" .Today.Year)}}"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
+  <a class="card tile" href="{{$d.Link "/stock" ""}}"><span class="label">{{icon "package"}} Items</span><span class="value">{{$d.ItemCount}}</span></a>
+  <a class="card tile{{if $d.LowItems}} warn{{end}}" href="{{$d.Link "/stock" "low=1"}}"><span class="label">{{icon "triangle-alert"}} Low stock</span><span class="value">{{len $d.LowItems}}</span></a>
+  <a class="card tile{{if $d.Expiring}} danger{{end}}" href="{{$d.Link "/stock" "exp=1"}}"><span class="label">{{icon "hourglass"}} Expiring</span><span class="value">{{len $d.Expiring}}</span></a>
+  <a class="card tile" href="{{$d.Link "/shopping" ""}}"><span class="label">{{icon "shopping-cart"}} Shopping list</span><span class="value">{{$d.ShoppingCount}}</span></a>
+  <a class="card tile" href="{{$d.Link "/stock" "instock=1"}}"><span class="label">{{icon "receipt-text"}} Stock value</span><span class="value money">{{money $d.Stats.StockValue}}</span></a>
+  <a class="card tile" href="{{$d.Link "/activity" (print "kind=bought&year=" .Today.Year)}}"><span class="label">{{icon "calendar"}} Spent in {{.Today.Year}}</span><span class="value money">{{money $d.Stats.SpentThisYear}}</span></a>
 </div>
 
 <div class="split">

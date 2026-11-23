@@ -18,7 +18,7 @@ Calm, friendly and dense enough for a garage full of parts:
 
 ## 2. Colour
 
-All colours are tokens on `:root` in `app.css`, each written once as `light-dark(light, dark)`; `color-scheme` picks one: the system's setting, unless the theme cookie sets `data-theme` on `<html>`. A component never sets a colour of its own outside the tokens (the dashboard figures' tints and the vehicles' colours are data).
+All colours are tokens on `:root` in `app.css`, each written once as `light-dark(light, dark)`; `color-scheme` picks one: the system's setting, unless the theme cookie sets `data-theme` on `<html>`. A component never sets a colour of its own outside the tokens (the vehicles' colours are data).
 
 ### The accent
 
@@ -53,7 +53,7 @@ The sidebar's palette button opens **Appearance** (on a phone, in the More sheet
 | `--border` | the rules between rows, under heading bars and table headers, and the edge of what floats (popovers, menus, lists, dialogs) |
 | `--field-border` | fields' and outlined buttons' borders: a light line, not a hard edge |
 
-Dashboard figures each have a fixed tint (`--t` on `.tile-items`, `.tile-low`, `.tile-expiring`, `.tile-shopping`, `.tile-value`, `.tile-spent`); Low stock and Expiring turn amber and red while they count something.
+Dashboard figures (`.tile`) are quiet like every card: only their icon is in the accent. Low stock and Expiring turn amber and red, the whole tile (`.warn`, `.danger`), only while they count something. No figure has a colour of its own: a fixed hue would sooner or later match the accent the device picked, or a status colour while nothing is wrong.
 
 ---
 

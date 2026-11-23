@@ -437,19 +437,19 @@ func TestAccent(t *testing.T) {
 	}
 }
 
-// TestAccentPresets keeps the preset accents clear of what already has a
-// colour (accentPresets): the suggested vehicle colours and the status
-// badges, for the accent and for the info badge (the accent's hue minus
-// 45°). A muted preset may come nearer; Graphite has no colour at all.
+// TestAccentPresets keeps the preset accents clear of the app's own colours
+// (accentPresets): the status colours (red, amber in light and dark, green)
+// and the info badge (app.css). A muted preset may come nearer; Graphite has
+// no colour at all. The first preset is the default, and names don't repeat.
 func TestAccentPresets(t *testing.T) {
-	badges := []float64{22, 60, 75, 155} // red, amber (light and dark), green
-	var taken []float64
-	for _, c := range palette {
-		taken = append(taken, oklchHue(t, c))
-	}
-	taken = append(taken, badges...)
+	taken := []float64{20, 22, 60, 75, 155, 235}
 	apart := func(a, b float64) float64 { d := math.Mod(math.Abs(a-b), 360); return math.Min(d, 360-d) }
+	names := map[string]bool{}
 	for _, p := range accentPresets() {
+		if names[p.Name] {
+			t.Errorf("two presets are called %s", p.Name)
+		}
+		names[p.Name] = true
 		if p.Intensity == 0 {
 			continue
 		}
@@ -457,45 +457,15 @@ func TestAccentPresets(t *testing.T) {
 		if p.Intensity < 60 {
 			least = 15
 		}
-		h := float64(p.Hue)
 		for _, o := range taken {
-			if d := apart(h, o); d < least {
-				t.Errorf("%s (%d°) is %.0f° from a colour in use at %.0f°; keep %.0f° apart", p.Name, p.Hue, d, o, least)
-			}
-		}
-		info := math.Mod(h-45+360, 360)
-		for _, o := range badges {
-			if d := apart(info, o); d < 40 {
-				t.Errorf("%s: its info badge (%.0f°) is %.0f° from a status badge at %.0f°", p.Name, info, d, o)
+			if d := apart(float64(p.Hue), o); d < least {
+				t.Errorf("%s (%d°) is %.0f° from the app's colour at %.0f°; keep %.0f° apart", p.Name, p.Hue, d, o, least)
 			}
 		}
 	}
 	if accentPresets()[0].Accent != defaultAccent {
 		t.Error("the first preset must be the default")
 	}
-}
-
-// oklchHue is a #rrggbb colour's hue in OKLCH, in degrees.
-func oklchHue(t *testing.T, hex string) float64 {
-	t.Helper()
-	n, err := strconv.ParseUint(strings.TrimPrefix(hex, "#"), 16, 32)
-	if err != nil {
-		t.Fatalf("colour %q: %v", hex, err)
-	}
-	lin := func(c uint64) float64 {
-		v := float64(c) / 255
-		if v <= 0.04045 {
-			return v / 12.92
-		}
-		return math.Pow((v+0.055)/1.055, 2.4)
-	}
-	r, g, b := lin(n>>16), lin(n>>8&255), lin(n&255)
-	l := math.Cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b)
-	m := math.Cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b)
-	s := math.Cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b)
-	A := 1.9779984951*l - 2.4285922050*m + 0.4505937099*s
-	B := 0.0259040371*l + 0.7827717662*m - 0.8086757660*s
-	return math.Mod(math.Atan2(B, A)*180/math.Pi+360, 360)
 }
 
 // TestHostileInput posts values people (or scripts) might send by accident

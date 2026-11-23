@@ -133,21 +133,23 @@ type AccentPreset struct {
 	Accent
 }
 
-// accentPresets are the accents offered as swatches: Violet (the default)
-// first, Graphite (no colour) last. The accent must read apart from what
-// already has a colour: the status badges (red 22°, amber 60-75°, green
-// 155°), the suggested vehicle colours (palette, handlers_vehicles.go:
-// 1°, 27°, 46°, 76°, 131°, 149°, 222°, 263°), and the info badge, whose hue
-// is the accent's minus 45° (app.css), so it must keep clear of green, red
-// and amber too. That leaves 285-340° for a full colour; a muted one
-// (Mauve, Slate) may sit nearer a vehicle colour. TestAccentPresets checks.
+// accentPresets are the accents offered as swatches, in their order on the
+// row: Violet (the default) first, then the rest mixed, so that the ones a
+// narrow row keeps (app.js hides the end ones) still differ. Only the app's
+// own colours constrain them: a preset in full colour keeps 30° from the
+// status colours (red 20-22°, amber 60-75°, green 155°) and the info badge
+// (235°), a muted one 15°; Graphite has none. Vehicle colours are the
+// user's own and may land anywhere. TestAccentPresets checks.
 func accentPresets() []AccentPreset {
 	return []AccentPreset{
 		{"Violet", defaultAccent},
+		{"Teal", Accent{Hue: 195, Intensity: 80}},
 		{"Orchid", Accent{Hue: 318, Intensity: 80}},
-		{"Mauve", Accent{Hue: 340, Intensity: 45}},
-		{"Slate", Accent{Hue: 245, Intensity: 40}},
+		{"Cobalt", Accent{Hue: 265, Intensity: 85}},
+		{"Rose", Accent{Hue: 350, Intensity: 70}},
 		{"Graphite", Accent{Hue: 295, Intensity: 0}},
+		{"Moss", Accent{Hue: 122, Intensity: 65}},
+		{"Mauve", Accent{Hue: 338, Intensity: 45}},
 	}
 }
 

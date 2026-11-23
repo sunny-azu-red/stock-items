@@ -104,10 +104,11 @@
     --warn-soft:     light-dark(oklch(95% .03 75),    oklch(32.5% .035 70));
     --danger:        light-dark(oklch(56% .11 22),    oklch(72% .09 20));
     --danger-soft:   light-dark(oklch(95% .02 20),    oklch(32.5% .04 20));
-    /* Info (dates, expiry) keeps away from the accent's hue, so it never
+    /* Info (dates, expiry, what comes next): a sky blue of its own. The
+       preset accents keep 30° from it (TestAccentPresets), so it never
        reads as a button. */
-    --info:          light-dark(oklch(55% .08 calc(var(--h) - 45)), oklch(74% .06 calc(var(--h) - 45)));
-    --info-soft:     light-dark(oklch(95% .02 calc(var(--h) - 45)), oklch(31.5% .035 calc(var(--h) - 45)));
+    --info:          light-dark(oklch(55% .08 235), oklch(74% .06 235));
+    --info-soft:     light-dark(oklch(95% .02 235), oklch(31.5% .035 235));
     /* Badges: the status colours with 1.35 times the chroma, so a state
        reads at a glance while the rest of the page stays quiet. */
     --badge-ok:          light-dark(oklch(55% .108 155),   oklch(74% .108 155));
@@ -116,8 +117,8 @@
     --badge-warn-soft:   light-dark(oklch(95% .04 75),     oklch(32.5% .047 70));
     --badge-danger:      light-dark(oklch(56% .15 22),     oklch(72% .12 20));
     --badge-danger-soft: light-dark(oklch(95% .027 20),    oklch(32.5% .054 20));
-    --badge-info:        light-dark(oklch(55% .108 calc(var(--h) - 45)), oklch(74% .081 calc(var(--h) - 45)));
-    --badge-info-soft:   light-dark(oklch(95% .027 calc(var(--h) - 45)), oklch(31.5% .047 calc(var(--h) - 45)));
+    --badge-info:        light-dark(oklch(55% .108 235),   oklch(74% .081 235));
+    --badge-info-soft:   light-dark(oklch(95% .027 235),   oklch(31.5% .047 235));
     --scrim:         light-dark(oklch(20% .02 var(--h) / .38), oklch(5% 0 0 / .6));
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23807b88' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
 
@@ -609,8 +610,12 @@
     width: var(--control-h); height: var(--control-h); background: transparent; color: var(--muted);
     &:hover { background: var(--surface-2); color: var(--text); }
   }
+  /* 331px: 297 inside, room for seven presets and Custom on one row with
+     an odd 25px between the last preset and Custom (so the divider's 1px
+     line has 12px each side, on whole pixels), and three 87px theme
+     pictures with 18px gaps. */
   .appearance {
-    position: fixed; inset: calc(var(--page) + var(--control-h) + 6px) auto auto 10px; margin: 0; width: min(320px, calc(100vw - 20px));
+    position: fixed; inset: calc(var(--page) + var(--control-h) + 6px) auto auto 10px; margin: 0; width: min(331px, calc(100vw - 20px));
     padding: 16px; flex-direction: column; gap: 16px;
     color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     /* It slides and fades in, and fades out the same way as it closes:
@@ -649,7 +654,7 @@
   /* At most 112px each, from the left: on a wide phone sheet they keep
      their shape instead of stretching across it. */
   .theme-cards {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 112px)); gap: 20px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 112px)); gap: 18px;
     @media (width <= 820px) { gap: 26px; }
     & button {
       display: grid; gap: 8px; padding: 0; border: 0; border-radius: var(--radius); background: none; cursor: pointer;
@@ -681,10 +686,11 @@
   }
   /* Accent: its name and Reset to default (only away from the default) on
      the heading's line, the presets, then Custom, a checkbox drawn as a
-     rainbow swatch that opens the sliders. */
-  /* Spaced by margins, not a gap: the closed sliders must take none. */
+     rainbow swatch that opens the sliders. Block flow spaced by margins,
+     not a grid or flex gap: the closed sliders must take no room, and as
+     a flex item they couldn't shrink while their height animates. */
   .accent-group {
-    display: flex; flex-direction: column;
+    display: block;
     & .swatches { margin-top: 8px; }
   }
   .accent-head {
@@ -695,10 +701,14 @@
   .accent-title { font-weight: 600; color: var(--muted); }
   .accent-name { margin-left: 4px; font-weight: 500; color: var(--text); }
   .accent-default { color: var(--muted); }
-  /* A preset swatch draws its own accent from its hue and intensity, the
-     way the tokens above do. */
+  /* One row: app.js (fitSwatches) hides the presets that don't fit, from
+     the end, never the first (the default), the one in use or Custom. A
+     preset swatch draws its own accent from its hue and intensity, the way
+     the tokens above do. Custom ends the row, at the panel's padding like
+     the first swatch, and on a wide sheet at the theme pictures' right
+     edge (three 112px and two 26px gaps). */
   .swatches {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 388px;
     @media (width <= 820px) { gap: 10px; }
   }
   .swatch, .swatch-custom {
@@ -711,31 +721,48 @@
     background: light-dark(oklch(calc(34% + 15% * var(--sw-i)) calc(.19 * var(--sw-i)) var(--swatch-h)), oklch(calc(90% - 15% * var(--sw-i)) calc(.13 * var(--sw-i)) var(--swatch-h)));
     &[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--text); }
   }
-  .swatch-sep { width: 1px; height: 20px; margin-inline: 2px; background: var(--border); }
+  /* The divider takes what the row has left over, so Custom ends at the
+     panel's padding, and draws its line in its own middle, centred between
+     the last preset and Custom. The line is the left edge of a box as wide
+     as the divider, moved by a transform alone (Chrome rounds a position to
+     whole pixels, not a transform): half the width less half the line puts
+     it exactly in the middle, on whole pixels when the space is odd (the
+     desktop's, see .appearance), on a half pixel otherwise, which a 2x or
+     3x screen (a phone) draws sharp. */
+  .swatch-sep {
+    position: relative; flex: 1 0 1px; height: 20px; margin-inline: 2px;
+    &::before { content: ""; position: absolute; inset: 0; border-left: 1px solid var(--border); translate: calc(50% - .5px) 0; }
+  }
   /* Custom: the colour wheel round a + while a preset is in use; checked,
      the accent in use fills it. */
+  /* Built like a preset swatch (the 2px surface border, the hairline, the
+     ring when it is the one in use), so the two are the same size. */
   .swatch-custom {
     appearance: none; display: grid; place-items: center;
-    background: conic-gradient(in oklch longer hue, oklch(70% .15 0), oklch(70% .15 359.9)); box-shadow: 0 0 0 1px var(--border);
+    border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
+    background: conic-gradient(in oklch longer hue, oklch(70% .15 0), oklch(70% .15 359.9));
     &::before {
       content: ""; width: calc(100% - 6px); height: calc(100% - 6px); border-radius: 50%;
-      background: linear-gradient(var(--muted) 0 0) center / 10px 2px no-repeat, linear-gradient(var(--muted) 0 0) center / 2px 10px no-repeat, var(--surface);
+      background: linear-gradient(var(--muted) 0 0) center / 8px 2px no-repeat, linear-gradient(var(--muted) 0 0) center / 2px 8px no-repeat, var(--surface);
     }
     &:checked {
       --sw-i: calc(var(--accent-i) / 100);
-      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
+      box-shadow: 0 0 0 2px var(--text);
       &::before { background: light-dark(oklch(calc(34% + 15% * var(--sw-i)) calc(.19 * var(--sw-i)) var(--accent-h)), oklch(calc(90% - 15% * var(--sw-i)) calc(.13 * var(--sw-i)) var(--accent-h))); }
     }
   }
-  /* The sliders slide open under the swatches while Custom is checked;
-     closed, they take no room (their 12px from the swatches too) and no
-     focus. They show what they pick: the whole colour wheel, and the
-     current hue from grey to full colour. */
+  /* The sliders slide open under the swatches while Custom is checked:
+     only the height moves (their 12px from the swatches is inside), and
+     closed they take no room and no focus. They show what they pick: the
+     whole colour wheel, and the current hue from grey to full colour. */
   .custom-sliders {
-    display: grid; gap: 12px; block-size: 0; margin-top: 0; visibility: hidden;
+    block-size: 0; min-height: 0; visibility: hidden;
     overflow: clip; overflow-clip-margin: 4px; interpolate-size: allow-keywords;
-    transition: block-size .22s cubic-bezier(.2, .8, .2, 1), margin-top .22s cubic-bezier(.2, .8, .2, 1), visibility .22s allow-discrete;
-    .accent-pick:has(.swatch-custom:checked) & { block-size: auto; margin-top: 12px; visibility: visible; }
+    transition: block-size .22s cubic-bezier(.2, .8, .2, 1), visibility .22s allow-discrete;
+    .accent-pick:has(.swatch-custom:checked) & { block-size: auto; visibility: visible; }
+  }
+  .custom-sliders-inner {
+    display: grid; gap: 12px; padding-top: 12px;
     & .accent-save { justify-self: start; }
   }
   .slider {

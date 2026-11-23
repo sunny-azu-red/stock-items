@@ -128,11 +128,11 @@
       </div>
       <div class="swatches">{{range accentPresets}}<button class="swatch" type="submit" name="accent" value="{{.Accent}}" style="--swatch-h: {{.Hue}}; --swatch-i: {{.Intensity}}" title="{{.Name}}" aria-label="{{.Name}}" data-name="{{.Name}}" aria-pressed="{{and (not $a.Custom) (eq .Accent $a.Accent)}}"></button>{{end}}<span class="swatch-sep"></span><input class="swatch-custom" type="checkbox" title="Custom colour" aria-label="Custom colour"{{if $a.Custom}} checked{{end}}></div>
       {{/* Open while Custom is checked (CSS). */}}
-      <div class="custom-sliders">
+      <div class="custom-sliders"><div class="custom-sliders-inner">
         <label class="slider">Colour<input class="hue-range" type="range" name="hue" min="0" max="359" value="{{$a.Hue}}"></label>
         <label class="slider">Intensity<input class="intensity-range" type="range" name="intensity" min="0" max="100" value="{{$a.Intensity}}"></label>
         <button class="btn btn-sm accent-save" type="submit">Save accent</button>
-      </div>
+      </div></div>
     </div>
   </form>
 </div>{{end}}

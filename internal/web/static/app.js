@@ -1035,6 +1035,8 @@
       if (reset) reset.hidden = v === DEFAULT_ACCENT;
       var custom = f.querySelector(".swatch-custom");
       if (custom && !fromSliders) custom.checked = !preset;
+      var row = f.querySelector(".swatches");
+      if (row) fitSwatches(row);
     });
     syncThemeColor();
   }
@@ -1061,6 +1063,24 @@
       }
     }
   });
+  // The swatches keep to one row: the presets that don't fit hide, from
+  // the end, never the first (the default), the one in use or Custom
+  // (without this the row wraps). Swatches are fixed sizes, so the row's
+  // width alone decides; it has none while Appearance is closed, and the
+  // observer fits it as it opens.
+  function fitSwatches(row) {
+    var presets = Array.prototype.slice.call(row.querySelectorAll(".swatch"));
+    var custom = row.querySelector(".swatch-custom");
+    presets.forEach(function (b) { b.hidden = false; });
+    if (!custom || !presets.length || !row.offsetWidth) return;
+    for (var i = presets.length - 1; i > 0 && custom.offsetTop > presets[0].offsetTop; i--) {
+      if (presets[i].getAttribute("aria-pressed") !== "true") presets[i].hidden = true;
+    }
+  }
+  var swatchObserver = new ResizeObserver(function (entries) {
+    entries.forEach(function (e) { if (e.contentRect.width) fitSwatches(e.target); });
+  });
+  document.querySelectorAll(".accent-pick .swatches").forEach(function (row) { swatchObserver.observe(row); });
   // The sliders recolour the page as they move, and save once let go.
   document.querySelectorAll(".accent-pick").forEach(function (f) {
     var saveButton = f.querySelector(".accent-save");

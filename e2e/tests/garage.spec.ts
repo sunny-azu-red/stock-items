@@ -910,6 +910,16 @@ test("pick the accent in Appearance", async ({ page }) => {
   await expect(name).toHaveText("Violet · default");
   await expect(reset).toBeHidden();
   await expect(panel.getByRole("slider", { name: "Colour" })).toBeHidden();
+  // The swatches keep to one row at any width: the default first, Custom
+  // last, the presets that don't fit hidden.
+  const oneRow = async () => {
+    const tops = await panel.locator(".swatches > :is(.swatch, .swatch-custom):visible").evaluateAll((els) =>
+      els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
+    expect(new Set(tops).size).toBe(1);
+  };
+  await oneRow();
+  await expect(panel.getByRole("button", { name: "Violet", exact: true })).toBeVisible();
+  await expect(custom).toBeVisible();
 
   // A preset recolours the page at once and is remembered on this device.
   let done = saved();
@@ -920,6 +930,7 @@ test("pick the accent in Appearance", async ({ page }) => {
   await expect(panel.getByRole("button", { name: "Orchid", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(name).toHaveText("Orchid");
   await expect(reset).toBeVisible();
+  await oneRow();
   await page.reload();
   await expect(html).toHaveAttribute("style", /--accent-h: 318; --accent-i: 80/);
 

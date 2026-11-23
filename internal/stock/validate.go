@@ -328,11 +328,12 @@ func (in VehicleInput) Validate() Errors {
 	if in.HasWarranty && in.WarrantyEndsOn == nil && in.WarrantyEndsAt == nil {
 		errs.Add("warranty_ends_on", "Enter when the warranty ends: a date, a reading or both")
 	}
+	// Neither end is checked against the purchase: a vehicle bought used
+	// may be bought after its warranty ended, or past its reading. The
+	// warranty is the vehicle's, from its first owner.
 	if in.WarrantyEndsOn != nil {
 		if y := in.WarrantyEndsOn.Year(); y < 1900 || y > 2100 {
 			errs.Add("warranty_ends_on", "Date year must be between 1900 and 2100")
-		} else if in.PurchasedOn != nil && in.WarrantyEndsOn.Before(*in.PurchasedOn) {
-			errs.Add("warranty_ends_on", "The warranty can't end before the vehicle was purchased")
 		}
 	}
 	if in.WarrantyEndsAt != nil {
@@ -341,8 +342,6 @@ func (in VehicleInput) Validate() Errors {
 			errs.Add("warranty_ends_at", "Warranty reading must be more than 0")
 		case *in.WarrantyEndsAt > MaxOdometer:
 			errs.Add("warranty_ends_at", "That is more than "+FormatDistance(MaxOdometer))
-		case in.OdometerAtPurchase != nil && *in.WarrantyEndsAt <= *in.OdometerAtPurchase:
-			errs.Add("warranty_ends_at", "Warranty reading must be higher than the purchase odometer")
 		}
 	}
 	limitText(errs, maxShortText, "Make", in.Make)

@@ -70,6 +70,17 @@ func TestVehicleWarrantyForm(t *testing.T) {
 	expect(t, edit, http.StatusOK, `id="has_warranty" name="has_warranty" value="1"> Under warranty`)
 }
 
+// A vehicle bought used can have had its warranty end before it was
+// bought, and past its purchase reading: the warranty is the vehicle's.
+func TestVehicleWarrantyBoughtUsed(t *testing.T) {
+	a := warrantyApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
+		"odometer": {"27102"}, "purchased_on": {"2024-07-04"}, "odometer_at_purchase": {"2148"},
+		"has_warranty": {"1"}, "warranty_ends_on": {"2023-11-11"}, "warranty_ends_at": {"2000"}})
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "Warranty ended</span>", "<dt>Warranty ended</dt><dd>11 Nov 2023 · 2\u202f000 km</dd>")
+}
+
 // A stale edit form comes back with the warranty as it was typed.
 func TestVehicleWarrantyStaleForm(t *testing.T) {
 	a := warrantyApp(t)

@@ -1491,13 +1491,13 @@
     & .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: 52px; color: var(--muted); }
     & .stats > span { display: inline-flex; align-items: center; gap: 6px; }
     & .stats strong { color: var(--text); font-weight: 650; }
-    /* Its line takes a little of the vehicle's colour, and under the cursor
-       as much as the edge light has at its brightest (75%), so they meet. */
+    /* Its line takes a little of the vehicle's colour (20%), and under the
+       cursor 70%, a little under the edge light's brightest (75%). */
     & .card-foot {
       margin-top: auto; flex-wrap: nowrap; justify-content: flex-start; gap: 8px;
       border-top-color: color-mix(in oklab, var(--chip) 20%, var(--border)); transition: border-color .3s;
     }
-    &:is(:hover, .touched) .card-foot { border-top-color: color-mix(in oklab, var(--chip) 75%, transparent); }
+    &:is(:hover, .touched) .card-foot { border-top-color: color-mix(in oklab, var(--chip) 70%, transparent); }
     & .go { margin-left: auto; color: var(--chip); opacity: 0; translate: -4px 0; transition: opacity .3s, translate .3s; }
     &:is(:hover, :focus-visible, .touched)::before { opacity: 1; }
     &:is(:hover, .touched)::after { opacity: 1; }

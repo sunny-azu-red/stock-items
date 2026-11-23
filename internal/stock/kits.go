@@ -226,9 +226,10 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 
 // MonthsUncounted reports whether the kit's full schedule repeats by months
 // but has no day to count them from: no full service logged (nor, without
-// an intermediate schedule, any service) and no purchase date on the
-// vehicle. Its month deadline, often a warranty's, is then unknown: the
-// kit says "Not done yet", and the pages ask for the purchase date.
+// an intermediate schedule, any service; nor, after an intermediate one,
+// an intermediate step in months) and no purchase date on the vehicle. Its
+// month deadline, often a warranty's, is then unknown: the kit says "Not
+// done yet", and the pages ask for the purchase date.
 func (k Kit) MonthsUncounted(currentOdo *int, today time.Time) bool {
 	if k.IntervalMonths == nil || k.Archived() {
 		return false
@@ -246,14 +247,17 @@ func (k Kit) InterDue(currentOdo *int, today time.Time) Due {
 	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterIntervalDistance, k.InterIntervalMonths, currentOdo, today)
 }
 
-// FullDue computes when the kit's main (full) schedule is next due.
-// When the last service was intermediate:
-//   - If InterIntervalMonths is set (alternating reset mode), the full service
-//     is due one intermediate interval (InterIntervalDistance, InterIntervalMonths)
-//     after the intermediate one.
-//   - If InterIntervalMonths is nil (strict warranty mode), the full schedule
-//     counts strictly from LastFullService (or the vehicle's purchase baseline)
-//     so intermediate changes never push back the full service's deadline.
+// FullDue computes when the kit's main (full) schedule is next due. When
+// the last service was intermediate, it depends on the vehicle's warranty
+// (UnderWarranty):
+//   - While it runs, the full schedule counts from LastFullService (or the
+//     vehicle's purchase baseline), so intermediate services never push back
+//     the full service's deadline, as a warranty asks.
+//   - After it ends, or without one, services alternate: the full service
+//     comes one intermediate step after the intermediate one, in distance
+//     (InterIntervalDistance) and in months (InterIntervalMonths); a
+//     dimension the intermediate schedule has no step in still counts from
+//     the last full service.
 func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if (k.IntervalDistance == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
@@ -267,17 +271,18 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	}
 	lastWasInter := k.LastService != nil && k.LastService.Intermediate
 	if lastWasInter {
-		if k.InterIntervalMonths != nil {
-			// Services alternate: the full one comes one intermediate step
-			// after the intermediate, in distance and in months alike.
-			if k.InterIntervalDistance == nil && k.IntervalDistance != nil {
-				// No intermediate step in distance: the distance still counts from the
-				// last full service, so the intermediate can't push them back.
-				byDate := dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, nil, k.InterIntervalMonths, currentOdo, today)
-				byDistance := dueFrom(lastFull, lastFullOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, nil, currentOdo, today)
-				return mergeDue(byDistance, byDate)
+		if !k.UnderWarranty(currentOdo, today) {
+			distFrom, distOdo, distance := lastFull, lastFullOdo, k.IntervalDistance
+			if k.InterIntervalDistance != nil {
+				distFrom, distOdo, distance = k.LastService, k.LastOdometer, k.InterIntervalDistance
 			}
-			return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, cmp.Or(k.InterIntervalDistance, k.IntervalDistance), k.InterIntervalMonths, currentOdo, today)
+			dateFrom, dateOdo, months := lastFull, lastFullOdo, k.IntervalMonths
+			if k.InterIntervalMonths != nil {
+				dateFrom, dateOdo, months = k.LastService, k.LastOdometer, k.InterIntervalMonths
+			}
+			byDistance := dueFrom(distFrom, distOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, nil, currentOdo, today)
+			byDate := dueFrom(dateFrom, dateOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, nil, months, currentOdo, today)
+			return mergeDue(byDistance, byDate)
 		}
 		if lastFull == nil && k.VehicleOdometerAtPurchase == nil {
 			// Nothing to count the full distance from but the intermediate
@@ -296,9 +301,17 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	return dueFrom(lastFull, lastFullOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 }
 
+// UnderWarranty reports whether the kit's vehicle is under warranty
+// (Warranty): its full service then keeps its own deadline (FullDue).
+func (k Kit) UnderWarranty(currentOdo *int, today time.Time) bool {
+	return k.Warranty(currentOdo, today).Runs()
+}
+
 // mergeDue joins a reminder counted in distance with one counted in months:
 // the odometer target of one, the date of the other, and the more urgent state (one that
-// is known beats one that isn't, as dueFrom does for its two halves).
+// is known beats one that isn't, as dueFrom does for its two halves). As in
+// dueFrom, months with no day to count them from are never "On track"
+// (MonthsUncounted): the distance being fine doesn't make the date known.
 func mergeDue(byDistance, byDate Due) Due {
 	d := Due{DueOdometer: byDistance.DueOdometer, DistanceLeft: byDistance.DistanceLeft, DueDate: byDate.DueDate, DaysLeft: byDate.DaysLeft}
 	switch {
@@ -306,6 +319,8 @@ func mergeDue(byDistance, byDate Due) Due {
 		d.State = DueOverdue
 	case byDistance.State == DueSoon || byDate.State == DueSoon:
 		d.State = DueSoon
+	case byDate.State == DueNever && byDistance.State == DueOK:
+		d.State = DueNever
 	case byDistance.State == DueOK || byDate.State == DueOK:
 		d.State = DueOK
 	case byDistance.State.Rank() <= byDate.State.Rank():
@@ -322,12 +337,14 @@ func (k Kit) NextIsIntermediate(currentOdo *int, today time.Time) bool {
 	if !k.HasIntermediate() || k.Archived() {
 		return false
 	}
+	warranty := k.UnderWarranty(currentOdo, today)
 	if k.LastService != nil && k.LastService.Intermediate {
-		// Alternating: a full service follows an intermediate one.
-		if k.InterIntervalMonths != nil {
+		// Alternating (no warranty running): a full service follows an
+		// intermediate one.
+		if !warranty {
 			return false
 		}
-		// Warranty mode: the full service keeps its own deadline, and
+		// Under warranty: the full service keeps its own deadline, and
 		// another intermediate service comes first while it falls due
 		// strictly before the full one (full every 15 000, intermediate every
 		// 5 000: the one at 10 000). A tie, or a full service due
@@ -343,7 +360,7 @@ func (k Kit) NextIsIntermediate(currentOdo *int, today time.Time) bool {
 		return false
 	}
 	fullDue := k.FullDue(currentOdo, today)
-	if k.InterIntervalMonths == nil && (fullDue.State == DueSoon || fullDue.State == DueOverdue) {
+	if warranty && (fullDue.State == DueSoon || fullDue.State == DueOverdue) {
 		return false
 	}
 	// A full schedule that only lacks a day to count its months from

@@ -501,7 +501,8 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 
 	// Create a kit where the Full tier is ready (needs 500 ml oil) and the
 	// Intermediate tier is short (needs 2 washers), while Full is currently active
-	// (no past full service, so NextIsIntermediate is false in warranty mode).
+	// (nothing logged and no purchase baseline, so the intermediate schedule has
+	// nothing to count from and NextIsIntermediate is false).
 	rec = a.post("/kits", url.Values{
 		"vehicle_id":              {itoa(k390)},
 		"name":                    {"Warranty service"},

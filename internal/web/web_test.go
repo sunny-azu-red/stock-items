@@ -850,7 +850,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 
 	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule,
 	// its box ticked (CSS shows the fields while it is); a new kit's box is not.
-	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "Leave empty under warranty", `value="2000"`,
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `id="inter-months-tip"`, "While the vehicle is under warranty, intermediate services never push back the full service", `value="2000"`,
 		`<input type="checkbox" id="has_inter" name="has_inter" value="1" checked> Use an intermediate schedule`)
 	expect(t, a.get("/kits/new"), http.StatusOK, `<input type="checkbox" id="has_inter" name="has_inter" value="1"> Use an intermediate schedule`)
 	expectNot(t, a.get("/kits/new"), "data-show-inter", "data-hide-inter")

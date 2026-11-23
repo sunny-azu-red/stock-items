@@ -273,9 +273,11 @@ func TestKitIntermediateSchedules(t *testing.T) {
 		return &ServiceRef{ID: id, PerformedOn: on, Odometer: &odo, Intermediate: inter}
 	}
 
-	// 1. Warranty bike (1290): Full = 4000 km / 12 mo, Intermediate = 2000 km / nil months.
-	t.Run("warranty mode (no intermediate months)", func(t *testing.T) {
+	// 1. Warranty bike (1290): Full = 4000 km / 12 mo, Intermediate = 2000 km / nil months,
+	// under warranty until 2028.
+	t.Run("warranty mode (the vehicle under warranty)", func(t *testing.T) {
 		k := Kit{
+			VehicleWarrantyEndsOn: ptr(day(2028, 3, 1)),
 			IntervalDistance:      ptr(4000),
 			IntervalMonths:        ptr(12),
 			InterIntervalDistance: ptr(2000),
@@ -318,7 +320,7 @@ func TestKitIntermediateSchedules(t *testing.T) {
 	})
 
 	// 2. Non-warranty bike (390): Full = 4000 km / 12 mo, Intermediate = 2000 km / 12 mo.
-	t.Run("alternating reset mode (intermediate months set)", func(t *testing.T) {
+	t.Run("alternating reset mode (no warranty)", func(t *testing.T) {
 		k := Kit{
 			IntervalDistance:      ptr(4000),
 			IntervalMonths:        ptr(12),
@@ -429,6 +431,8 @@ func TestWarrantyAndAlternatingSchedules(t *testing.T) {
 	tests := []struct {
 		name          string
 		interMonths   *int
+		warrantyOn    *time.Time // the vehicle's warranty ends on; nil: none
+		warrantyAt    *int       // or at this reading
 		boughtOn      *time.Time
 		boughtOdo     *int
 		last, lastFul *ServiceRef
@@ -437,40 +441,59 @@ func TestWarrantyAndAlternatingSchedules(t *testing.T) {
 		fullWant      want // FullDue, and which schedule is next
 		uncounted     bool // MonthsUncounted
 	}{
-		{name: "warranty, new bike: intermediate next, full by the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, new bike: intermediate next, full by the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			odo: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueOK, 15000, "2027-01-01"}},
-		{name: "warranty, low miles: the full service's year comes first", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, low miles: the full service's year comes first", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			odo: 5000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{name: "warranty, low miles, past the year: overdue", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, low miles, past the year: overdue", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			odo: 5000, today: d(2027, 1, 2), fullWant: want{"full", DueOverdue, 15000, "2027-01-01"}},
-		{name: "warranty, after an intermediate: the full deadline doesn't move", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, after an intermediate: the full deadline doesn't move", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
-		{name: "warranty, a late intermediate doesn't push the full one back", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, a late intermediate doesn't push the full one back", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{name: "warranty, after a full service: counts from it", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, after a full service: counts from it", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 16000, today: d(2027, 2, 1),
 			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
-		{name: "warranty, full then intermediate: still from the full one", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, full then intermediate: still from the full one", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2027, 7, 1), 22500, true), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 23000, today: d(2027, 12, 15),
 			fullWant: want{"full", DueSoon, 30000, "2028-01-01"}},
-		{name: "warranty, purchase date only", boughtOn: ptr(d(2026, 1, 1)),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase date only", boughtOn: ptr(d(2026, 1, 1)),
 			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
-		{name: "warranty, no purchase date, only an intermediate: not done yet", last: svc(d(2026, 7, 1), 7500, true),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, no purchase date, only an intermediate: not done yet", last: svc(d(2026, 7, 1), 7500, true),
 			odo: 9000, today: d(2027, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
-		{name: "warranty, purchase odometer only, only an intermediate: not done yet", boughtOdo: ptr(0), last: svc(d(2026, 7, 1), 7500, true),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase odometer only, only an intermediate: not done yet", boughtOdo: ptr(0), last: svc(d(2026, 7, 1), 7500, true),
 			odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
-		{name: "warranty, purchase odometer only, no service: intermediate still next by distance", boughtOdo: ptr(0),
+		{warrantyOn: ptr(d(2030, 1, 1)), name: "warranty, purchase odometer only, no service: intermediate still next by distance", boughtOdo: ptr(0),
 			odo: 3000, today: d(2026, 6, 1), fullWant: want{"inter", DueNever, 15000, ""}, uncounted: true},
-		{name: "alternating, after an intermediate: full one step later", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{name: "no warranty, alternating, after an intermediate: full one step later", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueOK, 15000, "2027-01-01"}},
-		{name: "alternating, after a full: intermediate next", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+		{name: "no warranty, alternating, after a full: intermediate next", interMonths: ptr(6), boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
 			last: svc(d(2027, 1, 1), 15000, false), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 16000, today: d(2027, 2, 1),
 			fullWant: want{"inter", DueOK, 30000, "2028-01-01"}},
+		{name: "warranty, intermediate months too: the full deadline still doesn't move", warrantyOn: ptr(d(2030, 1, 1)), interMonths: ptr(6),
+			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
+		{name: "warranty ended the day before: a late intermediate pushes the distance back", warrantyOn: ptr(d(2026, 10, 31)),
+			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueOK, 15500, "2027-01-01"}},
+		{name: "warranty ends today: still the warranty's deadline", warrantyOn: ptr(d(2026, 11, 1)),
+			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueSoon, 15000, "2027-01-01"}},
+		{name: "past the warranty's reading: alternating", warrantyOn: ptr(d(2030, 1, 1)), warrantyAt: ptr(14000),
+			boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), odo: 14600, today: d(2026, 11, 1), fullWant: want{"full", DueOK, 15500, "2027-01-01"}},
+		{name: "no warranty, no intermediate months: the date counts from the purchase", boughtOn: ptr(d(2026, 1, 1)), boughtOdo: ptr(0),
+			last: svc(d(2026, 8, 1), 8000, true), odo: 9000, today: d(2026, 12, 10), fullWant: want{"full", DueSoon, 15500, "2027-01-01"}},
+		{name: "no warranty, no intermediate months, after a full: the date counts from it",
+			last: svc(d(2027, 7, 1), 22500, true), lastFul: svc(d(2027, 1, 1), 15000, false), odo: 23000, today: d(2027, 8, 1),
+			fullWant: want{"full", DueOK, 30000, "2028-01-01"}},
+		{name: "no warranty, no intermediate months, nothing to count the months from: not done yet", boughtOdo: ptr(0),
+			last: svc(d(2026, 7, 1), 7500, true), odo: 9000, today: d(2026, 8, 1), fullWant: want{"full", DueNever, 15000, ""}, uncounted: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := Kit{IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(7500), InterIntervalMonths: tt.interMonths,
-				VehiclePurchasedOn: tt.boughtOn, VehicleOdometerAtPurchase: tt.boughtOdo, LastService: tt.last, LastFullService: tt.lastFul}
+				VehicleWarrantyEndsOn: tt.warrantyOn, VehicleWarrantyEndsAt: tt.warrantyAt, VehiclePurchasedOn: tt.boughtOn, VehicleOdometerAtPurchase: tt.boughtOdo, LastService: tt.last, LastFullService: tt.lastFul}
 			odo := tt.odo
 			got := k.FullDue(&odo, tt.today)
 			next := "full"
@@ -491,11 +514,11 @@ func TestWarrantyAndAlternatingSchedules(t *testing.T) {
 	}
 }
 
-// Two cases the warranty table doesn't reach. Warranty mode with an
+// Two cases the warranty table doesn't reach. Under warranty, with an
 // intermediate under half the full one (15 000 / 5 000): the second
 // intermediate service, at 10 000 km, is reminded too, while the full one
-// keeps its own deadline. Alternating mode whose intermediate has months
-// but no distance: an intermediate service resets the months, but the
+// keeps its own deadline. Alternating (no warranty), the intermediate with
+// months but no distance: an intermediate service resets the months, but the
 // full service's distance still counts from the last full one.
 func TestIntermediateScheduleEdges(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
@@ -505,7 +528,7 @@ func TestIntermediateScheduleEdges(t *testing.T) {
 	odo := func(n int) *int { return &n }
 
 	full := svc(d(2026, 1, 1), 0, false)
-	w := Kit{IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(5000), LastService: svc(d(2026, 4, 1), 5000, true), LastFullService: full}
+	w := Kit{VehicleWarrantyEndsOn: ptr(d(2030, 1, 1)), IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(5000), LastService: svc(d(2026, 4, 1), 5000, true), LastFullService: full}
 	if !w.NextIsIntermediate(odo(6000), d(2026, 5, 1)) {
 		t.Error("15 000 / 5 000 after the intermediate at 5 000: want the next intermediate (10 000) first")
 	}

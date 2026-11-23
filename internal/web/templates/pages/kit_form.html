@@ -71,7 +71,7 @@
           {{template "field-err" (fieldErr (index $e "inter_interval_distance") "inter_interval_distance")}}
         </div>
         <div class="field{{if index $e "inter_interval_months"}} has-error{{end}}">
-          <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "For" "Intermediate months" "ID" "inter-months-tip" "Text" "Leave empty under warranty so intermediate services never push back the full service's date. Set months (e.g. 12) when an intermediate service should also reset the time clock.")}}</div>
+          <div class="label-row"><label for="inter_interval_months">Intermediate months</label>{{template "tip" (dict "For" "Intermediate months" "ID" "inter-months-tip" "Text" "Whichever comes first, the distance or the months. While the vehicle is under warranty, intermediate services never push back the full service; after it, the full service comes one intermediate step after the last one.")}}</div>
           <input class="input" id="inter_interval_months" name="inter_interval_months" value="{{$f.InterIntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" {{invalid (index $e "inter_interval_months") "inter_interval_months" "inter-months-tip"}}>
           {{template "field-err" (fieldErr (index $e "inter_interval_months") "inter_interval_months")}}
         </div>

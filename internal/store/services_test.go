@@ -626,7 +626,13 @@ func TestKitNamesAndServiceTitles(t *testing.T) {
 
 func TestKitIntermediateStoreFlow(t *testing.T) {
 	s, ctx := newStore(t)
-	k1290 := mustVehicle(t, s, "KTM 1290")
+	// Under warranty: the full service keeps its own deadline.
+	vin := stock.VehicleInput{Name: "KTM 1290", HasWarranty: true, WarrantyEndsOn: ptr(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))}
+	vin.Normalize()
+	k1290, err := s.CreateVehicle(ctx, vin)
+	if err != nil {
+		t.Fatal(err)
+	}
 	oemKit := mustItem(t, s, stock.ItemInput{Name: "Oil Filter Service Kit", Brand: "OEM", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{k1290}})
 	hiflo := mustItem(t, s, stock.ItemInput{Name: "HF650", Brand: "Hiflofiltro", Unit: stock.UnitPiece, Quantity: 2, VehicleIDs: []int64{k1290}})
 	oring := mustItem(t, s, stock.ItemInput{Name: "Cap O-Ring", Brand: "OEM", Unit: stock.UnitPiece, Quantity: 4, VehicleIDs: []int64{k1290}})
@@ -653,6 +659,9 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatalf("kit = %+v", kit)
 	}
 	today := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	if kit.VehicleWarrantyEndsOn == nil || !kit.UnderWarranty(kit.VehicleOdometer, today) {
+		t.Fatalf("the kit doesn't see its vehicle's warranty: %v", kit.VehicleWarrantyEndsOn)
+	}
 	if kit.NextIsIntermediate(kit.VehicleOdometer, today) {
 		t.Errorf("want NextIsIntermediate = false before any service")
 	}

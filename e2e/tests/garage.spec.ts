@@ -900,35 +900,50 @@ test("pick the accent in Appearance", async ({ page }) => {
     probe.remove();
     return c;
   });
-  const indigo = await accent();
+  const violet = await accent();
   const saved = () => page.waitForResponse((r) => r.url().endsWith("/accent") && r.request().method() === "POST");
   const panel = await appearance(page);
-  await expect(panel.getByRole("button", { name: "Indigo", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const name = panel.locator(".accent-name");
+  const custom = panel.getByRole("checkbox", { name: "Custom colour" });
+  const reset = panel.getByRole("button", { name: "Reset to default" });
+  await expect(panel.getByRole("button", { name: "Violet", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(name).toHaveText("Violet · default");
+  await expect(reset).toBeHidden();
+  await expect(panel.getByRole("slider", { name: "Colour" })).toBeHidden();
 
   // A preset recolours the page at once and is remembered on this device.
   let done = saved();
-  await panel.getByRole("button", { name: "Ocean", exact: true }).click();
+  await panel.getByRole("button", { name: "Orchid", exact: true }).click();
   await done;
-  await expect(html).toHaveAttribute("style", /--accent-h: 228; --accent-i: 50/);
-  expect(await accent()).not.toBe(indigo);
-  await expect(panel.getByRole("button", { name: "Ocean", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(panel.getByRole("slider", { name: "Colour" })).toHaveValue("228");
+  await expect(html).toHaveAttribute("style", /--accent-h: 318; --accent-i: 80/);
+  expect(await accent()).not.toBe(violet);
+  await expect(panel.getByRole("button", { name: "Orchid", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(name).toHaveText("Orchid");
+  await expect(reset).toBeVisible();
   await page.reload();
-  await expect(html).toHaveAttribute("style", /--accent-h: 228; --accent-i: 50/);
+  await expect(html).toHaveAttribute("style", /--accent-h: 318; --accent-i: 80/);
 
-  // The sliders: any hue and intensity, saved once let go.
+  // Custom opens the sliders: any hue and intensity, saved once let go.
+  await (await appearance(page)).getByRole("checkbox", { name: "Custom colour" }).check();
+  await expect(panel.getByRole("slider", { name: "Colour" })).toHaveValue("318");
   done = saved();
-  await (await appearance(page)).getByRole("slider", { name: "Colour" }).fill("150");
+  await panel.getByRole("slider", { name: "Colour" }).fill("150");
   await done;
+  await expect(name).toHaveText("Custom");
   await page.reload();
-  await expect(html).toHaveAttribute("style", /--accent-h: 150; --accent-i: 50/);
-  await expect((await appearance(page)).locator('.swatch[aria-pressed="true"]')).toHaveCount(0);
+  await expect(html).toHaveAttribute("style", /--accent-h: 150; --accent-i: 80/);
+  await (await appearance(page)).locator(".accent-name").waitFor();
+  await expect(panel.locator('.swatch[aria-pressed="true"]')).toHaveCount(0);
+  await expect(custom).toBeChecked();
+  await expect(name).toHaveText("Custom");
 
-  // Back to Indigo forgets it.
+  // Reset to default forgets it, and Custom closes.
   done = saved();
-  await (await appearance(page)).getByRole("button", { name: "Back to Indigo" }).click();
+  await reset.click();
   await done;
-  expect(await accent()).toBe(indigo);
+  expect(await accent()).toBe(violet);
+  await expect(custom).not.toBeChecked();
+  await expect(name).toHaveText("Violet · default");
   await page.reload();
   await expect(html).not.toHaveAttribute("style");
   expect((await page.context().cookies()).find((c) => c.name === "accent")).toBeUndefined();

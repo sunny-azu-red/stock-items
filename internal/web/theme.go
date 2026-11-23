@@ -52,7 +52,7 @@ func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) error {
 // hue (0-359 degrees) and an intensity (0-100: 0 is grey, 100 the full
 // colour); app.css works every accent tone out from these two, at
 // lightnesses that keep its text readable whatever they are. No cookie means
-// the default, Indigo.
+// the default, Violet.
 const accentCookie = "accent"
 
 // Accent is a chosen accent colour.
@@ -133,18 +133,49 @@ type AccentPreset struct {
 	Accent
 }
 
-// accentPresets are the accents offered as swatches: Indigo (the default)
-// first, then those from the design's shortlist, Graphite last (no colour).
+// accentPresets are the accents offered as swatches: Violet (the default)
+// first, Graphite (no colour) last. The accent must read apart from what
+// already has a colour: the status badges (red 22°, amber 60-75°, green
+// 155°), the suggested vehicle colours (palette, handlers_vehicles.go:
+// 1°, 27°, 46°, 76°, 131°, 149°, 222°, 263°), and the info badge, whose hue
+// is the accent's minus 45° (app.css), so it must keep clear of green, red
+// and amber too. That leaves 285-340° for a full colour; a muted one
+// (Mauve, Slate) may sit nearer a vehicle colour. TestAccentPresets checks.
 func accentPresets() []AccentPreset {
 	return []AccentPreset{
-		{"Indigo", defaultAccent},
-		{"Cobalt", Accent{Hue: 258, Intensity: 87}},
-		{"Ocean", Accent{Hue: 228, Intensity: 50}},
-		{"Plum", Accent{Hue: 332, Intensity: 74}},
-		{"Raspberry", Accent{Hue: 2, Intensity: 97}},
-		{"Graphite", Accent{Hue: 280, Intensity: 0}},
+		{"Violet", defaultAccent},
+		{"Orchid", Accent{Hue: 318, Intensity: 80}},
+		{"Mauve", Accent{Hue: 340, Intensity: 45}},
+		{"Slate", Accent{Hue: 245, Intensity: 40}},
+		{"Graphite", Accent{Hue: 295, Intensity: 0}},
 	}
 }
 
 // defaultAccent is what app.css shows without a cookie.
-var defaultAccent = Accent{Hue: 280, Intensity: 100}
+var defaultAccent = Accent{Hue: 295, Intensity: 75}
+
+// AccentPick is what the Appearance panel shows of the accent in use: its
+// numbers (for the sliders), the preset's name ("" for a custom colour),
+// and whether it is the default (no Reset) or custom (the sliders open).
+type AccentPick struct {
+	Accent
+	Name    string
+	Default bool
+	Custom  bool
+}
+
+// accentPick describes a (nil: the default) for the Appearance panel.
+func accentPick(a *Accent) AccentPick {
+	p := AccentPick{Accent: defaultAccent}
+	if a != nil {
+		p.Accent = *a
+	}
+	p.Default = p.Accent == defaultAccent
+	for _, pr := range accentPresets() {
+		if pr.Accent == p.Accent {
+			p.Name = pr.Name
+		}
+	}
+	p.Custom = p.Name == ""
+	return p
+}

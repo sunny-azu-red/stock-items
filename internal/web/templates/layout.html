@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="{{or .Theme "light dark"}}">
-  <meta name="theme-color" content="#5a3fcc">
+  <meta name="theme-color" content="#6e5f99">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "historyCacheSize": 0, "scrollIntoViewOnBoost": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true}'>
   <title>{{.Title}} · Pitbox</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
@@ -94,12 +94,13 @@
      its keyboard shortcut, shown where a count would be. */}}
 {{define "nav-link"}}<a href="{{.Href}}" {{if .Tab}}class="tab-dup" {{end}}{{with .Key}}aria-keyshortcuts="{{.}}" {{end}}{{if .Active}}aria-current="page"{{end}}>{{icon .Icon}}{{.Label}}{{with .Count}}<span class="count{{if $.Muted}} count-muted{{end}}">{{.}}</span>{{end}}{{with .Key}}<span class="kbd" aria-hidden="true">{{.}}</span>{{end}}</a>{{end}}
 
-{{/* Appearance: the theme (System, Light, Dark; theme.go) and the accent
-     colour (a hue and an intensity, with presets), both remembered by this
-     device in a cookie. Plain forms that post and come back; app.js shows a
-     change on the spot and saves it without a reload. A popover: Esc and a
-     tap outside close it. */}}
-{{define "appearance"}}{{$t := or .Theme "system"}}{{$h := 280}}{{$i := 100}}{{with .Accent}}{{$h = .Hue}}{{$i = .Intensity}}{{end}}
+{{/* Appearance: the theme (System, Light, Dark; theme.go), each a small
+     picture of the app in the accent, and the accent colour (presets, or
+     a custom hue and intensity behind the Custom swatch), both remembered
+     by this device in a cookie. Plain forms that post and come back; app.js
+     shows a change on the spot and saves it without a reload. A popover:
+     Esc and a tap outside close it. */}}
+{{define "appearance"}}{{$t := or .Theme "system"}}{{$a := accentPick .Accent}}
 <button class="icon-btn appearance-btn" type="button" popovertarget="appearance" title="Appearance" aria-label="Appearance">{{icon "palette"}}</button>
 <div class="appearance" id="appearance" popover aria-labelledby="appearance-title">
   <div class="appearance-head">
@@ -112,26 +113,34 @@
   <form class="theme-pick" method="post" action="/theme">
     <fieldset>
       <legend>Theme</legend>
-      <div class="pick">
-        <button type="submit" name="theme" value="system" aria-pressed="{{eq $t "system"}}">{{icon "monitor"}} System</button>
-        <button type="submit" name="theme" value="light" aria-pressed="{{eq $t "light"}}">{{icon "sun"}} Light</button>
-        <button type="submit" name="theme" value="dark" aria-pressed="{{eq $t "dark"}}">{{icon "moon"}} Dark</button>
+      <div class="theme-cards">
+        <button type="submit" name="theme" value="system" aria-pressed="{{eq $t "system"}}">{{template "theme-thumb" "system"}}<span class="theme-name">{{icon "monitor"}} System</span></button>
+        <button type="submit" name="theme" value="light" aria-pressed="{{eq $t "light"}}">{{template "theme-thumb" "light"}}<span class="theme-name">{{icon "sun"}} Light</span></button>
+        <button type="submit" name="theme" value="dark" aria-pressed="{{eq $t "dark"}}">{{template "theme-thumb" "dark"}}<span class="theme-name">{{icon "moon"}} Dark</span></button>
       </div>
     </fieldset>
   </form>
   <form class="accent-pick" method="post" action="/accent">
-    <fieldset>
-      <legend>Accent</legend>
-      <div class="swatches">{{range accentPresets}}<button class="swatch" type="submit" name="accent" value="{{.Accent}}" style="--swatch-h: {{.Hue}}; --swatch-i: {{.Intensity}}" title="{{.Name}}" aria-label="{{.Name}}" aria-pressed="{{and (eq .Hue $h) (eq .Intensity $i)}}"></button>{{end}}</div>
-      <label class="slider">Colour<input class="hue-range" type="range" name="hue" min="0" max="359" value="{{$h}}"></label>
-      <label class="slider">Intensity<input class="intensity-range" type="range" name="intensity" min="0" max="100" value="{{$i}}"></label>
-      <div class="accent-actions">
-        <button class="btn btn-sm btn-ghost" type="submit" name="reset" value="1">Back to Indigo</button>
+    <div class="accent-group" role="group" aria-labelledby="accent-title">
+      <div class="accent-head">
+        <span class="accent-title"><span id="accent-title">Accent</span> <span class="accent-name">{{if $a.Custom}}Custom{{else}}{{$a.Name}}{{if $a.Default}} <span class="accent-default">· default</span>{{end}}{{end}}</span></span>
+        <button class="reset-link" type="submit" name="reset" value="1"{{if $a.Default}} hidden{{end}}>{{icon "rotate-ccw"}}Reset to default</button>
+      </div>
+      <div class="swatches">{{range accentPresets}}<button class="swatch" type="submit" name="accent" value="{{.Accent}}" style="--swatch-h: {{.Hue}}; --swatch-i: {{.Intensity}}" title="{{.Name}}" aria-label="{{.Name}}" data-name="{{.Name}}" aria-pressed="{{and (not $a.Custom) (eq .Accent $a.Accent)}}"></button>{{end}}<span class="swatch-sep"></span><input class="swatch-custom" type="checkbox" title="Custom colour" aria-label="Custom colour"{{if $a.Custom}} checked{{end}}></div>
+      {{/* Open while Custom is checked (CSS). */}}
+      <div class="custom-sliders">
+        <label class="slider">Colour<input class="hue-range" type="range" name="hue" min="0" max="359" value="{{$a.Hue}}"></label>
+        <label class="slider">Intensity<input class="intensity-range" type="range" name="intensity" min="0" max="100" value="{{$a.Intensity}}"></label>
         <button class="btn btn-sm accent-save" type="submit">Save accent</button>
       </div>
-    </fieldset>
+    </div>
   </form>
 </div>{{end}}
+
+{{/* A theme's picture in Appearance: a sidebar and a card of the app, in
+     the theme's own colours and the accent ("system": half light, half
+     dark). */}}
+{{define "theme-thumb"}}<span class="theme-thumb" aria-hidden="true">{{if ne . "dark"}}<span class="theme-scene theme-scene-light"><span class="scene-side"><span class="scene-mark"></span><span class="scene-line"></span><span class="scene-line"></span></span><span class="scene-card"><span class="scene-line"></span><span class="scene-line"></span><span class="scene-btn"></span></span></span>{{end}}{{if ne . "light"}}<span class="theme-scene theme-scene-dark{{if eq . "system"}} theme-scene-half{{end}}"><span class="scene-side"><span class="scene-mark"></span><span class="scene-line"></span><span class="scene-line"></span></span><span class="scene-card"><span class="scene-line"></span><span class="scene-line"></span><span class="scene-btn"></span></span></span>{{end}}</span>{{end}}
 
 {{/* The vehicles to work on, as buttons: tapping one works on it, tapping
      the one worked on stops. dict "View" View "Label" (id of its label).

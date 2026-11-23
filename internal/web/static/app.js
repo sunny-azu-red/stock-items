@@ -994,10 +994,14 @@
     var meta = document.querySelector('meta[name="theme-color"]');
     if (mark && meta) meta.content = getComputedStyle(mark).backgroundColor;
   }
-  // applyAccent shows hue and intensity, or the default (Indigo) for null,
-  // and moves the panel's sliders and swatches to match.
-  var DEFAULT_ACCENT = "280-100";
-  function applyAccent(value) {
+  // applyAccent shows hue and intensity, or the default (Violet) for null,
+  // and moves the panel to match: the sliders, the pressed swatch, the
+  // name on the heading's line ("Custom" for no preset) and Reset to
+  // default (hidden on the default). A preset or Reset closes Custom; a
+  // slider (fromSliders) leaves it open even on a preset's value, so it
+  // doesn't fold away under the thumb.
+  var DEFAULT_ACCENT = "295-75";
+  function applyAccent(value, fromSliders) {
     var root = document.documentElement;
     var v = value || DEFAULT_ACCENT;
     var hi = v.split("-");
@@ -1012,7 +1016,25 @@
     document.querySelectorAll(".accent-pick").forEach(function (f) {
       f.elements.hue.value = hi[0];
       f.elements.intensity.value = hi[1];
-      f.querySelectorAll(".swatch").forEach(function (b) { b.setAttribute("aria-pressed", String(b.value === v)); });
+      var preset = null;
+      f.querySelectorAll(".swatch").forEach(function (b) {
+        if (b.value === v) preset = b;
+        b.setAttribute("aria-pressed", String(b.value === v));
+      });
+      var name = f.querySelector(".accent-name");
+      if (name) {
+        name.replaceChildren(preset ? preset.dataset.name : "Custom");
+        if (preset && v === DEFAULT_ACCENT) {
+          var def = document.createElement("span");
+          def.className = "accent-default";
+          def.textContent = "· default";
+          name.append(" ", def);
+        }
+      }
+      var reset = f.querySelector("button[name=reset]");
+      if (reset) reset.hidden = v === DEFAULT_ACCENT;
+      var custom = f.querySelector(".swatch-custom");
+      if (custom && !fromSliders) custom.checked = !preset;
     });
     syncThemeColor();
   }
@@ -1032,8 +1054,9 @@
         applyAccent(null);
         save(form.action, "reset=1", "accent");
       } else {
-        var v = s && s.name === "accent" ? s.value : form.elements.hue.value + "-" + form.elements.intensity.value;
-        applyAccent(v);
+        var preset = s && s.name === "accent";
+        var v = preset ? s.value : form.elements.hue.value + "-" + form.elements.intensity.value;
+        applyAccent(v, !preset);
         save(form.action, "accent=" + encodeURIComponent(v), "accent");
       }
     }
@@ -1044,7 +1067,7 @@
     if (saveButton) saveButton.hidden = true;
     f.addEventListener("input", function (e) {
       if (e.target.type !== "range") return;
-      applyAccent(f.elements.hue.value + "-" + f.elements.intensity.value);
+      applyAccent(f.elements.hue.value + "-" + f.elements.intensity.value, true);
     });
     f.addEventListener("change", function (e) {
       if (e.target.type === "range") f.requestSubmit();

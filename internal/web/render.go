@@ -235,6 +235,7 @@ func (s *Server) funcs() template.FuncMap {
 		"plural":        plural,
 		"pluralOnly":    pluralOnly,
 		"accentPresets": accentPresets,
+		"accentPick":    accentPick,
 		"fieldErr":      fieldErr,
 		"invalid":       invalidAttrs,
 		"chipStyle": func(color string) template.CSS {

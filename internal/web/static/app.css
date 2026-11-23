@@ -65,7 +65,7 @@
     color-scheme: light dark;
 
     /* The accent: a hue on the colour wheel and an intensity (0 grey, 100
-       full), Indigo unless this device chose another in the Appearance
+       full), Violet unless this device chose another in the Appearance
        panel (theme.go renders them on <html>; app.js previews them). Every
        accent tone below is worked out from these two; the greys lean
        towards the hue too, as much as the intensity says.
@@ -73,8 +73,8 @@
        The palette is mellow on purpose ("Mist", design.md#contrast): soft
        text, a muted accent, faint outlines. It sits below the usual
        contrast advice by choice; don't raise it back to meet it. */
-    --accent-h: 280;
-    --accent-i: 100;
+    --accent-h: 295;
+    --accent-i: 75;
     --h: var(--accent-h);
     --ac: calc(.12 * var(--accent-i) / 100);
     --tint: calc(var(--accent-i) / 100);
@@ -642,41 +642,105 @@
     .sidebar:has(#appearance:popover-open), .sidebar:has(#appearance:popover-open)::backdrop { visibility: hidden; }
     .appearance { visibility: visible; }
   }
-  /* System / Light / Dark: one pressed, like a segmented control. */
-  .theme-pick .pick {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border-radius: var(--radius-sm); background: var(--surface-2);
+  /* System / Light / Dark: each a small picture of the app in that theme's
+     own colours and the accent (two scenes, each with its color-scheme, so
+     light-dark() draws them; System is light with dark over its corner).
+     The theme in use is ringed and named in the accent. */
+  .theme-cards {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    @media (width <= 820px) { gap: 26px; }
     & button {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 8px; --lh: 1.25;
-      border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--muted); font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+      display: grid; gap: 8px; padding: 0; border: 0; border-radius: var(--radius); background: none; cursor: pointer;
+      color: var(--muted); font-size: var(--text-sm); font-weight: 600; --lh: 1.25;
       &:hover { color: var(--text); }
-      &[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
-      & .icon { width: 14px; height: 14px; }
+      &[aria-pressed="true"] { color: var(--accent-strong); }
+      &[aria-pressed="true"] .theme-thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
     }
   }
+  .theme-name {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    & .icon { width: 14px; height: 14px; }
+  }
+  .theme-thumb {
+    position: relative; display: block; height: 52px; border-radius: var(--radius); overflow: hidden; box-shadow: 0 0 0 1px var(--border);
+    @media (width <= 820px) { height: 64px; }
+  }
+  .theme-scene {
+    position: absolute; inset: 0; background: var(--bg);
+    &.theme-scene-light { color-scheme: light; }
+    &.theme-scene-dark { color-scheme: dark; }
+    &.theme-scene-half { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+    & .scene-side { position: absolute; inset: 0 auto 0 0; width: 28%; padding: 8px 6px; display: grid; align-content: start; gap: 6px; }
+    & .scene-mark { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+    & .scene-line { height: 4px; border-radius: 2px; background: var(--muted); opacity: .45; &:nth-child(odd):not(:first-child) { width: 70%; } }
+    & .scene-card { position: absolute; inset: 8px 6px 8px 32%; border-radius: 4px; background: var(--surface); padding: 6px; display: grid; align-content: start; gap: 6px; }
+    & .scene-card .scene-line:nth-child(2) { width: 60%; }
+    & .scene-btn { width: 50%; height: 8px; border-radius: 2px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  }
+  /* Accent: its name and Reset to default (only away from the default) on
+     the heading's line, the presets, then Custom, a checkbox drawn as a
+     rainbow swatch that opens the sliders. */
+  .accent-group { display: grid; gap: 12px; }
+  .accent-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: -4px;
+    font-size: var(--text-sm); --lh: 1.45;
+    & .reset-link { padding: 0; border: 0; background: none; cursor: pointer; }
+  }
+  .accent-title { font-weight: 600; color: var(--muted); }
+  .accent-name { margin-left: 4px; font-weight: 500; color: var(--text); }
+  .accent-default { color: var(--muted); }
   /* A preset swatch draws its own accent from its hue and intensity, the
      way the tokens above do. */
-  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatches {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    @media (width <= 820px) { gap: 10px; }
+  }
+  .swatch, .swatch-custom {
+    width: 28px; height: 28px; padding: 0; margin: 0; border-radius: 50%; cursor: pointer; flex: none;
+    @media (width <= 820px) { width: 32px; height: 32px; }
+  }
   .swatch {
     --sw-i: calc(var(--swatch-i) / 100);
-    width: 28px; height: 28px; padding: 0; border-radius: 50%; cursor: pointer;
     border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
     background: light-dark(oklch(calc(34% + 15% * var(--sw-i)) calc(.19 * var(--sw-i)) var(--swatch-h)), oklch(calc(90% - 15% * var(--sw-i)) calc(.13 * var(--sw-i)) var(--swatch-h)));
     &[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--text); }
   }
-  /* The sliders show what they pick: the whole colour wheel, and the
-     current hue from grey to full colour. */
-  .slider {
-    display: grid; gap: 6px; font-size: var(--text-sm); font-weight: 600; color: var(--muted);
-    & input {
-      appearance: none; width: 100%; height: 22px; margin: 0; border-radius: 99px; cursor: pointer;
-      border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  .swatch-sep { width: 1px; height: 20px; margin-inline: 2px; background: var(--border); }
+  /* Custom: the colour wheel round a + while a preset is in use; checked,
+     the accent in use fills it. */
+  .swatch-custom {
+    appearance: none; display: grid; place-items: center;
+    background: conic-gradient(in oklch longer hue, oklch(70% .15 0), oklch(70% .15 359.9)); box-shadow: 0 0 0 1px var(--border);
+    &::before {
+      content: ""; width: calc(100% - 6px); height: calc(100% - 6px); border-radius: 50%;
+      background: linear-gradient(var(--muted) 0 0) center / 10px 2px no-repeat, linear-gradient(var(--muted) 0 0) center / 2px 10px no-repeat, var(--surface);
     }
-    & input::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text); }
+    &:checked {
+      --sw-i: calc(var(--accent-i) / 100);
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
+      &::before { background: light-dark(oklch(calc(34% + 15% * var(--sw-i)) calc(.19 * var(--sw-i)) var(--accent-h)), oklch(calc(90% - 15% * var(--sw-i)) calc(.13 * var(--sw-i)) var(--accent-h))); }
+    }
+  }
+  /* The sliders slide open under the swatches while Custom is checked;
+     closed, they take no room (the group's gap too) and no focus. They
+     show what they pick: the whole colour wheel, and the current hue from
+     grey to full colour. */
+  .custom-sliders {
+    display: grid; gap: 12px; block-size: 0; margin-top: -12px; visibility: hidden;
+    overflow: clip; overflow-clip-margin: 4px; interpolate-size: allow-keywords;
+    transition: block-size .22s cubic-bezier(.2, .8, .2, 1), margin-top .22s cubic-bezier(.2, .8, .2, 1), visibility .22s allow-discrete;
+    .accent-pick:has(.swatch-custom:checked) & { block-size: auto; margin-top: 0; visibility: visible; }
+    & .accent-save { justify-self: start; }
+  }
+  .slider {
+    display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 10px; min-height: 22px;
+    font-size: var(--text-sm); font-weight: 600; color: var(--muted);
+    & input { appearance: none; width: 100%; height: 10px; margin: 0; border-radius: 99px; cursor: pointer; }
+    & input::-webkit-slider-thumb { appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); border: 1px solid var(--field-border); }
     & input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   }
   .hue-range { background: linear-gradient(to right in oklch longer hue, oklch(62% .17 0), oklch(62% .17 359.9)); }
   .intensity-range { background: linear-gradient(to right, oklch(55% 0 0), oklch(55% .19 var(--accent-h))); }
-  .accent-actions { display: flex; justify-content: space-between; gap: 8px; }
 
   /* ---- Forms ------------------------------------------------------- */
   .form { display: grid; gap: var(--gap); }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -369,9 +370,12 @@ func TestTheme(t *testing.T) {
 // two numbers app.css works every accent tone out from.
 func TestAccent(t *testing.T) {
 	a := newApp(t)
-	// The default (Indigo) needs nothing on <html>; its preset is pressed.
+	// The default (Violet) needs nothing on <html>; its preset is pressed,
+	// the heading says so, Custom is closed and there is nothing to reset.
 	rec := a.get("/")
-	expect(t, rec, http.StatusOK, `<html lang="en">`, `aria-label="Indigo" aria-pressed="true"`, `name="hue" min="0" max="359" value="280"`)
+	expect(t, rec, http.StatusOK, `<html lang="en">`, `aria-label="Violet" data-name="Violet" aria-pressed="true"`,
+		`<span class="accent-name">Violet <span class="accent-default">· default</span></span>`,
+		`name="reset" value="1" hidden>`, `aria-label="Custom colour"></div>`, `name="hue" min="0" max="359" value="295"`, `name="intensity" min="0" max="100" value="75"`)
 	expectNot(t, rec, "--accent-h")
 
 	// The sliders' plain form post stores "hue-intensity" and goes back.
@@ -391,8 +395,18 @@ func TestAccent(t *testing.T) {
 	}
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(cookies[0])
-	expect(t, a.do(req), http.StatusOK, `<html lang="en" style="--accent-h: 332; --accent-i: 74">`,
-		`aria-label="Plum" aria-pressed="true"`, `name="intensity" min="0" max="100" value="74"`)
+	// No preset is that colour: it is Custom, open, with Reset.
+	rec = a.do(req)
+	expect(t, rec, http.StatusOK, `<html lang="en" style="--accent-h: 332; --accent-i: 74">`,
+		`<span class="accent-name">Custom</span>`, `aria-label="Custom colour" checked>`, `name="reset" value="1">`, `name="intensity" min="0" max="100" value="74"`)
+	expectNot(t, rec, `aria-pressed="true"></button>`)
+
+	// A preset's colour is that preset, Custom closed.
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: accentCookie, Value: "318-80"})
+	rec = a.do(req)
+	expect(t, rec, http.StatusOK, `aria-label="Orchid" data-name="Orchid" aria-pressed="true"`, `<span class="accent-name">Orchid</span>`,
+		`name="reset" value="1">`, `aria-label="Custom colour"></div>`)
 
 	// A preset posts one value; app.js gets a bare 204. Leading zeros are
 	// dropped, so the cookie and the page agree.
@@ -402,9 +416,9 @@ func TestAccent(t *testing.T) {
 		t.Errorf("preset cookie = %+v", c)
 	}
 
-	// Back to Indigo, the default itself, and values out of range forget
+	// Reset to default, the default itself, and values out of range forget
 	// the choice.
-	for _, v := range []url.Values{{"reset": {"1"}, "hue": {"10"}, "intensity": {"50"}}, {"hue": {"280"}, "intensity": {"100"}},
+	for _, v := range []url.Values{{"reset": {"1"}, "hue": {"10"}, "intensity": {"50"}}, {"hue": {"295"}, "intensity": {"75"}}, {"accent": {"295-75"}},
 		{"hue": {"360"}, "intensity": {"50"}}, {"hue": {"10"}, "intensity": {"101"}}, {"hue": {"-1"}, "intensity": {"5"}}, {"accent": {"red"}}} {
 		rec = a.post("/accent", v, "HX-Request", "true")
 		if c := rec.Result().Cookies(); len(c) != 1 || c[0].MaxAge >= 0 {
@@ -421,6 +435,67 @@ func TestAccent(t *testing.T) {
 		expect(t, rec, http.StatusOK, `<html lang="en">`)
 		expectNot(t, rec, "--accent-h:")
 	}
+}
+
+// TestAccentPresets keeps the preset accents clear of what already has a
+// colour (accentPresets): the suggested vehicle colours and the status
+// badges, for the accent and for the info badge (the accent's hue minus
+// 45°). A muted preset may come nearer; Graphite has no colour at all.
+func TestAccentPresets(t *testing.T) {
+	badges := []float64{22, 60, 75, 155} // red, amber (light and dark), green
+	var taken []float64
+	for _, c := range palette {
+		taken = append(taken, oklchHue(t, c))
+	}
+	taken = append(taken, badges...)
+	apart := func(a, b float64) float64 { d := math.Mod(math.Abs(a-b), 360); return math.Min(d, 360-d) }
+	for _, p := range accentPresets() {
+		if p.Intensity == 0 {
+			continue
+		}
+		least := 30.0
+		if p.Intensity < 60 {
+			least = 15
+		}
+		h := float64(p.Hue)
+		for _, o := range taken {
+			if d := apart(h, o); d < least {
+				t.Errorf("%s (%d°) is %.0f° from a colour in use at %.0f°; keep %.0f° apart", p.Name, p.Hue, d, o, least)
+			}
+		}
+		info := math.Mod(h-45+360, 360)
+		for _, o := range badges {
+			if d := apart(info, o); d < 40 {
+				t.Errorf("%s: its info badge (%.0f°) is %.0f° from a status badge at %.0f°", p.Name, info, d, o)
+			}
+		}
+	}
+	if accentPresets()[0].Accent != defaultAccent {
+		t.Error("the first preset must be the default")
+	}
+}
+
+// oklchHue is a #rrggbb colour's hue in OKLCH, in degrees.
+func oklchHue(t *testing.T, hex string) float64 {
+	t.Helper()
+	n, err := strconv.ParseUint(strings.TrimPrefix(hex, "#"), 16, 32)
+	if err != nil {
+		t.Fatalf("colour %q: %v", hex, err)
+	}
+	lin := func(c uint64) float64 {
+		v := float64(c) / 255
+		if v <= 0.04045 {
+			return v / 12.92
+		}
+		return math.Pow((v+0.055)/1.055, 2.4)
+	}
+	r, g, b := lin(n>>16), lin(n>>8&255), lin(n&255)
+	l := math.Cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b)
+	m := math.Cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b)
+	s := math.Cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b)
+	A := 1.9779984951*l - 2.4285922050*m + 0.4505937099*s
+	B := 0.0259040371*l + 0.7827717662*m - 0.8086757660*s
+	return math.Mod(math.Atan2(B, A)*180/math.Pi+360, 360)
 }
 
 // TestHostileInput posts values people (or scripts) might send by accident

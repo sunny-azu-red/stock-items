@@ -26,8 +26,8 @@ The accent is worked out from two numbers, so it can change without touching a t
 
 | Custom property | Default | Range | Means |
 |---|---|---|---|
-| `--accent-h` | 280 (Indigo) | 0–359 | the hue on the colour wheel |
-| `--accent-i` | 100 | 0–100 | intensity: 0 is grey (Graphite), 100 full colour |
+| `--accent-h` | 295 (Violet) | 0–359 | the hue on the colour wheel |
+| `--accent-i` | 75 | 0–100 | intensity: 0 is grey (Graphite), 100 full colour |
 
 `--accent`, `--accent-strong` (hover, text on soft fills), `--accent-soft` (selected fills) and `--on-accent` (text on the accent) come from these at fixed lightnesses, so every hue looks equally calm. The neutrals (`--bg`, `--surface*`, `--border`, `--text`, `--muted`) lean towards the hue as much as the intensity says, so a grey accent gives true greys. `--info` (dates, expiry) sits 45° away from the accent, so it never reads as a button.
 
@@ -37,7 +37,9 @@ The palette is mellow on purpose ("Mist"): text is a soft grey-blue rather than 
 
 ### Appearance (theme.go)
 
-The sidebar's palette button opens **Appearance** (on a phone, from the More sheet): Theme (System, Light, Dark) and Accent (presets Indigo, Cobalt, Ocean, Plum, Raspberry, Graphite; a Colour slider over the whole wheel; an Intensity slider; **Back to Indigo**). Both are remembered by the device in a cookie (`theme`; `accent` as `hue-intensity`, e.g. `332-74`), like the vehicle worked on: the phone in the garage can be dark and plum while the desktop is light and indigo. The server renders them on `<html>` (`data-theme`, and `style="--accent-h: …; --accent-i: …"`), so a page never flashes the default first. `app.js` shows a change on the spot and saves it in the background; without it, the forms post and come back.
+The sidebar's palette button opens **Appearance** (on a phone, in the More sheet's place). **Theme** is three small pictures of the app, System, Light and Dark, each a sidebar and a card in that theme's own colours and the accent (System is light with dark over its corner); the one in use is ringed and named in the accent. **Accent** says on its heading's line which is in use (*Violet · default*, *Orchid*, *Custom*), with **Reset to default** (`.reset-link`, ↺ on the left) at the line's end whenever it isn't the default. Under it are the presets, Violet, Orchid, Mauve, Slate and Graphite, then, after a divider, **Custom**: a checkbox drawn as a rainbow swatch, filled with the accent once checked, that slides open a Colour slider over the whole wheel and an Intensity slider (`:has()`, no JavaScript needed). A colour that is no preset keeps Custom checked; a preset or Reset closes it. Both are remembered by the device in a cookie (`theme`; `accent` as `hue-intensity`, e.g. `318-80`), like the vehicle worked on: the phone in the garage can be dark and orchid while the desktop is light and violet. The server renders them on `<html>` (`data-theme`, and `style="--accent-h: …; --accent-i: …"`), so a page never flashes the default first. `app.js` shows a change on the spot and saves it in the background; without it, the forms post and come back (Custom's sliders with **Save accent**).
+
+**Choosing the presets.** The accent must read apart from what already has a colour: the status badges (red 22°, amber 60–75°, green 155°), the suggested vehicle colours (1°, 27°, 46°, 76°, 131°, 149°, 222°, 263°: a shared stock section and the accent's chips sit beside vehicle chips), and the info badge, which sits 45° below the accent and so must keep clear of the status colours too. That leaves 285–340° for a full colour; a muted one (Mauve, Slate) may sit nearer a vehicle colour, and Graphite has none. `TestAccentPresets` checks every preset; a custom colour may go anywhere.
 
 ### Status and data colours
 

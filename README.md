@@ -36,7 +36,7 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Suggestions as you type:** the item to buy or a part's item, with what's in stock, and the brands, categories, locations, makes and models, shops and service names you've used before, each kept in one spelling (`ktm` is saved as the `KTM` in use).
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
 - Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service).
-- **Appearance per device:** light, dark or the system's theme, and the accent colour picked from presets or a hue wheel with an intensity slider, remembered on each device.
+- **Appearance per device:** light, dark or the system's theme, and the accent colour picked from presets or made with a custom hue and intensity, remembered on each device.
 
 | Stock grouped by vehicle | Service kit | Vehicles |
 |---|---|---|

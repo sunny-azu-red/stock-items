@@ -167,7 +167,7 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 	// rows, so the sequences are past the highest id (the trash holds them).
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES
-			('KTM 390', 12000, '2024-03-01', 10), ('Golf', NULL, NULL, NULL), ('Sold', 1, NULL, NULL);
+			('KTM 390', 12000, '2024-03-01', 10), ('Golf', 0, '2020-01-01', 0), ('Sold', 1, '2020-01-01', 0);
 		INSERT INTO items (name, brand, unit, quantity, min_quantity, expires_on, location) VALUES
 			('Rear Brake Pads', 'OEM', 'piece', 2, 1, NULL, 'Shelf'), ('15W50', 'Silkolene', 'ml', 1525.5, 1000, '2029-06-30', ''),
 			('Gone', '', 'g', 0, NULL, NULL, '');
@@ -241,7 +241,7 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 	if err := refused(t, pool, `DELETE FROM service_records WHERE id = 1`); err == nil || !strings.Contains(err.Error(), "stock_movements_service_record_id_fkey") {
 		t.Errorf("after moving the columns: deleting a service with parts: %v, want the foreign key to refuse it", err)
 	}
-	if err := refused(t, pool, `INSERT INTO vehicles (id, name) OVERRIDING SYSTEM VALUE VALUES (100, 'golf')`); err == nil || !strings.Contains(err.Error(), "vehicles_name_key") {
+	if err := refused(t, pool, `INSERT INTO vehicles (id, name, odometer, purchased_on, odometer_at_purchase) OVERRIDING SYSTEM VALUE VALUES (100, 'golf', 0, '2020-01-01', 0)`); err == nil || !strings.Contains(err.Error(), "vehicles_name_key") {
 		t.Errorf("after moving the columns: a second Golf: %v, want the unique index to refuse it", err)
 	}
 	if err := refused(t, pool, `UPDATE items SET quantity = -1 WHERE id = 1`); err == nil || !strings.Contains(err.Error(), "items_quantity_non_negative") {
@@ -256,12 +256,12 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 	// A new row takes the id after the deleted one, and the deleted one
 	// restores from its snapshot, as restoreRows does it.
 	var id int64
-	if err := pool.QueryRow(ctx, `INSERT INTO vehicles (name) VALUES ('New') RETURNING id`).Scan(&id); err != nil || id != 4 {
+	if err := pool.QueryRow(ctx, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('New', 0, '2020-01-01', 0) RETURNING id`).Scan(&id); err != nil || id != 4 {
 		t.Errorf("new vehicle id = %d (%v), want 4", id, err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (id, version, name, kind, odometer, created_at) OVERRIDING SYSTEM VALUE
-		SELECT id, version, name, kind, odometer, created_at
+		INSERT INTO vehicles (id, version, name, kind, odometer, purchased_on, odometer_at_purchase, created_at) OVERRIDING SYSTEM VALUE
+		SELECT id, version, name, kind, odometer, purchased_on, odometer_at_purchase, created_at
 		FROM jsonb_populate_recordset(NULL::vehicles, (SELECT payload -> 'vehicles' FROM trash WHERE label = 'Vehicle: Sold'))`); err != nil {
 		t.Errorf("restoring the snapshot taken before: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestReorderColumns(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO vehicles (name) VALUES ('KTM');
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM', 0, '2020-01-01', 0);
 		INSERT INTO items (name) VALUES ('Pads');
 		INSERT INTO item_vehicles (item_id, vehicle_id) VALUES (1, 1);
 		SELECT reorder_columns('item_vehicles', ARRAY['vehicle_id', 'item_id'])`); err != nil {

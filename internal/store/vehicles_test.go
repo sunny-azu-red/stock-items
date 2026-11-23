@@ -18,12 +18,12 @@ func TestVehicles(t *testing.T) {
 	dup := stock.VehicleInput{Name: "ktm 390"}
 	dup.Normalize()
 	var conflict *store.ConflictError
-	if _, err := s.CreateVehicle(ctx, dup); !errors.As(err, &conflict) || conflict.Field != "name" {
+	if _, err := s.CreateVehicle(ctx, anchored(dup)); !errors.As(err, &conflict) || conflict.Field != "name" {
 		t.Fatalf("duplicate name: want ConflictError, got %v", err)
 	}
 
 	upd := stock.VehicleInput{Name: "KTM 390 Duke", Kind: stock.KindMotorcycle, Make: "KTM", Year: ptr(2021), Color: "#ff6600", Odometer: ptr(12000)}
-	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, upd)); err != nil {
+	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, upd))); err != nil {
 		t.Fatal(err)
 	}
 	v, err := s.GetVehicle(ctx, id)
@@ -75,7 +75,7 @@ func TestOdometerGuards(t *testing.T) {
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
-	v, err := s.CreateVehicle(ctx, vin)
+	v, err := s.CreateVehicle(ctx, anchored(vin))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,11 +122,11 @@ func TestOdometerGuards(t *testing.T) {
 	upd := vin
 	upd.Name = "KTM 390 Duke"
 	upd.Odometer = ptr(13500)
-	if err := s.UpdateVehicle(ctx, v, vehicleV(t, s, v, upd)); err != nil {
+	if err := s.UpdateVehicle(ctx, v, anchored(vehicleV(t, s, v, upd))); err != nil {
 		t.Errorf("rename: %v", err)
 	}
 	upd.Odometer = ptr(9000)
-	if err := s.UpdateVehicle(ctx, v, vehicleV(t, s, v, upd)); !errors.As(err, &conflict) {
+	if err := s.UpdateVehicle(ctx, v, anchored(vehicleV(t, s, v, upd))); !errors.As(err, &conflict) {
 		t.Errorf("lowering through the form: want conflict, got %v", err)
 	}
 }
@@ -136,7 +136,7 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 	odo := 10000
 	in := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	in.Normalize()
-	id, err := s.CreateVehicle(ctx, in)
+	id, err := s.CreateVehicle(ctx, anchored(in))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.Plate, in.KeepOdometer = "B-123", true
-	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, in)); err != nil {
+	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, in))); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := s.GetVehicle(ctx, id); *v.Odometer != 12000 || v.Plate != "B-123" {
@@ -159,7 +159,7 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 	}
 	in.KeepOdometer, in.Odometer = false, nil
 	var conflict *store.ConflictError
-	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, in)); !errors.As(err, &conflict) || conflict.Field != "odometer" {
+	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, in))); !errors.As(err, &conflict) || conflict.Field != "odometer" {
 		t.Errorf("clearing: want conflict, got %v", err)
 	}
 }
@@ -182,7 +182,7 @@ func TestVehicleMakesAndModels(t *testing.T) {
 		{Name: "Blank", Make: "", Model: ""},
 	} {
 		v.Normalize()
-		if _, err := s.CreateVehicle(ctx, v); err != nil {
+		if _, err := s.CreateVehicle(ctx, anchored(v)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -219,7 +219,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 		Odometer:           &currentOdo,
 	}
 	in.Normalize()
-	id, err := s.CreateVehicle(ctx, in)
+	id, err := s.CreateVehicle(ctx, anchored(in))
 	if err != nil {
 		t.Fatalf("CreateVehicle: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 		Odometer:           &svcOdo,
 	})
 	var conflict *store.ConflictError
-	if err := s.UpdateVehicle(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "odometer_at_purchase" {
+	if err := s.UpdateVehicle(ctx, id, anchored(upd)); !errors.As(err, &conflict) || conflict.Field != "odometer_at_purchase" {
 		t.Errorf("want ConflictError for odometer_at_purchase > service odometer, got %v", err)
 	}
 
@@ -305,7 +305,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 		OdometerAtPurchase: &purchaseOdo,
 		Odometer:           &svcOdo,
 	})
-	if err := s.UpdateVehicle(ctx, id, upd); !errors.As(err, &conflict) || conflict.Field != "purchased_on" {
+	if err := s.UpdateVehicle(ctx, id, anchored(upd)); !errors.As(err, &conflict) || conflict.Field != "purchased_on" {
 		t.Errorf("want ConflictError for purchased_on > service date, got %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 		Odometer:           &svcOdo,
 	}
 	upd.Normalize()
-	if err := s.UpdateVehicle(ctx, id, vehicleV(t, s, id, upd)); err != nil {
+	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, upd))); err != nil {
 		t.Fatalf("good UpdateVehicle: %v", err)
 	}
 	v, _ = s.GetVehicle(ctx, id)
@@ -337,7 +337,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 		OdometerAtPurchase: &purchaseOdo,
 	}
 	standalone.Normalize()
-	sID, err := s.CreateVehicle(ctx, standalone)
+	sID, err := s.CreateVehicle(ctx, anchored(standalone))
 	if err != nil {
 		t.Fatalf("CreateVehicle standalone: %v", err)
 	}

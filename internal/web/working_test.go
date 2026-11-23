@@ -29,6 +29,7 @@ func (a *testApp) postWorking(path string, form url.Values, cookie string) *http
 	if !form.Has("form_key") {
 		form.Set("form_key", newFormKey())
 	}
+	form = vehicleFormDefaults(path, form)
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: workingCookie, Value: cookie})
@@ -529,7 +530,7 @@ func TestWorkingOnEmptyStock(t *testing.T) {
 	for _, name := range []string{"A", "B"} {
 		in := stock.VehicleInput{Name: name}
 		in.Normalize()
-		id, err := a.store.CreateVehicle(ctx, in)
+		id, err := a.store.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -562,7 +563,7 @@ func TestWorkingOnShopping(t *testing.T) {
 	vehicle := func(name string) int64 {
 		in := stock.VehicleInput{Name: name}
 		in.Normalize()
-		id, err := a.store.CreateVehicle(ctx, in)
+		id, err := a.store.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -755,7 +756,7 @@ func TestShoppingSoleVehicle(t *testing.T) {
 	vehicle := func(name string) stock.Vehicle {
 		in := stock.VehicleInput{Name: name}
 		in.Normalize()
-		id, err := a.store.CreateVehicle(ctx, in)
+		id, err := a.store.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			t.Fatal(err)
 		}

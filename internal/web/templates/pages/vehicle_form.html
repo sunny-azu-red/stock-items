@@ -13,7 +13,7 @@
         {{template "field-err" (fieldErr (index $e "name") "name")}}
       </div>
       <fieldset class="field span-2{{if index $e "kind"}} has-error{{end}}"{{with index $e "kind"}} aria-describedby="kind-err"{{end}}>
-        <legend>Type</legend>
+        <legend>Type {{template "req"}}</legend>
         <span class="segmented">
           {{range $d.Kinds}}<label title="{{.Label}}"><input type="radio" name="kind" value="{{.}}" {{if eq (print .) $f.Kind}}checked{{end}}>{{icon .Icon}}<span class="seg-text">{{.Label}}</span></label>{{end}}
         </span>
@@ -30,28 +30,31 @@
   <div class="form-section">
     <h2>Details</h2>
     <div class="form-grid">
-      <div class="field">
-        <label for="make">Make</label>
-        <input class="input" id="make" name="make" value="{{$f.Make}}" placeholder="e.g. KTM" list="makes" autocomplete="off">
+      <div class="field{{if index $e "make"}} has-error{{end}}">
+        <div class="label-row"><label for="make">Make</label>{{template "req"}}</div>
+        <input class="input" id="make" name="make" value="{{$f.Make}}" required placeholder="e.g. KTM" list="makes" autocomplete="off" {{invalid (index $e "make") "make"}}>
         {{template "datalist" (dict "ID" "makes" "Options" $d.Makes)}}
+        {{template "field-err" (fieldErr (index $e "make") "make")}}
       </div>
-      <div class="field">
-        <label for="model">Model</label>
-        <input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke" list="models" autocomplete="off">
+      <div class="field{{if index $e "model"}} has-error{{end}}">
+        <div class="label-row"><label for="model">Model</label>{{template "req"}}</div>
+        <input class="input" id="model" name="model" value="{{$f.Model}}" required placeholder="e.g. 390 Duke" list="models" autocomplete="off" {{invalid (index $e "model") "model"}}>
         {{template "datalist" (dict "ID" "models" "Options" $d.Models)}}
+        {{template "field-err" (fieldErr (index $e "model") "model")}}
       </div>
       <div class="field{{if index $e "year"}} has-error{{end}}">
-        <label for="year">Year</label>
-        <input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>
+        <div class="label-row"><label for="year">Year</label>{{template "req"}}</div>
+        <input class="input" id="year" name="year" value="{{$f.Year}}" required inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>
         {{template "field-err" (fieldErr (index $e "year") "year")}}
       </div>
       <div class="field">
         <label for="plate">Plate</label>
         <input class="input" id="plate" name="plate" value="{{$f.Plate}}" placeholder="e.g. B 123 ABC" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
       </div>
-      <div class="field span-2">
-        <label for="vin">VIN</label>
-        <input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      <div class="field span-2{{if index $e "vin"}} has-error{{end}}">
+        <div class="label-row"><label for="vin">VIN</label>{{template "req"}}</div>
+        <input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" required placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" {{invalid (index $e "vin") "vin"}}>
+        {{template "field-err" (fieldErr (index $e "vin") "vin")}}
       </div>
     </div>
   </div>
@@ -61,19 +64,19 @@
     {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
     <div class="form-grid">
       <div class="field{{if index $e "odometer"}} has-error{{end}}">
-        <label for="odometer">Odometer ({{distUnit}})</label>
-        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>
+        <div class="label-row"><label for="odometer">Odometer ({{distUnit}})</label>{{template "req"}}</div>
+        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" required inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>
         {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}
       </div>
       <div class="field{{if index $e "purchased_on"}} has-error{{end}}">
-        <label for="purchased_on">Purchased on</label>
-        <input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" {{invalid (index $e "purchased_on") "purchased_on"}}>
+        <div class="label-row"><label for="purchased_on">Purchased on</label>{{template "req"}}</div>
+        <input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" required {{invalid (index $e "purchased_on") "purchased_on"}}>
         {{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}
       </div>
       {{/* Two columns: its label and "?" outgrow one at four a row. */}}
       <div class="field span-2{{if index $e "odometer_at_purchase"}} has-error{{end}}">
-        <div class="label-row"><label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>{{template "tip" (dict "For" "Odometer at purchase" "ID" "odometer-at-purchase-tip" "Text" "0 for a brand new vehicle.")}}</div>
-        <input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase" "odometer-at-purchase-tip"}}>
+        <div class="label-row"><label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>{{template "req"}}{{template "tip" (dict "For" "Odometer at purchase" "ID" "odometer-at-purchase-tip" "Text" "0 for a brand new vehicle.")}}</div>
+        <input class="input" id="odometer_at_purchase" name="odometer_at_purchase" value="{{$f.OdometerAtPurchase}}" required inputmode="numeric" placeholder="e.g. 0" {{invalid (index $e "odometer_at_purchase") "odometer_at_purchase" "odometer-at-purchase-tip"}}>
         {{template "field-err" (fieldErr (index $e "odometer_at_purchase") "odometer_at_purchase")}}
       </div>
     </div>
@@ -87,8 +90,8 @@
     <div class="toggled-fields">
       <div class="form-grid">
         <div class="field{{if index $e "warranty_ends_on"}} has-error{{end}}">
-          <label for="warranty_ends_on">Warranty ends on</label>
-          <input class="input" type="date" id="warranty_ends_on" name="warranty_ends_on" value="{{$f.WarrantyEndsOn}}" {{invalid (index $e "warranty_ends_on") "warranty_ends_on"}}>
+          <div class="label-row"><label for="warranty_ends_on">Warranty ends on</label>{{template "req"}}</div>
+          <input class="input" type="date" id="warranty_ends_on" name="warranty_ends_on" value="{{$f.WarrantyEndsOn}}" required {{invalid (index $e "warranty_ends_on") "warranty_ends_on"}}>
           {{template "field-err" (fieldErr (index $e "warranty_ends_on") "warranty_ends_on")}}
         </div>
         <div class="field{{if index $e "warranty_ends_at"}} has-error{{end}}">

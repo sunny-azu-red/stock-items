@@ -70,7 +70,8 @@ func TestWarrantyLabels(t *testing.T) {
 func TestVehicleWarrantyValidate(t *testing.T) {
 	day := func(y int, m time.Month, d int) *time.Time { t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC); return &t }
 	base := func(edit func(*VehicleInput)) Errors {
-		in := VehicleInput{Name: "A", Kind: KindMotorcycle, Color: "#ffffff"}
+		in := VehicleInput{Name: "A", Kind: KindMotorcycle, Color: "#ffffff", Make: "KTM", Model: "390", Year: ptr(2024), VIN: "VBK1",
+			Odometer: ptr(10000), PurchasedOn: day(2024, 1, 1), OdometerAtPurchase: ptr(0)}
 		edit(&in)
 		return in.Validate()
 	}
@@ -81,7 +82,11 @@ func TestVehicleWarrantyValidate(t *testing.T) {
 	}{
 		{"ticked with nothing", base(func(in *VehicleInput) { in.HasWarranty = true }), "warranty_ends_on"},
 		{"ticked with a date", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsOn = true, day(2028, 3, 1) }), ""},
-		{"ticked with a reading", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(100000) }), ""},
+		// The day is required; the reading is optional.
+		{"ticked with a reading only", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(100000) }), "warranty_ends_on"},
+		{"ticked with both", base(func(in *VehicleInput) {
+			in.HasWarranty, in.WarrantyEndsOn, in.WarrantyEndsAt = true, day(2028, 3, 1), ptr(100000)
+		}), ""},
 		{"unticked with nothing", base(func(in *VehicleInput) {}), ""},
 		// Bought used: its warranty may have ended before it was bought.
 		{"date before the purchase", base(func(in *VehicleInput) {
@@ -91,7 +96,7 @@ func TestVehicleWarrantyValidate(t *testing.T) {
 		{"reading 0", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(0) }), "warranty_ends_at"},
 		{"reading over the maximum", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(MaxOdometer+1) }), "warranty_ends_at"},
 		{"reading below the purchase reading", base(func(in *VehicleInput) {
-			in.HasWarranty, in.OdometerAtPurchase, in.WarrantyEndsAt = true, ptr(5000), ptr(4000)
+			in.HasWarranty, in.OdometerAtPurchase, in.WarrantyEndsOn, in.WarrantyEndsAt = true, ptr(5000), day(2028, 3, 1), ptr(4000)
 		}), ""},
 	}
 	for _, tt := range tests {

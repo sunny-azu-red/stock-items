@@ -138,6 +138,8 @@ New migrations are applied automatically on start; to apply them separately, run
 
 **00003 (vehicle warranty).** It adds two empty warranty columns, so nothing changes until a warranty is entered, with one exception: a kit with an intermediate schedule whose Intermediate months is empty used to count as under warranty (the full service keeping its own deadline), and now the vehicle's warranty decides. Right after deploying it, open each vehicle under warranty and enter its end (Under warranty, Warranty ends on); until then its kits count as alternating.
 
+**00004 (vehicle required fields).** A vehicle's odometer, purchase date and purchase reading become required (`NOT NULL`). Nothing is filled in: if a vehicle, or a deleted one in the trash, lacks any of them, the migration stops, names it and changes nothing (the app doesn't start). Before deploying, check that every vehicle has them; fill in any that doesn't on its edit form (restore a deleted one first, or empty it from the trash). The form now also requires make, model, year and VIN, and a warranty's end date: open each vehicle and save it once to see whether anything is missing.
+
 ## Health check
 
 The running build's version shows when you hover the Pitbox logo at the top of the sidebar, and on any device (a phone too) at `/healthz`. `GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.

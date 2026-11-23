@@ -73,6 +73,7 @@ func (a *testApp) post(path string, form url.Values, headers ...string) *httptes
 		}
 		form = sent
 	}
+	form = vehicleFormDefaults(path, form)
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for i := 0; i+1 < len(headers); i += 2 {
@@ -111,7 +112,7 @@ func (a *testApp) seed() (k390, k1290 int64) {
 	mk := func(name string) int64 {
 		in := stock.VehicleInput{Name: name, Odometer: ptr(10000)}
 		in.Normalize()
-		id, err := a.store.CreateVehicle(ctx, in)
+		id, err := a.store.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			a.t.Fatal(err)
 		}
@@ -135,6 +136,53 @@ func (a *testApp) seed() (k390, k1290 int64) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// vehicleFormPath matches the vehicle form's actions (add and edit), and
+// vehicleDefaults are its required fields with values a test doesn't care
+// about (stock.VehicleInput.Validate): bought new on 1 Jan 2020.
+var (
+	vehicleFormPath = regexp.MustCompile(`^/vehicles(/\d+)?$`)
+	vehicleDefaults = url.Values{
+		"make": {"KTM"}, "model": {"Test"}, "year": {"2020"}, "vin": {"VBKTEST0000000001"},
+		"odometer": {"0"}, "purchased_on": {"2020-01-01"}, "odometer_at_purchase": {"0"},
+	}
+)
+
+// vehicleFormDefaults adds the vehicle form's required fields a test
+// doesn't name to a form posted to path (other forms are left as they
+// are). A test that leaves one out on purpose sends it empty.
+func vehicleFormDefaults(path string, form url.Values) url.Values {
+	if !vehicleFormPath.MatchString(path) {
+		return form
+	}
+	sent := url.Values{}
+	for k, v := range vehicleDefaults {
+		if !form.Has(k) {
+			sent[k] = v
+		}
+	}
+	for k, v := range form {
+		sent[k] = v
+	}
+	return sent
+}
+
+// anchored fills in what every vehicle has (the database requires them,
+// migration 00004) for a test that doesn't care: bought on 1 Jan 2020,
+// before anything a test logs, at its current reading. So a kit never
+// done is overdue by months and on track by distance, whatever the day.
+func anchored(in stock.VehicleInput) stock.VehicleInput {
+	if in.Odometer == nil {
+		in.Odometer = ptr(0)
+	}
+	if in.OdometerAtPurchase == nil {
+		in.OdometerAtPurchase = ptr(*in.Odometer)
+	}
+	if in.PurchasedOn == nil {
+		in.PurchasedOn = ptr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	}
+	return in
+}
 
 // vehicleChecked reports whether a kit or service form's Vehicle chips have
 // the vehicle with id picked.

@@ -87,7 +87,7 @@ func TestSpellings(t *testing.T) {
 		for i, mm := range [][2]string{{"KTM", "390 Duke"}, {"ktm", "390 DUKE"}} {
 			in := stock.VehicleInput{Name: "Bike " + strconv.Itoa(i), Make: mm[0], Model: mm[1]}
 			in.Normalize()
-			id, err := s.CreateVehicle(ctx, in)
+			id, err := s.CreateVehicle(ctx, anchored(in))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -135,12 +135,12 @@ func TestSpellings(t *testing.T) {
 	t.Run("an update leaves out the record itself, and keeps what it didn't change", func(t *testing.T) {
 		in := stock.VehicleInput{Name: "Car", Make: "skoda", Model: "Octavia"}
 		in.Normalize()
-		car, err := s.CreateVehicle(ctx, in)
+		car, err := s.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			t.Fatal(err)
 		}
 		in.Make, in.Version = "Skoda", cur(t, s, store.WhatVehicle, car)
-		if err := s.UpdateVehicle(ctx, car, in); err != nil {
+		if err := s.UpdateVehicle(ctx, car, anchored(in)); err != nil {
 			t.Fatal(err)
 		}
 		if got := col(t, `SELECT make FROM vehicles WHERE id = $1`, car); got != "Skoda" {

@@ -294,11 +294,33 @@ func (in VehicleInput) Validate() Errors {
 	if in.Kind != KindMotorcycle && in.Kind != KindCar && in.Kind != KindOther {
 		errs.Add("kind", "Unknown vehicle type")
 	}
-	if in.Year != nil && (*in.Year < 1900 || *in.Year > 2100) {
+	// What an owner always knows is required: the schedules count from the
+	// odometer and the purchase, and the rest names the vehicle.
+	if in.Make == "" {
+		errs.Add("make", "Make is required")
+	}
+	if in.Model == "" {
+		errs.Add("model", "Model is required")
+	}
+	if in.Year == nil {
+		errs.Add("year", "Year is required")
+	} else if *in.Year < 1900 || *in.Year > 2100 {
 		errs.Add("year", "Year must be between 1900 and 2100")
+	}
+	if in.VIN == "" {
+		errs.Add("vin", "VIN is required")
 	}
 	if !IsColor(in.Color) {
 		errs.Add("color", "Colour must look like #ff6600")
+	}
+	if in.Odometer == nil {
+		errs.Add("odometer", "Odometer is required")
+	}
+	if in.PurchasedOn == nil {
+		errs.Add("purchased_on", "Purchase date is required")
+	}
+	if in.OdometerAtPurchase == nil {
+		errs.Add("odometer_at_purchase", "Odometer at purchase is required")
 	}
 	if in.Odometer != nil && *in.Odometer < 0 {
 		errs.Add("odometer", "Odometer cannot be negative")
@@ -325,8 +347,8 @@ func (in VehicleInput) Validate() Errors {
 			errs.Add("odometer", "Current odometer cannot be lower than purchase odometer")
 		}
 	}
-	if in.HasWarranty && in.WarrantyEndsOn == nil && in.WarrantyEndsAt == nil {
-		errs.Add("warranty_ends_on", "Enter when the warranty ends: a date, a reading or both")
+	if in.HasWarranty && in.WarrantyEndsOn == nil {
+		errs.Add("warranty_ends_on", "Enter the day the warranty ends")
 	}
 	// Neither end is checked against the purchase: a vehicle bought used
 	// may be bought after its warranty ended, or past its reading. The

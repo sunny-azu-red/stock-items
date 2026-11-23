@@ -386,16 +386,18 @@ func (k Kit) NextIsIntermediate(currentOdo *int, today time.Time) bool {
 	return true
 }
 
-// dueBefore reports whether a falls due strictly before b: by odometer when both
-// have an odometer target, else by date when both have one.
+// dueBefore reports whether a may fall due strictly before b. Each falls
+// due at whichever of its odometer target and date comes first, and a
+// distance doesn't turn into days, so a comes first when it is earlier in
+// either: in an odometer target or date both have, or in one b has none of
+// (a full service with no day to count its months from must not hide an
+// intermediate one's date). A tie in one goes by the other; a tie in all
+// goes to b.
 func dueBefore(a, b Due) bool {
-	if a.DueOdometer != nil && b.DueOdometer != nil {
-		return *a.DueOdometer < *b.DueOdometer
+	if a.DueOdometer != nil && (b.DueOdometer == nil || *a.DueOdometer < *b.DueOdometer) {
+		return true
 	}
-	if a.DueDate != nil && b.DueDate != nil {
-		return a.DueDate.Before(*b.DueDate)
-	}
-	return false
+	return a.DueDate != nil && (b.DueDate == nil || a.DueDate.Before(*b.DueDate))
 }
 
 // Due computes when the kit's next active service (Intermediate or Full) is

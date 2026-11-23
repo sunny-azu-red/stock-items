@@ -14,6 +14,22 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+// anchored fills in what every vehicle has (the database requires them,
+// migration 00004) for a test that doesn't care: bought new on 1 Jan 2020,
+// before anything a test logs.
+func anchored(in stock.VehicleInput) stock.VehicleInput {
+	if in.Odometer == nil {
+		in.Odometer = ptr(0)
+	}
+	if in.OdometerAtPurchase == nil {
+		in.OdometerAtPurchase = ptr(0)
+	}
+	if in.PurchasedOn == nil {
+		in.PurchasedOn = ptr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	}
+	return in
+}
+
 // cur reads a record's current version, as a page opened now would carry
 // it (0 when the record is gone). It is safe to call from goroutines.
 func cur(t *testing.T, s *store.Store, what string, id int64) int {
@@ -89,7 +105,7 @@ func mustVehicle(t *testing.T, s *store.Store, name string) int64 {
 	t.Helper()
 	in := stock.VehicleInput{Name: name}
 	in.Normalize()
-	id, err := s.CreateVehicle(context.Background(), in)
+	id, err := s.CreateVehicle(context.Background(), anchored(in))
 	if err != nil {
 		t.Fatal(err)
 	}

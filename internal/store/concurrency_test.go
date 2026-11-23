@@ -98,7 +98,7 @@ func TestLoggingAndDeletingServicesDoNotDeadlock(t *testing.T) {
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
-	v, _ := s.CreateVehicle(ctx, vin)
+	v, _ := s.CreateVehicle(ctx, anchored(vin))
 	a := mustItem(t, s, stock.ItemInput{Name: "A", Unit: stock.UnitPiece, Quantity: 1000})
 	b := mustItem(t, s, stock.ItemInput{Name: "B", Unit: stock.UnitPiece, Quantity: 1000})
 	var reading sync.Mutex

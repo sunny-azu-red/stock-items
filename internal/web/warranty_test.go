@@ -35,7 +35,7 @@ func TestVehicleWarrantyForm(t *testing.T) {
 
 	// Ticked with nothing: the box stays ticked, with the error.
 	rec := a.post("/vehicles", with(url.Values{"has_warranty": {"1"}}))
-	expect(t, rec, http.StatusUnprocessableEntity, "Enter when the warranty ends: a date, a reading or both",
+	expect(t, rec, http.StatusUnprocessableEntity, "Enter the day the warranty ends",
 		`id="has_warranty" name="has_warranty" value="1" checked>`)
 
 	// Unticked: whatever its fields hold is dropped.

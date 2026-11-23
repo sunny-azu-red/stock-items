@@ -156,10 +156,19 @@ func TestItemInputBarcodeSKU(t *testing.T) {
 }
 
 func TestVehicleInputValidate(t *testing.T) {
-	in := VehicleInput{Name: " KTM 390 ", VIN: " vbk123 "}
+	bought := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	in := VehicleInput{Name: " KTM 390 ", VIN: " vbk123 ", Make: "KTM", Model: "390 Duke", Year: ptr(2021),
+		Odometer: ptr(12000), PurchasedOn: &bought, OdometerAtPurchase: ptr(0)}
 	in.Normalize()
 	if errs := in.Validate(); errs.Any() {
 		t.Fatalf("unexpected errors: %v", errs)
+	}
+	// What an owner always knows is required.
+	errs := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff"}.Validate()
+	for _, f := range []string{"make", "model", "year", "vin", "odometer", "purchased_on", "odometer_at_purchase"} {
+		if errs[f] == "" {
+			t.Errorf("want %s required, got %v", f, errs)
+		}
 	}
 	if in.Kind != KindMotorcycle || in.Color != "#f97316" || in.VIN != "VBK123" {
 		t.Errorf("defaults not applied: %+v", in)
@@ -168,7 +177,7 @@ func TestVehicleInputValidate(t *testing.T) {
 	badDate := time.Date(1850, 1, 1, 0, 0, 0, 0, time.UTC)
 	negOdo := -10
 	bad := VehicleInput{Kind: "boat", Color: "red", Year: &year, PurchasedOn: &badDate, OdometerAtPurchase: &negOdo}
-	errs := bad.Validate()
+	errs = bad.Validate()
 	for _, f := range []string{"name", "kind", "color", "year", "purchased_on", "odometer_at_purchase"} {
 		if _, ok := errs[f]; !ok {
 			t.Errorf("expected error for %s, got %v", f, errs)
@@ -185,7 +194,8 @@ func TestVehicleInputValidate(t *testing.T) {
 	validDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	zeroOdo := 0
 	currOdo := 1000
-	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
+	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", Make: "KTM", Model: "1290 Super Adventure S", Year: ptr(2024), VIN: "VBKV1",
+		PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
 	if errs := good.Validate(); errs.Any() {
 		t.Errorf("unexpected error on valid input: %v", errs)
 	}

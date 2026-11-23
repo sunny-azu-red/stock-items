@@ -163,7 +163,7 @@ func TestSchemaInvariants(t *testing.T) {
 	}
 
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name) VALUES ('KTM 390');
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 0, '2020-01-01', 0);
 		INSERT INTO items (name, quantity) VALUES ('15W50', 1000);
 		INSERT INTO stock_movements (item_id, kind, delta, total_price, occurred_on) VALUES (1, 'bought', 2000, 39.80, '2026-04-20');
 		INSERT INTO service_records (vehicle_id, performed_on, title) VALUES (1, '2026-05-01', 'Oil service');
@@ -273,6 +273,58 @@ func TestOdometerMovedNotNullMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer_moved = NULL WHERE title = 'Chain'`); err != nil {
+		t.Errorf("after Down: NULL refused: %v", err)
+	}
+}
+
+// 00004 makes a vehicle's odometer, purchase date and purchase reading NOT
+// NULL: it stops, changing nothing, on a vehicle or a deleted one in the
+// trash without them, and Down makes them nullable again.
+func TestVehicleRequiredMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0), ('Golf', NULL, '2020-01-01', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	stopped := func(when, want string) {
+		t.Helper()
+		_, err := provider.UpTo(ctx, 4)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
+		}
+		if v, err := provider.GetDBVersion(ctx); err != nil || v != 3 {
+			t.Errorf("%s: version %d (%v), want 3", when, v, err)
+		}
+	}
+	stopped("a vehicle without an odometer", "vehicles without an odometer, purchase date or purchase reading: Golf")
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE vehicles SET odometer = 0 WHERE name = 'Golf';
+		INSERT INTO trash (kind, label, payload) VALUES ('vehicle', 'Vehicle: Sold',
+			'{"vehicles": [{"id": 60, "name": "Sold", "odometer": 1, "purchased_on": null, "odometer_at_purchase": 0}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("a deleted vehicle without a purchase date", "deleted vehicles in the trash without an odometer, purchase date or purchase reading: Vehicle: Sold")
+
+	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{vehicles,0,purchased_on}', '"2020-01-01"')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	for _, col := range []string{"odometer", "purchased_on", "odometer_at_purchase"} {
+		if err := refused(t, pool, `UPDATE vehicles SET `+col+` = NULL`); err == nil {
+			t.Errorf("after Up: NULL %s was taken", col)
+		}
+	}
+	if _, err := provider.DownTo(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE vehicles SET odometer = NULL, purchased_on = NULL, odometer_at_purchase = NULL WHERE name = 'Golf'`); err != nil {
 		t.Errorf("after Down: NULL refused: %v", err)
 	}
 }

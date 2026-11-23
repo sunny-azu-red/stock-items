@@ -63,7 +63,7 @@ func TestAllowedHosts(t *testing.T) {
 
 	// A same-origin form post from the rebound page saves nothing.
 	post := func(h http.Handler, host string) int {
-		form := url.Values{"name": {"From " + host}, "form_key": {newFormKey()}}
+		form := vehicleFormDefaults("/vehicles", url.Values{"name": {"From " + host}, "form_key": {newFormKey()}})
 		req := httptest.NewRequest(http.MethodPost, "/vehicles", strings.NewReader(form.Encode()))
 		req.Host = host
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

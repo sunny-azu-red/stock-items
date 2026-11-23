@@ -69,14 +69,14 @@ func TestServicesPageOfAnArchivedVehicle(t *testing.T) {
 	k390, _ := a.seed()
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Chain"}, "interval_months": {"6"}}), http.StatusSeeOther)
 	page := "/services?v=" + itoa(k390)
-	expect(t, a.get(page), http.StatusOK, `href="/kits/new?vehicle=`+itoa(k390)+`"`, `href="/services/new?vehicle=`+itoa(k390)+`"`, "Not done yet")
+	expect(t, a.get(page), http.StatusOK, `href="/kits/new?vehicle=`+itoa(k390)+`"`, `href="/services/new?vehicle=`+itoa(k390)+`"`, "Overdue")
 	expect(t, a.postV("/vehicles/"+itoa(k390)+"/archive", nil), http.StatusSeeOther)
 	rec := a.get(page)
 	expect(t, rec, http.StatusOK, "Chain")
 	// The sidebar's Log service (no vehicle) stays; the page's own buttons go.
-	expectNot(t, rec, `href="/kits/new`, `href="/services/new?`, "Not done yet")
+	expectNot(t, rec, `href="/kits/new`, `href="/services/new?`, "Overdue")
 	// The archived vehicles list shows its next kit without a reminder too.
-	expectNot(t, a.get("/vehicles?archived=1"), "Not done yet")
+	expectNot(t, a.get("/vehicles?archived=1"), "Overdue")
 }
 
 // Adding a reading to a service logged without one, then removing it

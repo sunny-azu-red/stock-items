@@ -53,10 +53,20 @@ async function pickVehicle(page: Page, name: string) {
 // The headings of an open item list, in order.
 const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
 
+// Every vehicle has what its owner knows (all required): here bought on
+// 1 Mar 2024 at its current reading, so a kit never done is overdue by its
+// months and on track by its distance, whatever the day the tests run.
 async function addVehicle(page: Page, name: string, odometer: string, warrantyEndsOn?: string) {
   await page.goto("/vehicles/new");
   await field(page, "Name").fill(name);
-  await page.getByLabel("Odometer (km)").fill(odometer);
+  const [make, ...model] = name.split(" ");
+  await field(page, "Make").fill(make);
+  await field(page, "Model").fill(model.join(" "));
+  await field(page, "Year").fill("2023");
+  await field(page, "VIN").fill("VBKE2E" + model.join(""));
+  await page.getByLabel("Odometer (km)", { exact: true }).fill(odometer);
+  await field(page, "Purchased on").fill("2024-03-01");
+  await page.getByLabel("Odometer at purchase (km)").fill(odometer);
   if (warrantyEndsOn) {
     // Its fields show once the box is ticked.
     await expect(page.getByLabel("Warranty ends on")).toBeHidden();
@@ -259,7 +269,8 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Oil Service");
   await expect(page.locator(".page-head")).toContainText("1 part missing");
-  await expect(page.locator(".page-head")).toContainText("Not done yet");
+  // Never done: it counts from the purchase, 12 months ago and more.
+  await expect(page.locator(".page-head")).toContainText("Overdue");
   // Each part's stock against what the kit needs is a <meter>, red when short.
   const meters = page.locator("meter.meter");
   await expect(meters).toHaveCount(3);

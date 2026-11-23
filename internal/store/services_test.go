@@ -34,8 +34,10 @@ func TestKitsAndServices(t *testing.T) {
 	if r := kit.ReadinessAt(kit.VehicleOdometer, store.AppToday()); r.Lines != 2 || r.ShortLines != 1 || kit.VehicleName != "KTM 390" || kit.LastService != nil {
 		t.Errorf("kit = %+v readiness %+v", kit, r)
 	}
-	if got := kit.Due(nil, time.Now()).State; got != stock.DueNever {
-		t.Errorf("due state = %s", got)
+	// Never done: it counts from the purchase (1 Jan 2020, anchored), so
+	// 12 months on it is overdue.
+	if got := kit.Due(nil, time.Now()).State; got != stock.DueOverdue {
+		t.Errorf("due state = %s, want overdue", got)
 	}
 
 	// Not enough oil: the whole service must roll back.
@@ -170,7 +172,7 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		n++
 		in := stock.VehicleInput{Name: fmt.Sprintf("Bike %d", n), Odometer: odo}
 		in.Normalize()
-		id, err := s.CreateVehicle(ctx, in)
+		id, err := s.CreateVehicle(ctx, anchored(in))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -232,10 +234,12 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 			}
 			return v, svc
 		}, odo(12500)},
-		{"a vehicle without a reading gets none back", func() (int64, int64) {
+		// Every vehicle has a reading (migration 00004): one with no other
+		// service goes back to its purchase reading.
+		{"the only service goes back to the purchase reading", func() (int64, int64) {
 			v := vehicle(nil)
 			return v, service(v, 12000)
-		}, nil},
+		}, odo(0)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -336,7 +340,7 @@ func TestUpdateService(t *testing.T) {
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
-	k390, err := s.CreateVehicle(ctx, vin)
+	k390, err := s.CreateVehicle(ctx, anchored(vin))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +455,7 @@ func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
-	v, _ := s.CreateVehicle(ctx, vin)
+	v, _ := s.CreateVehicle(ctx, anchored(vin))
 	kin := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalDistance: ptr(6000)}
 	kin.Normalize()
 	kit, err := s.CreateKit(ctx, kin)
@@ -629,7 +633,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	// Under warranty: the full service keeps its own deadline.
 	vin := stock.VehicleInput{Name: "KTM 1290", HasWarranty: true, WarrantyEndsOn: ptr(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))}
 	vin.Normalize()
-	k1290, err := s.CreateVehicle(ctx, vin)
+	k1290, err := s.CreateVehicle(ctx, anchored(vin))
 	if err != nil {
 		t.Fatal(err)
 	}

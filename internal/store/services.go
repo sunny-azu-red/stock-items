@@ -481,8 +481,8 @@ func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, re
 
 // restoreOdometer undoes moveOdometer for a service that is being deleted
 // or changed: if the service moved the odometer and nothing changed it
-// since, it goes back to the highest of its earlier reading and the
-// readings of the vehicle's other services (NULL if there are none).
+// since, it goes back to the highest of its earlier reading, the readings
+// of the vehicle's other services and the purchase reading.
 func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 	// No new version, like moveOdometer.
 	_, err := tx.Exec(ctx, `

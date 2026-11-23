@@ -27,7 +27,8 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
-	expect(t, a.get(kitPath), http.StatusOK, "1 part missing", "1\u202f175 ml", "Not done yet")
+	// Never done, it counts from the purchase (2020): overdue by its months.
+	expect(t, a.get(kitPath), http.StatusOK, "1 part missing", "1\u202f175 ml", "Overdue")
 	expect(t, a.get("/"), http.StatusOK, "Oil service", "Upcoming service")
 	expect(t, a.get("/shopping"), http.StatusOK, "Short for the Oil service kit")
 
@@ -725,7 +726,7 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 
 	// A kit with two schedules names the one its header counts.
 	rec = a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
 		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
 		"line_item": {itoa(oil)}, "line_qty": {"5 L"},
 		"inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"},
@@ -788,9 +789,10 @@ func TestKitMissingStates(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	expect(t, a.getWorking(rec.Header().Get("Location"), cookie), http.StatusOK, "Brake Pads", "Silkolene")
 
-	// Two schedules: the full one is next and ready, the intermediate one
-	// misses 2 pads (the list asks for 2 of the 4).
-	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+	// Two schedules: the full one is next (overdue by its months since the
+	// purchase) and ready, the intermediate one misses 2 pads (the list
+	// asks for 2 of the 4).
+	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
 		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
 		"line_item": {itoa(oil)}, "line_qty": {"100 ml"}, "inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"}})
 	page = a.get(interURL)
@@ -824,7 +826,7 @@ func TestKitMissingStates(t *testing.T) {
 	coolant := itemID(t, a.store, "M3.0")
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
 		"line_item": {itoa(coolant)}, "line_qty": {"2 L"}})
-	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
+	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
 		"has_inter": {"1"}, "inter_interval_distance": {"5000"},
 		"line_item": {itoa(coolant)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(coolant)}, "inter_line_qty": {"100 ml"}})
 	v, err := a.store.GetVehicle(ctx, k1290)
@@ -982,44 +984,6 @@ func TestRestoreServiceBeforePurchaseDateIsRefused(t *testing.T) {
 	expect(t, a.get("/trash"), http.StatusOK, `action="/trash/`+itoa(undo)+`/restore"`)
 }
 
-// A warranty schedule (full every 15 000 km or 12 months, intermediate every
-// 7 500 km with no months) on a vehicle with no purchase date: after an
-// intermediate service the full service's yearly deadline has no day to
-// count from. The kit says "Not done yet", never "On track", and the kit
-// and vehicle pages ask for the purchase date; once it is set, the deadline
-// counts from it.
-func TestWarrantyDeadlineNeedsAPurchaseDate(t *testing.T) {
-	a := newApp(t)
-	a.seed()
-	k1290 := a.vehicle(t, "KTM 1290")
-	vPath := vehiclePath(k1290)
-	rec := a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k1290)}, "name": {"Major Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"has_inter": {"1"}, "inter_interval_distance": {"7500"},
-	})
-	expect(t, rec, http.StatusSeeOther)
-	kitURL := rec.Header().Get("Location")
-	kitID := mustID(t, kitURL)
-	today := "2026-10-29" // newApp's day
-	expect(t, a.post("/services", url.Values{
-		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_intermediate": {"1"},
-		"title": {"Major Service"}, "performed_on": {today}, "odometer": {"7500"},
-	}), http.StatusSeeOther)
-
-	hint := "so a warranty's yearly service isn't missed"
-	page := a.get(kitURL)
-	expect(t, page, http.StatusOK, "Not done yet", hint, `href="`+vPath+`/edit"`)
-	expectNot(t, page, "On track")
-	expect(t, a.get(vPath), http.StatusOK, "Major Service repeats by months", hint)
-
-	expect(t, a.postV(vPath, url.Values{"name": {"KTM 1290"}, "kind": {"motorcycle"}, "odometer": {"7500"}, "odometer_was": {"7500"},
-		"purchased_on": {today}}), http.StatusSeeOther)
-	page = a.get(kitURL)
-	expect(t, page, http.StatusOK, "On track")
-	expectNot(t, page, hint)
-	expectNot(t, a.get(vPath), hint)
-}
-
 // "Log service" from a kit, and the edit of such a service: the vehicle
 // chip and the kit badge sit in the page header, and the vehicle and kit
 // travel as hidden fields. A refused save (422) keeps all of it, the
@@ -1062,7 +1026,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	// Refused: no title. The kit name posted is stale.
 	rec = a.post("/services", url.Values{
 		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Old Name"}, "kit_intermediate": {"1"},
-		"title": {""}, "performed_on": {"2026-10-20"}, "odometer": {"7600"},
+		"title": {""}, "performed_on": {"2026-10-20"}, "odometer": {"10600"},
 		"part_item": {itoa(filter), itoa(oil)}, "part_qty": {"1", "750 ml"},
 	})
 	expect(t, rec, http.StatusUnprocessableEntity,
@@ -1081,7 +1045,7 @@ func TestServiceFormFromAKit(t *testing.T) {
 	// Saved as Intermediate; the edit shows the same header and the tier.
 	rec = a.post("/services", url.Values{
 		"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_intermediate": {"1"},
-		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer": {"7600"},
+		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-10-20"}, "odometer": {"10600"},
 		"part_item": {itoa(filter)}, "part_qty": {"1"},
 	})
 	expect(t, rec, http.StatusSeeOther)

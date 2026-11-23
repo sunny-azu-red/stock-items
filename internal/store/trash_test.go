@@ -265,7 +265,7 @@ func TestTrashRestoresAService(t *testing.T) {
 	odo := 10000
 	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
 	vin.Normalize()
-	v, _ := s.CreateVehicle(ctx, vin)
+	v, _ := s.CreateVehicle(ctx, anchored(vin))
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 2000})
 	kit := stock.KitInput{VehicleID: v, Name: "Oil service", Lines: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}}}
 	kit.Normalize()

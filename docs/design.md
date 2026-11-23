@@ -126,7 +126,7 @@ One scale, so a page reads as one thing: the same space wherever the same kind o
 | A form's fields | 4, 2 or 1 a row (never 3), at least 200px each | one a row | `.form-grid` |
 | Inside a form, as you see it (box edges, text's capitals and baseline) | 10px to what belongs to a thing (label → box, box → error), 17px to the next (heading → what follows, note → fields, field → field) | the same | `.form-section`, `.field`, `.rows` ([Forms](#6-layout)) |
 | A page's side column | 300–480px; the main column takes the rest | under the main column (below 680px of content) | `.split` |
-| Vehicle cards | at least 320px, as many as fit | one a row | `.grid-3` |
+| Vehicle cards | at least a quarter of the row, 340–420px, as many as fit | one a row | `.grid-3` |
 
 * **Wide windows: lists fill, the rest stops.** Lists, tables and the dashboard fill the window. A form stops at four fields a row, a side column at 480px, and vehicle cards keep their width (`auto-fill`, not `auto-fit`): at least a quarter of the row, 340–420px, so a big screen gets four or five wider cards rather than more narrow ones.
 * **The same space on every side of the page.** Nothing at the end of a page or a card adds a margin of its own: `.main > :last-child`, `.card-pad > :last-child`, `.card-body > :last-child` and `.empty > :last-child` have none (a `<p>` keeps its 12px only between paragraphs).

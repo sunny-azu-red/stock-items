@@ -100,22 +100,23 @@ func TestVehicleWarrantyStaleForm(t *testing.T) {
 func TestVehicleWarrantyShows(t *testing.T) {
 	tests := []struct {
 		name, endsOn string
+		bar          string   // the Working on bar's words after the name
 		page, card   []string // on the vehicle page, on its card
 		dash, kit    []string
 		not          []string // on none of the four
 	}{
-		{name: "runs", endsOn: "2028-03-01",
+		{name: "runs", endsOn: "2028-03-01", bar: "· Under warranty",
 			page: []string{`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-shield-check"></use></svg> Under warranty</span>`, "Warranty ends", "1 Mar 2028 · 100 000 km"},
 			card: []string{`<use href="#i-shield-check"></use></svg> Under warranty</span>`},
 			dash: []string{"· Under warranty</span>"},
 			kit:  []string{"<dt>Warranty ends</dt><dd>1 Mar 2028 · 100 000 km</dd>"},
 			not:  []string{"Warranty ends soon"}},
-		{name: "ends soon", endsOn: "2026-12-15",
+		{name: "ends soon", endsOn: "2026-12-15", bar: "· Warranty ends soon",
 			page: []string{`<span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
 			card: []string{`<use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
 			dash: []string{"· Warranty ends soon</span>"},
 			kit:  []string{"<dt>Warranty ends</dt><dd>15 Dec 2026 · 100 000 km <span class=\"badge badge-warn\">"}},
-		{name: "ended", endsOn: "2026-11-01",
+		{name: "ended", endsOn: "2026-11-01", bar: "· Warranty ended",
 			page: []string{`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> Warranty ended</span>`, "<dt>Warranty ended</dt><dd>1 Nov 2026 · 100\u202f000 km</dd>"},
 			card: []string{`<use href="#i-shield"></use></svg> Warranty ended</span>`},
 			dash: []string{"· Warranty ended</span>"},
@@ -142,6 +143,13 @@ func TestVehicleWarrantyShows(t *testing.T) {
 			expect(t, a.get(kit), http.StatusOK, tt.kit...)
 			for _, p := range []string{path, "/vehicles", "/", kit} {
 				expectNot(t, a.get(p), tt.not...)
+			}
+			// While it is worked on (the bar needs a second vehicle), the bar
+			// says it on every page, its own too, muted.
+			expect(t, a.post("/vehicles", url.Values{"name": {"KillJoy"}, "kind": {"car"}, "color": {"#2563eb"}}), http.StatusSeeOther)
+			id := itoa(mustID(t, path))
+			for _, p := range []string{"/trash", path} {
+				expect(t, a.getWorking(p, id), http.StatusOK, `Working on <strong>LittleJoy</strong> <span class="working-meta">`+tt.bar+"</span>")
 			}
 		})
 	}

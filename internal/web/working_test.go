@@ -485,8 +485,8 @@ func TestWorkingOnPages(t *testing.T) {
 }
 
 // While a vehicle is worked on, the nav's Vehicles is that vehicle's page
-// (Vehicle, its kind icon) and the bar's name opens it; the list is out of
-// view until you stop.
+// (Vehicle, its kind icon); the bar's name is plain text, no link; the list
+// is out of view until you stop.
 func TestWorkingOnNav(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
@@ -495,10 +495,10 @@ func TestWorkingOnNav(t *testing.T) {
 	barLink := `<a class="working-name" href="/vehicles/` + w + `">`
 	for _, path := range []string{"/shopping?v=" + w, "/trash", "/stock?general=1&v=" + w} {
 		rec := a.getWorking(path, w)
-		expect(t, rec, http.StatusOK, nav, `"></use></svg>Vehicle</a>`, barLink)
-		expectNot(t, rec, `<a href="/vehicles" `)
+		expect(t, rec, http.StatusOK, nav, `"></use></svg>Vehicle</a>`, `<span class="working-name">`)
+		expectNot(t, rec, `<a href="/vehicles" `, barLink)
 	}
-	// The list opens the vehicle's page, where the bar's name isn't a link.
+	// The list opens the vehicle's page.
 	expectRedirect(t, a.getWorking("/vehicles", w), "/vehicles/"+w)
 	own := a.getWorking("/vehicles/"+w, w)
 	expect(t, own, http.StatusOK, `<span class="working-name">`, nav+` aria-current="page"`)

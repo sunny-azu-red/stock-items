@@ -1230,13 +1230,13 @@
   .working-name {
     display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm);
     & .icon { color: var(--chip); }
+    /* After the name, quieter: its warranty. */
+    & .working-meta { color: var(--muted); }
     @media (width <= 820px) {
       flex: 1 1 0; min-width: 0;
       & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     }
   }
-  /* The name opens the vehicle's page: plain, on hover in its colour. */
-  a.working-name:hover strong { color: var(--chip); }
   .working-actions {
     margin-left: auto; display: flex; align-items: center; gap: 4px;
   }

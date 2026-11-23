@@ -1190,7 +1190,7 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
   }
-  // On its own page the bar's name is no link.
+  // The bar's name is no link, on any page.
   await expect(page.locator(".working-on a.working-name")).toHaveCount(0);
   // The list and the other vehicles are out of view meanwhile: no way to
   // them from its page, and an old link opens the vehicle worked on.
@@ -1198,9 +1198,10 @@ test("the nav's Vehicle opens the vehicle worked on, and a phone's More holds th
   await page.goto("/vehicles");
   await expect(page).toHaveURL(/\/vehicles\/\d+$/);
   await expect(page.locator("main h1")).toHaveText("KTM 390");
-  // The bar's name opens the vehicle too.
+  // Nor elsewhere: the nav's Vehicle opens it.
   await page.goto("/shopping");
-  await page.locator(".working-on a.working-name").click();
+  await expect(page.locator(".working-on a.working-name")).toHaveCount(0);
+  await (await sidebar(page)).locator("a.nav-vehicle").click();
   await expect(page.locator("main h1")).toHaveText("KTM 390");
   // Switching on its page opens the one now worked on.
   await (await sidebar(page)).locator(".work-on").getByRole("button", { name: "KTM 1290" }).click();
@@ -1260,7 +1261,7 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   expect(await look(more), "More while open").toBe(await look(stockTab));
   expect(await look(page.locator(".tabbar a[href='/shopping']")), "Shop while More is open").not.toBe(await look(stockTab));
   // The bar under the grey only closes it.
-  await tap(".working-on a.working-name");
+  await tap(".working-on .working-name");
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
   // The tab bar isn't grey: More again closes it, another tab opens.
@@ -1295,7 +1296,7 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   expect(await grey(sheet), "More's grey under Appearance").toBe("none");
   expect(await grey(panel), "Appearance's grey").toBe(scrim);
   // Out of reach: a tap on the page closes both, and opens nothing.
-  await tap(".working-on a.working-name");
+  await tap(".working-on .working-name");
   await expect(panel).toBeHidden();
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);

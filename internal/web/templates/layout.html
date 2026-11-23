@@ -157,15 +157,15 @@
 {{define "head-more"}}<button class="btn more-btn" type="button" commandfor="head-more" command="toggle-popover" title="More actions" aria-label="More actions" hidden>{{icon "ellipsis"}}</button><div class="head-more" id="head-more" popover></div>{{end}}
 
 {{/* The bar at the top of every page while a vehicle is worked on: says
-     so (its name opens the vehicle's page) or stops (All vehicles, an ×).
+     so (its name, then its warranty, plain text) or stops (All vehicles, an ×).
      Another vehicle is chosen in the sidebar's Work on list (on a phone, in
      More), or on its own page, where the bar's place offers it while no
      vehicle is worked on (below). It is the pages' vehicle control: their
      vehicle chips are hidden meanwhile. */}}
 {{define "working-on"}}{{with .WorkingOn}}<section class="working-on" aria-label="Working on" style="{{chipStyle .Color}}">
-  {{/* The name opens the vehicle's page, except on that page. */}}
-  {{if eq $.Path (print "/vehicles/" .ID)}}<span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></span>
-  {{else}}<a class="working-name" href="/vehicles/{{.ID}}">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong></span></a>{{end}}
+  {{/* After the name, muted, the warranty badge's words: the dashboard
+       drops its Vehicles card meanwhile, which says them. */}}
+  <span class="working-name">{{icon .Kind.Icon}}<span>Working on <strong>{{.Name}}</strong>{{with (.Warranty $.Today).State.Label}} <span class="working-meta">· {{.}}</span>{{end}}</span></span>
   <span class="working-actions">
     <form class="inline-form" method="post" action="/working-on"><button class="close-btn" type="submit" name="vehicle" value="" title="All vehicles">{{icon "x"}}<span class="working-btn-label">All vehicles</span></button></form>
   </span>

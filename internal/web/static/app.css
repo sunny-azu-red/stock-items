@@ -85,7 +85,8 @@
     --surface:       light-dark(oklch(99.2% calc(.004 * var(--tint)) var(--h)), oklch(26.5% calc(.011 * var(--tint)) var(--h)));
     --surface-2:     light-dark(oklch(94.6% calc(.009 * var(--tint)) var(--h)), oklch(28.5% calc(.012 * var(--tint)) var(--h)));
     --surface-3:     light-dark(oklch(92% calc(.011 * var(--tint)) var(--h)),   oklch(32% calc(.013 * var(--tint)) var(--h)));
-    /* Card outlines and the rules between rows. */
+    /* The rules between rows and under heading bars, and the edge of what
+       floats (popovers, menus, lists, dialogs); cards have none. */
     --border:        light-dark(oklch(92% calc(.009 * var(--tint)) var(--h)),   oklch(31.5% calc(.012 * var(--tint)) var(--h)));
     /* Field and outlined button borders: a light line, not a hard edge. */
     --field-border:  light-dark(oklch(85% calc(.012 * var(--tint)) var(--h)),   oklch(38.5% calc(.014 * var(--tint)) var(--h)));
@@ -410,7 +411,7 @@
      way, when there's no room). Its items are the buttons themselves, as
      rows: no edge of their own, the hover grey, the red of Delete, which a
      hairline sets apart from what comes before it. Like every popover it
-     takes a card's hairline and no shadow, and fades. */
+     takes the --border hairline and no shadow, and fades. */
   .head-more {
     position: fixed; inset: auto; margin: 0; margin-block-start: 4px;
     position-area: block-end span-inline-start; position-try-fallbacks: flip-block, flip-inline;

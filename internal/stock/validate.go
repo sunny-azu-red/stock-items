@@ -559,9 +559,10 @@ func (in KitInput) Validate() Errors {
 	switch {
 	case in.InBetween < 0 || in.InBetween > 2:
 		errs.Add("in_between", "Choose none, 1 or 2")
-	case in.InBetween > 0 && in.IntervalDistance == nil:
-		// The services in between are steps of the full distance.
-		errs.Add("interval_distance", "Enter the distance: the services in between are steps of it")
+	case in.InBetween > 0 && in.IntervalDistance == nil && in.IntervalMonths == nil:
+		// The services in between are steps of the full distance, or of its
+		// months without one.
+		errs.Add("interval_distance", "Enter the distance or months: the services in between are steps of them")
 	case in.InBetween == 0 && len(in.InterLines) > 0:
 		errs.Add("in_between", "Choose how many services come in between")
 	}

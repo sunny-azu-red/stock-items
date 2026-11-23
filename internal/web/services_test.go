@@ -1244,3 +1244,18 @@ func TestServicesAddKitInCard(t *testing.T) {
 	}
 	expectNot(t, a.get("/services?v="+itoa(k1290)), foot)
 }
+
+// A kit that counts months only can have intermediate services: in equal
+// steps of its months (coolant every 48, one in between: every 24).
+func TestMonthsOnlyKitInBetween(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Coolant"}, "interval_months": {"48"}, "in_between": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	expect(t, a.get(kit), http.StatusOK, "<dt>Full every</dt><dd>48 months</dd>", "<dt>Intermediate every</dt><dd>24 months</dd>")
+	expect(t, a.get(kit+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`)
+	// Without a distance or months, there is nothing to step.
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brake pads"}, "in_between": {"1"}}),
+		http.StatusUnprocessableEntity, "Enter the distance or months: the services in between are steps of them")
+}

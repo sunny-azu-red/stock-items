@@ -812,9 +812,11 @@
      when it isn't, so nothing needs clearing. */
   .toggled-fields { margin-top: var(--gap); }
   .form-section:has(> .toggle input:not(:checked)) > .toggled-fields { display: none; }
-  /* A kit's intermediate services are steps of the full distance: their
-     section shows once it is entered, their parts while there are any. */
-  .page-form:has(#interval_distance:placeholder-shown) :is(#inter-schedule, #break-in-field) { display: none; }
+  /* A kit's intermediate services are steps of the full distance (or its
+     months without one): their section shows once either is entered, their
+     parts while there are any; the break-in comes before the distance. */
+  .page-form:has(#interval_distance:placeholder-shown):has(#interval_months:placeholder-shown) #inter-schedule,
+  .page-form:has(#interval_distance:placeholder-shown) #break-in-field { display: none; }
   #inter-schedule:has(input[name="in_between"][value="0"]:checked) > .toggled-fields { display: none; }
   /* A line between sections: over each one with a section shown before
      it, whatever hidden inputs or hidden sections sit in between. */

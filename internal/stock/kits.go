@@ -218,13 +218,13 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 }
 
 // InterDue computes when the kit's next service in between is due: a step
-// (InterStep) and the full schedule's months after the latest service of
-// either kind, or after the purchase before the first.
+// (InterStep, InterMonths) after the latest service of either kind, or
+// after the purchase before the first.
 func (k Kit) InterDue(currentOdo *int, today time.Time) Due {
 	if !k.HasIntermediate() || k.Archived() {
 		return Due{State: DueNone}
 	}
-	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.IntervalMonths, currentOdo, today)
+	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.InterMonths(), currentOdo, today)
 }
 
 // FullDue computes when the kit's full service is next due.
@@ -234,7 +234,7 @@ func (k Kit) InterDue(currentOdo *int, today time.Time) Due {
 //   - Without a warranty and without services in between, from the last
 //     service.
 //   - Otherwise (no warranty, or it has ended) services take turns, each a
-//     step (InterStep) and the full months after the one before: the full
+//     step (InterStep, InterMonths) after the one before: the full
 //     one comes after the services in between still to do, from the last
 //     service of either kind.
 func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
@@ -257,8 +257,8 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if step := k.InterStep(); step != nil {
 		distance = ptrTo(steps * *step)
 	}
-	if k.IntervalMonths != nil {
-		months = ptrTo(steps * *k.IntervalMonths)
+	if m := k.InterMonths(); m != nil {
+		months = ptrTo(steps * *m)
 	}
 	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, months, currentOdo, today)
 }

@@ -466,7 +466,7 @@ type Kit struct {
 	IntervalDistance          *int
 	IntervalMonths            *int
 	// InBetween is how many lighter services come between two full ones
-	// (0 to 2): every InterStep, at the full schedule's months.
+	// (0 to 2): every InterStep and InterMonths.
 	InBetween int
 	// BreakInAt is the reading a new vehicle\'s break-in service is due at
 	// (NextIsBreakIn); nil without one.
@@ -509,6 +509,21 @@ func (k Kit) InterStep() *int {
 	}
 	step := *k.IntervalDistance / (k.InBetween + 1)
 	return &step
+}
+
+// InterMonths is the months from one service to the next when the kit has
+// services in between: the full schedule's months, or, for a kit that
+// counts no distance, those months in InBetween + 1 equal steps (rounded
+// down, a month at least). Nil without them, or without months.
+func (k Kit) InterMonths() *int {
+	if k.InBetween <= 0 || k.IntervalMonths == nil {
+		return nil
+	}
+	if k.IntervalDistance != nil {
+		return k.IntervalMonths
+	}
+	m := max(1, *k.IntervalMonths/(k.InBetween+1))
+	return &m
 }
 
 // VehicleChip returns a Vehicle value with the kit's vehicle chip fields.

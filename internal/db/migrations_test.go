@@ -460,3 +460,41 @@ func TestServiceKitTierMigration(t *testing.T) {
 		t.Errorf("after Down: trash snapshot kit_intermediate = %q (%v), want true", snapshot, err)
 	}
 }
+
+// 00007 lets a kit with months only have intermediate services; Down stops
+// on one, changing nothing.
+func TestKitInBetweenMonthsMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	coolant := `INSERT INTO service_kits (vehicle_id, name, interval_months, in_between) VALUES (1, 'Coolant', 48, 1)`
+	if err := refused(t, pool, coolant); err == nil {
+		t.Fatal("before 00007: months only with one in between was taken")
+	}
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, coolant); err != nil {
+		t.Fatalf("after Up: months only with one in between refused: %v", err)
+	}
+	if err := refused(t, pool, `INSERT INTO service_kits (vehicle_id, name, in_between) VALUES (1, 'Pads', 1)`); err == nil {
+		t.Error("after Up: one in between with no interval was taken")
+	}
+	if _, err := provider.DownTo(ctx, 6); err == nil || !strings.Contains(err.Error(), "kits with intermediate services and months only: Coolant") {
+		t.Errorf("Down with a months-only kit: %v, want it stopped", err)
+	}
+	if v, err := provider.GetDBVersion(ctx); err != nil || v != 7 {
+		t.Errorf("after the stopped Down: version %d (%v), want 7", v, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_kits SET in_between = 0`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.DownTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+}

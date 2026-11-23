@@ -85,7 +85,7 @@
       <dl class="facts">
         {{if $k.HasIntermediate}}
         <div><dt>Full every</dt><dd>{{template "kit-interval" (dict "Distance" $k.IntervalDistance "Months" $k.IntervalMonths)}}</dd></div>
-        <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Distance" $k.InterStep "Months" $k.IntervalMonths)}}</dd></div>
+        <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Distance" $k.InterStep "Months" $k.InterMonths)}}</dd></div>
         <div><dt>Next up</dt><dd>{{if $d.View.NextBreakIn}}Break-in{{else if $d.View.NextInter}}Intermediate{{else}}Full{{end}}</dd></div>
         <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .Odometer}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{else}}

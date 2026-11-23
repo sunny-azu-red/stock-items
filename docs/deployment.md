@@ -144,6 +144,8 @@ New migrations are applied automatically on start; to apply them separately, run
 
 **00006 (break-in).** A service's `kit_intermediate` becomes `kit_tier` (`full`, `intermediate`, `break_in`), converted exactly, in the trash too; kits get an empty `break_in_at`. Nothing else changes. After deploying, mark a vehicle's first service as **Break-in** on its edit form if it was one (GreyJoy's "Oil Service (First)"): the full schedule then counts from the purchase again.
 
+**00007 (intermediate services by months).** A kit without a distance may have intermediate services too, in equal steps of its months. It only relaxes a CHECK: nothing changes.
+
 ## Health check
 
 The running build's version shows when you hover the Pitbox logo at the top of the sidebar, and on any device (a phone too) at `/healthz`. `GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.

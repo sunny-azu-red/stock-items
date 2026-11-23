@@ -294,6 +294,47 @@ func tierOf(inter bool) KitTier {
 	return TierFull
 }
 
+func TestInterMonths(t *testing.T) {
+	for _, tt := range []struct {
+		distance, months *int
+		inBetween        int
+		want             *int
+	}{
+		{ptr(8000), ptr(12), 1, ptr(12)}, // with a distance: the full months
+		{ptr(8000), ptr(12), 2, ptr(12)},
+		{nil, ptr(48), 1, ptr(24)}, // months only: equal steps of them
+		{nil, ptr(48), 2, ptr(16)},
+		{nil, ptr(1), 2, ptr(1)}, // a month at least
+		{ptr(8000), nil, 1, nil},
+		{nil, ptr(48), 0, nil},
+	} {
+		got := Kit{IntervalDistance: tt.distance, IntervalMonths: tt.months, InBetween: tt.inBetween}.InterMonths()
+		if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
+			t.Errorf("InterMonths(%v, %v, %d) = %v, want %v", deref(tt.distance), deref(tt.months), tt.inBetween, deref(got), deref(tt.want))
+		}
+	}
+}
+
+// A kit that counts months only (coolant every 48) with one service in
+// between: at 24 months; under warranty the full one keeps its own 48,
+// without one they take turns every 24.
+func TestMonthsOnlyInBetween(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	full := &ServiceRef{ID: 1, PerformedOn: d(2025, 1, 1), Odometer: ptr(0), Tier: TierFull}
+	half := &ServiceRef{ID: 2, PerformedOn: d(2027, 3, 1), Odometer: ptr(20000), Tier: TierIntermediate}
+	kit := func(warrantyOn *time.Time, last *ServiceRef, since int) Kit {
+		return Kit{VehicleWarrantyEndsOn: warrantyOn, IntervalMonths: ptr(48), InBetween: 1, VehiclePurchasedOn: ptr(d(2024, 12, 1)), VehicleOdometerAtPurchase: ptr(0),
+			LastFullService: full, LastFullOdometer: ptr(0), LastService: last, LastOdometer: last.Odometer, InterSinceFull: since}
+	}
+	runs := ptr(d(2035, 1, 1))
+	checkNext(t, kit(runs, full, 0), ptr(5000), d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
+	checkNext(t, kit(nil, full, 0), ptr(5000), d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
+	// After a late half: under warranty, the full one by its own 48 months;
+	// without one, 24 months after the half.
+	checkNext(t, kit(runs, half, 1), ptr(21000), d(2027, 6, 1), "full", DueOK, nil, "2029-01-01")
+	checkNext(t, kit(nil, half, 1), ptr(21000), d(2027, 6, 1), "full", DueOK, nil, "2029-03-01")
+}
+
 func deref(p *int) any {
 	if p == nil {
 		return nil

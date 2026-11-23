@@ -63,12 +63,13 @@
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
   </div>
-  {{/* The intermediate services are steps of the full distance, so their
-       section shows once it is entered, and their parts while there are
-       any (CSS). The server drops the parts with none. */}}
+  {{/* The intermediate services are steps of the full distance (or its
+       months without one), so their section shows once either is entered,
+       and their parts while there are any (CSS). The server drops the parts
+       with none. */}}
   <div class="form-section" id="inter-schedule">
     <h2>Intermediate services</h2>
-    <p class="hint">Lighter jobs between full services (like a mid-interval oil &amp; filter change), with their own, smaller set of parts. They come in equal steps of the distance above, at its months.</p>
+    <p class="hint">Lighter jobs between full services (like a mid-interval oil &amp; filter change), with their own, smaller set of parts. They come in equal steps of the distance above, at its months, or of the months alone without a distance.</p>
     <div class="form-grid">
       <fieldset class="field span-all{{if index $e "in_between"}} has-error{{end}}"{{with index $e "in_between"}} aria-describedby="in_between-err"{{end}}>
         <legend>Between two full services</legend>

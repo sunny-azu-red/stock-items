@@ -479,8 +479,11 @@
   .card > .pager { border-top: 1px solid var(--border); }
 
   .grid { display: grid; gap: var(--gap); }
-  /* auto-fill, not auto-fit: two cards keep a card's width on a wide window. */
-  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
+  /* auto-fill, not auto-fit: two cards keep a card's width on a wide window.
+     The narrowest a card gets grows with the window, a quarter of the row
+     from 340px to 420px: three a row on a laptop, 4-5 wider ones on a big
+     screen instead of more narrow ones whose text ends in "…". */
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(min(clamp(340px, 24%, 420px), 100%), 1fr)); }
   :is(.grid, .tiles, .split) > .card + .card { margin-top: 0; }
   /* The page's main column and a side column of details: the side one
      stays 300-480px, wide enough for a kit row's badges beside its name

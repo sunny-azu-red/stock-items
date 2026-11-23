@@ -1702,7 +1702,9 @@ test("screenshots", async ({ page }, testInfo) => {
       // The sticky sidebar is one screen high too: stretch it down the page,
       // so its footer is at the bottom and not halfway down.
       await fullPageStyles(page);
-      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
+      // Transitions end first: a form's first field takes the focus as it
+      // loads, and a shot mid-way through its ring's fade differed each run.
+      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true, animations: "disabled" });
     }
   }
   // Working on a vehicle: its dashboard and its stock, with the bar.
@@ -1712,7 +1714,7 @@ test("screenshots", async ({ page }, testInfo) => {
     for (const [name, url] of [["dashboard-working", "/"], ["stock-working", "/stock"]]) {
       await page.goto(url);
       await fullPageStyles(page);
-      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true });
+      await page.screenshot({ path: `${dir}/${device}/${scheme}/${name}.png`, fullPage: true, animations: "disabled" });
     }
   }
 });

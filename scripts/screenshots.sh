@@ -40,20 +40,31 @@ mkdir -p docs/screenshots
 cp -r "$shots/desktop" "$shots/mobile" docs/screenshots/
 
 # Lossless: the same pixels, about a third smaller. Chromium's anti-aliasing
-# varies by a level or two between runs: a screenshot that differs from the
-# committed one by no more than that keeps the committed file.
+# varies between runs: by a level or two anywhere, and by up to about ten on
+# a few dozen pixels of a rounded corner or an icon's edge. A screenshot that
+# differs from the committed one by no more than that keeps the committed
+# file. A real change is far more: text is 100+ levels off its background,
+# and even a faint border or outline is hundreds of pixels.
 echo "==> recompress"
 find docs/screenshots -name '*.png' -print0 | while IFS= read -r -d '' f; do
   vips copy "$f" "$shots/png.png[compression=9,strip]"
   mv "$shots/png.png" "$f"
   if git cat-file -e "HEAD:$f" 2>/dev/null && ! git diff --quiet -- "$f"; then
     git show "HEAD:$f" > "$shots/old.png"
-    if [ "$(vipsheader -f width "$f")x$(vipsheader -f height "$f")" = \
-         "$(vipsheader -f width "$shots/old.png")x$(vipsheader -f height "$shots/old.png")" ]; then
+    w=$(vipsheader -f width "$f") h=$(vipsheader -f height "$f")
+    if [ "${w}x$h" = "$(vipsheader -f width "$shots/old.png")x$(vipsheader -f height "$shots/old.png")" ]; then
       vips subtract "$f" "$shots/old.png" "$shots/d.v"
       vips abs "$shots/d.v" "$shots/a.v"
-      if [ "$(vips max "$shots/a.v" | cut -d. -f1)" -le 2 ]; then
+      max=$(vips max "$shots/a.v" | cut -d. -f1)
+      if [ "$max" -le 2 ]; then
         git checkout -q -- "$f"
+      elif [ "$max" -le 16 ]; then
+        # The pixels off by 3 levels or more, in any colour: fewer than 100?
+        vips relational_const "$shots/a.v" "$shots/m.v" moreeq 3
+        vips bandbool "$shots/m.v" "$shots/o.v" or
+        if awk -v avg="$(vips avg "$shots/o.v")" -v n="$((w * h))" 'BEGIN { exit !(avg * n / 255 < 100) }'; then
+          git checkout -q -- "$f"
+        fi
       fi
     fi
   fi

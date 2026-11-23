@@ -1429,8 +1429,8 @@
       & span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     }
     & .meta { color: var(--muted); font-size: .75rem; margin-top: 2px; }
-    /* A list row's badge (stock, warranty), on its own line under the title. */
-    & .badge-line { display: flex; margin-block: 4px; }
+    /* A list row's stock badge, on its own line under the title. */
+    & .stock-line { display: flex; margin-block: 4px; }
     & .end { text-align: right; white-space: nowrap; font-weight: 600; }
   }
 

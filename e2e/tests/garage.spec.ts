@@ -1261,9 +1261,10 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   expect(await look(more), "More while open").toBe(await look(stockTab));
   expect(await look(page.locator(".tabbar a[href='/shopping']")), "Shop while More is open").not.toBe(await look(stockTab));
   // The bar under the grey only closes it.
-  await tap(".working-on .working-name");
+  await tap(".working-on .close-btn"); // would stop working on it
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  await expect(page.locator(".working-on")).toBeVisible();
   // The tab bar isn't grey: More again closes it, another tab opens.
   await more.click();
   await expect(sheet).toBeVisible();
@@ -1296,10 +1297,11 @@ test("a phone's More sheet greys the page, and Appearance takes its place", asyn
   expect(await grey(sheet), "More's grey under Appearance").toBe("none");
   expect(await grey(panel), "Appearance's grey").toBe(scrim);
   // Out of reach: a tap on the page closes both, and opens nothing.
-  await tap(".working-on .working-name");
+  await tap(".working-on .close-btn"); // would stop working on it
   await expect(panel).toBeHidden();
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/shopping\?v=\d+$/);
+  await expect(page.locator(".working-on")).toBeVisible();
   // Back to More, by ←, by the tab bar's More (a tap or a key) and by Esc: the sheet again,
   // and its grey. The two swap at once: nothing of Appearance lingers in
   // or out (a fade shows the page through it; its grey left on More's is

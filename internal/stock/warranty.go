@@ -24,9 +24,6 @@ type Warranty struct {
 	// the odometer reading it ends past.
 	EndsOn *time.Time
 	EndsAt *int
-	// DaysLeft and DistanceLeft count to each end that is known.
-	DaysLeft     *int
-	DistanceLeft *int
 }
 
 // WarrantyOf works out a warranty that ends on endsOn (the last day it
@@ -42,13 +39,11 @@ func WarrantyOf(endsOn *time.Time, endsAt *int, odo *int, today time.Time) Warra
 	if endsOn != nil {
 		// Both are midnight UTC days, so a DST change can't make one 23 hours.
 		days := int(DateOnly(*endsOn).Sub(DateOnly(today)).Hours() / 24)
-		w.DaysLeft = &days
 		ended = ended || days < 0
 		soon = soon || days <= DueSoonDays
 	}
 	if endsAt != nil && odo != nil {
 		left := *endsAt - *odo
-		w.DistanceLeft = &left
 		ended = ended || left < 0
 		soon = soon || left <= WarrantySoonDistance
 	}

@@ -382,7 +382,7 @@
   <ul class="list">
     {{range .Matches}}
     <li>
-      <span class="grow"><span class="title-row"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a>{{if .Chips}}{{template "vehicle-chips" (dict "IDs" .VehicleIDs "Vehicles" $vs "Link" false)}}{{end}}</span><span class="badge-line">{{template "stock-badge" (stockBadge .Item true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
+      <span class="grow"><span class="title-row"><a class="title" href="/items/{{.ID}}">{{.DisplayName}}</a>{{if .Chips}}{{template "vehicle-chips" (dict "IDs" .VehicleIDs "Vehicles" $vs "Link" false)}}{{end}}</span><span class="stock-line">{{template "stock-badge" (stockBadge .Item true)}}</span>{{if .Archived}}<span class="meta">Archived</span>{{end}}</span>
       <form class="inline-form" method="post" action="/shopping/{{$entry}}/link"><input type="hidden" name="item_id" value="{{.ID}}"><input type="hidden" name="version" value="{{$version}}">{{with $v}}<input type="hidden" name="v" value="{{.}}">{{end}}<button class="btn btn-sm btn-primary" type="submit">{{icon "package-plus"}} {{if .Archived}}Restore and add to it{{else}}Add to this item{{end}}</button></form>
     </li>
     {{end}}

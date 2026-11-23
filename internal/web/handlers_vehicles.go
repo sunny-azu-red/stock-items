@@ -544,9 +544,6 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			if k.VehicleOdometerAtPurchase == nil {
 				k.VehicleOdometerAtPurchase = v.OdometerAtPurchase
 			}
-			if k.VehicleWarrantyEndsOn == nil && k.VehicleWarrantyEndsAt == nil {
-				k.VehicleWarrantyEndsOn, k.VehicleWarrantyEndsAt = v.WarrantyEndsOn, v.WarrantyEndsAt
-			}
 		}
 		out[i] = kitView{
 			Kit:             k,

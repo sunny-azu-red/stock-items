@@ -412,11 +412,14 @@ func TestKitIntermediateSchedules(t *testing.T) {
 
 // The schedules of an expensive bike under warranty, and of one whose
 // services simply alternate. Full every 15 000 km or 12 months, intermediate
-// every 7 500 km: with no intermediate months (warranty), an intermediate
-// service never moves the full service's deadline, which counts from the
-// last full service or the purchase; with intermediate months (alternating),
-// each service comes one intermediate step after the other, in distance and in
-// months. A month deadline with no day to count from is never "On track".
+// every 7 500 km: while the vehicle's warranty runs, an intermediate service
+// never moves the full service's deadline, which counts from the last full
+// service or the purchase; after it, or without one, each service comes one
+// intermediate step after the other, in distance and, with intermediate
+// months, in months (without, the months count from the last full service).
+// The switch is on the day after the warranty's last day, or past its
+// reading, also for an intermediate service done while it ran. A month
+// deadline with no day to count from is never "On track".
 func TestWarrantyAndAlternatingSchedules(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
@@ -551,6 +554,22 @@ func TestIntermediateScheduleEdges(t *testing.T) {
 	a := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), InterIntervalMonths: ptr(6), LastService: svc(d(2026, 7, 1), 6000, true), LastFullService: full}
 	if due := a.FullDue(odo(10500), d(2026, 10, 1)); due.State != DueOverdue || due.DueOdometer == nil || *due.DueOdometer != 10000 || due.DueDate == nil || !due.DueDate.Equal(d(2027, 1, 1)) {
 		t.Errorf("alternating, intermediate by months only: full due = %+v, want overdue at 10 000 km / 2027-01-01", due)
+	}
+
+	// No warranty, no intermediate months: an intermediate service wouldn't
+	// reset the full service's months, so a full service due soon by date
+	// comes first, though the intermediate one is due sooner by distance.
+	n := Kit{IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InterIntervalDistance: ptr(7500), LastService: full, LastFullService: full}
+	if n.NextIsIntermediate(odo(7000), d(2026, 12, 10)) {
+		t.Error("no warranty, no intermediate months, full due soon by date: want the full service next")
+	}
+	if !n.NextIsIntermediate(odo(7000), d(2026, 10, 1)) {
+		t.Error("no warranty, no intermediate months, full not due yet: want the intermediate next")
+	}
+	// With intermediate months, the intermediate service resets them: it comes first.
+	n.InterIntervalMonths = ptr(12)
+	if !n.NextIsIntermediate(odo(7000), d(2026, 12, 10)) {
+		t.Error("no warranty, intermediate months, full due soon by date: want the intermediate next")
 	}
 }
 

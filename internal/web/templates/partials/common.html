@@ -70,6 +70,10 @@
      warranty, Warranty ends soon or Warranty ended; nothing without one. */}}
 {{define "warranty-badge"}}{{if eq .State "active"}}<span class="badge badge-ok">{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span class="badge badge-muted">{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
 
+{{/* The warranty badge's icon and words without its colour, where a
+     vehicle is one line of a list (the /vehicles cards' stats). */}}
+{{define "warranty-text"}}{{if eq .State "active"}}<span>{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span>{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span>{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
+
 {{define "archived-badge"}}<span class="badge badge-muted"{{with .}} title="Archived {{date .}}"{{end}}>{{icon "archive"}} Archived</span>{{end}}
 
 {{define "archived-date-badge"}}<span class="badge badge-muted">{{icon "archive"}} Archived {{date .}}</span>{{end}}

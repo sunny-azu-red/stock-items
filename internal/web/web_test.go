@@ -830,7 +830,12 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km / empty months for warranty).
+	// The 1290 is under warranty: the full service keeps its own deadline.
+	if _, err := a.pool.Exec(context.Background(), `UPDATE vehicles SET warranty_ends_on = '2028-03-01' WHERE id = $1`, k1290); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km, no months).
 	rec := a.post("/kits", url.Values{
 		"vehicle_id":              {itoa(k1290)},
 		"name":                    {"Oil service"},
@@ -913,6 +918,8 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	// Service page badges it as Intermediate.
 	expect(t, a.get(interSvcPath), http.StatusOK, "Oil service · Intermediate")
 
-	// Kit page now switches back to Next: Full, due at 14,000 km or 10 Jan 2027 (warranty date preserved!).
+	// Kit page now switches back to Next: Full, due at 14,000 km or 10 Jan 2027, from the last full service.
+	// (Done on time, the intermediate service would give the same without the warranty: see
+	// TestWarrantyDecidesKitSchedule for one that moves it.)
 	expect(t, a.get(kitPath), http.StatusOK, "Next: Full", stock.FormatDistance(14000), "10 Jan 2027", "(intermediate)")
 }

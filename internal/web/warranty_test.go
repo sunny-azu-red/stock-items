@@ -94,9 +94,9 @@ func TestVehicleWarrantyStaleForm(t *testing.T) {
 		`id="has_warranty" name="has_warranty" value="1" checked>`, `name="warranty_ends_on" value="2028-03-01"`, `name="warranty_ends_at" value="100000"`)
 }
 
-// Each state shows where it was designed to: the vehicle page's line and
-// facts, the vehicle's card, the dashboard (only when it ends soon) and the
-// kit page (while it runs).
+// Each state shows where it was designed to: the vehicle page's line (the
+// badge) and facts, the vehicle's card and the dashboard's row (its words,
+// without the badge's colour) and the kit page (while it runs).
 func TestVehicleWarrantyShows(t *testing.T) {
 	tests := []struct {
 		name, endsOn string
@@ -107,15 +107,18 @@ func TestVehicleWarrantyShows(t *testing.T) {
 		{name: "runs", endsOn: "2028-03-01",
 			page: []string{`<span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-shield-check"></use></svg> Under warranty</span>`, "Warranty ends", "1 Mar 2028 · 100 000 km"},
 			card: []string{`<use href="#i-shield-check"></use></svg> Under warranty</span>`},
+			dash: []string{"· Under warranty</span>"},
 			kit:  []string{"<dt>Warranty ends</dt><dd>1 Mar 2028 · 100 000 km</dd>"},
 			not:  []string{"Warranty ends soon"}},
 		{name: "ends soon", endsOn: "2026-12-15",
 			page: []string{`<span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
 			card: []string{`<use href="#i-shield-alert"></use></svg> Warranty ends soon</span>`},
-			dash: []string{`<span class="badge-line"><span class="badge badge-warn">`, "· warranty ends in 22 days"},
+			dash: []string{"· Warranty ends soon</span>"},
 			kit:  []string{"<dt>Warranty ends</dt><dd>15 Dec 2026 · 100 000 km <span class=\"badge badge-warn\">"}},
 		{name: "ended", endsOn: "2026-11-01",
 			page: []string{`<span class="badge badge-muted"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> Warranty ended</span>`, "<dt>Warranty ended</dt><dd>1 Nov 2026 · 100\u202f000 km</dd>"},
+			card: []string{`<use href="#i-shield"></use></svg> Warranty ended</span>`},
+			dash: []string{"· Warranty ended</span>"},
 			not:  []string{"Under warranty</span>", "Warranty ends soon", "<dt>Warranty ends</dt><dd>1 Nov"}},
 	}
 	for _, tt := range tests {
@@ -137,14 +140,76 @@ func TestVehicleWarrantyShows(t *testing.T) {
 			expect(t, a.get("/vehicles"), http.StatusOK, tt.card...)
 			expect(t, a.get("/"), http.StatusOK, tt.dash...)
 			expect(t, a.get(kit), http.StatusOK, tt.kit...)
-			if tt.dash == nil {
-				expectNot(t, a.get("/"), `<span class="badge-line">`, "warranty ends in")
-			}
 			for _, p := range []string{path, "/vehicles", "/", kit} {
 				expectNot(t, a.get(p), tt.not...)
 			}
 		})
 	}
+}
+
+// A field typed but not understood has its own error, and the box doesn't
+// also ask for an end.
+func TestVehicleWarrantyUnreadableField(t *testing.T) {
+	a := warrantyApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
+		"has_warranty": {"1"}, "warranty_ends_at": {"abc"}})
+	expect(t, rec, http.StatusUnprocessableEntity, `name="warranty_ends_at" value="abc"`)
+	expectNot(t, rec, "Enter when the warranty ends")
+}
+
+// An archived vehicle shows no warranty: no badge on its line (Archived
+// instead), no stat on its card, nothing on its kits.
+func TestVehicleWarrantyArchived(t *testing.T) {
+	a := warrantyApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"}, "odometer": {"12000"},
+		"has_warranty": {"1"}, "warranty_ends_on": {"2028-03-01"}})
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"7500"}, "interval_months": {"12"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "title": {"Oil Service"},
+		"performed_on": {"2026-11-01"}, "odometer": {"12000"}}), http.StatusSeeOther)
+	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
+	page := a.get(path)
+	expect(t, page, http.StatusOK, "Archived", "<dt>Warranty ends</dt>") // the facts still say it
+	expectNot(t, page, "Under warranty</span>")
+	expectNot(t, a.get("/vehicles?archived=1"), "Under warranty")
+	expectNot(t, a.get(kit), "<dt>Warranty ends</dt>")
+}
+
+// The warranty decides how an intermediate service counts: while it runs, a
+// late one doesn't move the full service; once it has ended, the full one
+// comes one intermediate step after it.
+func TestWarrantyDecidesKitSchedule(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	vehicle := url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#dc2626"}, "odometer": {"9000"},
+		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2028-04-03"}}
+	rec := a.post("/vehicles", vehicle)
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"has_inter": {"1"}, "inter_interval_distance": {"7500"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	// A late intermediate service, at 8 000 km instead of 7 500.
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_intermediate": {"1"},
+		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-08-01"}, "odometer": {"8000"}}), http.StatusSeeOther)
+
+	// Under warranty: the full service is still due at 15 000 km or a year after the purchase.
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+
+	// The warranty ended on 1 Nov 2026: the full service comes one intermediate step after it.
+	vehicle.Set("warranty_ends_on", "2026-11-01")
+	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f500 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+
+	// No warranty at all: the same.
+	vehicle.Del("has_warranty")
+	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
+	expect(t, a.get(kit), http.StatusOK, "<dt>Due at</dt><dd>15\u202f500 km</dd>")
 }
 
 // Delete and Undo bring the warranty back with the vehicle.

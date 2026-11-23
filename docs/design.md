@@ -322,8 +322,8 @@ How much of an item there is, wherever it shows, is one badge: `{{template "stoc
 Where a vehicle's warranty stands is one badge, `{{template "warranty-badge" (vehicle.Warranty today)}}` (`stock.WarrantyOf`), never written by hand: `badge-ok` shield-check **Under warranty**, `badge-warn` shield-alert **Warranty ends soon** (its last 30 days or 1 000 km), `badge-muted` shield **Warranty ended**, nothing without one. It is a plain label, never a link.
 
 * **The vehicle page**: on the header's line, before the make and model (badges, then text); the kind isn't written there, the tile's icon shows it. An archived vehicle shows its Archived badge instead. The facts say *Warranty ends* (*Warranty ended* once it has) with the date and reading.
-* **The vehicle's card**: a stat like its items and kits, the badge's icon and words in the stats' grey, without the badge's colour, while it runs.
-* **The dashboard's Vehicles card**: only while it ends soon, on the vehicle's row as a shopping suggestion's stock badge is, on its own line under the name (`.badge-line`), and the row's meta says when ("· warranty ends in 22 days").
+* **The vehicle's card** (`/vehicles`): a stat like its items and kits, the badge's icon and words in the stats' grey, without the badge's colour (`warranty-text`), in all three states.
+* **The dashboard's Vehicles card**: the badge's words at the end of the vehicle's row, in its grey line ("13 items · 27 102 km · Warranty ended"), in all three states.
 * **A kit's Schedule**: *Warranty ends* with the date and reading while it runs, the badge too when it ends soon.
 
 ### When a chip or badge is a link

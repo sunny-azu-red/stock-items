@@ -92,7 +92,7 @@
           {{template "field-err" (fieldErr (index $e "warranty_ends_on") "warranty_ends_on")}}
         </div>
         <div class="field{{if index $e "warranty_ends_at"}} has-error{{end}}">
-          <div class="label-row"><label for="warranty_ends_at">Warranty ends at ({{distUnit}})</label>{{template "tip" (dict "For" "Warranty ends at" "ID" "warranty-ends-at-tip" "Text" "The odometer reading it ends at, if it has a limit.")}}</div>
+          <div class="label-row"><label for="warranty_ends_at">Warranty ends at ({{distUnit}})</label>{{template "tip" (dict "For" "Warranty ends at" "ID" "warranty-ends-at-tip" "Text" "The last odometer reading it covers, if it has a limit.")}}</div>
           <input class="input" id="warranty_ends_at" name="warranty_ends_at" value="{{$f.WarrantyEndsAt}}" inputmode="numeric" placeholder="e.g. 100000" {{invalid (index $e "warranty_ends_at") "warranty_ends_at" "warranty-ends-at-tip"}}>
           {{template "field-err" (fieldErr (index $e "warranty_ends_at") "warranty_ends_at")}}
         </div>

@@ -1,9 +1,6 @@
 package stock
 
-import (
-	"strings"
-	"time"
-)
+import "time"
 
 // WarrantyState says where a vehicle's warranty stands.
 type WarrantyState string
@@ -68,28 +65,6 @@ func WarrantyOf(endsOn *time.Time, endsAt *int, odo *int, today time.Time) Warra
 
 // Runs reports whether the warranty is in force (ending soon or not).
 func (w Warranty) Runs() bool { return w.State == WarrantyActive || w.State == WarrantySoon }
-
-// EndsIn says how soon a warranty that ends soon ends, counting only what
-// is near: "in 22 days", "today", "in 800 km", or both joined with "or"
-// ("in 22 days or 800 km"). An end that is still far off is left out.
-func (w Warranty) EndsIn() string {
-	var parts []string
-	if d := w.DaysLeft; d != nil && *d >= 0 && *d <= DueSoonDays {
-		if *d == 0 {
-			parts = append(parts, "today")
-		} else {
-			parts = append(parts, "in "+plural(*d, "day"))
-		}
-	}
-	if l := w.DistanceLeft; l != nil && *l >= 0 && *l <= WarrantySoonDistance {
-		if len(parts) == 0 {
-			parts = append(parts, "in "+FormatDistance(*l))
-		} else {
-			parts = append(parts, FormatDistance(*l))
-		}
-	}
-	return strings.Join(parts, " or ")
-}
 
 // Label is the warranty's badge text, "" without one.
 func (s WarrantyState) Label() string {

@@ -1,5 +1,5 @@
 {{/* The page header (layout.html writes it from these). */}}
-{{define "head-lead"}}{{$v := .Data.Vehicle}}<span class="avatar" style="{{chipStyle $v.Color}}">{{icon $v.Kind.Icon}}</span>{{end}}
+{{define "head-lead"}}{{$v := .Data.Vehicle}}<span class="avatar" style="{{chipStyle $v.Color}}" role="img" aria-label="{{$v.Kind.Label}}" title="{{$v.Kind.Label}}">{{icon $v.Kind.Icon}}</span>{{end}}
 {{define "head-title"}}{{.Data.Vehicle.Name}}{{end}}
 {{define "head-line"}}{{$v := .Data.Vehicle}}
 {{if $v.Archived}}{{template "archived-date-badge" $v.ArchivedAt}}{{else}}{{template "warranty-badge" ($v.Warranty .Today)}}{{end}}

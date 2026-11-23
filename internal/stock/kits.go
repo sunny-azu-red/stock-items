@@ -360,8 +360,15 @@ func (k Kit) NextIsIntermediate(currentOdo *int, today time.Time) bool {
 		return false
 	}
 	fullDue := k.FullDue(currentOdo, today)
-	if warranty && (fullDue.State == DueSoon || fullDue.State == DueOverdue) {
-		return false
+	if fullDue.State == DueSoon || fullDue.State == DueOverdue {
+		// The full service comes first when an intermediate one wouldn't
+		// move what makes it urgent: nothing does under warranty, and the
+		// months don't without an intermediate step in months (FullDue
+		// counts them from the last full service). Urgent by distance is
+		// below.
+		if warranty || (k.InterIntervalMonths == nil && fullDue.DaysLeft != nil && *fullDue.DaysLeft <= DueSoonDays) {
+			return false
+		}
 	}
 	// A full schedule that only lacks a day to count its months from
 	// (MonthsUncounted) isn't more urgent for that: the parts offered

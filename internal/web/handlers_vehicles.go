@@ -99,6 +99,11 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 		if in.WarrantyEndsAt, err = parseOptInt(f.WarrantyEndsAt); err != nil {
 			f.Errors.Add("warranty_ends_at", err.Error())
 		}
+		// A field typed but not understood has its own error: the box
+		// doesn't also ask for an end.
+		if f.Errors["warranty_ends_on"] != "" || f.Errors["warranty_ends_at"] != "" {
+			in.HasWarranty = false
+		}
 	} else {
 		// Unticked: the warranty is cleared, whatever its fields still hold.
 		f.WarrantyEndsOn, f.WarrantyEndsAt = "", ""

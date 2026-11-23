@@ -1371,19 +1371,70 @@
   }
 
   /* ---- Vehicles ---------------------------------------------------- */
-  /* Washed in the vehicle's colour at the top, fading into the panel. */
+  /* Quiet at rest like every card: the vehicle's colour only in its icon's
+     tile and a faint outline of its kind in the corner. Under the cursor it
+     lights up: a soft glow of its colour follows the pointer, the edge
+     lights near it, the outline drifts away from it and an arrow slides in.
+     app.js sets --x/--y (px) and --px/--py (0-1) where the pointer is; a tap
+     on a phone puts the glow under the finger (.touched). All of it is paint
+     and translate, so no box moves off its whole pixels. */
   .vehicle-card {
-    --chip: var(--accent); --rim-fade: var(--surface);
+    --chip: var(--accent);
+    --x: 50%; --y: 50%; --px: .5; --py: .5;
+    --glow: light-dark(color-mix(in oklab, var(--chip) 8%, transparent), color-mix(in oklab, var(--chip) 12%, transparent));
+    position: relative; isolation: isolate;
     display: flex; flex-direction: column;
-    background: linear-gradient(to bottom, color-mix(in oklab, var(--chip) 14%, var(--surface)), var(--rim-fade) 70%);
-    border-top: 3px solid var(--chip);
-    transition: --rim-fade .2s;
-    &:is(a):hover { --rim-fade: color-mix(in oklab, var(--chip) 6%, var(--surface)); }
-    & .body { padding: 14px var(--inset); display: grid; gap: 8px; }
-    & .name { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 1.125rem; }
-    & .name .icon { color: var(--chip); }
-    & .stats { display: flex; gap: 18px; color: var(--muted); font-size: var(--text-sm); flex-wrap: wrap; }
+    &::before, &::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      opacity: 0; transition: opacity .4s;
+    }
+    &::before {
+      z-index: -1;
+      background: radial-gradient(320px circle at var(--x) var(--y), var(--glow), transparent 70%);
+    }
+    /* The edge light: a 1px ring cut out of the same disc. */
+    &::after {
+      z-index: 2; border-radius: inherit; padding: 1px;
+      background: radial-gradient(200px circle at var(--x) var(--y), color-mix(in oklab, var(--chip) 75%, transparent), transparent 70%);
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+    }
+    & > .mark {
+      position: absolute; z-index: -1; right: -26px; bottom: -34px; width: 150px; height: 150px; stroke-width: 1.4;
+      color: light-dark(color-mix(in oklab, var(--chip) 7%, transparent), color-mix(in oklab, var(--chip) 6%, transparent));
+      transition: color .4s, translate .5s cubic-bezier(.2, .7, .2, 1);
+    }
+    & .body { padding: 16px var(--inset) 14px; display: grid; gap: 12px; }
+    & .top { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+    & .tile {
+      width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+      background: color-mix(in oklab, var(--chip) 14%, var(--surface)); color: var(--chip);
+      transition: background-color .3s, box-shadow .3s;
+      & .icon { width: 20px; height: 20px; }
+    }
+    & .who { display: grid; min-width: 0; }
+    & .name { font-weight: 650; font-size: 1.125rem; --lh: 1.25; }
+    & :is(.model, .what) { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    & .model { font-size: .8rem; }
+    & .odo { display: grid; justify-items: end; text-align: right; }
+    & .odo strong { font-size: 1.125rem; font-weight: 650; --lh: 1.25; }
+    & .odo span { color: var(--muted); font-size: var(--text-xs); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    /* Under the name, past the tile and its gap. */
+    & .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: 52px; color: var(--muted); }
+    & .stats > span { display: inline-flex; align-items: center; gap: 6px; }
     & .stats strong { color: var(--text); font-weight: 650; }
+    & .card-foot { margin-top: auto; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; }
+    & .go { margin-left: auto; color: var(--chip); opacity: 0; translate: -4px 0; transition: opacity .3s, translate .3s; }
+    &:is(:hover, :focus-visible, .touched)::before { opacity: 1; }
+    &:is(:hover, .touched)::after { opacity: 1; }
+    &:is(:hover, .touched) > .mark {
+      color: light-dark(color-mix(in oklab, var(--chip) 15%, transparent), color-mix(in oklab, var(--chip) 13%, transparent));
+      translate: calc((var(--px) - .5) * -14px) calc((var(--py) - .5) * -10px);
+    }
+    &:hover .tile { background: color-mix(in oklab, var(--chip) 22%, var(--surface)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--chip) 8%, transparent); }
+    &:hover .go { opacity: 1; translate: 0 0; }
+    @media (prefers-reduced-motion: reduce) { &:is(:hover, .touched) > .mark { translate: none; } }
+    @container (width < 340px) { & .stats { margin-left: 0; } }
   }
 
   /* Facts: a record's figures in label / value pairs. */

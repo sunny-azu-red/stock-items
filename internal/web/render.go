@@ -168,6 +168,7 @@ func (s *Server) funcs() template.FuncMap {
 		"num":        stock.FormatNumber,
 		"distance":   formatDistance,
 		"distUnit":   func() string { return stock.DistanceUnit },
+		"distNum":    formatDistanceNum,
 		"money":      s.formatMoney,
 		"date":       formatDate,
 		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
@@ -480,6 +481,14 @@ func formatDecimal(f float64) string {
 func formatDistance(v any) string {
 	if n, ok := derefIntOK(v); ok {
 		return stock.FormatDistance(n)
+	}
+	return "—"
+}
+
+// formatDistanceNum is a distance's figure without its unit, "—" for none.
+func formatDistanceNum(v any) string {
+	if n, ok := derefIntOK(v); ok {
+		return stock.FormatInt(n)
 	}
 	return "—"
 }

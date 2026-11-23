@@ -1242,6 +1242,36 @@
     if (first) first.focus();
   }, true);
 
+  // ---- Vehicle cards ------------------------------------------------------
+  // The glow under the cursor (app.css .vehicle-card): where the pointer is
+  // on the card, once a frame. A tap on a phone, which has no hover, lights
+  // the card under the finger for the moment before the page changes.
+  function placeGlow(card, e) {
+    var r = card.getBoundingClientRect();
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    card.style.setProperty("--x", x + "px");
+    card.style.setProperty("--y", y + "px");
+    card.style.setProperty("--px", Math.min(1, Math.max(0, x / r.width)).toFixed(3));
+    card.style.setProperty("--py", Math.min(1, Math.max(0, y / r.height)).toFixed(3));
+  }
+  var glowFrame = 0, glowEvent = null;
+  document.addEventListener("pointermove", function (e) {
+    glowEvent = e;
+    if (glowFrame) return;
+    glowFrame = requestAnimationFrame(function () {
+      glowFrame = 0;
+      var card = glowEvent.target.closest && glowEvent.target.closest(".vehicle-card");
+      if (card) placeGlow(card, glowEvent);
+    });
+  }, { passive: true });
+  document.addEventListener("pointerdown", function (e) {
+    var card = e.pointerType !== "mouse" && e.target.closest && e.target.closest(".vehicle-card");
+    if (!card) return;
+    placeGlow(card, e);
+    card.classList.add("touched");
+    setTimeout(function () { card.classList.remove("touched"); }, 700);
+  });
+
   // ---- Init ---------------------------------------------------------------
   function init(root) {
     root.querySelectorAll("form").forEach(syncUnits);

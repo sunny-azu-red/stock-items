@@ -6,16 +6,24 @@
 {{if $d.Cards}}
 <div class="grid grid-3">
   {{range $d.Cards}}{{$v := .Vehicle}}
+  {{/* Quiet at rest; under the cursor it lights up in the vehicle's colour
+       (app.js puts the glow where the pointer is; design.md#8-cards-heading-bars-and-footers). */}}
   <a class="card vehicle-card" href="/vehicles/{{$v.ID}}" style="{{chipStyle $v.Color}}">
+    {{icon $v.Kind.Icon "mark"}}
     <span class="body">
-      <span class="name">{{icon $v.Kind.Icon}} {{$v.Name}}</span>
-      {{with $v.Subtitle}}<span class="muted small">{{.}}</span>{{end}}
-      <span class="stats">
-        <span><strong>{{$v.ItemCount}}</strong> {{pluralOnly $v.ItemCount "item"}}</span>
-        <span><strong>{{.Kits}}</strong> {{pluralOnly .Kits "kit"}}</span>
-        <span><strong>{{distance $v.Odometer}}</strong></span>
+      <span class="top">
+        <span class="tile">{{icon $v.Kind.Icon}}</span>
+        <span class="who"><span class="name">{{$v.Name}}</span>{{with $v.Subtitle}}<span class="model">{{.}}</span>{{end}}</span>
+        <span class="odo"><strong>{{distNum $v.Odometer}}</strong>{{if $v.Odometer}}<span>{{distUnit}}</span>{{end}}</span>
       </span>
-      {{if $v.Archived}}<span class="flex">{{template "archived-badge" $v.ArchivedAt}}</span>{{else}}{{with .Next}}{{if not .VehicleArchived}}<span class="flex">{{template "due-badge" .Due}}<span class="small muted">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span></span>{{end}}{{end}}{{end}}
+      <span class="stats">
+        <span>{{icon "package"}}<strong>{{$v.ItemCount}}</strong> {{pluralOnly $v.ItemCount "item"}}</span>
+        <span>{{icon "list-checks"}}<strong>{{.Kits}}</strong> {{pluralOnly .Kits "kit"}}</span>
+      </span>
+    </span>
+    <span class="card-foot">
+      {{- if $v.Archived}}{{template "archived-badge" $v.ArchivedAt}}{{else}}{{with .Next}}{{if not .VehicleArchived}}{{template "due-badge" .Due}}<span class="what">{{.Kit.Name}}{{with .Due.Summary}} · {{.}}{{end}}</span>{{end}}{{else}}<span class="what">No service planned</span>{{end}}{{end -}}
+      {{icon "chevron-right" "go"}}
     </span>
   </a>
   {{end}}

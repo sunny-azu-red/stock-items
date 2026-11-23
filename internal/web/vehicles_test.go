@@ -122,8 +122,9 @@ func TestDistanceUnit(t *testing.T) {
 	vPath := rec.Header().Get("Location")
 	expect(t, a.get(vPath), http.StatusOK, `aria-label="Odometer in mi"`)
 	list := a.get("/vehicles")
-	expect(t, list, http.StatusOK, "12\u202f000 mi")
-	expectNot(t, list, "12\u202f000 km")
+	// A card shows the figure, then its unit under it.
+	expect(t, list, http.StatusOK, "12\u202f000</strong><span>mi</span>")
+	expectNot(t, list, "<span>km</span>")
 	expect(t, a.get("/kits/new?vehicle="+itoa(mustID(t, vPath))), http.StatusOK,
 		"Distance (mi)", "Intermediate distance (mi)")
 	expect(t, a.get("/services/new"), http.StatusOK, "Odometer (mi)")

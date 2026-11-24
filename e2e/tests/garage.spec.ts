@@ -2663,6 +2663,24 @@ test("Enter in the new item form saves the item", async ({ page }) => {
   await expect(page.locator("h1")).toContainText("Brake cleaner");
 });
 
+test("a kit's break-in and intermediate service show with a distance, and while they hold something", async ({ page }) => {
+  await page.goto("/kits/new");
+  const breakIn = page.locator("#break-in-field"), inter = page.locator("#inter-schedule");
+  await expect(breakIn).toBeHidden();
+  await expect(inter).toBeHidden();
+  await page.locator("#interval_distance").fill("8000");
+  await page.locator("#break_in_at").fill("1000");
+  await page.locator("#intermediate").check();
+  // The distance cleared: both stay, so they can be cleared too.
+  await page.locator("#interval_distance").fill("");
+  await expect(breakIn).toBeVisible();
+  await expect(inter).toBeVisible();
+  await page.locator("#break_in_at").fill("");
+  await page.locator("#intermediate").uncheck();
+  await expect(breakIn).toBeHidden();
+  await expect(inter).toBeHidden();
+});
+
 test("a kit's intermediate service comes between its full ones", async ({ page }) => {
   await page.goto("/services");
   await page.locator("a.kit-row").first().click();

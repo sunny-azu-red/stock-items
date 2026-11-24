@@ -280,10 +280,14 @@ func TestBreakIn(t *testing.T) {
 	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>4\u202f000 km</dd>", "<dt>Due by</dt><dd>1 Jun 2027</dd>",
 		"<dt>Full due</dt><dd>8\u202f000 km or 1 Jun 2027</dd>", `(break-in)`)
 	expectNot(t, a.get(kit), "Next: Break-in")
-	// Log service no longer offers a break-in; a second one is refused.
+	// Log service no longer offers a break-in; a second one is refused:
+	// after it, as not the kit's first; before it, as a second.
 	expectNot(t, a.get("/services/new?kit="+itoa(kitID)), `value="break_in"`)
 	service.Set("performed_on", "2026-07-01")
 	service.Set("odometer", "1500")
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "This kit has an earlier service: only its first is the break-in")
+	service.Set("performed_on", "2026-06-10")
+	service.Set("odometer", "500")
 	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "This kit has a break-in already")
 
 	// Its edit keeps it a break-in.
@@ -291,7 +295,8 @@ func TestBreakIn(t *testing.T) {
 }
 
 // A service logged as Full before break-ins were kept (GreyJoy's first)
-// can be marked one on its edit while the kit has none.
+// can be marked one on its edit, as the kit's first service; a later one
+// can't (else the schedules would count from the purchase years on).
 func TestBreakInMarkedOnEdit(t *testing.T) {
 	a := warrantyApp(t)
 	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"12822"},
@@ -314,4 +319,19 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 	expect(t, a.postV(svc, first), http.StatusSeeOther)
 	// A break-in: from the purchase again (15 000 km, 4 Apr 2026).
 	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>15\u202f000 km</dd>", "<dt>Due by</dt><dd>4 Apr 2026</dd>")
+
+	// A later service: its edit offers no break-in, and one is refused.
+	later := url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service"},
+		"performed_on": {"2026-04-28"}, "odometer": {"12822"}}
+	rec = a.post("/services", later)
+	expect(t, rec, http.StatusSeeOther)
+	laterSvc := rec.Header().Get("Location")
+	expectNot(t, a.get(laterSvc+"/edit"), `value="break_in"`)
+	first.Set("kit_tier", "full")
+	first.Set("title", "Oil Service (First)")
+	expect(t, a.postV(svc, first), http.StatusSeeOther) // the first one a full service again
+	expectNot(t, a.get(laterSvc+"/edit"), `value="break_in"`)
+	later.Set("kit_tier", "break_in")
+	expect(t, a.postV(laterSvc, later), http.StatusUnprocessableEntity, "This kit has an earlier service: only its first is the break-in")
+	expect(t, a.get(svc+"/edit"), http.StatusOK, `value="break_in" autocomplete="off"`)
 }

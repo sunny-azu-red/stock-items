@@ -80,9 +80,9 @@ type DueState string
 
 const (
 	DueNone DueState = "none" // no interval configured
-	// DueUnknown: a distance with nothing to count it from (a service
-	// logged without a reading, before readings were required, and none
-	// earlier).
+	// DueUnknown: a distance with nothing to count it from (services
+	// logged without a reading, before readings were required or before
+	// the kit had a distance, and none earlier).
 	DueUnknown DueState = "unknown"
 	DueOK      DueState = "ok"
 	DueSoon    DueState = "soon"

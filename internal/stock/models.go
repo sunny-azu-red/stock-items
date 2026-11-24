@@ -449,8 +449,8 @@ type Movement struct {
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an
-// optional interval used for reminders, 1 or 2 optional intermediate
-// services between full ones with their own parts list, and an optional
+// optional interval used for reminders, an optional intermediate service
+// halfway between full ones with its own parts list, and an optional
 // break-in reading.
 type Kit struct {
 	ID                        int64
@@ -489,8 +489,9 @@ type Kit struct {
 	// InterSinceFull says an intermediate service was done after the last
 	// full one (or before the first): the full one is next.
 	InterSinceFull bool
-	// HasBreakIn says a break-in was logged with the kit (there is at most one).
-	HasBreakIn bool
+	// FirstServiceID is the kit's earliest service on its vehicle (0 with
+	// none): the only one that can be its break-in.
+	FirstServiceID int64
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
@@ -500,8 +501,8 @@ type Kit struct {
 func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 
 // InterStep is the distance from one service to the next when the kit has
-// an intermediate service: half the full distance (rounded down to a whole
-// unit). Nil without one.
+// an intermediate service: half the full distance, which is even
+// (KitInput.Validate). Nil without one.
 func (k Kit) InterStep() *int {
 	if !k.Intermediate || k.IntervalDistance == nil {
 		return nil

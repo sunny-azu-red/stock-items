@@ -162,7 +162,7 @@ func TestVehiclePurchaseBaselineFlow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	kitPath := rec.Header().Get("Location")
 
-	// Services list shows "On track" with the remaining distance, not "Not done yet"
+	// Services list shows "On track" with the remaining distance
 	services := a.get("/services")
 	expect(t, services, http.StatusOK, "Valve check", "On track", "in 14\u202f500 km")
 	expectNot(t, services, "Valve check.*last")

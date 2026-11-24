@@ -44,7 +44,9 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		       EXISTS (SELECT 1 FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'intermediate'
 		          AND (lf.id IS NULL OR (sr.performed_on, COALESCE(sr.odometer, -1), sr.id) > (lf.performed_on, COALESCE(lf.odometer, -1), lf.id))),
-		       EXISTS (SELECT 1 FROM service_records sr WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'break_in'),
+		       -- The earliest service, in the same order.
+		       COALESCE((SELECT sr.id FROM service_records sr WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id
+		                 ORDER BY sr.performed_on, COALESCE(sr.odometer, -1), sr.id LIMIT 1), 0),
 		       k.archived_at
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
@@ -92,7 +94,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.Notes,
 			&lsID, &lsDate, &ls.Odometer, &ls.OdometerAtLog, &lsLogged, &lsTier, &k.LastOdometer,
 			&lfID, &lfDate, &lf.Odometer, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometer,
-			&k.InterSinceFull, &k.HasBreakIn, &k.ArchivedAt)
+			&k.InterSinceFull, &k.FirstServiceID, &k.ArchivedAt)
 		if lsID != nil && lsDate != nil {
 			ls.ID, ls.PerformedOn = *lsID, *lsDate
 			if lsTier != nil {

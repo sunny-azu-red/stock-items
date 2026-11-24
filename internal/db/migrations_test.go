@@ -296,7 +296,9 @@ func TestKitSchedulesMigration(t *testing.T) {
 			(1, 1, false, '2025-01-01', 4000, 'Oil'), (1, 1, true, '2025-06-01', 8000, 'Oil (Intermediate)'), (1, NULL, false, '2025-07-01', NULL, 'Wash');
 		INSERT INTO trash (kind, label, payload) VALUES ('kit', 'Kit: Gone',
 			'{"service_kits": [{"id": 60, "vehicle_id": 1, "name": "Gone", "interval_distance": 10000, "interval_months": 12, "inter_interval_distance": 5000, "inter_interval_months": 12}],
-			  "service_records": [{"id": 61, "vehicle_id": 1, "kit_id": 60, "kit_intermediate": true, "performed_on": "2025-03-01", "title": "Old"}]}')`); err != nil {
+			  "service_records": [{"id": 61, "vehicle_id": 1, "kit_id": 60, "kit_intermediate": true, "performed_on": "2025-03-01", "title": "Old"}]}'),
+			('kit', 'Kit: Coolant',
+			'{"service_kits": [{"id": 62, "vehicle_id": 1, "name": "Coolant", "interval_distance": null, "interval_months": 48, "inter_interval_distance": null, "inter_interval_months": 24}]}')`); err != nil {
 		t.Fatal(err)
 	}
 	// A vehicle without its purchase reading fails it, changing nothing.
@@ -321,8 +323,13 @@ func TestKitSchedulesMigration(t *testing.T) {
 		t.Errorf("kit_tier = %q (%v), want full,intermediate,full", tiers, err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT (payload -> 'service_kits' -> 0 ->> 'intermediate') || ',' || (payload -> 'service_records' -> 0 ->> 'kit_tier')
-		|| ',' || (payload -> 'service_kits' -> 0 ? 'inter_interval_distance')::text FROM trash`).Scan(&snapshot); err != nil || snapshot != "true,intermediate,false" {
+		|| ',' || (payload -> 'service_kits' -> 0 ? 'inter_interval_distance')::text FROM trash WHERE label = 'Kit: Gone'`).Scan(&snapshot); err != nil || snapshot != "true,intermediate,false" {
 		t.Errorf("trash snapshot = %q (%v), want true,intermediate,false", snapshot, err)
+	}
+	// A deleted kit without a distance keeps no intermediate service, so
+	// it still restores (the CHECK would refuse it).
+	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_kits' -> 0 ->> 'intermediate' FROM trash WHERE label = 'Kit: Coolant'`).Scan(&snapshot); err != nil || snapshot != "false" {
+		t.Errorf("months-only trash snapshot intermediate = %q (%v), want false", snapshot, err)
 	}
 	for _, tc := range []struct{ name, sql string }{
 		{"a NULL odometer", `UPDATE vehicles SET odometer = NULL`},
@@ -351,7 +358,7 @@ func TestKitSchedulesMigration(t *testing.T) {
 		t.Errorf("after Down: kit_intermediate = %q (%v), want false,true,false", inter, err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT (payload -> 'service_kits' -> 0 ->> 'inter_interval_distance') || ',' || (payload -> 'service_records' -> 0 ->> 'kit_intermediate')
-		|| ',' || (payload -> 'service_kits' -> 0 ? 'intermediate')::text FROM trash`).Scan(&snapshot); err != nil || snapshot != "5000,true,false" {
+		|| ',' || (payload -> 'service_kits' -> 0 ? 'intermediate')::text FROM trash WHERE label = 'Kit: Gone'`).Scan(&snapshot); err != nil || snapshot != "5000,true,false" {
 		t.Errorf("after Down: trash snapshot = %q (%v), want 5000,true,false", snapshot, err)
 	}
 }

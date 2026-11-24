@@ -17,14 +17,18 @@ ALTER TABLE vehicles
 -- its months (stock.Kit.InterStep): intermediate replaces the two free
 -- intervals, and needs the distance. A kit may say at what reading a new
 -- vehicle's break-in is due (break_in_at, stock.Kit.NextIsBreakIn).
--- Deleted kits in the trash convert the same way, so they restore.
+-- Deleted kits in the trash convert the same way, so they restore; one
+-- without a distance (which the live kits can't be: the CHECK fails the
+-- migration) restores without an intermediate service, rather than not at
+-- all (its intermediate parts stay unused, and its next save drops them).
 ALTER TABLE service_kits
     ADD COLUMN intermediate boolean NOT NULL DEFAULT false,
     ADD COLUMN break_in_at integer CHECK (break_in_at > 0);
 UPDATE service_kits SET intermediate = true WHERE inter_interval_distance IS NOT NULL OR inter_interval_months IS NOT NULL;
 UPDATE trash t SET payload = jsonb_set(t.payload, '{service_kits}', (
     SELECT jsonb_agg((k - 'inter_interval_distance' - 'inter_interval_months') || jsonb_build_object('intermediate',
-               k ->> 'inter_interval_distance' IS NOT NULL OR k ->> 'inter_interval_months' IS NOT NULL)
+               (k ->> 'inter_interval_distance' IS NOT NULL OR k ->> 'inter_interval_months' IS NOT NULL)
+               AND k ->> 'interval_distance' IS NOT NULL)
            ORDER BY ord)
     FROM jsonb_array_elements(t.payload -> 'service_kits') WITH ORDINALITY AS e (k, ord)))
 WHERE jsonb_typeof(t.payload -> 'service_kits') = 'array' AND jsonb_array_length(t.payload -> 'service_kits') > 0;

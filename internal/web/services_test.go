@@ -582,7 +582,7 @@ func TestServiceShortPartsShoppingForm(t *testing.T) {
 
 // A kit error shows on the service form even when the vehicle is fixed
 // (logged from a kit, or an edit), where the Vehicle field that used to
-// hold it isn't shown: the intermediate schedule removed in another tab.
+// hold it isn't shown: the intermediate service removed in another tab.
 func TestServiceFormShowsKitError(t *testing.T) {
 	a := newApp(t)
 	a.seed()
@@ -661,7 +661,7 @@ func TestKitPerTierShortfall(t *testing.T) {
 }
 
 // A kit's Add missing is its parts card's, also on a kit without an
-// intermediate schedule; the header has none. The button counts what isn't
+// intermediate service; the header has none. The button counts what isn't
 // on the shopping list yet, and once all is, the card says so instead.
 func TestKitAddMissingInPartsCard(t *testing.T) {
 	a := newApp(t)

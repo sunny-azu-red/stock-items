@@ -266,7 +266,6 @@ func TestInterStep(t *testing.T) {
 	}{
 		{ptr(8000), true, ptr(4000)},
 		{ptr(15000), true, ptr(7500)},
-		{ptr(7999), true, ptr(3999)}, // rounded down
 		{ptr(8000), false, nil},
 		{nil, true, nil},
 	} {
@@ -407,7 +406,7 @@ func TestBreakIn(t *testing.T) {
 	// from the purchase (4 000 km, a year on); the full one at 8 000 km or
 	// 4 Apr 2026, not 8 960.
 	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: ptr(960), Tier: TierBreakIn}
-	k.LastService, k.LastOdometer, k.HasBreakIn = breakIn, ptr(960), true
+	k.LastService, k.LastOdometer, k.FirstServiceID = breakIn, ptr(960), breakIn.ID
 	if k.NextIsBreakIn() {
 		t.Error("after the break-in: want it no longer next")
 	}

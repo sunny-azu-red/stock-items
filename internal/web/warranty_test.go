@@ -292,6 +292,15 @@ func TestBreakIn(t *testing.T) {
 
 	// Its edit keeps it a break-in.
 	expect(t, a.get(breakIn+"/edit"), http.StatusOK, `value="break_in" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service (Break-in)" checked`)
+
+	// A kit without a Break-in at (an air filter every 15 000 km) has no
+	// break-in: its first service is a full one, with no Schedule to pick.
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Air Filter"}, "interval_distance": {"15000"}})
+	expect(t, rec, http.StatusSeeOther)
+	airFilter := itoa(mustID(t, rec.Header().Get("Location")))
+	expectNot(t, a.get("/services/new?kit="+airFilter), `name="kit_tier"`)
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {airFilter}, "kit_tier": {"break_in"}, "title": {"Air Filter"},
+		"performed_on": {"2026-06-20"}, "odometer": {"960"}}), http.StatusUnprocessableEntity, "This kit has no break-in")
 }
 
 // A service logged as Full before break-ins were kept (GreyJoy's first)
@@ -303,7 +312,8 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 		"purchased_on": {"2025-04-04"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2028-04-03"}})
 	expect(t, rec, http.StatusSeeOther)
 	id := itoa(mustID(t, rec.Header().Get("Location")))
-	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"}, "intermediate": {"1"}})
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"}, "intermediate": {"1"},
+		"break_in_at": {"1000"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	first := url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service (First)"},

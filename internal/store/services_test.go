@@ -774,7 +774,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 // intermediate service saves unchanged after its kit dropped its
 // intermediate service. A kit has one break-in on a vehicle: a second is
 // refused, also from the trash, and a kit moved to another vehicle may
-// have its own there; a kit without a distance has none.
+// have its own there; a kit without a Break-in at has none.
 func TestServiceTierChecks(t *testing.T) {
 	s, ctx := newStore(t)
 	v1 := mustVehicle(t, s, "KTM 390")
@@ -845,16 +845,20 @@ func TestServiceTierChecks(t *testing.T) {
 		t.Errorf("a break-in on the vehicle the kit moved to: %v, want it saved", err)
 	}
 
-	// A kit without a distance has no break-in.
-	months := stock.KitInput{VehicleID: v1, Name: "Coolant", IntervalMonths: ptr(48)}
-	months.Normalize()
-	coolant, err := s.CreateKit(ctx, months)
-	if err != nil {
-		t.Fatal(err)
-	}
-	in := stock.ServiceInput{VehicleID: v1, KitID: &coolant, KitTier: stock.TierBreakIn, Title: "Coolant", PerformedOn: day(5, 1), Odometer: ptr(5000)}
-	in.Normalize()
-	if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Field != "kit_tier" {
-		t.Errorf("a break-in on a kit without a distance: %v, want it refused", err)
+	// A kit without a Break-in at has no break-in, with a distance or not.
+	for _, other := range []stock.KitInput{
+		{VehicleID: v1, Name: "Coolant", IntervalMonths: ptr(48)},
+		{VehicleID: v1, Name: "Air Filter", IntervalDistance: ptr(15000)},
+	} {
+		other.Normalize()
+		id, err := s.CreateKit(ctx, other)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := stock.ServiceInput{VehicleID: v1, KitID: &id, KitTier: stock.TierBreakIn, Title: other.Name, PerformedOn: day(5, 1), Odometer: ptr(5000)}
+		in.Normalize()
+		if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Field != "kit_tier" || conflict.Message != "This kit has no break-in" {
+			t.Errorf("a break-in on %s without a Break-in at: %v, want it refused", other.Name, err)
+		}
 	}
 }

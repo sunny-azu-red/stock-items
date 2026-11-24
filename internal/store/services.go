@@ -286,9 +286,9 @@ func serviceTier(in stock.ServiceInput) stock.KitTier {
 // locked FOR SHARE, as checkServiceKit does). A tier it takes now (tierWas
 // is the one it had with this kit, "" for a new service or kit) must fit
 // the kit: an intermediate service needs the kit to have one, and a
-// break-in is the kit's first service on this vehicle (none earlier by
-// date, reading and id, the order ListKits keeps) and its only break-in
-// there (serviceID is the service being saved, 0 for a new one; a partial
+// break-in needs a Break-in at and is the kit's first service on this
+// vehicle (none earlier by date, reading and id, the order ListKits keeps)
+// and its only break-in there (serviceID is the service being saved, 0 for a new one; a partial
 // unique index keeps it to one too). A tier it keeps stays, so an old
 // service saves unchanged. A new service needs a reading when the kit
 // counts its distance (one logged before that was required stays editable
@@ -303,16 +303,16 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	if idKey == 0 {
 		idKey = math.MaxInt64
 	}
-	var intermediate, countsDistance, otherBreakIn, earlier bool
+	var intermediate, breakIn, countsDistance, otherBreakIn, earlier bool
 	err := tx.QueryRow(ctx, `
-		SELECT intermediate, interval_distance IS NOT NULL,
+		SELECT intermediate, break_in_at IS NOT NULL, interval_distance IS NOT NULL,
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND kit_tier = 'break_in' AND id <> $2),
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND id <> $2
 		                 AND (performed_on, COALESCE(odometer, -1), id) < ($4::date, COALESCE($5::integer, -1), $6::bigint))
 		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID, in.PerformedOn, in.Odometer, idKey).
-		Scan(&intermediate, &countsDistance, &otherBreakIn, &earlier)
+		Scan(&intermediate, &breakIn, &countsDistance, &otherBreakIn, &earlier)
 	if err != nil {
 		return notFound(err)
 	}
@@ -320,8 +320,8 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	switch {
 	case changed && in.KitTier == stock.TierIntermediate && !intermediate:
 		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate service"}
-	case changed && in.KitTier == stock.TierBreakIn && !countsDistance:
-		return &ConflictError{Field: "kit_tier", Message: "A break-in comes before the kit's distance: this kit has none"}
+	case changed && in.KitTier == stock.TierBreakIn && !breakIn:
+		return &ConflictError{Field: "kit_tier", Message: "This kit has no break-in"}
 	case changed && in.KitTier == stock.TierBreakIn && earlier:
 		return &ConflictError{Field: "kit_tier", Message: "This kit has an earlier service: only its first is the break-in"}
 	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:

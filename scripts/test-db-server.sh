@@ -24,6 +24,12 @@ chmod 600 "${PGPASSFILE}"
 unset PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD
 REAL_PSQL="$(command -v psql)"
 SYNC="${ROOT}/scripts/db-server/sync_schema.sh"
+# The latest migration, and versions above it that no real migration has:
+# one a schema may carry extra (EXTRA), and one a target may be ahead at
+# (AHEAD).
+LATEST="$(ls "${ROOT}/internal/db/migrations" | sed -n 's/^0*\([0-9][0-9]*\)_.*/\1/p' | sort -n | tail -1)"
+EXTRA=$((LATEST + 100))
+AHEAD=$((LATEST + 3))
 
 cleanup() {
   docker rm -f "${NAME}" >/dev/null 2>&1 || true
@@ -140,7 +146,7 @@ echo "==> Migrating a scrap schema with the app and filling it..."
 q <<'SQL'
 SET search_path = scrap_src;
 SET ROLE stock;
-INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 10), ('Golf', NULL, NULL, NULL), ('Sold', 1, NULL, NULL);
+INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 10), ('Golf', 0, '2020-01-01', 0), ('Sold', 1, '2020-01-01', 0);
 INSERT INTO items (name, brand, unit, quantity, min_quantity, expires_on, location, notes) VALUES
   ('Rear Brake Pads', 'OEM', 'piece', 2, 1, NULL, 'Shelf', E'line one\nline "two"'), ('15W50', 'Silkolene', 'ml', 1525.5, 1000, '2029-06-30', '', ''),
   ('Gone', '', 'g', 0, NULL, NULL, '', '');
@@ -179,7 +185,7 @@ check "stock owns everything in the copy" [ "$(notowned scrap_dst)" = 0 ]
 check "the source is untouched: its postgres-owned table still is" [ "$(owner scrap_src.postgres_owned)" = postgres ]
 check "the source's data is unchanged" [ "$(fingerprint scrap_src)" = "${SRC_BEFORE}" ]
 check "the view with [1:s] came through as it was" [ "$(qa -c "SELECT a::text FROM scrap_dst.slice")" = "{1,2}" ]
-check "the copy's ids continue from the source's sequences" [ "$(as_stock -At -c "INSERT INTO scrap_dst.vehicles (name) VALUES ('New') RETURNING id")" = 4 ]
+check "the copy's ids continue from the source's sequences" [ "$(as_stock -At -c "INSERT INTO scrap_dst.vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('New', 0, '2020-01-01', 0) RETURNING id")" = 4 ]
 check "the copy runs reorder_columns" as_stock -At -c "BEGIN; SELECT scrap_dst.reorder_columns('scrap_dst.item_vehicles', ARRAY['vehicle_id', 'item_id']); ROLLBACK;"
 check "a log of the run is kept" eval "ls \"${SYNC_BACKUP_DIR}\"/pitbox-sync-*-scrap_src-to-scrap_dst.log >/dev/null"
 check "no staging database is left" [ -z "$(qa -c "SELECT datname FROM pg_database WHERE datname LIKE 'pitbox_sync_staging_%'")" ]
@@ -417,7 +423,7 @@ check "a copy into public commits" said "Done. public is now a copy of scrap_src
 run_sync scrap_src dev || true
 DEV_BEFORE="$(fingerprint dev)"
 # public gains a table dev's backup won't have (with a foreign key to items).
-as_stock -c "CREATE TABLE public.extra (item_id bigint REFERENCES public.items (id))" -c "INSERT INTO public.extra VALUES (1)" -c "INSERT INTO public.goose_db_version (version_id, is_applied) VALUES (9, true)"
+as_stock -c "CREATE TABLE public.extra (item_id bigint REFERENCES public.items (id))" -c "INSERT INTO public.extra VALUES (1)" -c "INSERT INTO public.goose_db_version (version_id, is_applied) VALUES (${EXTRA}, true)"
 wrapper sync_stock_items_public_to_dev.sh OVERWRITE || true
 check "public -> dev commits" said "Done. dev is now a copy of public"
 check "dev holds public's rows" [ "$(fingerprint dev)" = "$(fingerprint public | sed 's/\bpublic\b/dev/g')" ]
@@ -454,17 +460,17 @@ echo "OVERWRITE public" >&7
 exec 7>&-
 wait "${SPID}" || true
 check "a sync confirmed after the source changed commits what was shown" said "Done. public is now a copy of dev"
-check "without the later migration or column" [ "$(qa -c "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.items'::regclass AND attname = 'sneaked'")-$(qa -c "SELECT max(version_id) FROM public.goose_db_version")" = "0-9" ]
+check "without the later migration or column" [ "$(qa -c "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.items'::regclass AND attname = 'sneaked'")-$(qa -c "SELECT max(version_id) FROM public.goose_db_version")" = "0-${EXTRA}" ]
 PUB_BEFORE="$(fingerprint public)"
 wrapper sync_stock_items_dev_to_public.sh "OVERWRITE public" && bad "a dev with unreleased migrations over public should be refused" || true
 check "a migration public doesn't have is refused" said "different migrations applied"
-as_stock -c "DELETE FROM dev.goose_db_version WHERE version_id IN (999, 9)" -c "ALTER TABLE dev.items DROP COLUMN sneaked"
+as_stock -c "DELETE FROM dev.goose_db_version WHERE version_id IN (999, ${EXTRA})" -c "ALTER TABLE dev.items DROP COLUMN sneaked"
 wrapper sync_stock_items_dev_to_public.sh "OVERWRITE public" && bad "an older dev over public should be refused" || true
 check "an older migration set over public is refused" said "different migrations applied"
 check "public is unchanged" [ "$(fingerprint public)" = "${PUB_BEFORE}" ]
-as_stock -c "INSERT INTO scrap_dst.goose_db_version (version_id, is_applied) VALUES (5, true)"
+as_stock -c "INSERT INTO scrap_dst.goose_db_version (version_id, is_applied) VALUES (${AHEAD}, true)"
 run_sync dev scrap_dst || true
-check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration 5, newer than the copy (2); it goes back to 2"
+check "an older migration over another schema goes ahead with a note" said "scrap_dst is at migration ${AHEAD}, newer than the copy (${LATEST}); it goes back to ${LATEST}"
 PUB_BACKUP="$(latest_backup public)"
 echo "OVERWRITE public" | "${SYNC}" --from-backup "${PUB_BACKUP}" public >"${WORK}/out.log" 2>&1 || true
 check "public can go back to its backup" said "Done. public is now a copy of ${PUB_BACKUP}"

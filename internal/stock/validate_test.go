@@ -374,6 +374,8 @@ func TestTextAndNumberLimits(t *testing.T) {
 			return in.Validate()
 		}(), "lines"},
 		{"kit in between without a schedule", KitInput{VehicleID: 1, Name: "A", InBetween: 1}.Validate(), "interval_distance"},
+		{"kit in between, too few months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(2), InBetween: 2}.Validate(), "in_between"},
+		{"kit in between, too short a distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(2), InBetween: 2}.Validate(), "in_between"},
 		{"kit break-in without a distance", KitInput{VehicleID: 1, Name: "A", BreakInAt: ptr(1000)}.Validate(), "interval_distance"},
 		{"kit break-in past the distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(8000)}.Validate(), "break_in_at"},
 		{"kit break-in at 0", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(0)}.Validate(), "break_in_at"},

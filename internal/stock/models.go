@@ -449,8 +449,9 @@ type Movement struct {
 }
 
 // Kit is a reusable list of parts for a recurring service job, with an
-// optional interval used for reminders (plus an optional intermediate
-// half-interval schedule and parts list).
+// optional interval used for reminders, 1 or 2 optional intermediate
+// services between full ones with their own parts list, and an optional
+// break-in reading.
 type Kit struct {
 	ID                        int64
 	Version                   int // see Item.Version
@@ -465,10 +466,10 @@ type Kit struct {
 	Name                      string
 	IntervalDistance          *int
 	IntervalMonths            *int
-	// InBetween is how many lighter services come between two full ones
-	// (0 to 2): every InterStep and InterMonths.
+	// InBetween is how many intermediate services come between two full
+	// ones (0 to 2): every InterStep and InterMonths.
 	InBetween int
-	// BreakInAt is the reading a new vehicle\'s break-in service is due at
+	// BreakInAt is the reading a new vehicle's break-in service is due at
 	// (NextIsBreakIn); nil without one.
 	BreakInAt   *int
 	Notes       string
@@ -479,8 +480,9 @@ type Kit struct {
 	// that has one; distance reminders count from it when the last service was
 	// logged without a reading.
 	LastOdometer *int
-	// LastFullService is the latest full (non-intermediate) service performed
-	// with this kit, and LastFullOdometer is the latest full reading.
+	// LastFullService is the latest full service performed with this kit
+	// (never an intermediate one or the break-in), and LastFullOdometer the
+	// latest reading at or before it.
 	LastFullService  *ServiceRef
 	LastFullOdometer *int
 	// InterSinceFull counts the intermediate services after the last full
@@ -501,7 +503,7 @@ func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 func (k Kit) HasIntermediate() bool { return k.InBetween > 0 }
 
 // InterStep is the distance from one service to the next when the kit has
-// services in between: the full distance in InBetween + 1 equal steps
+// intermediate services: the full distance in InBetween + 1 equal steps
 // (rounded down to a whole unit). Nil without them.
 func (k Kit) InterStep() *int {
 	if k.InBetween <= 0 || k.IntervalDistance == nil {
@@ -512,7 +514,7 @@ func (k Kit) InterStep() *int {
 }
 
 // InterMonths is the months from one service to the next when the kit has
-// services in between: the full schedule's months, or, for a kit that
+// intermediate services: the full schedule's months, or, for a kit that
 // counts no distance, those months in InBetween + 1 equal steps (rounded
 // down, a month at least). Nil without them, or without months.
 func (k Kit) InterMonths() *int {
@@ -544,6 +546,9 @@ type ServiceRef struct {
 
 // Intermediate reports whether it was an intermediate service.
 func (r ServiceRef) Intermediate() bool { return r.Tier == TierIntermediate }
+
+// BreakIn reports whether it was the kit's break-in.
+func (r ServiceRef) BreakIn() bool { return r.Tier == TierBreakIn }
 
 // KitTier is which of its kit's services a service is.
 type KitTier string

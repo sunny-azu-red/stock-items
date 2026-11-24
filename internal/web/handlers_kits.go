@@ -228,7 +228,7 @@ type kitFormPage struct {
 // between two full ones.
 type inBetweenOption struct{ Value, Label string }
 
-var inBetweens = []inBetweenOption{{"0", "None"}, {"1", "1, half-way"}, {"2", "2, at thirds"}}
+var inBetweens = []inBetweenOption{{"0", "None"}, {"1", "1, halfway"}, {"2", "2, at thirds"}}
 
 func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status int, f kitForm, isNew bool) error {
 	ctx := r.Context()

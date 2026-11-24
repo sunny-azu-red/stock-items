@@ -807,9 +807,9 @@
   /* A page that is a form stops at four fields, its header and flash too. */
   .page-form { max-width: var(--form-width); }
   .main:has(> .page-form) > :is(.page-head, .flash) { max-width: var(--form-width); }
-  /* A section's fields that show while its toggle is ticked (a kit's
-     intermediate schedule, a vehicle's warranty). The server drops them
-     when it isn't, so nothing needs clearing. */
+  /* A section's fields that show while its toggle is ticked (a vehicle's
+     warranty; a kit's intermediate parts show by their own rule below).
+     The server drops them when it isn't, so nothing needs clearing. */
   .toggled-fields { margin-top: var(--gap); }
   .form-section:has(> .toggle input:not(:checked)) > .toggled-fields { display: none; }
   /* A kit's intermediate services are steps of the full distance (or its

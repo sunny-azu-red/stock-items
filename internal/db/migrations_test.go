@@ -498,3 +498,43 @@ func TestKitInBetweenMonthsMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00008 keeps a kit to one break-in on a vehicle: it stops, changing
+// nothing, on a kit with two, and Down lets them be again.
+func TestOneBreakInMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0), ('KTM 690', 500, '2024-03-01', 0);
+		INSERT INTO service_kits (vehicle_id, name, interval_distance, break_in_at) VALUES (1, 'Oil', 8000, 1000);
+		INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, title) VALUES
+			(1, 1, 'break_in', '2024-04-01', 900, 'Oil (Break-in)'), (1, 1, 'break_in', '2024-04-02', 950, 'Oil (Break-in)'),
+			(2, 1, 'break_in', '2024-04-03', 400, 'Oil (Break-in)')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 8); err == nil || !strings.Contains(err.Error(), "kits with more than one break-in on a vehicle: Oil") {
+		t.Errorf("two break-ins on a vehicle: %v, want it stopped", err)
+	}
+	if v, err := provider.GetDBVersion(ctx); err != nil || v != 7 {
+		t.Errorf("after the stop: version %d (%v), want 7", v, err)
+	}
+	// One on each vehicle is fine (a kit moved to another).
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'full' WHERE odometer = 950`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	if err := refused(t, pool, `UPDATE service_records SET kit_tier = 'break_in' WHERE odometer = 950`); err == nil {
+		t.Error("after Up: a second break-in on a vehicle was taken")
+	}
+	if _, err := provider.DownTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'break_in' WHERE odometer = 950`); err != nil {
+		t.Errorf("after Down: a second break-in refused: %v", err)
+	}
+}

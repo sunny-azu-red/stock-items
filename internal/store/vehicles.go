@@ -145,17 +145,7 @@ func (s *Store) SetOdometer(ctx context.Context, id int64, odo int) error {
 // An unchanged reading is let through, so other fields can still be edited.
 func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo *int) error {
 	if odo == nil {
-		// Clearing the reading would leave logged services' readings with
-		// nothing to compare against, and distance reminders unknown.
-		var logged bool
-		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_records WHERE vehicle_id = $1 AND odometer IS NOT NULL)`, id).Scan(&logged)
-		if err != nil {
-			return err
-		}
-		if current != nil && logged {
-			return &ConflictError{Field: "odometer", Message: "Services logged with a reading need one here too"}
-		}
-		return nil
+		return nil // never cleared: the form requires it, the column is NOT NULL
 	}
 	if current != nil && *current == *odo {
 		return nil

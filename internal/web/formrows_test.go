@@ -110,7 +110,9 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 		`Oil service<span class="badge badge-ok">On track</span></a>`,
 		`name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
 		`data-odometer="10`+"\u202f"+`000 km"`)
-	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`)
+	// Started from a kit that counts its distance: the reading is required.
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer" value="" required inputmode="numeric" placeholder="Last reading 10`,
+		`<label for="odometer">Odometer (km)</label><span class="req" aria-hidden="true">*</span>`)
 	// No vehicle yet, or one without kits: the section waits, hidden.
 	expect(t, a.get("/services/new"), http.StatusOK, `id="kit-starts" hidden`, `data-kit-vehicle="`+itoa(k390)+`" hidden`)
 	expect(t, a.get("/services/new?vehicle="+itoa(k1290)), http.StatusOK, `id="kit-starts" hidden`)
@@ -145,7 +147,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 		`Coolant<span class="badge badge-ok">On track</span></a>`)
 	body := page.Body.String()
 	if strings.Index(body, "Brake fluid<span") > strings.Index(body, "Oil service<span") {
-		t.Error("the overdue kit should come before the one not done yet")
+		t.Error("the overdue kit should come before the one on track")
 	}
 }
 

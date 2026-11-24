@@ -38,7 +38,6 @@ func TestKitDue(t *testing.T) {
 		want       DueState
 	}{
 		{"no interval", Kit{}, nil, DueNone},
-		{"never done", Kit{IntervalDistance: ptr(6000)}, ptr(1000), DueNever},
 		{"ok by distance", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(11000), DueOK},
 		{"soon by distance (threshold 600)", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(15500), DueSoon},
 		{"due exactly at the odometer target is not over yet", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(16000), DueSoon},
@@ -71,14 +70,6 @@ func TestKitDue(t *testing.T) {
 			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, nil, DueOverdue},
 		{"new vehicle date overdue wins over distance ok",
 			Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), VehicleOdometerAtPurchase: ptr(0), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, ptr(1000), DueOverdue},
-		{"new vehicle distance interval but no odometer",
-			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0)}, nil, DueUnknown},
-		{"new vehicle distance and date interval with purchase odometer only and no odometer",
-			Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), VehicleOdometerAtPurchase: ptr(0)}, nil, DueUnknown},
-		{"new vehicle distance interval but only purchase date set",
-			Kit{IntervalDistance: ptr(6000), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -100))}, ptr(1000), DueNever},
-		{"new vehicle date interval but only purchase odometer set",
-			Kit{IntervalMonths: ptr(12), VehicleOdometerAtPurchase: ptr(0)}, ptr(1000), DueNever},
 		{"past service ignores vehicle purchase baseline",
 			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0), LastService: last(10, 10000)}, ptr(11000), DueOK},
 	}
@@ -343,7 +334,7 @@ func deref(p *int) any {
 }
 
 // The schedule the app is meant for: an odometer kept up to date, a full
-// service every 8 000 km or 12 months and one half-way (4 000 km, the same
+// service every 8 000 km or 12 months and one halfway (4 000 km, the same
 // 12 months), counted from a logged service or the purchase. While the
 // warranty runs, the full service comes every 12 months from the last full
 // one, whether a half service was done in between or not; once it has
@@ -496,14 +487,22 @@ func TestBreakIn(t *testing.T) {
 	if r := k.ReadinessAt(ptr(300), d(2025, 4, 20)); !r.Ready() {
 		t.Errorf("the break-in takes the full parts, which are in stock: %+v", r)
 	}
-	// Logged (at 960 km): the half one next, from it; the full one from
-	// the purchase, at 8 000 km or 4 Apr 2026, not 8 960.
+	// Logged (at 960 km): no schedule counts from it. The half one next,
+	// from the purchase (4 000 km, a year on); the full one at 8 000 km or
+	// 4 Apr 2026, not 8 960.
 	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: ptr(960), Tier: TierBreakIn}
 	k.LastService, k.LastOdometer, k.HasBreakIn = breakIn, ptr(960), true
 	if k.NextIsBreakIn() {
 		t.Error("after the break-in: want it no longer next")
 	}
-	checkNext(t, k, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4960), "2026-04-30")
+	checkNext(t, k, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
+	// Without a warranty, the same: they take turns from the purchase.
+	noWarranty := k
+	noWarranty.VehicleWarrantyEndsOn = nil
+	checkNext(t, noWarranty, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
+	if f := noWarranty.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 {
+		t.Errorf("no warranty, full due after the break-in = %v, want 8 000 km", deref(f.DueOdometer))
+	}
 	if f := k.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2026, 4, 4)) {
 		t.Errorf("full due after the break-in = %v / %v, want 8 000 km / 2026-04-04", deref(f.DueOdometer), f.DueDate)
 	}
@@ -519,6 +518,16 @@ func TestBreakIn(t *testing.T) {
 	used.VehicleOdometerAtPurchase = ptr(2148)
 	if used.NextIsBreakIn() {
 		t.Error("bought at 2 148 km: want no break-in")
+	}
+	// A kit added long after: the vehicle is past its first full distance.
+	late := kit()
+	late.VehicleOdometer = ptr(8000)
+	if late.NextIsBreakIn() {
+		t.Error("at 8 000 km, a kit's first full distance: want no break-in")
+	}
+	late.VehicleOdometer = ptr(7999)
+	if !late.NextIsBreakIn() {
+		t.Error("at 7 999 km: want the break-in still next (late)")
 	}
 	// Archived: none either.
 	archived := kit()

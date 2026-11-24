@@ -13,7 +13,7 @@
       <span class="top">
         <span class="avatar">{{icon $v.Kind.Icon}}</span>
         <span class="who"><span class="name">{{$v.Name}}</span>{{with $v.Subtitle}}<span class="model">{{.}}</span>{{end}}</span>
-        <span class="odo"><strong>{{distNum $v.Odometer}}</strong>{{if $v.Odometer}}<span>{{distUnit}}</span>{{end}}</span>
+        <span class="odo"><strong>{{distNum $v.Odometer}}</strong><span>{{distUnit}}</span></span>
       </span>
       <span class="stats">
         <span>{{icon "package"}}<strong>{{$v.ItemCount}}</strong> {{pluralOnly $v.ItemCount "item"}}</span>

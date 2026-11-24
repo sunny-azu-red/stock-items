@@ -560,11 +560,15 @@ func (in KitInput) Validate() Errors {
 	case in.InBetween < 0 || in.InBetween > 2:
 		errs.Add("in_between", "Choose none, 1 or 2")
 	case in.InBetween > 0 && in.IntervalDistance == nil && in.IntervalMonths == nil:
-		// The services in between are steps of the full distance, or of its
-		// months without one.
-		errs.Add("interval_distance", "Enter the distance or months: the services in between are steps of them")
+		// The intermediate services are steps of the full distance, or of
+		// its months without one.
+		errs.Add("interval_distance", "Enter the distance or months: the intermediate services are steps of them")
+	case in.InBetween > 0 && in.IntervalDistance != nil && *in.IntervalDistance > 0 && *in.IntervalDistance < in.InBetween+1:
+		errs.Add("in_between", "The distance is too short for that many steps")
+	case in.InBetween > 0 && in.IntervalDistance == nil && in.IntervalMonths != nil && *in.IntervalMonths > 0 && *in.IntervalMonths < in.InBetween+1:
+		errs.Add("in_between", fmt.Sprintf("%d months make fewer than %d steps of a month", *in.IntervalMonths, in.InBetween+1))
 	case in.InBetween == 0 && len(in.InterLines) > 0:
-		errs.Add("in_between", "Choose how many services come in between")
+		errs.Add("in_between", "Choose how many intermediate services there are")
 	}
 	if in.BreakInAt != nil {
 		switch {

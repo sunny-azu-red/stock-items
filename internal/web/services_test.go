@@ -501,9 +501,7 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 	washerID := mustID(t, rec.Header().Get("Location"))
 
 	// Create a kit where the Full tier is ready (needs 500 ml oil) and the
-	// Intermediate tier is short (needs 2 washers), while Full is currently active
-	// (nothing logged and no purchase baseline, so the intermediate schedule has
-	// nothing to count from and NextIsIntermediate is false).
+	// Intermediate tier is short (needs 2 washers).
 	rec = a.post("/kits", url.Values{
 		"vehicle_id":        {itoa(k390)},
 		"name":              {"Warranty service"},
@@ -518,7 +516,7 @@ func TestKitIntermediateShortfallAndItemSuggestion(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	kitURL := rec.Header().Get("Location")
 
-	// The Intermediate parts card offers Add missing even though the active Full tier is ready.
+	// The Intermediate parts card offers Add missing, as it is short.
 	expect(t, a.get(kitURL), http.StatusOK, `action="`+kitURL+`/shortfall"`)
 
 	// Clicking "Add to shopping list" on the washer's item page suggests the 2 pcs needed by the intermediate tier.
@@ -609,7 +607,7 @@ func TestServiceFormShowsKitError(t *testing.T) {
 		"title": {"Oil Service"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(oil)}, "part_qty": {"100 ml"},
 	})
-	expect(t, rec, http.StatusUnprocessableEntity, "This kit has no intermediate schedule")
+	expect(t, rec, http.StatusUnprocessableEntity, "This kit has no intermediate services")
 }
 
 func TestKitPerTierShortfall(t *testing.T) {
@@ -916,8 +914,8 @@ func TestServiceFormHeader(t *testing.T) {
 	expectNot(t, page, "<h1>Log service · ", "<title>Log service · KTM 390")
 }
 
-// A kit with an intermediate schedule, the same item in both parts lists,
-// comes back whole from the trash: both lists and the intermediate interval.
+// A kit with intermediate services, the same item in both parts lists,
+// comes back whole from the trash: both lists and its intermediate services.
 func TestKitWithBothSchedulesRoundTripsTheTrash(t *testing.T) {
 	a := newApp(t)
 	a.seed()
@@ -1257,5 +1255,5 @@ func TestMonthsOnlyKitInBetween(t *testing.T) {
 	expect(t, a.get(kit+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`)
 	// Without a distance or months, there is nothing to step.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brake pads"}, "in_between": {"1"}}),
-		http.StatusUnprocessableEntity, "Enter the distance or months: the services in between are steps of them")
+		http.StatusUnprocessableEntity, "Enter the distance or months: the intermediate services are steps of them")
 }

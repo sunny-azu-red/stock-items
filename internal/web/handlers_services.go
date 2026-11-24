@@ -61,15 +61,16 @@ func kitTitle(name string, t stock.KitTier) string {
 }
 
 // kitTiers lists the tiers a service of kit k can be: Full; Intermediate
-// with services in between; Break-in for the kit's first service, or on
-// the edit of one when the kit has no break-in yet (there is at most one,
-// store.checkKitTier). The tier the form holds is always among them.
+// when the kit has intermediate services; Break-in, for a kit with a
+// distance, as its first service or on the edit of one while the kit has
+// no break-in (there is one at most, store.checkKitTier). The tier the
+// form holds is always among them.
 func kitTiers(k stock.Kit, f serviceForm) []tierOption {
 	tiers := []stock.KitTier{stock.TierFull}
 	if k.HasIntermediate() || f.KitTier == stock.TierIntermediate {
 		tiers = append(tiers, stock.TierIntermediate)
 	}
-	if f.KitTier == stock.TierBreakIn || (f.ID == 0 && k.LastService == nil) || (f.ID != 0 && !k.HasBreakIn) {
+	if f.KitTier == stock.TierBreakIn || (k.IntervalDistance != nil && ((f.ID == 0 && k.LastService == nil) || (f.ID != 0 && !k.HasBreakIn))) {
 		tiers = append(tiers, stock.TierBreakIn)
 	}
 	var out []tierOption
@@ -91,9 +92,12 @@ type serviceFormPage struct {
 	ServiceTitles []string
 	// KitTiers: the tiers of its kit the service can be, when there is a
 	// choice (more than Full).
-	KitTiers      []tierOption
-	KitFullParts  []lineRow
-	KitInterParts []lineRow
+	KitTiers []tierOption
+	// ReadingRequired: a new service with a kit that counts its distance
+	// needs a reading (store.checkKitTier).
+	ReadingRequired bool
+	KitFullParts    []lineRow
+	KitInterParts   []lineRow
 	// Kits: for a new service without a kit, the active kits to start
 	// from instead, most urgent first; the form shows the chosen vehicle's.
 	Kits []kitView
@@ -161,6 +165,7 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			if tiers := kitTiers(k, f); len(tiers) > 1 {
 				p.KitTiers = tiers
 			}
+			p.ReadingRequired = f.ID == 0 && k.IntervalDistance != nil
 			if f.ID == 0 && len(p.KitTiers) > 1 {
 				p.KitFullParts = kitPartRows(k.Lines)
 				describeRows(p.KitFullParts, items, true)
@@ -224,23 +229,14 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		f.KitID, f.KitName, f.VehicleID, f.Title = k.ID, k.Name, k.VehicleID, k.Name
-		switch q.Get("intermediate") {
-		case "1":
-			f.KitTier = stock.TierFull
-			if k.HasIntermediate() {
-				f.KitTier = stock.TierIntermediate
-			}
-		case "0":
-			f.KitTier = stock.TierFull
+		// The service due next.
+		switch {
+		case k.NextIsBreakIn():
+			f.KitTier = stock.TierBreakIn
+		case k.NextIsIntermediate(k.VehicleOdometer, s.now()):
+			f.KitTier = stock.TierIntermediate
 		default:
-			switch {
-			case k.NextIsBreakIn():
-				f.KitTier = stock.TierBreakIn
-			case k.NextIsIntermediate(k.VehicleOdometer, s.now()):
-				f.KitTier = stock.TierIntermediate
-			default:
-				f.KitTier = stock.TierFull
-			}
+			f.KitTier = stock.TierFull
 		}
 		f.Title = kitTitle(k.Name, f.KitTier)
 		lines := k.Lines

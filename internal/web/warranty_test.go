@@ -274,9 +274,10 @@ func TestBreakIn(t *testing.T) {
 	breakIn := rec.Header().Get("Location")
 	expect(t, a.get(breakIn), http.StatusOK, "Oil Service · Break-in")
 
-	// Done: the half one next, from it (960 + 4 000); the full one from the
-	// purchase, under warranty: 8 000 km or 1 Jun 2027, not 8 960.
-	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>4\u202f960 km</dd>",
+	// Done: no schedule counts from it. The half one next, from the
+	// purchase (4 000 km, or a year on); the full one, under warranty,
+	// 8 000 km or 1 Jun 2027, not 8 960.
+	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>4\u202f000 km</dd>", "<dt>Due by</dt><dd>1 Jun 2027</dd>",
 		"<dt>Full due</dt><dd>8\u202f000 km or 1 Jun 2027</dd>", `(break-in)`)
 	expectNot(t, a.get(kit), "Next: Break-in")
 	// Log service no longer offers a break-in; a second one is refused.

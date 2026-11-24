@@ -479,7 +479,6 @@ type kitView struct {
 	InterReadiness  stock.Readiness
 	Due             stock.Due
 	FullDue         stock.Due
-	InterDue        stock.Due
 	NextInter       bool
 	NextBreakIn     bool // stock.Kit.NextIsBreakIn
 	VehicleArchived bool
@@ -527,12 +526,6 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 		v, ok := byVehicle[k.VehicleID]
 		if ok {
 			odo = v.Odometer
-			if k.VehiclePurchasedOn == nil {
-				k.VehiclePurchasedOn = v.PurchasedOn
-			}
-			if k.VehicleOdometerAtPurchase == nil {
-				k.VehicleOdometerAtPurchase = v.OdometerAtPurchase
-			}
 		}
 		out[i] = kitView{
 			Kit:             k,
@@ -541,7 +534,6 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			InterReadiness:  stock.ReadinessOf(k.InterLines),
 			Due:             k.Due(odo, today),
 			FullDue:         k.FullDue(odo, today),
-			InterDue:        k.InterDue(odo, today),
 			NextInter:       k.NextIsIntermediate(odo, today),
 			NextBreakIn:     k.NextIsBreakIn(),
 			VehicleArchived: v.Archived(),

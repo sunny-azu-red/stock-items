@@ -60,8 +60,8 @@ func ToList(lines []KitLine, listed map[int64]float64) int {
 	return n
 }
 
-// ActiveLines returns the lines for whichever schedule (Intermediate or
-// Full) is due next.
+// ActiveLines returns the lines of the service due next: the intermediate
+// ones, or the full ones (a break-in's too).
 func (k Kit) ActiveLines(currentOdo *int, today time.Time) []KitLine {
 	if k.NextIsIntermediate(currentOdo, today) {
 		return k.InterLines
@@ -79,9 +79,11 @@ func (k Kit) ReadinessAt(currentOdo *int, today time.Time) Readiness {
 type DueState string
 
 const (
-	DueNone    DueState = "none"    // no interval configured
-	DueNever   DueState = "never"   // interval set but never performed
-	DueUnknown DueState = "unknown" // not enough data (e.g. no odometer)
+	DueNone DueState = "none" // no interval configured
+	// DueUnknown: a distance with nothing to count it from (a service
+	// logged without a reading, before readings were required, and none
+	// earlier).
+	DueUnknown DueState = "unknown"
 	DueOK      DueState = "ok"
 	DueSoon    DueState = "soon"
 	DueOverdue DueState = "overdue"
@@ -94,14 +96,12 @@ func (s DueState) Rank() int {
 		return 0
 	case DueSoon:
 		return 1
-	case DueNever:
-		return 2
 	case DueUnknown:
-		return 3
+		return 2
 	case DueOK:
-		return 4
+		return 3
 	}
-	return 5
+	return 4
 }
 
 // Label is a short badge text.
@@ -111,8 +111,6 @@ func (s DueState) Label() string {
 		return "Overdue"
 	case DueSoon:
 		return "Due soon"
-	case DueNever:
-		return "Not done yet"
 	case DueUnknown:
 		return "Needs odometer"
 	case DueOK:
@@ -160,9 +158,6 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 	if intervalDistance == nil && intervalMonths == nil {
 		return Due{State: DueNone}
 	}
-	if ref == nil && baseDate == nil && baseOdo == nil {
-		return Due{State: DueNever}
-	}
 	var d Due
 	soon, overdue, known := false, false, false
 	var lastOdo *int
@@ -202,11 +197,7 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 	}
 	switch {
 	case !known:
-		if ref == nil && d.DueOdometer == nil && d.DueDate == nil {
-			d.State = DueNever
-		} else {
-			d.State = DueUnknown
-		}
+		d.State = DueUnknown
 	case overdue:
 		d.State = DueOverdue
 	case soon:
@@ -224,19 +215,32 @@ func (k Kit) InterDue(currentOdo *int, today time.Time) Due {
 	if !k.HasIntermediate() || k.Archived() {
 		return Due{State: DueNone}
 	}
-	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.InterMonths(), currentOdo, today)
+	last, lastOdo := k.counted()
+	return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.InterMonths(), currentOdo, today)
 }
 
-// FullDue computes when the kit's full service is next due.
+// counted is the service the schedules count from (with the reading to fall
+// back on when it has none): the latest one, unless that is the break-in,
+// which no schedule counts from (the manual's intervals run from the
+// purchase): then none, so they count from the purchase.
+func (k Kit) counted() (*ServiceRef, *int) {
+	if k.LastService != nil && k.LastService.Tier == TierBreakIn {
+		return nil, nil
+	}
+	return k.LastService, k.LastOdometer
+}
+
+// FullDue computes when the kit's full service is next due. No schedule
+// counts from a break-in (counted, LastFullService).
 //   - While the vehicle is under warranty (UnderWarranty), it counts its
 //     own interval from the last full service, or from the purchase before
-//     the first: services in between never move it, as a warranty asks.
-//   - Without a warranty and without services in between, from the last
+//     the first: intermediate services never move it, as a warranty asks.
+//   - Without a warranty and without intermediate services, from the last
 //     service.
 //   - Otherwise (no warranty, or it has ended) services take turns, each a
-//     step (InterStep, InterMonths) after the one before: the full
-//     one comes after the services in between still to do, from the last
-//     service of either kind.
+//     step (InterStep, InterMonths) after the one before: the full one
+//     comes after the intermediate ones still to do, from the last service
+//     of either kind.
 func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if (k.IntervalDistance == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
@@ -244,12 +248,8 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if k.UnderWarranty(currentOdo, today) {
 		return dueFrom(k.LastFullService, k.LastFullOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
+	last, lastOdo := k.counted()
 	if !k.HasIntermediate() {
-		// Not from a break-in, though: the schedule runs from the purchase.
-		last, lastOdo := k.LastService, k.LastOdometer
-		if last != nil && last.Tier == TierBreakIn {
-			last, lastOdo = k.LastFullService, k.LastFullOdometer
-		}
 		return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	steps := k.InBetween - min(k.InterSinceFull, k.InBetween) + 1
@@ -260,20 +260,27 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if m := k.InterMonths(); m != nil {
 		months = ptrTo(steps * *m)
 	}
-	return dueFrom(k.LastService, k.LastOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, months, currentOdo, today)
+	return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, months, currentOdo, today)
 }
 
 func ptrTo(n int) *int { return &n }
 
 // NextIsBreakIn reports whether the kit's next service is a new vehicle's
 // break-in: it has a reading for one (BreakInAt), nothing has been logged
-// with it yet, and the vehicle was bought below that reading. The break-in
-// takes the full parts (ActiveLines), and the full schedule doesn't count
-// from it (FullDue: under warranty from the last full service or the
-// purchase, LastFullService leaves it out).
+// with it yet, the vehicle was bought below that reading and hasn't gone
+// past its first full distance since (a kit added long after the break-in
+// doesn't ask for one). The break-in takes the full parts (ActiveLines),
+// and no schedule counts from it (counted, LastFullService).
 func (k Kit) NextIsBreakIn() bool {
-	return k.BreakInAt != nil && k.LastService == nil && !k.Archived() &&
-		(k.VehicleOdometerAtPurchase == nil || *k.VehicleOdometerAtPurchase < *k.BreakInAt)
+	if k.BreakInAt == nil || k.LastService != nil || k.Archived() {
+		return false
+	}
+	bought := 0
+	if k.VehicleOdometerAtPurchase != nil {
+		bought = *k.VehicleOdometerAtPurchase
+	}
+	pastFirst := k.IntervalDistance != nil && k.VehicleOdometer != nil && *k.VehicleOdometer >= bought+*k.IntervalDistance
+	return bought < *k.BreakInAt && !pastFirst
 }
 
 // BreakInDue computes when the break-in is due (NextIsBreakIn): at the
@@ -330,8 +337,8 @@ func dueBefore(a, b Due) bool {
 	return a.DueDate != nil && (b.DueDate == nil || a.DueDate.Before(*b.DueDate))
 }
 
-// Due computes when the kit's next active service (Intermediate or Full) is
-// due, given the vehicle's current odometer reading and today's date.
+// Due computes when the kit's next service (break-in, intermediate or full)
+// is due, given the vehicle's current odometer reading and today's date.
 func (k Kit) Due(currentOdo *int, today time.Time) Due {
 	if k.NextIsBreakIn() {
 		return k.BreakInDue(currentOdo, today)

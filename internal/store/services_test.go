@@ -769,3 +769,92 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	}
 	assertLedger(t, s)
 }
+
+// A service's tier is checked against its kit only when it changes: an
+// intermediate service saves unchanged after its kit dropped its
+// intermediate services. A kit has one break-in on a vehicle: a second is
+// refused, also from the trash, and a kit moved to another vehicle may
+// have its own there; a kit without a distance has none.
+func TestServiceTierChecks(t *testing.T) {
+	s, ctx := newStore(t)
+	v1 := mustVehicle(t, s, "KTM 390")
+	v2 := mustVehicle(t, s, "KTM 690")
+	kitIn := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000), InBetween: 1, BreakInAt: ptr(1000)}
+	kitIn.Normalize()
+	kit, err := s.CreateKit(ctx, kitIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := func(v int64, tier stock.KitTier, on time.Time, odo int) (int64, error) {
+		in := stock.ServiceInput{VehicleID: v, KitID: &kit, KitTier: tier, Title: "Oil", PerformedOn: on, Odometer: ptr(odo)}
+		in.Normalize()
+		return s.CreateService(ctx, in)
+	}
+	day := func(m time.Month, d int) time.Time { return time.Date(2025, m, d, 0, 0, 0, 0, time.UTC) }
+
+	// An intermediate service, then the kit drops its intermediate ones.
+	inter, err := log(v1, stock.TierIntermediate, day(3, 1), 3000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitIn.InBetween = 0
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, kitIn)); err != nil {
+		t.Fatal(err)
+	}
+	edit := stock.ServiceInput{VehicleID: v1, KitID: &kit, KitTier: stock.TierIntermediate, Title: "Oil", Notes: "typo fixed", PerformedOn: day(3, 1), Odometer: ptr(3000)}
+	if err := s.UpdateService(ctx, inter, serviceV(t, s, inter, edit)); err != nil {
+		t.Errorf("an unchanged intermediate service: %v, want it saved", err)
+	}
+	// Made Full and back: refused, the kit has none now.
+	edit.KitTier = stock.TierFull
+	if err := s.UpdateService(ctx, inter, serviceV(t, s, inter, edit)); err != nil {
+		t.Fatal(err)
+	}
+	edit.KitTier = stock.TierIntermediate
+	var conflict *store.ConflictError
+	if err := s.UpdateService(ctx, inter, serviceV(t, s, inter, edit)); !errors.As(err, &conflict) || conflict.Field != "kit_id" {
+		t.Errorf("made intermediate on a kit without: %v, want it refused", err)
+	}
+
+	// One break-in on a vehicle; deleted, another logged, the first can't
+	// come back from the trash.
+	first, err := log(v1, stock.TierBreakIn, day(1, 20), 900)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log(v1, stock.TierBreakIn, day(1, 21), 950); !errors.As(err, &conflict) || conflict.Field != "kit_tier" {
+		t.Errorf("a second break-in: %v, want it refused", err)
+	}
+	trash, err := s.DeleteService(ctx, first, cur(t, s, store.WhatService, first))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log(v1, stock.TierBreakIn, day(1, 22), 980); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RestoreTrash(ctx, trash); !errors.As(err, &conflict) || !strings.Contains(conflict.Message, "break-in again") {
+		t.Errorf("restoring a second break-in: %v, want it refused", err)
+	}
+
+	// The kit moved to another vehicle: a break-in of its own there.
+	kitIn.VehicleID = v2
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, kitIn)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log(v2, stock.TierBreakIn, day(4, 1), 400); err != nil {
+		t.Errorf("a break-in on the vehicle the kit moved to: %v, want it saved", err)
+	}
+
+	// A kit without a distance has no break-in.
+	months := stock.KitInput{VehicleID: v1, Name: "Coolant", IntervalMonths: ptr(48)}
+	months.Normalize()
+	coolant, err := s.CreateKit(ctx, months)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stock.ServiceInput{VehicleID: v1, KitID: &coolant, KitTier: stock.TierBreakIn, Title: "Coolant", PerformedOn: day(5, 1), Odometer: ptr(5000)}
+	in.Normalize()
+	if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Field != "kit_tier" {
+		t.Errorf("a break-in on a kit without a distance: %v, want it refused", err)
+	}
+}

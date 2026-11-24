@@ -883,7 +883,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a kit with Full (4000 km / 12 months) and Intermediate (2000 km, no months).
+	// Create a kit with Full (4000 km / 12 months) and 1 intermediate service (every 2000 km, at the 12 months).
 	rec := a.post("/kits", url.Values{
 		"vehicle_id":        {itoa(k1290)},
 		"name":              {"Oil service"},
@@ -899,11 +899,9 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	kitPath := rec.Header().Get("Location")
 	kitID := strings.TrimPrefix(kitPath, "/kits/")
 
-	// Edit page shows the (?) help tooltip on Intermediate months and the intermediate schedule,
-	// its box ticked (CSS shows the fields while it is); a new kit's box is not.
-	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`, "1, half-way")
+	// The edit page has its 1 intermediate service chosen; a new kit has none.
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`, "1, halfway")
 	expect(t, a.get("/kits/new"), http.StatusOK, `name="in_between" value="0" autocomplete="off" checked`)
-	expectNot(t, a.get("/kits/new"), "data-show-inter", "data-hide-inter")
 
 	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts with package icon.
 	expect(t, a.get(kitPath), http.StatusOK,

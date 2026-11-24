@@ -587,6 +587,17 @@ func restoreService(ctx context.Context, tx pgx.Tx, p trashPayload, dropped *int
 			rec["kit_id"] = nil
 			rec["kit_tier"] = string(stock.TierFull)
 			*dropped++
+		} else if stock.KitTier(rec.string("kit_tier")) == stock.TierBreakIn {
+			// A kit has one break-in on a vehicle (store.checkKitTier): one
+			// logged since this was deleted keeps it.
+			var other bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_records WHERE kit_id = $1 AND vehicle_id = $2 AND kit_tier = 'break_in')`,
+				rec.int64("kit_id"), rec.int64("vehicle_id")).Scan(&other); err != nil {
+				return 0, err
+			}
+			if other {
+				return 0, &ConflictError{Field: "form", Message: "Its kit has a break-in again since. Make that one a full service first, then restore this one."}
+			}
 		}
 	}
 	if err := restoreRows(ctx, tx, "service_records", encodeRows([]snapshotRow{rec})); err != nil {

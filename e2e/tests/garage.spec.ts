@@ -51,12 +51,13 @@ async function pickVehicle(page: Page, name: string) {
 }
 
 // Shows a kit form's intermediate services: they are steps of the full
-// distance, so their section shows once it has one; then 1 in between.
+// distance (or its months), so their section shows once one is entered;
+// then 1 in between.
 async function showInter(page: Page) {
   const distance = page.locator("#interval_distance");
   if (!(await distance.count())) return;
   if (!(await distance.inputValue())) await distance.fill("8000");
-  await page.locator("#inter-schedule .segmented label").filter({ hasText: "1, half-way" }).click();
+  await page.locator("#inter-schedule .segmented label").filter({ hasText: "1, halfway" }).click();
 }
 
 // The headings of an open item list, in order.
@@ -2663,12 +2664,12 @@ test("Enter in the new item form saves the item", async ({ page }) => {
   await expect(page.locator("h1")).toContainText("Brake cleaner");
 });
 
-test("intermediate schedule on a kit alternates with the full schedule", async ({ page }) => {
+test("a kit's intermediate service comes between its full ones", async ({ page }) => {
   await page.goto("/services");
   await page.locator("a.kit-row").first().click();
   await (await headAction(page, "link", "Edit", true)).click();
 
-  // Its parts show once there are intermediate services: 1, half-way
+  // Its parts show once there are intermediate services: 1, halfway
   // (every 3 750 km of the 7 500).
   await expect(page.locator("#inter-lines")).toBeHidden();
   await showInter(page);
@@ -2713,7 +2714,7 @@ test("intermediate schedule on a kit alternates with the full schedule", async (
   await expect(partQty).toHaveValue("1.5 L");
 });
 
-// After the kit above has an intermediate schedule, so Log service from it
+// After the kit above has intermediate services, so Log service from it
 // shows its Schedule row.
 test("every form follows the Forms rules", async ({ page }, testInfo) => {
   // docs/design.md#6-layout (Forms), the rules every form keeps, new ones

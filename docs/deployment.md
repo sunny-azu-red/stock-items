@@ -146,6 +146,8 @@ New migrations are applied automatically on start; to apply them separately, run
 
 **00007 (intermediate services by months).** A kit without a distance may have intermediate services too, in equal steps of its months. It only relaxes a CHECK: nothing changes.
 
+**00008 (one break-in).** A kit has one break-in on a vehicle, held by a unique index. A kit with more stops the migration, naming it, and changes nothing: make the others full services on their edit forms. Nothing else changes.
+
 ## Health check
 
 The running build's version shows when you hover the Pitbox logo at the top of the sidebar, and on any device (a phone too) at `/healthz`. `GET /healthz` returns `{"status":"ok","version":"…"}` (HTTP 200), or `{"status":"unavailable","database":"down"}` with HTTP 503 when the database is unreachable. `pitbox -healthcheck` asks the server on `HOST`:`PORT` for it and exits 0 or 1. The Docker image uses it, since the image has no curl. Docker only marks an unhealthy container; it doesn't restart it.

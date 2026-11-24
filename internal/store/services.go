@@ -106,7 +106,7 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
-		if err := checkServiceKit(ctx, tx, in, 0); err != nil {
+		if err := checkServiceKit(ctx, tx, in, 0, ""); err != nil {
 			return err
 		}
 		if err := checkServiceOdometer(ctx, tx, in, 0); err != nil {
@@ -169,10 +169,11 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 	in.KitTier = serviceTier(in)
 	return s.inFormTx(ctx, in.FormKey, WhatService, &id, func(tx pgx.Tx) error {
 		var kitWas *int64
+		var tierWas stock.KitTier
 		var version int
 		var titleWas string
-		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, title FROM service_records WHERE id = $1 FOR UPDATE`, id).
-			Scan(&version, &in.VehicleID, &kitWas, &titleWas)
+		err := tx.QueryRow(ctx, `SELECT version, vehicle_id, kit_id, kit_tier, title FROM service_records WHERE id = $1 FOR UPDATE`, id).
+			Scan(&version, &in.VehicleID, &kitWas, &tierWas, &titleWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatService, id); err != nil {
 			return err
 		}
@@ -184,10 +185,10 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		// The service keeps its kit even if the kit has moved to another
 		// vehicle since; only a newly chosen kit must fit the vehicle.
 		if in.KitID == nil || kitWas == nil || *in.KitID != *kitWas {
-			if err := checkServiceKit(ctx, tx, in, id); err != nil {
+			if err := checkServiceKit(ctx, tx, in, id, ""); err != nil {
 				return err
 			}
-		} else if err := checkKitTier(ctx, tx, in, id); err != nil {
+		} else if err := checkKitTier(ctx, tx, in, id, tierWas); err != nil {
 			return err
 		}
 		if err := checkServiceOdometer(ctx, tx, in, id); err != nil {
@@ -251,7 +252,7 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 // SHARE lock, which archiving doesn't wait for). The caller holds the
 // vehicle; the kit comes after it and before the parts, the order UpdateKit
 // locks in too.
-func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64) error {
+func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64, tierWas stock.KitTier) error {
 	if in.KitID == nil {
 		return nil
 	}
@@ -268,7 +269,7 @@ func checkServiceKit(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serv
 	if archived {
 		return &ConflictError{Field: "form", Message: "This kit is archived; restore it first."}
 	}
-	return checkKitTier(ctx, tx, in, serviceID)
+	return checkKitTier(ctx, tx, in, serviceID, tierWas)
 }
 
 // serviceTier is the tier a service is saved with: Full without a kit, or
@@ -281,12 +282,15 @@ func serviceTier(in stock.ServiceInput) stock.KitTier {
 }
 
 // checkKitTier checks what a service with a kit needs from it (the kit is
-// locked FOR SHARE, as checkServiceKit does): an intermediate service, that
-// the kit has services in between; a break-in, that the kit has no other
-// (serviceID is the service being saved, 0 for a new one); and, for a new
-// service, a reading when the kit counts its distance (one logged before
-// that was required stays editable without; Kit.Due falls back for it).
-func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64) error {
+// locked FOR SHARE, as checkServiceKit does). A tier it takes now (tierWas
+// is the one it had with this kit, "" for a new service or kit) must fit
+// the kit: an intermediate service needs intermediate services, and a
+// break-in that the kit has no other on this vehicle (serviceID is the
+// service being saved, 0 for a new one; a partial unique index keeps it to
+// one too). A tier it keeps stays, so an old service saves unchanged. A new
+// service needs a reading when the kit counts its distance (one logged
+// before that was required stays editable without; Kit.Due falls back).
+func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64, tierWas stock.KitTier) error {
 	if in.KitID == nil {
 		return nil
 	}
@@ -294,15 +298,19 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	var countsDistance, otherBreakIn bool
 	err := tx.QueryRow(ctx, `
 		SELECT in_between, interval_distance IS NOT NULL,
-		       EXISTS (SELECT 1 FROM service_records WHERE kit_id = $1 AND kit_tier = 'break_in' AND id <> $2)
-		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID).Scan(&inBetween, &countsDistance, &otherBreakIn)
+		       EXISTS (SELECT 1 FROM service_records
+		               WHERE kit_id = $1 AND vehicle_id = $3 AND kit_tier = 'break_in' AND id <> $2)
+		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID).Scan(&inBetween, &countsDistance, &otherBreakIn)
 	if err != nil {
 		return notFound(err)
 	}
+	changed := in.KitTier != tierWas
 	switch {
-	case in.KitTier == stock.TierIntermediate && inBetween == 0:
-		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate schedule"}
-	case in.KitTier == stock.TierBreakIn && otherBreakIn:
+	case changed && in.KitTier == stock.TierIntermediate && inBetween == 0:
+		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate services"}
+	case changed && in.KitTier == stock.TierBreakIn && !countsDistance:
+		return &ConflictError{Field: "kit_tier", Message: "A break-in comes before the kit's distance: this kit has none"}
+	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:
 		return &ConflictError{Field: "kit_tier", Message: "This kit has a break-in already"}
 	case serviceID == 0 && countsDistance && in.Odometer == nil:
 		return &ConflictError{Field: "odometer", Message: "Enter the reading: this kit counts its distance from it"}
@@ -509,7 +517,7 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 		                               WHERE o.vehicle_id = sr.vehicle_id AND o.id <> sr.id)) AS odo) back
 		WHERE sr.id = $1 AND v.id = sr.vehicle_id AND sr.odometer_moved
 		  AND v.odometer = sr.odometer
-		  AND (GREATEST(back.odo, v.odometer_at_purchase) IS NULL OR GREATEST(back.odo, v.odometer_at_purchase) < sr.odometer)`, serviceID)
+		  AND GREATEST(back.odo, v.odometer_at_purchase) < sr.odometer`, serviceID)
 	return err
 }
 

@@ -63,22 +63,13 @@
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
   </div>
-  {{/* The intermediate services are steps of the full distance (or its
-       months without one), so their section shows once either is entered,
-       and their parts while there are any (CSS). The server drops the parts
-       with none. */}}
+  {{/* The intermediate service comes halfway through the distance, so its
+       section shows once there is one, and its parts while its box is
+       ticked (CSS). The server drops the parts when it isn't. */}}
   <div class="form-section" id="inter-schedule">
-    <h2>Intermediate services</h2>
-    <p class="hint">Lighter jobs between full services (like a mid-interval oil &amp; filter change), with their own, smaller set of parts. They come in equal steps of the distance above, at its months, or of the months alone without a distance.</p>
-    <div class="form-grid">
-      <fieldset class="field span-all{{if index $e "in_between"}} has-error{{end}}"{{with index $e "in_between"}} aria-describedby="in_between-err"{{end}}>
-        <legend>Between two full services</legend>
-        <span class="segmented">
-          {{range $d.InBetweens}}<label title="{{.Label}}"><input type="radio" name="in_between" value="{{.Value}}" autocomplete="off"{{if eq .Value $f.InBetween}} checked{{end}}><span class="seg-text">{{.Label}}</span></label>{{end}}
-        </span>
-        {{template "field-err" (fieldErr (index $e "in_between") "in_between")}}
-      </fieldset>
-    </div>
+    <h2>Intermediate service</h2>
+    <p class="hint">A lighter job halfway between full services (like an oil &amp; filter change), with its own, smaller set of parts. It comes at half the distance above, at its months.</p>
+    <label class="toggle"><input type="checkbox" id="intermediate" name="intermediate" value="1"{{if $f.Intermediate}} checked{{end}}> Halfway between full services</label>
     <div class="toggled-fields">
       <h3>Intermediate parts</h3>
       {{template "err" (index $e "inter_lines")}}

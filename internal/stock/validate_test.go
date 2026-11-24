@@ -246,6 +246,12 @@ func TestKitAndServiceMergeDuplicateLines(t *testing.T) {
 	if len(in.Lines) != 2 || in.Lines[0].Quantity != 2 {
 		t.Errorf("lines = %+v", in.Lines)
 	}
+	// Intermediate parts go with the intermediate service, and without it.
+	in.InterLines = []KitLineInput{{ItemID: 2, Quantity: 1000}}
+	in.Normalize()
+	if in.InterLines != nil {
+		t.Errorf("no intermediate service, intermediate parts = %+v", in.InterLines)
+	}
 	svc := ServiceInput{VehicleID: 1}
 	svc.Normalize()
 	errs := svc.Validate()
@@ -373,15 +379,11 @@ func TestTextAndNumberLimits(t *testing.T) {
 			in.Normalize()
 			return in.Validate()
 		}(), "lines"},
-		{"kit in between without a schedule", KitInput{VehicleID: 1, Name: "A", InBetween: 1}.Validate(), "interval_distance"},
-		{"kit in between, too few months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(2), InBetween: 2}.Validate(), "in_between"},
-		{"kit in between, too short a distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(2), InBetween: 2}.Validate(), "in_between"},
+		{"kit intermediate service with months only", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(48), Intermediate: true}.Validate(), "interval_distance"},
 		{"kit break-in without a distance", KitInput{VehicleID: 1, Name: "A", BreakInAt: ptr(1000)}.Validate(), "interval_distance"},
 		{"kit break-in past the distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(8000)}.Validate(), "break_in_at"},
 		{"kit break-in at 0", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(0)}.Validate(), "break_in_at"},
 		{"service tier unknown", ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), KitTier: "half"}.Validate(), "kit_tier"},
-		{"kit in between out of range", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), InBetween: 3}.Validate(), "in_between"},
-		{"kit in-between parts with none in between", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), InterLines: []KitLineInput{{ItemID: 1, Quantity: 1}}}.Validate(), "in_between"},
 		{"service part over the maximum", func() Errors {
 			in := ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), Parts: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
 			in.Normalize()

@@ -466,9 +466,10 @@ type Kit struct {
 	Name                      string
 	IntervalDistance          *int
 	IntervalMonths            *int
-	// InBetween is how many intermediate services come between two full
-	// ones (0 to 2): every InterStep and InterMonths.
-	InBetween int
+	// Intermediate says the kit has an intermediate service halfway between
+	// two full ones, by distance (InterStep), at the full months. It needs
+	// the distance.
+	Intermediate bool
 	// BreakInAt is the reading a new vehicle's break-in service is due at
 	// (NextIsBreakIn); nil without one.
 	BreakInAt   *int
@@ -485,10 +486,9 @@ type Kit struct {
 	// latest reading at or before it.
 	LastFullService  *ServiceRef
 	LastFullOdometer *int
-	// InterSinceFull counts the intermediate services after the last full
-	// one (all of them before the first): once there are InBetween, the
-	// full one is next.
-	InterSinceFull int
+	// InterSinceFull says an intermediate service was done after the last
+	// full one (or before the first): the full one is next.
+	InterSinceFull bool
 	// HasBreakIn says a break-in was logged with the kit (there is at most one).
 	HasBreakIn bool
 	// ArchivedAt is set for kits no longer used: they leave lists and
@@ -499,33 +499,15 @@ type Kit struct {
 // Archived reports whether the kit has been archived.
 func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 
-// HasIntermediate reports whether the kit has services between full ones.
-func (k Kit) HasIntermediate() bool { return k.InBetween > 0 }
-
 // InterStep is the distance from one service to the next when the kit has
-// intermediate services: the full distance in InBetween + 1 equal steps
-// (rounded down to a whole unit). Nil without them.
+// an intermediate service: half the full distance (rounded down to a whole
+// unit). Nil without one.
 func (k Kit) InterStep() *int {
-	if k.InBetween <= 0 || k.IntervalDistance == nil {
+	if !k.Intermediate || k.IntervalDistance == nil {
 		return nil
 	}
-	step := *k.IntervalDistance / (k.InBetween + 1)
+	step := *k.IntervalDistance / 2
 	return &step
-}
-
-// InterMonths is the months from one service to the next when the kit has
-// intermediate services: the full schedule's months, or, for a kit that
-// counts no distance, those months in InBetween + 1 equal steps (rounded
-// down, a month at least). Nil without them, or without months.
-func (k Kit) InterMonths() *int {
-	if k.InBetween <= 0 || k.IntervalMonths == nil {
-		return nil
-	}
-	if k.IntervalDistance != nil {
-		return k.IntervalMonths
-	}
-	m := max(1, *k.IntervalMonths/(k.InBetween+1))
-	return &m
 }
 
 // VehicleChip returns a Vehicle value with the kit's vehicle chip fields.

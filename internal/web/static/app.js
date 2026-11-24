@@ -3,7 +3,7 @@
 // badges, suggestion dropdowns, photo shrinking, clipboard, toasts, tabs,
 // the Appearance panel without a reload, the double-submit guard,
 // keyboard shortcuts and the vehicle cards' glow under the cursor. Dialogs,
-// popovers, the "?" hints and the kit form's intermediate services and
+// popovers, the "?" hints and the kit form's intermediate service and
 // Break-in at need none of it. JavaScript is assumed
 // (docs/conventions.md); the server never relies on what it did.
 (function () {

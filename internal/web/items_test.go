@@ -600,10 +600,10 @@ func TestRefusedFormsKeepNewFields(t *testing.T) {
 	// No name: refused.
 	rec := a.post("/kits", url.Values{
 		"vehicle_id": {itoa(k390)}, "interval_distance": {"4000"},
-		"in_between":      {"1"},
+		"intermediate":    {"1"},
 		"inter_line_item": {itoa(oil)}, "inter_line_qty": {"1 L"},
 	})
-	expect(t, rec, http.StatusUnprocessableEntity, `name="in_between" value="1" autocomplete="off" checked`)
+	expect(t, rec, http.StatusUnprocessableEntity, `name="intermediate" value="1" checked`)
 	if !regexp.MustCompile(`(?s)id="inter-lines".*?name="inter_line_item" value="` + itoa(oil) + `" data-item-id>.*?id="inter-line-template"`).MatchString(rec.Body.String()) {
 		t.Error("the kit form lost the intermediate part")
 	}

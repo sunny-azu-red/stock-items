@@ -199,7 +199,7 @@ func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	path := rec.Header().Get("Location")
 	id := itoa(mustID(t, path))
 	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"},
-		"in_between": {"1"}})
+		"intermediate": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	// A late intermediate service, at 8 000 km instead of 7 500.
@@ -252,7 +252,7 @@ func TestBreakIn(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	id := itoa(mustID(t, rec.Header().Get("Location")))
 	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"8000"}, "interval_months": {"12"},
-		"in_between": {"1"}, "break_in_at": {"1000"}})
+		"intermediate": {"1"}, "break_in_at": {"1000"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	kitID := mustID(t, kit)
@@ -298,7 +298,7 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 		"purchased_on": {"2025-04-04"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2028-04-03"}})
 	expect(t, rec, http.StatusSeeOther)
 	id := itoa(mustID(t, rec.Header().Get("Location")))
-	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"}, "in_between": {"1"}})
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"15000"}, "interval_months": {"12"}, "intermediate": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	first := url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service (First)"},

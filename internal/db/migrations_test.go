@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io/fs"
-	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -278,263 +277,81 @@ func TestOdometerMovedNotNullMigration(t *testing.T) {
 	}
 }
 
-// 00004 makes a vehicle's odometer, purchase date and purchase reading NOT
-// NULL: it stops, changing nothing, on a vehicle or a deleted one in the
-// trash without them, and Down makes them nullable again.
-func TestVehicleRequiredMigration(t *testing.T) {
+// 00004 makes a vehicle's odometer and purchase required, turns a kit's
+// intermediate intervals into intermediate and a service's
+// kit_intermediate into kit_tier (in the trash's snapshots too, so they
+// restore), keeps a kit to one break-in on a vehicle, and Down brings the
+// old columns back.
+func TestKitSchedulesMigration(t *testing.T) {
 	pool, provider := migrationDB(t)
 	ctx := context.Background()
 	if _, err := provider.UpTo(ctx, 3); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0), ('Golf', NULL, '2020-01-01', 0)`); err != nil {
-		t.Fatal(err)
-	}
-	stopped := func(when, want string) {
-		t.Helper()
-		_, err := provider.UpTo(ctx, 4)
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
-		}
-		if v, err := provider.GetDBVersion(ctx); err != nil || v != 3 {
-			t.Errorf("%s: version %d (%v), want 3", when, v, err)
-		}
-	}
-	stopped("a vehicle without an odometer", "vehicles without an odometer, purchase date or purchase reading: Golf")
-
-	if _, err := pool.Exec(ctx, `
-		UPDATE vehicles SET odometer = 0 WHERE name = 'Golf';
-		INSERT INTO trash (kind, label, payload) VALUES ('vehicle', 'Vehicle: Sold',
-			'{"vehicles": [{"id": 60, "name": "Sold", "odometer": 1, "purchased_on": null, "odometer_at_purchase": 0}]}')`); err != nil {
-		t.Fatal(err)
-	}
-	stopped("a deleted vehicle without a purchase date", "deleted vehicles in the trash without an odometer, purchase date or purchase reading: Vehicle: Sold")
-
-	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{vehicles,0,purchased_on}', '"2020-01-01"')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 4); err != nil {
-		t.Fatal(err)
-	}
-	for _, col := range []string{"odometer", "purchased_on", "odometer_at_purchase"} {
-		if err := refused(t, pool, `UPDATE vehicles SET `+col+` = NULL`); err == nil {
-			t.Errorf("after Up: NULL %s was taken", col)
-		}
-	}
-	if _, err := provider.DownTo(ctx, 3); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE vehicles SET odometer = NULL, purchased_on = NULL, odometer_at_purchase = NULL WHERE name = 'Golf'`); err != nil {
-		t.Errorf("after Down: NULL refused: %v", err)
-	}
-}
-
-// 00005 turns a kit's two intermediate intervals into in_between: it stops,
-// changing nothing, on a kit or a deleted one in the trash that isn't 2 or
-// 3 equal steps of the full distance at its months, converts the rest (the
-// trash's too, so they restore), and Down brings the intervals back.
-func TestKitInBetweenMigration(t *testing.T) {
-	pool, provider := migrationDB(t)
-	ctx := context.Background()
-	if _, err := provider.UpTo(ctx, 4); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0);
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', NULL);
 		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, inter_interval_distance, inter_interval_months) VALUES
-			(1, 'Oil', 8000, 12, 4000, 12), (1, 'Thirds', 15000, 12, 5000, NULL), (1, 'Plugs', 15000, NULL, NULL, NULL),
-			(1, 'Odd', 15000, 12, 4000, 12)`); err != nil {
-		t.Fatal(err)
-	}
-	stopped := func(when, want string) {
-		t.Helper()
-		_, err := provider.UpTo(ctx, 5)
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
-		}
-		if v, err := provider.GetDBVersion(ctx); err != nil || v != 4 {
-			t.Errorf("%s: version %d (%v), want 4", when, v, err)
-		}
-	}
-	stopped("4 000 of 15 000", "kits whose intermediate schedule is not 2 or 3 equal steps of the full distance at its months: KTM 390: Odd")
-
-	if _, err := pool.Exec(ctx, `
-		UPDATE service_kits SET inter_interval_distance = 7500 WHERE name = 'Odd';
+			(1, 'Oil', 8000, 12, 4000, 12), (1, 'Plugs', 15000, NULL, NULL, NULL);
+		INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, odometer, title) VALUES
+			(1, 1, false, '2025-01-01', 4000, 'Oil'), (1, 1, true, '2025-06-01', 8000, 'Oil (Intermediate)'), (1, NULL, false, '2025-07-01', NULL, 'Wash');
 		INSERT INTO trash (kind, label, payload) VALUES ('kit', 'Kit: Gone',
-			'{"service_kits": [{"id": 60, "vehicle_id": 1, "name": "Gone", "interval_distance": 10000, "interval_months": 12, "inter_interval_distance": 5000, "inter_interval_months": 6}], "service_kit_lines": []}')`); err != nil {
+			'{"service_kits": [{"id": 60, "vehicle_id": 1, "name": "Gone", "interval_distance": 10000, "interval_months": 12, "inter_interval_distance": 5000, "inter_interval_months": 12}],
+			  "service_records": [{"id": 61, "vehicle_id": 1, "kit_id": 60, "kit_intermediate": true, "performed_on": "2025-03-01", "title": "Old"}]}')`); err != nil {
 		t.Fatal(err)
 	}
-	stopped("a deleted kit with other months", "deleted kits in the trash whose intermediate schedule is not 2 or 3 equal steps of the full distance at its months: Kit: Gone")
-
-	if _, err := pool.Exec(ctx, `UPDATE trash SET payload = jsonb_set(payload, '{service_kits,0,inter_interval_months}', '12')`); err != nil {
+	// A vehicle without its purchase reading fails it, changing nothing.
+	if _, err := provider.UpTo(ctx, 4); err == nil || !strings.Contains(err.Error(), "odometer_at_purchase") {
+		t.Errorf("a vehicle without a purchase reading: %v, want it to fail", err)
+	}
+	if v, err := provider.GetDBVersion(ctx); err != nil || v != 3 {
+		t.Errorf("after the failure: version %d (%v), want 3", v, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE vehicles SET odometer_at_purchase = 0`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provider.UpTo(ctx, 5); err != nil {
+	if _, err := provider.UpTo(ctx, 4); err != nil {
 		t.Fatal(err)
-	}
-	got := map[string]int{}
-	rows, err := pool.Query(ctx, `SELECT name, in_between FROM service_kits`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for rows.Next() {
-		var name string
-		var n int
-		if err := rows.Scan(&name, &n); err != nil {
-			t.Fatal(err)
-		}
-		got[name] = n
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if want := map[string]int{"Oil": 1, "Thirds": 2, "Plugs": 0, "Odd": 1}; !maps.Equal(got, want) {
-		t.Errorf("in_between = %v, want %v", got, want)
-	}
-	var snapshot string
-	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_kits' -> 0 ->> 'in_between' FROM trash`).Scan(&snapshot); err != nil || snapshot != "1" {
-		t.Errorf("trash snapshot in_between = %q (%v), want 1", snapshot, err)
-	}
-	if err := refused(t, pool, `INSERT INTO service_kits (vehicle_id, name, interval_months, in_between) VALUES (1, 'Months only', 12, 1)`); err == nil {
-		t.Error("after Up: in between without a distance was taken")
-	}
-	if err := refused(t, pool, `UPDATE service_kits SET in_between = 3`); err == nil {
-		t.Error("after Up: 3 in between was taken")
 	}
 
-	if _, err := provider.DownTo(ctx, 4); err != nil {
-		t.Fatal(err)
+	var kits, tiers, snapshot string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(name || '=' || intermediate, ',' ORDER BY id) FROM service_kits`).Scan(&kits); err != nil || kits != "Oil=true,Plugs=false" {
+		t.Errorf("intermediate = %q (%v), want Oil=true,Plugs=false", kits, err)
 	}
-	var dist, months *int
-	if err := pool.QueryRow(ctx, `SELECT inter_interval_distance, inter_interval_months FROM service_kits WHERE name = 'Thirds'`).Scan(&dist, &months); err != nil ||
-		dist == nil || *dist != 5000 || months == nil || *months != 12 {
-		t.Errorf("after Down: Thirds every %v / %v months (%v), want 5 000 / 12", dist, months, err)
-	}
-}
-
-// 00006 turns kit_intermediate into kit_tier, in the trash's services too
-// (so they restore), adds break_in_at, and Down turns a break-in back into
-// a full service.
-func TestServiceKitTierMigration(t *testing.T) {
-	pool, provider := migrationDB(t)
-	ctx := context.Background()
-	if _, err := provider.UpTo(ctx, 5); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0);
-		INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, in_between) VALUES (1, 'Oil', 8000, 12, 1);
-		INSERT INTO service_records (vehicle_id, kit_id, kit_intermediate, performed_on, title) VALUES
-			(1, 1, false, '2025-01-01', 'Oil'), (1, 1, true, '2025-06-01', 'Oil (Intermediate)'), (1, NULL, false, '2025-07-01', 'Wash');
-		INSERT INTO trash (kind, label, payload) VALUES ('service', 'Service: Old',
-			'{"service_records": [{"id": 60, "vehicle_id": 1, "kit_id": 1, "kit_intermediate": true, "performed_on": "2025-03-01", "title": "Old"}]}')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 6); err != nil {
-		t.Fatal(err)
-	}
-	var tiers string
 	if err := pool.QueryRow(ctx, `SELECT string_agg(kit_tier, ',' ORDER BY id) FROM service_records`).Scan(&tiers); err != nil || tiers != "full,intermediate,full" {
 		t.Errorf("kit_tier = %q (%v), want full,intermediate,full", tiers, err)
 	}
-	var snapshot string
-	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_records' -> 0 ->> 'kit_tier' FROM trash`).Scan(&snapshot); err != nil || snapshot != "intermediate" {
-		t.Errorf("trash snapshot kit_tier = %q (%v), want intermediate", snapshot, err)
+	if err := pool.QueryRow(ctx, `SELECT (payload -> 'service_kits' -> 0 ->> 'intermediate') || ',' || (payload -> 'service_records' -> 0 ->> 'kit_tier')
+		|| ',' || (payload -> 'service_kits' -> 0 ? 'inter_interval_distance')::text FROM trash`).Scan(&snapshot); err != nil || snapshot != "true,intermediate,false" {
+		t.Errorf("trash snapshot = %q (%v), want true,intermediate,false", snapshot, err)
 	}
-	if err := refused(t, pool, `UPDATE service_records SET kit_tier = 'half'`); err == nil {
-		t.Error("after Up: an unknown tier was taken")
+	for _, tc := range []struct{ name, sql string }{
+		{"a NULL odometer", `UPDATE vehicles SET odometer = NULL`},
+		{"intermediate without a distance", `INSERT INTO service_kits (vehicle_id, name, interval_months, intermediate) VALUES (1, 'Coolant', 48, true)`},
+		{"an unknown tier", `UPDATE service_records SET kit_tier = 'half'`},
+		{"a second break-in on a vehicle", `UPDATE service_records SET kit_tier = 'break_in' WHERE kit_id = 1`},
+	} {
+		if err := refused(t, pool, tc.sql); err == nil {
+			t.Errorf("after Up: %s was taken", tc.name)
+		}
 	}
 	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'break_in' WHERE id = 1; UPDATE service_kits SET break_in_at = 1000`); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := provider.DownTo(ctx, 5); err != nil {
+	if _, err := provider.DownTo(ctx, 3); err != nil {
 		t.Fatal(err)
+	}
+	var dist, months *int
+	if err := pool.QueryRow(ctx, `SELECT inter_interval_distance, inter_interval_months FROM service_kits WHERE name = 'Oil'`).Scan(&dist, &months); err != nil ||
+		dist == nil || *dist != 4000 || months == nil || *months != 12 {
+		t.Errorf("after Down: Oil every %v / %v months (%v), want 4 000 / 12", dist, months, err)
 	}
 	var inter string
 	if err := pool.QueryRow(ctx, `SELECT string_agg(kit_intermediate::text, ',' ORDER BY id) FROM service_records`).Scan(&inter); err != nil || inter != "false,true,false" {
 		t.Errorf("after Down: kit_intermediate = %q (%v), want false,true,false", inter, err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_records' -> 0 ->> 'kit_intermediate' FROM trash`).Scan(&snapshot); err != nil || snapshot != "true" {
-		t.Errorf("after Down: trash snapshot kit_intermediate = %q (%v), want true", snapshot, err)
-	}
-}
-
-// 00007 lets a kit with months only have intermediate services; Down stops
-// on one, changing nothing.
-func TestKitInBetweenMonthsMigration(t *testing.T) {
-	pool, provider := migrationDB(t)
-	ctx := context.Background()
-	if _, err := provider.UpTo(ctx, 6); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0)`); err != nil {
-		t.Fatal(err)
-	}
-	coolant := `INSERT INTO service_kits (vehicle_id, name, interval_months, in_between) VALUES (1, 'Coolant', 48, 1)`
-	if err := refused(t, pool, coolant); err == nil {
-		t.Fatal("before 00007: months only with one in between was taken")
-	}
-	if _, err := provider.UpTo(ctx, 7); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, coolant); err != nil {
-		t.Fatalf("after Up: months only with one in between refused: %v", err)
-	}
-	if err := refused(t, pool, `INSERT INTO service_kits (vehicle_id, name, in_between) VALUES (1, 'Pads', 1)`); err == nil {
-		t.Error("after Up: one in between with no interval was taken")
-	}
-	if _, err := provider.DownTo(ctx, 6); err == nil || !strings.Contains(err.Error(), "kits with intermediate services and months only: Coolant") {
-		t.Errorf("Down with a months-only kit: %v, want it stopped", err)
-	}
-	if v, err := provider.GetDBVersion(ctx); err != nil || v != 7 {
-		t.Errorf("after the stopped Down: version %d (%v), want 7", v, err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE service_kits SET in_between = 0`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.DownTo(ctx, 6); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// 00008 keeps a kit to one break-in on a vehicle: it stops, changing
-// nothing, on a kit with two, and Down lets them be again.
-func TestOneBreakInMigration(t *testing.T) {
-	pool, provider := migrationDB(t)
-	ctx := context.Background()
-	if _, err := provider.UpTo(ctx, 7); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0), ('KTM 690', 500, '2024-03-01', 0);
-		INSERT INTO service_kits (vehicle_id, name, interval_distance, break_in_at) VALUES (1, 'Oil', 8000, 1000);
-		INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, title) VALUES
-			(1, 1, 'break_in', '2024-04-01', 900, 'Oil (Break-in)'), (1, 1, 'break_in', '2024-04-02', 950, 'Oil (Break-in)'),
-			(2, 1, 'break_in', '2024-04-03', 400, 'Oil (Break-in)')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 8); err == nil || !strings.Contains(err.Error(), "kits with more than one break-in on a vehicle: Oil") {
-		t.Errorf("two break-ins on a vehicle: %v, want it stopped", err)
-	}
-	if v, err := provider.GetDBVersion(ctx); err != nil || v != 7 {
-		t.Errorf("after the stop: version %d (%v), want 7", v, err)
-	}
-	// One on each vehicle is fine (a kit moved to another).
-	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'full' WHERE odometer = 950`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 8); err != nil {
-		t.Fatal(err)
-	}
-	if err := refused(t, pool, `UPDATE service_records SET kit_tier = 'break_in' WHERE odometer = 950`); err == nil {
-		t.Error("after Up: a second break-in on a vehicle was taken")
-	}
-	if _, err := provider.DownTo(ctx, 7); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE service_records SET kit_tier = 'break_in' WHERE odometer = 950`); err != nil {
-		t.Errorf("after Down: a second break-in refused: %v", err)
+	if err := pool.QueryRow(ctx, `SELECT (payload -> 'service_kits' -> 0 ->> 'inter_interval_distance') || ',' || (payload -> 'service_records' -> 0 ->> 'kit_intermediate')
+		|| ',' || (payload -> 'service_kits' -> 0 ? 'intermediate')::text FROM trash`).Scan(&snapshot); err != nil || snapshot != "5000,true,false" {
+		t.Errorf("after Down: trash snapshot = %q (%v), want 5000,true,false", snapshot, err)
 	}
 }

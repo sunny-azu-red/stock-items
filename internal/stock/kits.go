@@ -61,7 +61,7 @@ func ToList(lines []KitLine, listed map[int64]float64) int {
 }
 
 // ActiveLines returns the lines of the service due next: the intermediate
-// ones, or the full ones (a break-in's too).
+// one's, or the full ones (a break-in's too).
 func (k Kit) ActiveLines(currentOdo *int, today time.Time) []KitLine {
 	if k.NextIsIntermediate(currentOdo, today) {
 		return k.InterLines
@@ -208,15 +208,15 @@ func dueFrom(ref *ServiceRef, fallbackOdo *int, baseDate *time.Time, baseOdo *in
 	return d
 }
 
-// InterDue computes when the kit's next service in between is due: a step
-// (InterStep, InterMonths) after the latest service of either kind, or
-// after the purchase before the first.
+// InterDue computes when the kit's intermediate service is due: a step
+// (InterStep, at the full months) after the latest service of either kind,
+// or after the purchase before the first.
 func (k Kit) InterDue(currentOdo *int, today time.Time) Due {
-	if !k.HasIntermediate() || k.Archived() {
+	if !k.Intermediate || k.Archived() {
 		return Due{State: DueNone}
 	}
 	last, lastOdo := k.counted()
-	return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.InterMonths(), currentOdo, today)
+	return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.IntervalMonths, currentOdo, today)
 }
 
 // counted is the service the schedules count from (with the reading to fall
@@ -235,12 +235,12 @@ func (k Kit) counted() (*ServiceRef, *int) {
 //   - While the vehicle is under warranty (UnderWarranty), it counts its
 //     own interval from the last full service, or from the purchase before
 //     the first: intermediate services never move it, as a warranty asks.
-//   - Without a warranty and without intermediate services, from the last
-//     service.
+//   - Without a warranty and without an intermediate service, from the
+//     last service.
 //   - Otherwise (no warranty, or it has ended) services take turns, each a
-//     step (InterStep, InterMonths) after the one before: the full one
-//     comes after the intermediate ones still to do, from the last service
-//     of either kind.
+//     step (InterStep, at the full months) after the one before: after an
+//     intermediate service the full one is a step on, after anything else
+//     two (the intermediate one comes first).
 func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 	if (k.IntervalDistance == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
@@ -249,16 +249,19 @@ func (k Kit) FullDue(currentOdo *int, today time.Time) Due {
 		return dueFrom(k.LastFullService, k.LastFullOdometer, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	last, lastOdo := k.counted()
-	if !k.HasIntermediate() {
+	if !k.Intermediate {
 		return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
-	steps := k.InBetween - min(k.InterSinceFull, k.InBetween) + 1
+	steps := 2
+	if k.InterSinceFull {
+		steps = 1
+	}
 	var distance, months *int
 	if step := k.InterStep(); step != nil {
 		distance = ptrTo(steps * *step)
 	}
-	if m := k.InterMonths(); m != nil {
-		months = ptrTo(steps * *m)
+	if k.IntervalMonths != nil {
+		months = ptrTo(steps * *k.IntervalMonths)
 	}
 	return dueFrom(last, lastOdo, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, months, currentOdo, today)
 }
@@ -302,15 +305,14 @@ func (k Kit) UnderWarranty(currentOdo *int, today time.Time) bool {
 	return k.Warranty(currentOdo, today).Runs()
 }
 
-// NextIsIntermediate reports whether a service in between is next.
-//   - Once InBetween of them have been done since the last full service,
-//     the full one is.
+// NextIsIntermediate reports whether the intermediate service is next.
+//   - Once it has been done since the last full service, the full one is.
 //   - Without a warranty running, they take turns.
 //   - Under warranty the full service keeps its own deadline: it comes
-//     first once it is due soon or overdue, or when the next service in
-//     between wouldn't fall due before it (dueBefore).
+//     first once it is due soon or overdue, or when the intermediate one
+//     wouldn't fall due before it (dueBefore).
 func (k Kit) NextIsIntermediate(currentOdo *int, today time.Time) bool {
-	if !k.HasIntermediate() || k.Archived() || k.InterSinceFull >= k.InBetween || k.NextIsBreakIn() {
+	if !k.Intermediate || k.Archived() || k.InterSinceFull || k.NextIsBreakIn() {
 		return false
 	}
 	if !k.UnderWarranty(currentOdo, today) {

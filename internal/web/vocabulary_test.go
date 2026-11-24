@@ -51,7 +51,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `<button[^>]*command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html", unless: `commandfor="photo-view"`},
 		{re: `>\s*(Something new|Item in stock)\s*<`, use: `"Item": one field that suggests your stock and takes anything else as something new`, uiOnly: true},
 		{re: `<noscript`, use: "nothing: JavaScript is assumed", uiOnly: true},
-		{re: `[Ii]ntermediate schedule|services in between|[Hh]alf-way|[Hh]alf service`, use: `"intermediate services" (a kit's 1 or 2 between full ones; "Intermediate" for the tier; "1, halfway" the option)`},
+		{re: `[Ii]ntermediate schedule|services in between|[Hh]alf-way|[Hh]alf service|at thirds`, use: `"intermediate service" (a kit's one halfway between full ones; "Intermediate" for the tier)`},
 		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}
 	// A link's text starts with a capital, also mid-sentence.

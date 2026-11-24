@@ -51,7 +51,7 @@
 {{/* The page header (layout.html writes it from these). */}}
 {{define "head-title"}}{{.Data.View.Kit.Name}}{{end}}
 {{define "head-line"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}{{$fr := $d.View.FullReadiness}}{{$ir := $d.View.InterReadiness}}
-{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if not $k.Archived}}{{/* An archived vehicle's kit has no reminders: its readiness only, named like any other. */}}{{if not $d.Vehicle.Archived}}{{if $d.View.NextBreakIn}}<span class="badge badge-info">Next: Break-in</span>{{else if $k.HasIntermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{end}}{{if $k.HasIntermediate}}{{template "schedule-ready-badge" (dict "R" $r "Name" (or (and $d.View.NextBreakIn "Break-in") (and $d.View.NextInter "Intermediate") "Full"))}}{{else}}{{template "ready-badge" $r}}{{end}}{{if and (not $d.Vehicle.Archived) $k.HasIntermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} missing</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} missing</span>{{end}}{{end}}{{end}}
+{{if $k.Archived}}{{template "archived-date-badge" $k.ArchivedAt}}{{end}}{{template "chip-link" $d.Vehicle}}{{if not $k.Archived}}{{/* An archived vehicle's kit has no reminders: its readiness only, named like any other. */}}{{if not $d.Vehicle.Archived}}{{if $d.View.NextBreakIn}}<span class="badge badge-info">Next: Break-in</span>{{else if $k.Intermediate}}<span class="badge badge-info">{{if $d.View.NextInter}}Next: Intermediate{{else}}Next: Full{{end}}</span>{{end}}{{template "due-badge" $due}}{{end}}{{if $k.Intermediate}}{{template "schedule-ready-badge" (dict "R" $r "Name" (or (and $d.View.NextBreakIn "Break-in") (and $d.View.NextInter "Intermediate") "Full"))}}{{else}}{{template "ready-badge" $r}}{{end}}{{if and (not $d.Vehicle.Archived) $k.Intermediate (ne $fr.Ready $ir.Ready)}}{{if and $r.Ready (not $fr.Ready)}}<span class="badge badge-warn">Full: {{plural $fr.ShortLines "part"}} missing</span>{{else if and $r.Ready (not $ir.Ready)}}<span class="badge badge-warn">Intermediate: {{plural $ir.ShortLines "part"}} missing</span>{{end}}{{end}}{{end}}
 {{end}}
 {{define "head-actions"}}{{$d := .Data}}{{$k := $d.View.Kit}}
 <a class="btn" href="/kits/{{$k.ID}}/edit" data-more="3">{{icon "pencil"}} Edit</a>
@@ -72,8 +72,8 @@
 {{define "content"}}{{$d := .Data}}{{$k := $d.View.Kit}}{{$r := $d.View.Readiness}}{{$due := $d.View.Due}}{{$fr := $d.View.FullReadiness}}{{$ir := $d.View.InterReadiness}}
 <div class="split">
   <div class="stack">
-    {{template "kit-parts-card" (dict "Title" (or (and $k.HasIntermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "0" "Listed" $d.Listed)}}
-    {{if $k.HasIntermediate}}
+    {{template "kit-parts-card" (dict "Title" (or (and $k.Intermediate "Full parts") "Parts") "KitID" $k.ID "Lines" $d.Lines "Readiness" $fr "Sort" $d.Sort "EmptyText" "No parts yet." "EmptyAdd" "this job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "0" "Listed" $d.Listed)}}
+    {{if $k.Intermediate}}
     {{template "kit-parts-card" (dict "Title" "Intermediate parts" "KitID" $k.ID "Lines" $d.InterLines "Readiness" $ir "Sort" $d.Sort "EmptyText" "No intermediate parts yet." "EmptyAdd" "the intermediate job needs." "CanShop" (and (not $k.Archived) (not $d.Vehicle.Archived)) "Inter" "1" "Listed" $d.Listed)}}
     {{end}}
   </div>
@@ -83,19 +83,19 @@
       <div class="card-head"><h2>{{icon "clock"}} Schedule</h2></div>
       <div class="card-body">
       <dl class="facts">
-        {{if $k.HasIntermediate}}
+        {{if $k.Intermediate}}
         <div><dt>Full every</dt><dd>{{template "kit-interval" (dict "Distance" $k.IntervalDistance "Months" $k.IntervalMonths)}}</dd></div>
-        <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Distance" $k.InterStep "Months" $k.InterMonths)}}</dd></div>
+        <div><dt>Intermediate every</dt><dd>{{template "kit-interval" (dict "Distance" $k.InterStep "Months" $k.IntervalMonths)}}</dd></div>
         <div><dt>Next up</dt><dd>{{if $d.View.NextBreakIn}}Break-in{{else if $d.View.NextInter}}Intermediate{{else}}Full{{end}}</dd></div>
         <div><dt>Last full</dt><dd>{{with $k.LastFullService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{with .Odometer}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{else}}
         <div><dt>Every</dt><dd>{{template "kit-interval" (dict "Distance" $k.IntervalDistance "Months" $k.IntervalMonths)}}</dd></div>
         {{end}}
         {{with $k.BreakInAt}}<div><dt>Break-in at</dt><dd>{{distance .}}</dd></div>{{end}}
-        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.HasIntermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{else if .BreakIn}} <span class="muted small">(break-in)</span>{{end}}{{with .Odometer}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
+        <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.Intermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{else if .BreakIn}} <span class="muted small">(break-in)</span>{{end}}{{with .Odometer}} <span class="muted small">({{distance .}})</span>{{end}}{{else}}Never{{end}}</dd></div>
         {{if $due.DueOdometer}}<div><dt>Due at</dt><dd>{{distance $due.DueOdometer}}</dd></div>{{end}}
         {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}
-        {{if and $k.HasIntermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueOdometer .DueDate}}<div><dt>Full due</dt><dd>{{with .DueOdometer}}{{distance .}}{{end}}{{if and .DueOdometer .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
+        {{if and $k.Intermediate $d.View.NextInter}}{{with $d.View.FullDue}}{{if or .DueOdometer .DueDate}}<div><dt>Full due</dt><dd>{{with .DueOdometer}}{{distance .}}{{end}}{{if and .DueOdometer .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
         {{if and (ne $due.State "none") (not $d.Vehicle.Archived)}}{{with $d.View.Warranty}}{{if .Runs}}<div><dt>Warranty ends</dt><dd>{{with .EndsOn}}{{date .}}{{end}}{{if and .EndsOn .EndsAt}} · {{end}}{{with .EndsAt}}{{distance .}}{{end}}{{if eq .State "soon"}} {{template "warranty-badge" .}}{{end}}</dd></div>{{end}}{{end}}{{end}}
         <div><dt>Odometer now</dt><dd>{{distance $d.Vehicle.Odometer}}</dd></div>
         {{with $due.Summary}}<div><dt>Status</dt><dd>{{.}}</dd></div>{{end}}

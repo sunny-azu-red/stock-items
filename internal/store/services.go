@@ -284,7 +284,7 @@ func serviceTier(in stock.ServiceInput) stock.KitTier {
 // checkKitTier checks what a service with a kit needs from it (the kit is
 // locked FOR SHARE, as checkServiceKit does). A tier it takes now (tierWas
 // is the one it had with this kit, "" for a new service or kit) must fit
-// the kit: an intermediate service needs intermediate services, and a
+// the kit: an intermediate service needs the kit to have one, and a
 // break-in that the kit has no other on this vehicle (serviceID is the
 // service being saved, 0 for a new one; a partial unique index keeps it to
 // one too). A tier it keeps stays, so an old service saves unchanged. A new
@@ -294,20 +294,19 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	if in.KitID == nil {
 		return nil
 	}
-	var inBetween int
-	var countsDistance, otherBreakIn bool
+	var intermediate, countsDistance, otherBreakIn bool
 	err := tx.QueryRow(ctx, `
-		SELECT in_between, interval_distance IS NOT NULL,
+		SELECT intermediate, interval_distance IS NOT NULL,
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND kit_tier = 'break_in' AND id <> $2)
-		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID).Scan(&inBetween, &countsDistance, &otherBreakIn)
+		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID).Scan(&intermediate, &countsDistance, &otherBreakIn)
 	if err != nil {
 		return notFound(err)
 	}
 	changed := in.KitTier != tierWas
 	switch {
-	case changed && in.KitTier == stock.TierIntermediate && inBetween == 0:
-		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate services"}
+	case changed && in.KitTier == stock.TierIntermediate && !intermediate:
+		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate service"}
 	case changed && in.KitTier == stock.TierBreakIn && !countsDistance:
 		return &ConflictError{Field: "kit_tier", Message: "A break-in comes before the kit's distance: this kit has none"}
 	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:

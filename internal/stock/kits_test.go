@@ -260,20 +260,19 @@ func TestSortKitLines(t *testing.T) {
 
 func TestInterStep(t *testing.T) {
 	for _, tt := range []struct {
-		distance  *int
-		inBetween int
-		want      *int
+		distance *int
+		inter    bool
+		want     *int
 	}{
-		{ptr(8000), 1, ptr(4000)},
-		{ptr(15000), 1, ptr(7500)},
-		{ptr(15000), 2, ptr(5000)},
-		{ptr(8000), 2, ptr(2666)}, // rounded down; the full one comes after 2 by count anyway
-		{ptr(8000), 0, nil},
-		{nil, 1, nil},
+		{ptr(8000), true, ptr(4000)},
+		{ptr(15000), true, ptr(7500)},
+		{ptr(7999), true, ptr(3999)}, // rounded down
+		{ptr(8000), false, nil},
+		{nil, true, nil},
 	} {
-		got := Kit{IntervalDistance: tt.distance, InBetween: tt.inBetween}.InterStep()
+		got := Kit{IntervalDistance: tt.distance, Intermediate: tt.inter}.InterStep()
 		if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
-			t.Errorf("InterStep(%v, %d) = %v, want %v", deref(tt.distance), tt.inBetween, deref(got), deref(tt.want))
+			t.Errorf("InterStep(%v, %v) = %v, want %v", deref(tt.distance), tt.inter, deref(got), deref(tt.want))
 		}
 	}
 }
@@ -283,47 +282,6 @@ func tierOf(inter bool) KitTier {
 		return TierIntermediate
 	}
 	return TierFull
-}
-
-func TestInterMonths(t *testing.T) {
-	for _, tt := range []struct {
-		distance, months *int
-		inBetween        int
-		want             *int
-	}{
-		{ptr(8000), ptr(12), 1, ptr(12)}, // with a distance: the full months
-		{ptr(8000), ptr(12), 2, ptr(12)},
-		{nil, ptr(48), 1, ptr(24)}, // months only: equal steps of them
-		{nil, ptr(48), 2, ptr(16)},
-		{nil, ptr(1), 2, ptr(1)}, // a month at least
-		{ptr(8000), nil, 1, nil},
-		{nil, ptr(48), 0, nil},
-	} {
-		got := Kit{IntervalDistance: tt.distance, IntervalMonths: tt.months, InBetween: tt.inBetween}.InterMonths()
-		if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
-			t.Errorf("InterMonths(%v, %v, %d) = %v, want %v", deref(tt.distance), deref(tt.months), tt.inBetween, deref(got), deref(tt.want))
-		}
-	}
-}
-
-// A kit that counts months only (coolant every 48) with one service in
-// between: at 24 months; under warranty the full one keeps its own 48,
-// without one they take turns every 24.
-func TestMonthsOnlyInBetween(t *testing.T) {
-	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	full := &ServiceRef{ID: 1, PerformedOn: d(2025, 1, 1), Odometer: ptr(0), Tier: TierFull}
-	half := &ServiceRef{ID: 2, PerformedOn: d(2027, 3, 1), Odometer: ptr(20000), Tier: TierIntermediate}
-	kit := func(warrantyOn *time.Time, last *ServiceRef, since int) Kit {
-		return Kit{VehicleWarrantyEndsOn: warrantyOn, IntervalMonths: ptr(48), InBetween: 1, VehiclePurchasedOn: ptr(d(2024, 12, 1)), VehicleOdometerAtPurchase: ptr(0),
-			LastFullService: full, LastFullOdometer: ptr(0), LastService: last, LastOdometer: last.Odometer, InterSinceFull: since}
-	}
-	runs := ptr(d(2035, 1, 1))
-	checkNext(t, kit(runs, full, 0), ptr(5000), d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
-	checkNext(t, kit(nil, full, 0), ptr(5000), d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
-	// After a late half: under warranty, the full one by its own 48 months;
-	// without one, 24 months after the half.
-	checkNext(t, kit(runs, half, 1), ptr(21000), d(2027, 6, 1), "full", DueOK, nil, "2029-01-01")
-	checkNext(t, kit(nil, half, 1), ptr(21000), d(2027, 6, 1), "full", DueOK, nil, "2029-03-01")
 }
 
 func deref(p *int) any {
@@ -350,14 +308,14 @@ func TestFullAndHalfService(t *testing.T) {
 	// 1 Jan 2025 at 0 km; then the services in history, the last full one
 	// last among the full ones.
 	kit := func(warrantyOn time.Time, history ...*ServiceRef) Kit {
-		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), InBetween: 1,
+		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true,
 			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0)}
 		for _, s := range append([]*ServiceRef{firstFull}, history...) {
 			k.LastService, k.LastOdometer = s, s.Odometer
 			if s.Intermediate() {
-				k.InterSinceFull++
+				k.InterSinceFull = true
 			} else {
-				k.LastFullService, k.LastFullOdometer, k.InterSinceFull = s, s.Odometer, 0
+				k.LastFullService, k.LastFullOdometer, k.InterSinceFull = s, s.Odometer, false
 			}
 		}
 		return k
@@ -390,52 +348,10 @@ func TestFullAndHalfService(t *testing.T) {
 			checkNext(t, tt.k, &tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
 		})
 	}
-}
-
-// Two services in between (15 000 km: at 5 000 and 10 000), under warranty
-// and without one: the full one comes once both are done, and under
-// warranty still by its own deadline, whatever they did.
-func TestTwoInBetween(t *testing.T) {
-	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Tier: tierOf(inter)}
-	}
-	full := svc(d(2025, 1, 1), 0, false)
-	kit := func(warrantyOn time.Time, last *ServiceRef, since int) Kit {
-		return Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(15000), IntervalMonths: ptr(12), InBetween: 2,
-			VehiclePurchasedOn: ptr(d(2024, 12, 1)), VehicleOdometerAtPurchase: ptr(0),
-			LastFullService: full, LastFullOdometer: ptr(0), LastService: last, LastOdometer: last.Odometer, InterSinceFull: since}
-	}
-	runs, ended := d(2030, 1, 1), d(2024, 12, 31)
-	first, second := svc(d(2025, 3, 1), 5000, true), svc(d(2025, 6, 1), 10000, true)
-	tests := []struct {
-		name      string
-		k         Kit
-		odo       int
-		today     time.Time
-		wantNext  string
-		wantState DueState
-		wantOdo   int
-		wantDate  string
-	}{
-		{"warranty, after the full: the first at 5 000", kit(runs, full, 0), 1000, d(2025, 2, 1), "inter", DueOK, 5000, "2026-01-01"},
-		{"warranty, after the first: the second at 10 000", kit(runs, first, 1), 6000, d(2025, 4, 1), "inter", DueOK, 10000, "2026-03-01"},
-		{"warranty, after both: the full one by its own deadline", kit(runs, second, 2), 11000, d(2025, 7, 1), "full", DueOK, 15000, "2026-01-01"},
-		{"warranty, after the first, the full one due soon: the full one", kit(runs, first, 1), 6000, d(2025, 12, 10), "full", DueSoon, 15000, "2026-01-01"},
-		{"no warranty, after the first: the second a step later", kit(ended, first, 1), 6000, d(2025, 4, 1), "inter", DueOK, 10000, "2026-03-01"},
-		{"no warranty, after both: the full one a step after the second", kit(ended, second, 2), 11000, d(2025, 7, 1), "full", DueOK, 15000, "2026-06-01"},
-		{"no warranty, after the full: the first, the full one three steps on", kit(ended, full, 0), 1000, d(2025, 2, 1), "inter", DueOK, 5000, "2026-01-01"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			checkNext(t, tt.k, &tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
-		})
-	}
-	// While it isn't its turn, the full one's due counts the steps still to
-	// do: after the full, three steps (15 000 km, 36 months).
-	k := kit(ended, full, 0)
-	if f := k.FullDue(ptr(1000), d(2025, 2, 1)); f.DueOdometer == nil || *f.DueOdometer != 15000 || f.DueDate == nil || !f.DueDate.Equal(d(2028, 1, 1)) {
-		t.Errorf("full due three steps on = %v / %v, want 15 000 km / 2028-01-01", deref(f.DueOdometer), f.DueDate)
+	// While it isn't its turn, the full one's due counts the two steps from
+	// the last full service: 8 000 km, 24 months.
+	if f := kit(ended).FullDue(ptr(3000), d(2025, 3, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2027, 1, 1)) {
+		t.Errorf("no warranty, full due two steps on = %v / %v, want 8 000 km / 2027-01-01", deref(f.DueOdometer), f.DueDate)
 	}
 }
 
@@ -473,7 +389,7 @@ func TestBreakIn(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	bought := d(2025, 4, 4)
 	kit := func() Kit {
-		return Kit{VehicleWarrantyEndsOn: ptr(d(2028, 4, 3)), IntervalDistance: ptr(8000), IntervalMonths: ptr(12), InBetween: 1, BreakInAt: ptr(1000),
+		return Kit{VehicleWarrantyEndsOn: ptr(d(2028, 4, 3)), IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
 			VehiclePurchasedOn: &bought, VehicleOdometerAtPurchase: ptr(0),
 			Lines: []KitLine{{ItemID: 1, Need: 1, Have: 1}}, InterLines: []KitLine{{ItemID: 2, Need: 1, Have: 0}}}
 	}
@@ -506,8 +422,8 @@ func TestBreakIn(t *testing.T) {
 	if f := k.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2026, 4, 4)) {
 		t.Errorf("full due after the break-in = %v / %v, want 8 000 km / 2026-04-04", deref(f.DueOdometer), f.DueDate)
 	}
-	// Without services in between, the same: the full one from the purchase.
-	k.InBetween, k.InterLines = 0, nil
+	// Without an intermediate service, the same: the full one from the purchase.
+	k.Intermediate, k.InterLines = false, nil
 	checkNext(t, k, ptr(2000), d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
 	// And without a warranty too: the schedule runs from the purchase.
 	k.VehicleWarrantyEndsOn = nil

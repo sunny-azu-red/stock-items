@@ -891,7 +891,7 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 		"interval_months":   {"12"},
 		"line_item":         {itoa(oil)},
 		"line_qty":          {"3.6 L"},
-		"in_between":        {"1"},
+		"intermediate":      {"1"},
 		"inter_line_item":   {itoa(hiflo), itoa(oring), itoa(oil)},
 		"inter_line_qty":    {"1", "2", "3.6 L"},
 	})
@@ -900,8 +900,8 @@ func TestKitIntermediateWebFlow(t *testing.T) {
 	kitID := strings.TrimPrefix(kitPath, "/kits/")
 
 	// The edit page has its 1 intermediate service chosen; a new kit has none.
-	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `name="in_between" value="1" autocomplete="off" checked`, "1, halfway")
-	expect(t, a.get("/kits/new"), http.StatusOK, `name="in_between" value="0" autocomplete="off" checked`)
+	expect(t, a.get(kitPath+"/edit"), http.StatusOK, `name="intermediate" value="1" checked`, "Halfway between full services")
+	expect(t, a.get("/kits/new"), http.StatusOK, `name="intermediate" value="1">`)
 
 	// Kit page initially says Next: Full and shows both Full parts and Intermediate parts with package icon.
 	expect(t, a.get(kitPath), http.StatusOK,

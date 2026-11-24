@@ -670,9 +670,9 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	kitIn := stock.KitInput{
 		VehicleID: k1290, Name: "Oil service",
 		IntervalDistance: ptr(4000), IntervalMonths: ptr(12),
-		InBetween:  1, // every 2 000 km
-		Lines:      []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
-		InterLines: []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
+		Intermediate: true, // every 2 000 km
+		Lines:        []stock.KitLineInput{{ItemID: oemKit, Quantity: 1}, {ItemID: oil, Quantity: 3600}},
+		InterLines:   []stock.KitLineInput{{ItemID: hiflo, Quantity: 1}, {ItemID: oring, Quantity: 2}, {ItemID: oil, Quantity: 3600}},
 	}
 	kitIn.Normalize()
 	kitID, err := s.CreateKit(ctx, kitIn)
@@ -684,7 +684,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !kit.HasIntermediate() || len(kit.Lines) != 2 || len(kit.InterLines) != 3 {
+	if !kit.Intermediate || len(kit.Lines) != 2 || len(kit.InterLines) != 3 {
 		t.Fatalf("kit = %+v", kit)
 	}
 	today := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
@@ -738,8 +738,8 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometer != 10000 {
 		t.Fatalf("LastFullService = %+v, odometer = %v", kit.LastFullService, kit.LastFullOdometer)
 	}
-	if kit.InterSinceFull != 1 {
-		t.Errorf("InterSinceFull = %d, want 1", kit.InterSinceFull)
+	if !kit.InterSinceFull {
+		t.Error("InterSinceFull = false, want true")
 	}
 	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) {
 		t.Errorf("want NextIsIntermediate = false after intermediate service")
@@ -755,7 +755,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 || kit.InterSinceFull != 0 {
+	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 || kit.InterSinceFull {
 		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 
@@ -772,14 +772,14 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 
 // A service's tier is checked against its kit only when it changes: an
 // intermediate service saves unchanged after its kit dropped its
-// intermediate services. A kit has one break-in on a vehicle: a second is
+// intermediate service. A kit has one break-in on a vehicle: a second is
 // refused, also from the trash, and a kit moved to another vehicle may
 // have its own there; a kit without a distance has none.
 func TestServiceTierChecks(t *testing.T) {
 	s, ctx := newStore(t)
 	v1 := mustVehicle(t, s, "KTM 390")
 	v2 := mustVehicle(t, s, "KTM 690")
-	kitIn := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000), InBetween: 1, BreakInAt: ptr(1000)}
+	kitIn := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000), Intermediate: true, BreakInAt: ptr(1000)}
 	kitIn.Normalize()
 	kit, err := s.CreateKit(ctx, kitIn)
 	if err != nil {
@@ -792,12 +792,12 @@ func TestServiceTierChecks(t *testing.T) {
 	}
 	day := func(m time.Month, d int) time.Time { return time.Date(2025, m, d, 0, 0, 0, 0, time.UTC) }
 
-	// An intermediate service, then the kit drops its intermediate ones.
+	// An intermediate service, then the kit drops its intermediate service.
 	inter, err := log(v1, stock.TierIntermediate, day(3, 1), 3000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kitIn.InBetween = 0
+	kitIn.Intermediate = false
 	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, kitIn)); err != nil {
 		t.Fatal(err)
 	}

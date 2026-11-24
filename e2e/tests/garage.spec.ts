@@ -50,14 +50,13 @@ async function pickVehicle(page: Page, name: string) {
   await page.locator("#vehicle_id label.chip-toggle").filter({ hasText: exact(name) }).click();
 }
 
-// Shows a kit form's intermediate services: they are steps of the full
-// distance (or its months), so their section shows once one is entered;
-// then 1 in between.
+// Shows a kit form's intermediate service: it comes halfway through the
+// distance, so its section shows once one is entered; then its box ticked.
 async function showInter(page: Page) {
   const distance = page.locator("#interval_distance");
   if (!(await distance.count())) return;
   if (!(await distance.inputValue())) await distance.fill("8000");
-  await page.locator("#inter-schedule .segmented label").filter({ hasText: "1, halfway" }).click();
+  await page.locator("#intermediate").check();
 }
 
 // The headings of an open item list, in order.
@@ -1992,10 +1991,10 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   await page.getByRole("button", { name: "Save item", exact: true }).click();
   await expect(page.locator(".error-summary")).toBeVisible();
   await check("/items/new with errors");
-  // The kit form with its intermediate services and their parts.
+  // The kit form with its intermediate service and its parts.
   await page.goto(kit + "/edit");
   await showInter(page);
-  await check(kit + "/edit with intermediate services");
+  await check(kit + "/edit with an intermediate service");
   // Working on a vehicle: the bar on every page.
   await workingCookie(page, test.info().project.use.baseURL as string, "KTM 390");
   for (const p of ["/", "/stock", "/stock?v=all", "/services", "/activity", "/shopping", item]) {
@@ -2669,8 +2668,8 @@ test("a kit's intermediate service comes between its full ones", async ({ page }
   await page.locator("a.kit-row").first().click();
   await (await headAction(page, "link", "Edit", true)).click();
 
-  // Its parts show once there are intermediate services: 1, halfway
-  // (every 3 750 km of the 7 500).
+  // Its parts show once its box is ticked (halfway: every 3 750 km of the
+  // 7 500).
   await expect(page.locator("#inter-lines")).toBeHidden();
   await showInter(page);
   await expect(page.locator("#inter-lines")).toBeVisible();

@@ -61,13 +61,13 @@ func kitTitle(name string, t stock.KitTier) string {
 }
 
 // kitTiers lists the tiers a service of kit k can be: Full; Intermediate
-// when the kit has intermediate services; Break-in, for a kit with a
+// when the kit has an intermediate service; Break-in, for a kit with a
 // distance, as its first service or on the edit of one while the kit has
 // no break-in (there is one at most, store.checkKitTier). The tier the
 // form holds is always among them.
 func kitTiers(k stock.Kit, f serviceForm) []tierOption {
 	tiers := []stock.KitTier{stock.TierFull}
-	if k.HasIntermediate() || f.KitTier == stock.TierIntermediate {
+	if k.Intermediate || f.KitTier == stock.TierIntermediate {
 		tiers = append(tiers, stock.TierIntermediate)
 	}
 	if f.KitTier == stock.TierBreakIn || (k.IntervalDistance != nil && ((f.ID == 0 && k.LastService == nil) || (f.ID != 0 && !k.HasBreakIn))) {

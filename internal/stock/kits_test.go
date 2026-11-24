@@ -21,7 +21,7 @@ func TestKitReadiness(t *testing.T) {
 	if s := k.Lines[1].Short(); s != 1175 {
 		t.Errorf("short = %v, want 1175", s)
 	}
-	if (Kit{}).ReadinessAt(nil, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)).Ready() {
+	if (Kit{}).ReadinessAt(0, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)).Ready() {
 		t.Error("an empty kit must not be ready")
 	}
 }
@@ -34,38 +34,37 @@ func TestKitDue(t *testing.T) {
 	tests := []struct {
 		name       string
 		kit        Kit
-		currentOdo *int
+		currentOdo int
 		want       DueState
 	}{
-		{"no interval", Kit{}, nil, DueNone},
-		{"ok by distance", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(11000), DueOK},
-		{"soon by distance (threshold 600)", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(15500), DueSoon},
-		{"due exactly at the odometer target is not over yet", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(16000), DueSoon},
-		{"overdue by distance", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, ptr(16001), DueOverdue},
-		{"ok by date", Kit{IntervalMonths: ptr(12), LastService: last(100, 0)}, nil, DueOK},
-		{"soon by date", Kit{IntervalMonths: ptr(12), LastService: last(350, 0)}, nil, DueSoon},
-		{"overdue by date", Kit{IntervalMonths: ptr(12), LastService: last(400, 0)}, nil, DueOverdue},
-		{"date overdue wins over distance ok", Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), LastService: last(400, 10000)}, ptr(10100), DueOverdue},
-		{"distance interval but no odometer", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, nil, DueUnknown},
-		{"short interval is not soon right after", Kit{IntervalDistance: ptr(300), LastService: last(1, 10000)}, ptr(10010), DueOK},
-		{"monthly is not soon right after", Kit{IntervalMonths: ptr(1), LastService: last(0, 0)}, nil, DueOK},
-		{"monthly is soon in its second half", Kit{IntervalMonths: ptr(1), LastService: last(20, 0)}, nil, DueSoon},
+		{"no interval", Kit{}, 0, DueNone},
+		{"ok by distance", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, 11000, DueOK},
+		{"soon by distance (threshold 600)", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, 15500, DueSoon},
+		{"due exactly at the odometer target is not over yet", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, 16000, DueSoon},
+		{"overdue by distance", Kit{IntervalDistance: ptr(6000), LastService: last(10, 10000)}, 16001, DueOverdue},
+		{"ok by date", Kit{IntervalMonths: ptr(12), LastService: last(100, 0)}, 0, DueOK},
+		{"soon by date", Kit{IntervalMonths: ptr(12), LastService: last(350, 0)}, 0, DueSoon},
+		{"overdue by date", Kit{IntervalMonths: ptr(12), LastService: last(400, 0)}, 0, DueOverdue},
+		{"date overdue wins over distance ok", Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), LastService: last(400, 10000)}, 10100, DueOverdue},
+		{"short interval is not soon right after", Kit{IntervalDistance: ptr(300), LastService: last(1, 10000)}, 10010, DueOK},
+		{"monthly is not soon right after", Kit{IntervalMonths: ptr(1), LastService: last(0, 0)}, 0, DueOK},
+		{"monthly is soon in its second half", Kit{IntervalMonths: ptr(1), LastService: last(20, 0)}, 0, DueSoon},
 		{"new vehicle ok by distance",
-			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0)}, ptr(1000), DueOK},
+			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: 0}, 1000, DueOK},
 		{"new vehicle soon by distance",
-			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0)}, ptr(5500), DueSoon},
+			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: 0}, 5500, DueSoon},
 		{"new vehicle overdue by distance",
-			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0)}, ptr(6001), DueOverdue},
+			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: 0}, 6001, DueOverdue},
 		{"new vehicle ok by date",
-			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -100))}, nil, DueOK},
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: today.AddDate(0, 0, -100)}, 0, DueOK},
 		{"new vehicle soon by date",
-			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -350))}, nil, DueSoon},
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: today.AddDate(0, 0, -350)}, 0, DueSoon},
 		{"new vehicle overdue by date",
-			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, nil, DueOverdue},
+			Kit{IntervalMonths: ptr(12), VehiclePurchasedOn: today.AddDate(0, 0, -400)}, 0, DueOverdue},
 		{"new vehicle date overdue wins over distance ok",
-			Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), VehicleOdometerAtPurchase: ptr(0), VehiclePurchasedOn: ptr(today.AddDate(0, 0, -400))}, ptr(1000), DueOverdue},
+			Kit{IntervalDistance: ptr(6000), IntervalMonths: ptr(12), VehicleOdometerAtPurchase: 0, VehiclePurchasedOn: today.AddDate(0, 0, -400)}, 1000, DueOverdue},
 		{"past service ignores vehicle purchase baseline",
-			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0), LastService: last(10, 10000)}, ptr(11000), DueOK},
+			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: 0, LastService: last(10, 10000)}, 11000, DueOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -129,7 +128,7 @@ func TestReadinessIgnoresArchivedLines(t *testing.T) {
 		{"active short line", []KitLine{{Need: 2, Have: 1}, {Need: 1, Have: 0, Archived: true}}, 1, true, false},
 	}
 	for _, tt := range tests {
-		r := Kit{Lines: tt.lines}.ReadinessAt(nil, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+		r := Kit{Lines: tt.lines}.ReadinessAt(0, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
 		if r.Lines != tt.lines2 || (r.ShortLines > 0) != tt.short || r.Ready() != tt.ready {
 			t.Errorf("%s: %+v ready=%v", tt.name, r, r.Ready())
 		}
@@ -254,7 +253,7 @@ func TestFullAndHalfService(t *testing.T) {
 	// last among the full ones.
 	kit := func(warrantyOn time.Time, history ...*ServiceRef) Kit {
 		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true,
-			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0)}
+			VehiclePurchasedOn: d(2024, 1, 1), VehicleOdometerAtPurchase: 0}
 		for _, s := range append([]*ServiceRef{firstFull}, history...) {
 			k.LastService = s
 			if s.Intermediate() {
@@ -290,12 +289,12 @@ func TestFullAndHalfService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			checkNext(t, tt.k, &tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
+			checkNext(t, tt.k, tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
 		})
 	}
 	// While it isn't its turn, the full one's due counts the two steps from
 	// the last full service: 8 000 km, 24 months.
-	if f := kit(ended).FullDue(ptr(3000), d(2025, 3, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2027, 1, 1)) {
+	if f := kit(ended).FullDue(3000, d(2025, 3, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2027, 1, 1)) {
 		t.Errorf("no warranty, full due two steps on = %v / %v, want 8 000 km / 2027-01-01", deref(f.DueOdometer), f.DueDate)
 	}
 }
@@ -335,17 +334,17 @@ func TestBreakIn(t *testing.T) {
 	bought := d(2025, 4, 4)
 	kit := func() Kit {
 		return Kit{VehicleWarrantyEndsOn: ptr(d(2028, 4, 3)), IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
-			VehiclePurchasedOn: &bought, VehicleOdometerAtPurchase: ptr(0),
+			VehiclePurchasedOn: bought, VehicleOdometerAtPurchase: 0,
 			Lines: []KitLine{{ItemID: 1, Need: 1, Have: 1}}, InterLines: []KitLine{{ItemID: 2, Need: 1, Have: 0}}}
 	}
 	k := kit()
-	if !k.NextIsBreakIn() || k.NextIsIntermediate(ptr(300), d(2025, 4, 20)) {
+	if !k.NextIsBreakIn() || k.NextIsIntermediate(300, d(2025, 4, 20)) {
 		t.Fatal("a new kit with a break-in reading: want the break-in next")
 	}
-	checkNext(t, k, ptr(300), d(2025, 4, 20), "full", DueOK, ptr(1000), "")
-	checkNext(t, k, ptr(600), d(2025, 4, 25), "full", DueSoon, ptr(1000), "")
-	checkNext(t, k, ptr(1100), d(2025, 5, 5), "full", DueOverdue, ptr(1000), "")
-	if r := k.ReadinessAt(ptr(300), d(2025, 4, 20)); !r.Ready() {
+	checkNext(t, k, 300, d(2025, 4, 20), "full", DueOK, ptr(1000), "")
+	checkNext(t, k, 600, d(2025, 4, 25), "full", DueSoon, ptr(1000), "")
+	checkNext(t, k, 1100, d(2025, 5, 5), "full", DueOverdue, ptr(1000), "")
+	if r := k.ReadinessAt(300, d(2025, 4, 20)); !r.Ready() {
 		t.Errorf("the break-in takes the full parts, which are in stock: %+v", r)
 	}
 	// Logged (at 960 km): no schedule counts from it. The half one next,
@@ -356,50 +355,50 @@ func TestBreakIn(t *testing.T) {
 	if k.NextIsBreakIn() {
 		t.Error("after the break-in: want it no longer next")
 	}
-	checkNext(t, k, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
+	checkNext(t, k, 2000, d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
 	// Without a warranty, the same: they take turns from the purchase.
 	noWarranty := k
 	noWarranty.VehicleWarrantyEndsOn = nil
-	checkNext(t, noWarranty, ptr(2000), d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
-	if f := noWarranty.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 {
+	checkNext(t, noWarranty, 2000, d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
+	if f := noWarranty.FullDue(2000, d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 {
 		t.Errorf("no warranty, full due after the break-in = %v, want 8 000 km", deref(f.DueOdometer))
 	}
-	if f := k.FullDue(ptr(2000), d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2026, 4, 4)) {
+	if f := k.FullDue(2000, d(2025, 6, 1)); f.DueOdometer == nil || *f.DueOdometer != 8000 || f.DueDate == nil || !f.DueDate.Equal(d(2026, 4, 4)) {
 		t.Errorf("full due after the break-in = %v / %v, want 8 000 km / 2026-04-04", deref(f.DueOdometer), f.DueDate)
 	}
 	// Without an intermediate service, the same: the full one from the purchase.
 	k.Intermediate, k.InterLines = false, nil
-	checkNext(t, k, ptr(2000), d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
+	checkNext(t, k, 2000, d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
 	// And without a warranty too: the schedule runs from the purchase.
 	k.VehicleWarrantyEndsOn = nil
-	checkNext(t, k, ptr(2000), d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
+	checkNext(t, k, 2000, d(2025, 6, 1), "full", DueOK, ptr(8000), "2026-04-04")
 
 	// A vehicle bought used, past the break-in reading: no break-in.
 	used := kit()
-	used.VehicleOdometerAtPurchase = ptr(2148)
+	used.VehicleOdometerAtPurchase = 2148
 	if used.NextIsBreakIn() {
 		t.Error("bought at 2 148 km: want no break-in")
 	}
 	// A kit added long after: the vehicle is past its first full distance.
 	late := kit()
-	late.VehicleOdometer = ptr(8000)
+	late.VehicleOdometer = 8000
 	if late.NextIsBreakIn() {
 		t.Error("at 8 000 km, a kit's first full distance: want no break-in")
 	}
-	late.VehicleOdometer = ptr(7999)
+	late.VehicleOdometer = 7999
 	if !late.NextIsBreakIn() {
 		t.Error("at 7 999 km: want the break-in still next (late)")
 	}
 	// Archived: none either.
 	archived := kit()
 	archived.ArchivedAt = ptr(d(2025, 5, 1))
-	if archived.NextIsBreakIn() || archived.Due(ptr(300), d(2025, 5, 1)).State != DueNone {
+	if archived.NextIsBreakIn() || archived.Due(300, d(2025, 5, 1)).State != DueNone {
 		t.Error("archived kit: want no break-in")
 	}
 }
 
 // checkNext checks which schedule the kit offers next and when it is due.
-func checkNext(t *testing.T, k Kit, odo *int, today time.Time, wantNext string, wantState DueState, wantOdo *int, wantDate string) {
+func checkNext(t *testing.T, k Kit, odo int, today time.Time, wantNext string, wantState DueState, wantOdo *int, wantDate string) {
 	t.Helper()
 	next := "full"
 	if k.NextIsIntermediate(odo, today) {

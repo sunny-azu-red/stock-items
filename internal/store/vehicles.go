@@ -68,37 +68,29 @@ func (s *Store) CreateVehicle(ctx context.Context, in stock.VehicleInput) (int64
 	return id, err
 }
 
-// UpdateVehicle replaces a vehicle's fields. A changed odometer may not be
-// lower than a service's reading (see checkVehicleOdometer). A vehicle
-// changed since in.Version fails with a *StaleError.
+// UpdateVehicle replaces a vehicle's fields, all but its odometer (see
+// SetOdometer). Its purchase may not be after a service or above the
+// odometer. A vehicle changed since in.Version fails with a *StaleError.
+// Call in.Validate first.
 func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInput) error {
 	return s.inFormTx(ctx, in.FormKey, WhatVehicle, &id, func(tx pgx.Tx) error {
-		// The lock the update takes anyway (and checkVehicleOdometer), first.
-		var version int
-		var currentOdo *int
+		// The lock the update takes anyway, first.
+		var version, currentOdo int
 		var makeWas, modelWas string
 		err := tx.QueryRow(ctx, `SELECT version, odometer, make, model FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).
 			Scan(&version, &currentOdo, &makeWas, &modelWas)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatVehicle, id); err != nil {
 			return err
 		}
-		if !in.KeepOdometer {
-			if err := checkVehicleOdometer(ctx, tx, id, currentOdo, in.Odometer); err != nil {
-				return err
-			}
-		} else if in.OdometerAtPurchase != nil && currentOdo != nil && *in.OdometerAtPurchase > *currentOdo {
+		if *in.OdometerAtPurchase > currentOdo {
 			return &ConflictError{Field: "odometer_at_purchase", Message: fmt.Sprintf(
-				"Higher than the current odometer (%s)", stock.FormatDistance(*currentOdo))}
+				"Higher than the current odometer (%s)", stock.FormatDistance(currentOdo))}
 		}
-		if in.OdometerAtPurchase != nil {
-			if err := checkVehicleOdometerAtPurchase(ctx, tx, id, *in.OdometerAtPurchase); err != nil {
-				return err
-			}
+		if err := checkVehicleOdometerAtPurchase(ctx, tx, id, *in.OdometerAtPurchase); err != nil {
+			return err
 		}
-		if in.PurchasedOn != nil {
-			if err := checkVehiclePurchasedOn(ctx, tx, id, *in.PurchasedOn); err != nil {
-				return err
-			}
+		if err := checkVehiclePurchasedOn(ctx, tx, id, *in.PurchasedOn); err != nil {
+			return err
 		}
 		if err := spellFields(ctx, tx, id, spelledField{&in.Make, makeSpellings, makeWas}, spelledField{&in.Model, modelSpellings, modelWas}); err != nil {
 			return err
@@ -107,12 +99,11 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 		tag, err := tx.Exec(ctx, `
 			UPDATE vehicles SET version = version + 1,
 			       name = $2, kind = $3, make = $4, model = $5, year = $6, plate = $7, vin = $8,
-			       color = $9, odometer = CASE WHEN $10 THEN odometer ELSE $11 END,
-			       purchased_on = $12, odometer_at_purchase = $13,
-			       warranty_ends_on = $14, warranty_ends_at = $15,
-			       notes = $16, updated_at = now()
+			       color = $9, purchased_on = $10, odometer_at_purchase = $11,
+			       warranty_ends_on = $12, warranty_ends_at = $13,
+			       notes = $14, updated_at = now()
 			WHERE id = $1`,
-			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color, in.KeepOdometer, in.Odometer,
+			id, in.Name, in.Kind, in.Make, in.Model, in.Year, in.Plate, in.VIN, in.Color,
 			in.PurchasedOn, in.OdometerAtPurchase, in.WarrantyEndsOn, in.WarrantyEndsAt, in.Notes)
 		return checkAffected(tag, vehicleConflict(err))
 	})
@@ -122,19 +113,19 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 // not be lower than a service's reading or the vehicle's purchase reading.
 func (s *Store) SetOdometer(ctx context.Context, id int64, odo int) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		var current, purchasedOdo *int
+		var current, purchasedOdo int
 		if err := tx.QueryRow(ctx, `SELECT odometer, odometer_at_purchase FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&current, &purchasedOdo); err != nil {
 			return notFound(err)
 		}
-		if purchasedOdo != nil && odo < *purchasedOdo {
+		if odo < purchasedOdo {
 			return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
-				"Current odometer cannot be lower than purchase odometer (%s)", stock.FormatDistance(*purchasedOdo))}
+				"Current odometer cannot be lower than purchase odometer (%s)", stock.FormatDistance(purchasedOdo))}
 		}
-		if err := checkVehicleOdometer(ctx, tx, id, current, &odo); err != nil {
+		if err := checkVehicleOdometer(ctx, tx, id, current, odo); err != nil {
 			return err
 		}
-		// No new version: the edit form guards the reading with odometer_was,
-		// so setting it here (or by a service) leaves an open form good.
+		// No new version: the odometer isn't on the edit form, so setting it
+		// here (or by a service) leaves an open form good.
 		tag, err := tx.Exec(ctx, `UPDATE vehicles SET odometer = $2, updated_at = now() WHERE id = $1`, id, odo)
 		return checkAffected(tag, err)
 	})
@@ -142,12 +133,9 @@ func (s *Store) SetOdometer(ctx context.Context, id int64, odo int) error {
 
 // checkVehicleOdometer refuses to change a vehicle's odometer to less than
 // the highest reading of its services: that reading is wrong, or this one.
-// An unchanged reading is let through, so other fields can still be edited.
-func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo *int) error {
-	if odo == nil {
-		return nil // never cleared: the form requires it, the column is NOT NULL
-	}
-	if current != nil && *current == *odo {
+// An unchanged reading is let through.
+func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo int) error {
+	if current == odo {
 		return nil
 	}
 	var top int
@@ -161,7 +149,7 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo
 	if err != nil {
 		return err
 	}
-	if *odo < top {
+	if odo < top {
 		return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
 			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatDistance(top))}
 	}
@@ -216,20 +204,20 @@ func checkVehiclePurchasedOn(ctx context.Context, tx pgx.Tx, id int64, purchased
 // The caller holds the vehicle's lock (lockVehicle), so two services saved
 // at once take turns and can't both pass.
 func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, except int64) error {
-	var purchasedOn *time.Time
-	var purchasedOdo *int
+	var purchasedOn time.Time
+	var purchasedOdo int
 	if err := tx.QueryRow(ctx, `SELECT purchased_on, odometer_at_purchase FROM vehicles WHERE id = $1`, in.VehicleID).Scan(&purchasedOn, &purchasedOdo); err != nil {
 		return notFound(err)
 	}
 	day := stock.DateOnly(in.PerformedOn)
-	if purchasedOn != nil && day.Before(stock.DateOnly(*purchasedOn)) {
+	if day.Before(stock.DateOnly(purchasedOn)) {
 		return &ConflictError{Field: "performed_on", Message: fmt.Sprintf(
 			"Earlier than %s, when the vehicle was purchased", purchasedOn.Format("2 Jan 2006"))}
 	}
 	odo := *in.Odometer
-	if purchasedOdo != nil && odo < *purchasedOdo {
+	if odo < purchasedOdo {
 		return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
-			"Lower than %s, the vehicle's purchase odometer", stock.FormatDistance(*purchasedOdo))}
+			"Lower than %s, the vehicle's purchase odometer", stock.FormatDistance(purchasedOdo))}
 	}
 	var other int
 	var on time.Time

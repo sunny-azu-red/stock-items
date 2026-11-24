@@ -22,6 +22,8 @@ func TestVehicles(t *testing.T) {
 		t.Fatalf("duplicate name: want ConflictError, got %v", err)
 	}
 
+	// An edit leaves the odometer (Odometer is Add vehicle's): it changes
+	// with SetOdometer.
 	upd := stock.VehicleInput{Name: "KTM 390 Duke", Kind: stock.KindMotorcycle, Make: "KTM", Year: ptr(2021), Color: "#ff6600", Odometer: ptr(12000)}
 	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, upd))); err != nil {
 		t.Fatal(err)
@@ -30,7 +32,7 @@ func TestVehicles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Name != "KTM 390 Duke" || *v.Year != 2021 || *v.Odometer != 12000 || v.Subtitle() != "KTM (2021)" {
+	if v.Name != "KTM 390 Duke" || *v.Year != 2021 || v.Odometer != 0 || v.Subtitle() != "KTM (2021)" {
 		t.Errorf("vehicle = %+v", v)
 	}
 	if err := s.SetOdometer(ctx, id, 12500); err != nil {
@@ -39,7 +41,7 @@ func TestVehicles(t *testing.T) {
 
 	itemID := mustItem(t, s, stock.ItemInput{Name: "Oil Filter", Unit: stock.UnitPiece, VehicleIDs: []int64{id}})
 	list, _ := s.ListVehicles(ctx)
-	if len(list) != 1 || list[0].ItemCount != 1 || *list[0].Odometer != 12500 {
+	if len(list) != 1 || list[0].ItemCount != 1 || list[0].Odometer != 12500 {
 		t.Errorf("list = %+v", list)
 	}
 
@@ -121,17 +123,14 @@ func TestOdometerGuards(t *testing.T) {
 	}
 	upd := vin
 	upd.Name = "KTM 390 Duke"
-	upd.Odometer = ptr(13500)
 	if err := s.UpdateVehicle(ctx, v, anchored(vehicleV(t, s, v, upd))); err != nil {
 		t.Errorf("rename: %v", err)
 	}
-	upd.Odometer = ptr(9000)
-	if err := s.UpdateVehicle(ctx, v, anchored(vehicleV(t, s, v, upd))); !errors.As(err, &conflict) {
-		t.Errorf("lowering through the form: want conflict, got %v", err)
-	}
 }
 
-func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
+// The edit form has no odometer: an update leaves the reading as it is,
+// also one set after the form was opened, whatever the input holds.
+func TestVehicleUpdateLeavesTheOdometer(t *testing.T) {
 	s, ctx := newStore(t)
 	odo := 10000
 	in := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
@@ -144,23 +143,18 @@ func TestVehicleFormKeepsANewerOdometer(t *testing.T) {
 	if err := s.SetOdometer(ctx, id, 12000); err != nil {
 		t.Fatal(err)
 	}
-	in.Plate, in.KeepOdometer = "B-123", true
+	in.Plate = "B-123"
 	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, in))); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := s.GetVehicle(ctx, id); *v.Odometer != 12000 || v.Plate != "B-123" {
+	if v, _ := s.GetVehicle(ctx, id); v.Odometer != 12000 || v.Plate != "B-123" {
 		t.Errorf("vehicle = %+v", v)
 	}
-	// Clearing the reading is refused once services have readings.
-	svc := stock.ServiceInput{VehicleID: id, Title: "Chain", PerformedOn: time.Now(), Odometer: ptr(12000)}
-	svc.Normalize()
-	if _, err := s.CreateService(ctx, svc); err != nil {
-		t.Fatal(err)
-	}
-	in.KeepOdometer, in.Odometer = false, nil
+	// The purchase reading can't go above it.
+	in.OdometerAtPurchase = ptr(12001)
 	var conflict *store.ConflictError
-	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, in))); !errors.As(err, &conflict) || conflict.Field != "odometer" {
-		t.Errorf("clearing: want conflict, got %v", err)
+	if err := s.UpdateVehicle(ctx, id, anchored(vehicleV(t, s, id, in))); !errors.As(err, &conflict) || conflict.Field != "odometer_at_purchase" {
+		t.Errorf("purchase above the odometer: want conflict, got %v", err)
 	}
 }
 
@@ -228,10 +222,10 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVehicle: %v", err)
 	}
-	if v.PurchasedOn == nil || !v.PurchasedOn.Equal(pDate) {
+	if !v.PurchasedOn.Equal(pDate) {
 		t.Errorf("PurchasedOn = %v, want %v", v.PurchasedOn, pDate)
 	}
-	if v.OdometerAtPurchase == nil || *v.OdometerAtPurchase != 0 {
+	if v.OdometerAtPurchase != 0 {
 		t.Errorf("OdometerAtPurchase = %v, want 0", v.OdometerAtPurchase)
 	}
 
@@ -240,7 +234,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListVehicles: %v", err)
 	}
-	if len(list) != 1 || list[0].PurchasedOn == nil || !list[0].PurchasedOn.Equal(pDate) || list[0].OdometerAtPurchase == nil || *list[0].OdometerAtPurchase != 0 {
+	if len(list) != 1 || !list[0].PurchasedOn.Equal(pDate) || list[0].OdometerAtPurchase != 0 {
 		t.Fatalf("ListVehicles = %+v", list)
 	}
 
@@ -257,10 +251,10 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKit: %v", err)
 	}
-	if kit.VehiclePurchasedOn == nil || !kit.VehiclePurchasedOn.Equal(pDate) {
+	if !kit.VehiclePurchasedOn.Equal(pDate) {
 		t.Errorf("kit.VehiclePurchasedOn = %v, want %v", kit.VehiclePurchasedOn, pDate)
 	}
-	if kit.VehicleOdometerAtPurchase == nil || *kit.VehicleOdometerAtPurchase != 0 {
+	if kit.VehicleOdometerAtPurchase != 0 {
 		t.Errorf("kit.VehicleOdometerAtPurchase = %v, want 0", kit.VehicleOdometerAtPurchase)
 	}
 	// Reminders count from 0 km: at 1000 km, 14000 km left -> DueOK
@@ -353,7 +347,7 @@ func TestVehiclePurchaseBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVehicle after restore: %v", err)
 	}
-	if vStand.PurchasedOn == nil || !vStand.PurchasedOn.Equal(goodDate) || vStand.OdometerAtPurchase == nil || *vStand.OdometerAtPurchase != 0 {
+	if !vStand.PurchasedOn.Equal(goodDate) || vStand.OdometerAtPurchase != 0 {
 		t.Errorf("restored vehicle = %+v", vStand)
 	}
 }

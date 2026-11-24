@@ -139,13 +139,11 @@ func ptr[T any](v T) *T { return &v }
 
 // vehicleFormPath matches the vehicle form's actions (add and edit), and
 // vehicleDefaults are its required fields with values a test doesn't care
-// about (stock.VehicleInput.Validate): bought new on 1 Jan 2020.
+// about (stock.VehicleInput.ValidateNew): bought new on 1 Jan 2020. The
+// edit form ignores the odometer.
 var (
 	vehicleFormPath = regexp.MustCompile(`^/vehicles(/\d+)?$`)
-	vehicleDefaults = url.Values{
-		"make": {"KTM"}, "model": {"Test"}, "year": {"2020"}, "vin": {"VBKTEST0000000001"},
-		"odometer": {"0"}, "purchased_on": {"2020-01-01"}, "odometer_at_purchase": {"0"},
-	}
+	vehicleDefaults = url.Values{"odometer": {"0"}, "purchased_on": {"2020-01-01"}, "odometer_at_purchase": {"0"}}
 )
 
 // vehicleFormDefaults adds the vehicle form's required fields a test

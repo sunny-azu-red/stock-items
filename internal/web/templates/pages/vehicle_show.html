@@ -57,7 +57,7 @@
       <p class="hint">Restore this vehicle to log services or add kits.</p>
       {{else}}
       <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
-        <input class="input" name="odometer" value="{{optInt $v.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" aria-label="Odometer in {{distUnit}}" aria-describedby="odometer-note">
+        <input class="input" name="odometer" value="{{$v.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" aria-label="Odometer in {{distUnit}}" aria-describedby="odometer-note">
         <button class="btn" type="submit">Save odometer</button>
       </form>
       <p class="hint" id="odometer-note">Used for distance-based service reminders. Logging a service also updates it.</p>

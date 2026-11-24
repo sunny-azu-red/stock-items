@@ -58,7 +58,7 @@
 
 {{define "empty"}}<div class="empty">{{icon .Icon}}{{if .Sub}}<h3>{{.Title}}</h3>{{else}}<h2>{{.Title}}</h2>{{end}}{{with .Text}}<p>{{.}}</p>{{end}}{{with .Href}}<a class="btn btn-primary" href="{{.}}">{{icon (or $.ActionIcon "plus")}} {{$.Action}}</a>{{end}}</div>{{end}}
 
-{{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{else if eq .State "none"}}{{else}}<span class="badge badge-muted">{{.State.Label}}</span>{{end}}{{end}}
+{{define "due-badge"}}{{if eq .State "overdue"}}<span class="badge badge-danger">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "clock"}} {{.State.Label}}</span>{{else if eq .State "ok"}}<span class="badge badge-ok">{{.State.Label}}</span>{{end}}{{end}}
 
 {{define "ready-badge"}}{{template "schedule-ready-badge" (dict "R" .)}}{{end}}
 
@@ -291,7 +291,7 @@
 <fieldset class="field span-all{{if or .Err .KitErr}} has-error{{end}}" id="vehicle_id"{{if or .Err .KitErr}} aria-describedby="{{if .Err}}vehicle_id-err{{end}}{{if and .Err .KitErr}} {{end}}{{if .KitErr}}kit_id-err{{end}}"{{end}}>
   <legend>Vehicle {{template "req"}}</legend>
   <div class="chips">
-    {{range $i, $v := .Vehicles}}<label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="radio" name="vehicle_id" value="{{.ID}}" data-name="{{.Name}}"{{with .Odometer}} data-odometer="{{distance .}}"{{end}} required{{if eq .ID $c}} checked{{end}}{{if and (eq $i 0) (not $c)}} autofocus{{end}}><span class="dot"></span>{{.Name}}</label>{{end}}
+    {{range $i, $v := .Vehicles}}<label class="chip chip-toggle" style="{{chipStyle .Color}}"><input type="radio" name="vehicle_id" value="{{.ID}}" data-name="{{.Name}}" data-odometer="{{distance .Odometer}}" required{{if eq .ID $c}} checked{{end}}{{if and (eq $i 0) (not $c)}} autofocus{{end}}><span class="dot"></span>{{.Name}}</label>{{end}}
   </div>
   {{template "field-err" (fieldErr .Err "vehicle_id")}}
   {{template "field-err" (fieldErr .KitErr "kit_id")}}

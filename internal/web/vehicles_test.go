@@ -61,27 +61,46 @@ func TestArchiveVehicleFlow(t *testing.T) {
 	expect(t, a.get("/vehicles"), http.StatusOK, `href="`+path+`"`)
 }
 
-func TestVehicleEditFormKeepsANewerOdometer(t *testing.T) {
+// The edit form has no odometer (Add vehicle has, then the vehicle's page
+// and logged services change it): a new reading, and a service that moves
+// it on, while the form is open, neither makes the form stale nor is
+// undone by its save, and a posted odometer changes nothing.
+func TestVehicleEditFormHasNoOdometer(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	path := "/vehicles/" + itoa(k390)
 	edit := a.get(path + "/edit")
-	expect(t, edit, http.StatusOK, `name="odometer_was" value="10000"`)
+	expect(t, edit, http.StatusOK, "<h2>Purchase</h2>", `name="purchased_on"`, `name="odometer_at_purchase"`)
+	expectNot(t, edit, `name="odometer"`, `odometer_was`)
 	version := formVersion(t, edit.Body.String(), path)
-	// A new reading, and a service that moves it on, while the form is
-	// open: neither makes the form stale.
 	expect(t, a.post(path+"/odometer", url.Values{"odometer": {"12000"}}), http.StatusSeeOther)
 	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"},
 		"odometer": {"12500"}}), http.StatusSeeOther)
 	expect(t, a.post(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
-		"odometer": {"10000"}, "odometer_was": {"10000"}, "plate": {"B-123"}, "version": {version}}), http.StatusSeeOther)
-	if v, _ := a.store.GetVehicle(context.Background(), k390); *v.Odometer != 12500 || v.Plate != "B-123" {
+		"odometer": {"10000"}, "plate": {"B-123"}, "version": {version}}), http.StatusSeeOther)
+	if v, _ := a.store.GetVehicle(context.Background(), k390); v.Odometer != 12500 || v.Plate != "B-123" {
 		t.Errorf("vehicle = %+v", v)
 	}
 	// Archived vehicles still show their kits.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}}), http.StatusSeeOther)
 	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
 	expect(t, a.get("/vehicles?archived=1"), http.StatusOK, "<strong>1</strong> kit")
+}
+
+// What is only shown (make, model, year, VIN, plate) is optional: a
+// vehicle saves without, and its page shows a dash for each. What the
+// schedules count from is required.
+func TestVehicleDisplayFieldsAreOptional(t *testing.T) {
+	a := newApp(t)
+	form := a.get("/vehicles/new")
+	expect(t, form, http.StatusOK, `<label for="make">Make</label>`, `<label for="vin">VIN</label>`,
+		`<label for="odometer">Odometer (km)</label><span class="req"`, `<label for="purchased_on">Purchased on</label><span class="req"`)
+	expect(t, a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}, "odometer": {""}, "purchased_on": {""}, "odometer_at_purchase": {""}}),
+		http.StatusUnprocessableEntity, "Odometer is required", "Purchase date is required", "Odometer at purchase is required")
+	rec := a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}})
+	expect(t, rec, http.StatusSeeOther)
+	page := a.get(rec.Header().Get("Location"))
+	expect(t, page, http.StatusOK, "<dt>Make</dt><dd>—</dd>", "<dt>Model</dt><dd>—</dd>", "<dt>Year</dt><dd>—</dd>")
 }
 
 func TestVehicleMakeModelSuggestions(t *testing.T) {

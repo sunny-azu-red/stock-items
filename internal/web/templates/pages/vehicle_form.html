@@ -31,20 +31,20 @@
     <h2>Details</h2>
     <div class="form-grid">
       <div class="field{{if index $e "make"}} has-error{{end}}">
-        <div class="label-row"><label for="make">Make</label>{{template "req"}}</div>
-        <input class="input" id="make" name="make" value="{{$f.Make}}" required placeholder="e.g. KTM" list="makes" autocomplete="off" {{invalid (index $e "make") "make"}}>
+        <label for="make">Make</label>
+        <input class="input" id="make" name="make" value="{{$f.Make}}" placeholder="e.g. KTM" list="makes" autocomplete="off" {{invalid (index $e "make") "make"}}>
         {{template "datalist" (dict "ID" "makes" "Options" $d.Makes)}}
         {{template "field-err" (fieldErr (index $e "make") "make")}}
       </div>
       <div class="field{{if index $e "model"}} has-error{{end}}">
-        <div class="label-row"><label for="model">Model</label>{{template "req"}}</div>
-        <input class="input" id="model" name="model" value="{{$f.Model}}" required placeholder="e.g. 390 Duke" list="models" autocomplete="off" {{invalid (index $e "model") "model"}}>
+        <label for="model">Model</label>
+        <input class="input" id="model" name="model" value="{{$f.Model}}" placeholder="e.g. 390 Duke" list="models" autocomplete="off" {{invalid (index $e "model") "model"}}>
         {{template "datalist" (dict "ID" "models" "Options" $d.Models)}}
         {{template "field-err" (fieldErr (index $e "model") "model")}}
       </div>
       <div class="field{{if index $e "year"}} has-error{{end}}">
-        <div class="label-row"><label for="year">Year</label>{{template "req"}}</div>
-        <input class="input" id="year" name="year" value="{{$f.Year}}" required inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>
+        <label for="year">Year</label>
+        <input class="input" id="year" name="year" value="{{$f.Year}}" inputmode="numeric" placeholder="e.g. 2021" {{invalid (index $e "year") "year"}}>
         {{template "field-err" (fieldErr (index $e "year") "year")}}
       </div>
       <div class="field">
@@ -52,23 +52,26 @@
         <input class="input" id="plate" name="plate" value="{{$f.Plate}}" placeholder="e.g. B 123 ABC" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
       </div>
       <div class="field span-2{{if index $e "vin"}} has-error{{end}}">
-        <div class="label-row"><label for="vin">VIN</label>{{template "req"}}</div>
-        <input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" required placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" {{invalid (index $e "vin") "vin"}}>
+        <label for="vin">VIN</label>
+        <input class="input mono" id="vin" name="vin" value="{{$f.VIN}}" placeholder="17 letters and digits" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" {{invalid (index $e "vin") "vin"}}>
         {{template "field-err" (fieldErr (index $e "vin") "vin")}}
       </div>
     </div>
   </div>
+  {{/* The odometer only on Add vehicle: then the vehicle's page changes
+       it, and logging a service. */}}
   <div class="form-section">
-    <h2>Odometer</h2>
+    <h2>{{if $d.IsNew}}Odometer{{else}}Purchase{{end}}</h2>
     <p class="hint">Reminders count from the purchase until a service is logged.</p>
-    {{if not $d.IsNew}}<input type="hidden" name="odometer_was" value="{{$f.OdometerWas}}">{{end}}
     <div class="form-grid">
+      {{if $d.IsNew}}
       <div class="field{{if index $e "odometer"}} has-error{{end}}">
         <div class="label-row"><label for="odometer">Odometer ({{distUnit}})</label>{{template "req"}}</div>
         <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" required inputmode="numeric" placeholder="e.g. 12500" {{invalid (index $e "odometer") "odometer"}}>
         {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}
       </div>
-      <div class="field{{if index $e "purchased_on"}} has-error{{end}}">
+      {{end}}
+      <div class="field{{if not $d.IsNew}} span-2{{end}}{{if index $e "purchased_on"}} has-error{{end}}">
         <div class="label-row"><label for="purchased_on">Purchased on</label>{{template "req"}}</div>
         <input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" required {{invalid (index $e "purchased_on") "purchased_on"}}>
         {{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}
@@ -85,8 +88,8 @@
        drops them when it isn't, which clears a saved warranty. */}}
   <div class="form-section">
     <h2>Warranty</h2>
-    <p class="hint">While it runs, intermediate services never push back the full service.</p>
-    <label class="toggle"><input type="checkbox" id="has_warranty" name="has_warranty" value="1"{{if $f.ShowWarranty}} checked{{end}}> Under warranty</label>
+    <p class="hint">Tick it for one that has ended too. While it runs, intermediate services never push back the full service.</p>
+    <label class="toggle"><input type="checkbox" id="has_warranty" name="has_warranty" value="1"{{if $f.ShowWarranty}} checked{{end}}> Has a warranty</label>
     <div class="toggled-fields">
       <div class="form-grid">
         <div class="field{{if index $e "warranty_ends_on"}} has-error{{end}}">

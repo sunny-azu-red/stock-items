@@ -59,8 +59,8 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 	expect(t, a.get("/services"), http.StatusOK, "Oil service")
 
 	v, _ := a.store.GetVehicle(context.Background(), k390)
-	if *v.Odometer != 12000 {
-		t.Errorf("odometer = %d", *v.Odometer)
+	if v.Odometer != 12000 {
+		t.Errorf("odometer = %d", v.Odometer)
 	}
 	expect(t, a.postV(svcPath+"/delete", nil), http.StatusSeeOther)
 	if it, _ := a.store.GetItem(context.Background(), oil); it.Quantity != 4525 {
@@ -437,14 +437,15 @@ func TestVehiclePurchaseBaselineEnforcedAcrossServicesAndOdometer(t *testing.T) 
 	k390 := a.vehicle(t, "KTM 390")
 	vPath := vehiclePath(k390)
 
-	// Set purchase baseline: 2026-06-01 at 1000 km, current odometer 5000 km.
+	// Set purchase baseline: 2026-06-01 at 1000 km, current odometer 5000 km
+	// (on the vehicle's page: the edit form has no odometer).
 	expect(t, a.postV(vPath, url.Values{
 		"name":                 {"KTM 390"},
 		"kind":                 {"motorcycle"},
-		"odometer":             {"5000"},
 		"purchased_on":         {"2026-06-01"},
 		"odometer_at_purchase": {"1000"},
 	}), http.StatusSeeOther)
+	expect(t, a.post(vPath+"/odometer", url.Values{"odometer": {"5000"}}), http.StatusSeeOther)
 
 	// SetOdometer below odometer_at_purchase is refused.
 	rec := a.post(vPath+"/odometer", url.Values{"odometer": {"800"}})
@@ -470,16 +471,13 @@ func TestVehiclePurchaseBaselineEnforcedAcrossServicesAndOdometer(t *testing.T) 
 	})
 	expect(t, rec, http.StatusUnprocessableEntity, "Lower than 1\u202f000 km, the vehicle&#39;s purchase odometer")
 
-	// Raising odometer_at_purchase above the current odometer while KeepOdometer is true
-	// is refused cleanly instead of failing the DB CHECK.
+	// Raising odometer_at_purchase above the current odometer is refused.
 	expect(t, a.postV(vPath, url.Values{
 		"name":                 {"KTM 390"},
 		"kind":                 {"motorcycle"},
-		"odometer":             {"5000"},
-		"odometer_was":         {"5000"},
 		"purchased_on":         {"2026-06-01"},
 		"odometer_at_purchase": {"6000"},
-	}), http.StatusUnprocessableEntity, "Purchase odometer cannot be higher than the current odometer")
+	}), http.StatusUnprocessableEntity, "Higher than the current odometer (5\u202f000 km)")
 
 	// Deleting a service that moved the odometer from 5000 -> 12000 after
 	// odometer_at_purchase was raised to 8000 clamps odometer to 8000 (not 5000).
@@ -494,8 +492,6 @@ func TestVehiclePurchaseBaselineEnforcedAcrossServicesAndOdometer(t *testing.T) 
 	expect(t, a.postV(vPath, url.Values{
 		"name":                 {"KTM 390"},
 		"kind":                 {"motorcycle"},
-		"odometer":             {"12000"},
-		"odometer_was":         {"12000"},
 		"purchased_on":         {"2026-06-01"},
 		"odometer_at_purchase": {"8000"},
 	}), http.StatusSeeOther)

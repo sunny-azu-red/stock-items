@@ -36,7 +36,7 @@ func TestKitsAndServices(t *testing.T) {
 	}
 	// Never done: it counts from the purchase (1 Jan 2020, anchored), so
 	// 12 months on it is overdue.
-	if got := kit.Due(nil, time.Now()).State; got != stock.DueOverdue {
+	if got := kit.Due(0, time.Now()).State; got != stock.DueOverdue {
 		t.Errorf("due state = %s, want overdue", got)
 	}
 
@@ -86,7 +86,7 @@ func TestKitsAndServices(t *testing.T) {
 		t.Errorf("oil after service = %v, want 2825", it.Quantity)
 	}
 	v, _ := s.GetVehicle(ctx, k390)
-	if v.Odometer == nil || *v.Odometer != 15000 {
+	if v.Odometer != 15000 {
 		t.Errorf("odometer = %v", v.Odometer)
 	}
 	rec, err := s.GetService(ctx, svcID)
@@ -110,8 +110,8 @@ func TestKitsAndServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, _ = s.GetVehicle(ctx, k390)
-	if *v.Odometer != 15000 {
-		t.Errorf("odometer moved backwards to %d", *v.Odometer)
+	if v.Odometer != 15000 {
+		t.Errorf("odometer moved backwards to %d", v.Odometer)
 	}
 	assertLedger(t, s)
 
@@ -188,7 +188,7 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		}
 		return id
 	}
-	odometer := func(id int64) *int {
+	odometer := func(id int64) int {
 		t.Helper()
 		v, err := s.GetVehicle(ctx, id)
 		if err != nil {
@@ -202,17 +202,17 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 		name string
 		// setup returns the vehicle and the service to delete.
 		setup func() (vehicleID, serviceID int64)
-		want  *int
+		want  int
 	}{
 		{"a typo is undone", func() (int64, int64) {
 			v := vehicle(odo(10000))
 			return v, service(v, 120000)
-		}, odo(10000)},
+		}, 10000},
 		{"the newest of two goes back to the older one", func() (int64, int64) {
 			v := vehicle(odo(10000))
 			service(v, 11000)
 			return v, service(v, 12000)
-		}, odo(11000)},
+		}, 11000},
 		{"a service at the current reading moved nothing", func() (int64, int64) {
 			v := vehicle(odo(10000))
 			service(v, 9000)
@@ -220,12 +220,12 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 				t.Fatal(err)
 			}
 			return v, service(v, 12000)
-		}, odo(12000)},
+		}, 12000},
 		{"an older service moved nothing", func() (int64, int64) {
 			v := vehicle(odo(10000))
 			service(v, 11000)
 			return v, service(v, 10500)
-		}, odo(11000)},
+		}, 11000},
 		{"a reading entered by hand since is kept", func() (int64, int64) {
 			v := vehicle(odo(10000))
 			svc := service(v, 12000)
@@ -233,13 +233,13 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 				t.Fatal(err)
 			}
 			return v, svc
-		}, odo(12500)},
+		}, 12500},
 		// Every vehicle has a reading (migration 00004): one with no other
 		// service goes back to its purchase reading.
 		{"the only service goes back to the purchase reading", func() (int64, int64) {
 			v := vehicle(nil)
 			return v, service(v, 12000)
-		}, odo(0)},
+		}, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -248,8 +248,8 @@ func TestDeleteServicePutsOdometerBack(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := odometer(v)
-			if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
-				t.Errorf("odometer = %v, want %v", deref(got), deref(tt.want))
+			if got != tt.want {
+				t.Errorf("odometer = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -369,8 +369,8 @@ func TestUpdateService(t *testing.T) {
 			t.Errorf("item %d = %v, want %v", item, got, want)
 		}
 	}
-	if v, _ := s.GetVehicle(ctx, k390); *v.Odometer != 12000 {
-		t.Errorf("odometer = %d, want 12000", *v.Odometer)
+	if v, _ := s.GetVehicle(ctx, k390); v.Odometer != 12000 {
+		t.Errorf("odometer = %d, want 12000", v.Odometer)
 	}
 	svc, _ := s.GetService(ctx, id)
 	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || svc.Odometer != 12000 {
@@ -392,8 +392,8 @@ func TestUpdateService(t *testing.T) {
 	if _, err := s.DeleteService(ctx, id, cur(t, s, store.WhatService, id)); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := s.GetVehicle(ctx, k390); *v.Odometer != 10000 {
-		t.Errorf("odometer after delete = %d, want 10000", *v.Odometer)
+	if v, _ := s.GetVehicle(ctx, k390); v.Odometer != 10000 {
+		t.Errorf("odometer after delete = %d, want 10000", v.Odometer)
 	}
 	if err := s.UpdateService(ctx, id, serviceV(t, s, id, upd)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("update deleted service: want ErrNotFound, got %v", err)
@@ -644,7 +644,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 10000 || kit.InterSinceFull {
+	if !kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || kit.VehicleOdometer != 10000 || kit.InterSinceFull {
 		t.Errorf("after deleting intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 
@@ -653,7 +653,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	kit, _ = s.GetKit(ctx, kitID)
-	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || *kit.VehicleOdometer != 12000 {
+	if kit.NextIsIntermediate(kit.VehicleOdometer, interDate) || kit.VehicleOdometer != 12000 {
 		t.Errorf("after restoring intermediate: NextIsIntermediate = %v, odo = %v", kit.NextIsIntermediate(kit.VehicleOdometer, interDate), kit.VehicleOdometer)
 	}
 	assertLedger(t, s)

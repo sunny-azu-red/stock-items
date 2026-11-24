@@ -301,8 +301,8 @@ func TestTrashRestoresAService(t *testing.T) {
 	if got := mustGet(t, s, oil).Quantity; got != 300 {
 		t.Errorf("oil after restore = %v, want 300", got)
 	}
-	if veh, _ := s.GetVehicle(ctx, v); *veh.Odometer != 12000 {
-		t.Errorf("odometer = %d, want 12000", *veh.Odometer)
+	if veh, _ := s.GetVehicle(ctx, v); veh.Odometer != 12000 {
+		t.Errorf("odometer = %d, want 12000", veh.Odometer)
 	}
 	if n, _ := s.CountTrash(ctx); n != 0 {
 		t.Errorf("trash still has %d", n)

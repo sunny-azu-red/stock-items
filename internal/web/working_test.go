@@ -298,7 +298,7 @@ func TestWorkingOnPages(t *testing.T) {
 		}
 		f := vehicleFormFrom(v)
 		rec = a.postWorking("/vehicles/"+k, url.Values{"name": {f.Name}, "notes": {"Saved from before"}, "kind": {f.Kind}, "color": {f.Color},
-			"odometer": {f.Odometer}, "odometer_was": {f.OdometerWas}, "version": {itoa(int64(f.Version))}}, w)
+			"purchased_on": {f.PurchasedOn}, "odometer_at_purchase": {f.OdometerAtPurchase}, "version": {itoa(int64(f.Version))}}, w)
 		expectRedirect(t, rec, "/vehicles/"+k)
 		expectRedirect(t, a.getWorking("/vehicles/"+k, w), own)
 		if v, err := a.store.GetVehicle(ctx, k1290); err != nil || v.Notes != "Saved from before" {

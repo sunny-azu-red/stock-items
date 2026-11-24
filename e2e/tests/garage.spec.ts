@@ -62,7 +62,8 @@ async function showInter(page: Page) {
 // The headings of an open item list, in order.
 const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
 
-// Every vehicle has what its owner knows (all required): here bought on
+// Every vehicle has what its owner knows (the odometer and purchase are
+// required; make, model, year and VIN only shown): here bought on
 // 1 Mar 2024 at its current reading, so a kit never done is overdue by its
 // months and on track by its distance, whatever the day the tests run.
 async function addVehicle(page: Page, name: string, odometer: string, warrantyEndsOn?: string) {
@@ -79,7 +80,7 @@ async function addVehicle(page: Page, name: string, odometer: string, warrantyEn
   if (warrantyEndsOn) {
     // Its fields show once the box is ticked.
     await expect(page.getByLabel("Warranty ends on")).toBeHidden();
-    await page.getByLabel("Under warranty").check();
+    await page.getByLabel("Has a warranty").check();
     await page.getByLabel("Warranty ends on").fill(warrantyEndsOn);
   }
   await page.getByRole("button", { name: "Save vehicle" }).click();

@@ -28,9 +28,8 @@ type Warranty struct {
 
 // WarrantyOf works out a warranty that ends on endsOn (the last day it
 // covers) or past the reading endsAt, whichever comes first, given the
-// vehicle's odometer and today (a calendar day in the app zone). An unknown
-// odometer never ends it; the date still can.
-func WarrantyOf(endsOn *time.Time, endsAt *int, odo *int, today time.Time) Warranty {
+// vehicle's odometer and today (a calendar day in the app zone).
+func WarrantyOf(endsOn *time.Time, endsAt *int, odo int, today time.Time) Warranty {
 	w := Warranty{State: WarrantyNone, EndsOn: endsOn, EndsAt: endsAt}
 	if endsOn == nil && endsAt == nil {
 		return w
@@ -42,8 +41,8 @@ func WarrantyOf(endsOn *time.Time, endsAt *int, odo *int, today time.Time) Warra
 		ended = ended || days < 0
 		soon = soon || days <= DueSoonDays
 	}
-	if endsAt != nil && odo != nil {
-		left := *endsAt - *odo
+	if endsAt != nil {
+		left := *endsAt - odo
 		ended = ended || left < 0
 		soon = soon || left <= WarrantySoonDistance
 	}
@@ -81,6 +80,6 @@ func (v Vehicle) Warranty(today time.Time) Warranty {
 
 // Warranty works out the warranty of the kit's vehicle, from its odometer
 // reading currentOdo, on the day today.
-func (k Kit) Warranty(currentOdo *int, today time.Time) Warranty {
+func (k Kit) Warranty(currentOdo int, today time.Time) Warranty {
 	return WarrantyOf(k.VehicleWarrantyEndsOn, k.VehicleWarrantyEndsAt, currentOdo, today)
 }

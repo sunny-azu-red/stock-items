@@ -49,19 +49,23 @@ func (k VehicleKind) Icon() string {
 
 // Vehicle is something items are kept in stock for.
 type Vehicle struct {
-	ID                 int64
-	Version            int // see Item.Version; odometer readings don't count
-	Name               string
-	Kind               VehicleKind
-	Make               string
-	Model              string
-	Year               *int
-	Plate              string
-	VIN                string
-	Color              string
-	Odometer           *int
-	PurchasedOn        *time.Time
-	OdometerAtPurchase *int
+	ID      int64
+	Version int // see Item.Version; odometer readings don't count
+	Name    string
+	Kind    VehicleKind
+	Make    string
+	Model   string
+	Year    *int
+	Plate   string
+	VIN     string
+	Color   string
+	// Odometer is the current reading, and PurchasedOn and
+	// OdometerAtPurchase the day and reading the vehicle was bought at:
+	// every schedule counts from them (the columns are NOT NULL). Make,
+	// Model, Year, VIN and Plate are only shown, and optional.
+	Odometer           int
+	PurchasedOn        time.Time
+	OdometerAtPurchase int
 	// WarrantyEndsOn is the last day the warranty covers, and WarrantyEndsAt
 	// the reading it ends past; whichever comes first ends it (Warranty).
 	WarrantyEndsOn *time.Time
@@ -458,9 +462,9 @@ type Kit struct {
 	VehicleID                 int64
 	VehicleName               string
 	VehicleColor              string
-	VehicleOdometer           *int
-	VehiclePurchasedOn        *time.Time
-	VehicleOdometerAtPurchase *int
+	VehicleOdometer           int
+	VehiclePurchasedOn        time.Time
+	VehicleOdometerAtPurchase int
 	VehicleWarrantyEndsOn     *time.Time
 	VehicleWarrantyEndsAt     *int
 	Name                      string
@@ -507,7 +511,7 @@ func (k Kit) InterStep() *int {
 
 // VehicleChip returns a Vehicle value with the kit's vehicle chip fields.
 func (k Kit) VehicleChip() Vehicle {
-	return Vehicle{ID: k.VehicleID, Name: k.VehicleName, Color: k.VehicleColor, Odometer: k.VehicleOdometer}
+	return Vehicle{ID: k.VehicleID, Name: k.VehicleName, Color: k.VehicleColor}
 }
 
 // ServiceRef is the minimal information about a past service.

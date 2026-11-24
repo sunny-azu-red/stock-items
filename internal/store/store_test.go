@@ -167,13 +167,6 @@ func ids(items []stock.Item) []string {
 	return out
 }
 
-func deref(p *int) any {
-	if p == nil {
-		return nil
-	}
-	return *p
-}
-
 func mustList(t *testing.T, s *store.Store, f store.ItemFilter) []stock.Item {
 	t.Helper()
 	items, err := s.ListItems(context.Background(), f)

@@ -79,7 +79,7 @@
       </div>
       <div class="field{{if index $e "odometer"}} has-error{{end}}">
         <div class="label-row"><label for="odometer">Odometer ({{distUnit}})</label>{{template "req"}}</div>
-        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" required inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle $d.Vehicle.Odometer}}Last reading {{distance $d.Vehicle.Odometer}}{{else}}e.g. 15000{{end}}" {{invalid (index $e "odometer") "odometer"}}>
+        <input class="input" id="odometer" name="odometer" value="{{$f.Odometer}}" required inputmode="numeric" placeholder="{{if and (not $f.ID) $d.Vehicle}}Last reading {{distance $d.Vehicle.Odometer}}{{else}}e.g. 15000{{end}}" {{invalid (index $e "odometer") "odometer"}}>
         {{template "field-err" (fieldErr (index $e "odometer") "odometer")}}
       </div>
       <div class="field{{if index $e "labor_cost"}} has-error{{end}}">

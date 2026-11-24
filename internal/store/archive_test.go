@@ -281,7 +281,7 @@ func TestArchiveKitWithServices(t *testing.T) {
 		t.Errorf("a vehicle's active kits = %+v", kits)
 	}
 	k, _ := s.GetKit(ctx, used)
-	if !k.Archived() || k.Due(nil, time.Now()).State != stock.DueNone {
+	if !k.Archived() || k.Due(0, time.Now()).State != stock.DueNone {
 		t.Errorf("archived kit = %+v", k)
 	}
 	if r, _ := s.GetService(ctx, svc); r.KitID == nil || *r.KitID != used {

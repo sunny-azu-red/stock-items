@@ -42,7 +42,8 @@ func TestVocabulary(t *testing.T) {
 		{re: `\bparts? (is |are )?short\b|\b\d+ short\b|"part"\}\} short`, use: `"missing": "1 part missing", "2 parts are missing from stock" (only a shopping reason says "Short for the Air Filter kit")`},
 		{re: `Add missing to (the )?shopping list`, use: `"Add missing" (a parts card's button, and the service form's; the cart icon and its tooltip say where)`},
 		{re: `\bWhat was done\b`, use: `"Work performed"`},
-		{re: `\b([Ii]n|[Hh]as( a)?|[Oo]ut of) warranty\b|[Ww]arranty (expired|active|valid)\b`, use: `"Under warranty", "Warranty ends soon", "Warranty ended" (the warranty badge's words)`},
+		// "Has a warranty" is the vehicle form's box (one that has ended too).
+		{re: `\b([Ii]n|[Hh]as|[Oo]ut of) warranty\b|[Ww]arranty (expired|active|valid)\b`, use: `"Under warranty", "Warranty ends soon", "Warranty ended" (the warranty badge's words)`},
 		{re: `Other items`, use: `"General": an item list heads a vehicle's items "For KTM 390", then "General" (docs/design.md, Item lists)`},
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},

@@ -168,7 +168,7 @@ func (s *Server) funcs() template.FuncMap {
 		"num":        stock.FormatNumber,
 		"distance":   formatDistance,
 		"distUnit":   func() string { return stock.DistanceUnit },
-		"distNum":    formatDistanceNum,
+		"distNum":    stock.FormatInt, // a distance's figure, without its unit
 		"money":      s.formatMoney,
 		"date":       formatDate,
 		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
@@ -193,7 +193,6 @@ func (s *Server) funcs() template.FuncMap {
 		// rowPlaceholderFor is a part row's: the number alone, as the unit
 		// picker beside it says the unit (and a phone has room for little).
 		"rowPlaceholderFor": func(u stock.Unit) string { return "e.g. " + numberExampleFor(u) },
-		"optInt":            optIntString,
 		"unitPrice":         s.formatUnitPrice,
 		// withQuery joins a path and an already encoded query string
 		// (from url.Values.Encode), so html/template does not escape it again.
@@ -482,14 +481,6 @@ func formatDecimal(f float64) string {
 func formatDistance(v any) string {
 	if n, ok := derefIntOK(v); ok {
 		return stock.FormatDistance(n)
-	}
-	return "—"
-}
-
-// formatDistanceNum is a distance's figure without its unit, "—" for none.
-func formatDistanceNum(v any) string {
-	if n, ok := derefIntOK(v); ok {
-		return stock.FormatInt(n)
 	}
 	return "—"
 }

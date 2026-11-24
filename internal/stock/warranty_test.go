@@ -12,26 +12,24 @@ func TestWarrantyOf(t *testing.T) {
 		name   string
 		endsOn *time.Time
 		endsAt *int
-		odo    *int
+		odo    int
 		want   WarrantyState
 	}{
-		{name: "none entered", odo: ptr(12000), want: WarrantyNone},
+		{name: "none entered", odo: 12000, want: WarrantyNone},
 		{name: "date far off", endsOn: ptr(day(2028, 3, 1)), want: WarrantyActive},
 		{name: "date in 31 days", endsOn: ptr(day(2026, 12, 24)), want: WarrantyActive},
 		{name: "date in 30 days is soon", endsOn: ptr(day(2026, 12, 23)), want: WarrantySoon},
 		{name: "its last day still counts", endsOn: ptr(today), want: WarrantySoon},
 		{name: "the day after, ended", endsOn: ptr(day(2026, 11, 22)), want: WarrantyEnded},
-		{name: "reading far off", endsAt: ptr(100000), odo: ptr(12000), want: WarrantyActive},
-		{name: "reading 1 000 km off is soon", endsAt: ptr(13000), odo: ptr(12000), want: WarrantySoon},
-		{name: "reading 1 001 km off", endsAt: ptr(13001), odo: ptr(12000), want: WarrantyActive},
-		{name: "at the reading still counts", endsAt: ptr(12000), odo: ptr(12000), want: WarrantySoon},
-		{name: "past the reading, ended", endsAt: ptr(11999), odo: ptr(12000), want: WarrantyEnded},
-		{name: "reading without an odometer never ends", endsAt: ptr(100), want: WarrantyActive},
-		{name: "reading without an odometer, the date ends it", endsOn: ptr(day(2026, 1, 1)), endsAt: ptr(100), want: WarrantyEnded},
-		{name: "past the reading ends it before the date", endsOn: ptr(day(2028, 3, 1)), endsAt: ptr(11000), odo: ptr(12000), want: WarrantyEnded},
-		{name: "past the date ends it before the reading", endsOn: ptr(day(2026, 11, 1)), endsAt: ptr(100000), odo: ptr(12000), want: WarrantyEnded},
-		{name: "soon by date, far by reading: soon", endsOn: ptr(day(2026, 12, 15)), endsAt: ptr(100000), odo: ptr(12000), want: WarrantySoon},
-		{name: "soon by both", endsOn: ptr(day(2026, 11, 24)), endsAt: ptr(12800), odo: ptr(12000), want: WarrantySoon},
+		{name: "reading far off", endsAt: ptr(100000), odo: 12000, want: WarrantyActive},
+		{name: "reading 1 000 km off is soon", endsAt: ptr(13000), odo: 12000, want: WarrantySoon},
+		{name: "reading 1 001 km off", endsAt: ptr(13001), odo: 12000, want: WarrantyActive},
+		{name: "at the reading still counts", endsAt: ptr(12000), odo: 12000, want: WarrantySoon},
+		{name: "past the reading, ended", endsAt: ptr(11999), odo: 12000, want: WarrantyEnded},
+		{name: "past the reading ends it before the date", endsOn: ptr(day(2028, 3, 1)), endsAt: ptr(11000), odo: 12000, want: WarrantyEnded},
+		{name: "past the date ends it before the reading", endsOn: ptr(day(2026, 11, 1)), endsAt: ptr(100000), odo: 12000, want: WarrantyEnded},
+		{name: "soon by date, far by reading: soon", endsOn: ptr(day(2026, 12, 15)), endsAt: ptr(100000), odo: 12000, want: WarrantySoon},
+		{name: "soon by both", endsOn: ptr(day(2026, 11, 24)), endsAt: ptr(12800), odo: 12000, want: WarrantySoon},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,7 +50,7 @@ func TestWarrantyOfCountsDays(t *testing.T) {
 	plus3 := time.FixedZone("UTC+3", 3*3600)
 	endsOn := time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC)
 	justAfterMidnight := time.Date(2026, 11, 24, 0, 30, 0, 0, plus3) // 23 Nov in UTC
-	if got := WarrantyOf(&endsOn, nil, nil, justAfterMidnight).State; got != WarrantyEnded {
+	if got := WarrantyOf(&endsOn, nil, 0, justAfterMidnight).State; got != WarrantyEnded {
 		t.Errorf("at 00:30 on the day after, state = %s, want ended", got)
 	}
 }

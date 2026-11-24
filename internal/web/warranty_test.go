@@ -13,12 +13,12 @@ func warrantyApp(t *testing.T) *testApp {
 	return newAppAt(t, func() time.Time { return time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC) })
 }
 
-// The vehicle form's Under warranty box shows its two fields; ticked, it
+// The vehicle form's Has a warranty box shows its two fields; ticked, it
 // needs one of them; unticked, it saves none, which clears a warranty.
 func TestVehicleWarrantyForm(t *testing.T) {
 	a := warrantyApp(t)
 	expect(t, a.get("/vehicles/new"), http.StatusOK,
-		`<label class="toggle"><input type="checkbox" id="has_warranty" name="has_warranty" value="1"> Under warranty</label>`,
+		`<label class="toggle"><input type="checkbox" id="has_warranty" name="has_warranty" value="1"> Has a warranty</label>`,
 		`name="warranty_ends_on" value=""`, `name="warranty_ends_at" value=""`)
 
 	base := url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"}, "odometer": {"12000"}}
@@ -67,7 +67,7 @@ func TestVehicleWarrantyForm(t *testing.T) {
 		t.Errorf("unticking kept the warranty: %v, %v", v.WarrantyEndsOn, v.WarrantyEndsAt)
 	}
 	edit := a.get(path + "/edit")
-	expect(t, edit, http.StatusOK, `id="has_warranty" name="has_warranty" value="1"> Under warranty`)
+	expect(t, edit, http.StatusOK, `id="has_warranty" name="has_warranty" value="1"> Has a warranty`)
 }
 
 // A vehicle bought used can have had its warranty end before it was

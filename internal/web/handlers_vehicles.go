@@ -22,11 +22,10 @@ type vehicleForm struct {
 	Name, Kind, Make, Model, Year      string
 	Plate, VIN, Color, Odometer, Notes string
 	PurchasedOn, OdometerAtPurchase    string
-	// ShowWarranty is the Under warranty box; WarrantyEndsOn and
+	// ShowWarranty is the Has a warranty box; WarrantyEndsOn and
 	// WarrantyEndsAt are its fields, shown while it is ticked.
 	ShowWarranty                   bool
 	WarrantyEndsOn, WarrantyEndsAt string
-	OdometerWas                    string // as the edit form was opened
 	Stored                         string // the saved name while editing, for the heading
 	Version                        int    // as the edit form was opened (see itemForm)
 	Stale                          *staleNote
@@ -52,21 +51,21 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
-		Plate: v.Plate, VIN: v.VIN, Color: v.Color, Odometer: optIntString(v.Odometer),
-		PurchasedOn: day(v.PurchasedOn), OdometerAtPurchase: optIntString(v.OdometerAtPurchase),
+		Plate: v.Plate, VIN: v.VIN, Color: v.Color,
+		PurchasedOn: v.PurchasedOn.Format("2006-01-02"), OdometerAtPurchase: strconv.Itoa(v.OdometerAtPurchase),
 		ShowWarranty:   v.WarrantyEndsOn != nil || v.WarrantyEndsAt != nil,
 		WarrantyEndsOn: day(v.WarrantyEndsOn), WarrantyEndsAt: optIntString(v.WarrantyEndsAt), Notes: v.Notes,
-		OdometerWas: optIntString(v.Odometer), Stored: v.Name, Version: v.Version,
+		Stored: v.Name, Version: v.Version,
 	}
 }
 
-func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.VehicleInput) {
+func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, stock.VehicleInput) {
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		Odometer: formText(r, "odometer"), PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
+		PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
 		ShowWarranty: formText(r, "has_warranty") == "1", WarrantyEndsOn: formText(r, "warranty_ends_on"), WarrantyEndsAt: formText(r, "warranty_ends_at"),
-		Notes: formText(r, "notes"), OdometerWas: formText(r, "odometer_was"),
+		Notes:   formText(r, "notes"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
@@ -78,8 +77,12 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 	if in.Year, err = parseOptInt(f.Year); err != nil {
 		f.Errors.Add("year", err.Error())
 	}
-	if in.Odometer, err = parseOptInt(f.Odometer); err != nil {
-		f.Errors.Add("odometer", err.Error())
+	// Only Add vehicle has the odometer: the vehicle's page changes it.
+	if isNew {
+		f.Odometer = formText(r, "odometer")
+		if in.Odometer, err = parseOptInt(f.Odometer); err != nil {
+			f.Errors.Add("odometer", err.Error())
+		}
 	}
 	if in.OdometerAtPurchase, err = parseOptInt(f.OdometerAtPurchase); err != nil {
 		f.Errors.Add("odometer_at_purchase", err.Error())
@@ -108,11 +111,12 @@ func parseVehicleForm(r *http.Request, now time.Time) (vehicleForm, stock.Vehicl
 		// Unticked: the warranty is cleared, whatever its fields still hold.
 		f.WarrantyEndsOn, f.WarrantyEndsAt = "", ""
 	}
-	if was, err := parseOptInt(f.OdometerWas); err == nil && r.PostForm.Has("odometer_was") {
-		in.KeepOdometer = optIntString(was) == optIntString(in.Odometer)
-	}
 	in.Normalize()
-	for k, v := range in.Validate() {
+	validate := in.Validate
+	if isNew {
+		validate = in.ValidateNew
+	}
+	for k, v := range validate() {
 		f.Errors.Add(k, v)
 	}
 	return f, in
@@ -219,7 +223,7 @@ func (s *Server) vehicleCreate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
 		return err
 	}
-	f, in := parseVehicleForm(r, s.now())
+	f, in := parseVehicleForm(r, s.now(), true)
 	if !f.Errors.Any() {
 		id, err := s.store.CreateVehicle(r.Context(), in)
 		if err == nil {
@@ -263,7 +267,7 @@ func (s *Server) vehicleUpdate(w http.ResponseWriter, r *http.Request) error {
 	if done, err := s.savedBefore(w, r, parseFormKey(r), store.WhatVehicle, vehiclePath, "/vehicles"); done || err != nil {
 		return err
 	}
-	f, in := parseVehicleForm(r, s.now())
+	f, in := parseVehicleForm(r, s.now(), false)
 	f.ID = id
 	if !f.Errors.Any() {
 		err := s.store.UpdateVehicle(r.Context(), id, in)

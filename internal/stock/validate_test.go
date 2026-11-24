@@ -160,15 +160,25 @@ func TestVehicleInputValidate(t *testing.T) {
 	in := VehicleInput{Name: " KTM 390 ", VIN: " vbk123 ", Make: "KTM", Model: "390 Duke", Year: ptr(2021),
 		Odometer: ptr(12000), PurchasedOn: &bought, OdometerAtPurchase: ptr(0)}
 	in.Normalize()
-	if errs := in.Validate(); errs.Any() {
+	if errs := in.ValidateNew(); errs.Any() {
 		t.Fatalf("unexpected errors: %v", errs)
 	}
-	// What an owner always knows is required.
-	errs := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff"}.Validate()
-	for _, f := range []string{"make", "model", "year", "vin", "odometer", "purchased_on", "odometer_at_purchase"} {
+	// What the schedules count from is required; what is only shown
+	// (make, model, year, VIN, plate) isn't. The odometer only on a new
+	// vehicle (ValidateNew): an edit leaves it.
+	errs := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff"}.ValidateNew()
+	for _, f := range []string{"odometer", "purchased_on", "odometer_at_purchase"} {
 		if errs[f] == "" {
 			t.Errorf("want %s required, got %v", f, errs)
 		}
+	}
+	for _, f := range []string{"make", "model", "year", "vin", "plate"} {
+		if errs[f] != "" {
+			t.Errorf("want %s optional, got %v", f, errs)
+		}
+	}
+	if errs := (VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff"}).Validate(); errs["odometer"] != "" {
+		t.Errorf("an edit has no odometer, got %v", errs)
 	}
 	if in.Kind != KindMotorcycle || in.Color != "#f97316" || in.VIN != "VBK123" {
 		t.Errorf("defaults not applied: %+v", in)
@@ -187,7 +197,7 @@ func TestVehicleInputValidate(t *testing.T) {
 	highPurchased := 20000
 	lowCurrent := 15000
 	inverted := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff", OdometerAtPurchase: &highPurchased, Odometer: &lowCurrent}
-	if errs := inverted.Validate(); errs["odometer"] == "" {
+	if errs := inverted.ValidateNew(); errs["odometer"] == "" {
 		t.Errorf("expected error when current odometer is lower than the purchase odometer, got %v", errs)
 	}
 
@@ -196,7 +206,7 @@ func TestVehicleInputValidate(t *testing.T) {
 	currOdo := 1000
 	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", Make: "KTM", Model: "1290 Super Adventure S", Year: ptr(2024), VIN: "VBKV1",
 		PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
-	if errs := good.Validate(); errs.Any() {
+	if errs := good.ValidateNew(); errs.Any() {
 		t.Errorf("unexpected error on valid input: %v", errs)
 	}
 }
@@ -372,7 +382,7 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"item notes", ItemInput{Name: "A", Unit: UnitPiece, Notes: longer}.Validate(), "form"},
 		{"item bought note", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: long}.Validate(), "form"},
 		{"sku code", ItemInput{Name: "A", Unit: UnitPiece, SKUs: []SKU{{Code: long, Kind: SKUOther}}}.Validate(), "sku_0"},
-		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(MaxOdometer + 1)}.Validate(), "odometer"},
+		{"vehicle odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(MaxOdometer + 1)}.ValidateNew(), "odometer"},
 		{"vehicle plate", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Plate: long}.Validate(), "form"},
 		{"shop on a purchase", MovementInput{Kind: MoveBought, Delta: 1, Supplier: long}.Validate(), "form"},
 		{"kit months", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(241)}.Validate(), "interval_months"},
@@ -394,7 +404,6 @@ func TestTextAndNumberLimits(t *testing.T) {
 			return in.Validate()
 		}(), "parts"},
 		{"item note with zero starting stock", ItemInput{Name: "A", Unit: UnitPiece, BoughtNote: "spare"}.Validate(), "quantity"},
-		{"vehicle purchase odometer above kept odometer", VehicleInput{Name: "A", Kind: KindCar, Color: "#ffffff", Odometer: ptr(5000), OdometerAtPurchase: ptr(6000), KeepOdometer: true}.Validate(), "odometer_at_purchase"},
 		{"service title", ServiceInput{VehicleID: 1, Title: long, PerformedOn: time.Now()}.Validate(), "title"},
 		{"shopping text", ShoppingInput{FreeText: long}.Validate(), "item"},
 	}

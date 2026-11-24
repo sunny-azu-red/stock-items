@@ -241,29 +241,29 @@ func IsColor(s string) bool { return colorRe.MatchString(s) }
 
 // VehicleInput is the data needed to create or update a vehicle.
 type VehicleInput struct {
-	Version            int // as the edit form was opened; unused on create
-	Name               string
-	Kind               VehicleKind
-	Make               string
-	Model              string
-	Year               *int
-	Plate              string
-	VIN                string
-	Color              string
+	Version int // as the edit form was opened; unused on create
+	Name    string
+	Kind    VehicleKind
+	Make    string
+	Model   string
+	Year    *int
+	Plate   string
+	VIN     string
+	Color   string
+	// Odometer is the current reading: only Add vehicle has it
+	// (ValidateNew). An update leaves the vehicle's, which changes on its
+	// page (store.SetOdometer) and by logging a service.
 	Odometer           *int
 	PurchasedOn        *time.Time
 	OdometerAtPurchase *int
-	// HasWarranty is the form's Under warranty box: ticked, the warranty
-	// needs an end date, an end reading or both. Unticked, the handler
-	// leaves both nil, which clears a warranty.
+	// HasWarranty is the form's Has a warranty box: ticked, the warranty
+	// needs an end date (and may have an end reading). Unticked, the
+	// handler leaves both nil, which clears a warranty.
 	HasWarranty    bool
 	WarrantyEndsOn *time.Time
 	WarrantyEndsAt *int
 	Notes          string
-	// KeepOdometer says the edit form's odometer was left as it was opened,
-	// so an update keeps the current reading (it may have changed since).
-	KeepOdometer bool
-	FormKey      string // see ItemInput.FormKey
+	FormKey        string // see ItemInput.FormKey
 }
 
 // Normalize trims text fields and applies defaults.
@@ -283,7 +283,10 @@ func (in *VehicleInput) Normalize() {
 	}
 }
 
-// Validate checks the input. Call Normalize first.
+// Validate checks the fields of both vehicle forms (the odometer is
+// ValidateNew's). Call Normalize first. The name is required, and what the
+// schedules count from (the purchase); make, model, year, VIN and plate
+// are only shown, so they are optional.
 func (in VehicleInput) Validate() Errors {
 	errs := Errors{}
 	if in.Name == "" {
@@ -294,39 +297,17 @@ func (in VehicleInput) Validate() Errors {
 	if in.Kind != KindMotorcycle && in.Kind != KindCar && in.Kind != KindOther {
 		errs.Add("kind", "Unknown vehicle type")
 	}
-	// What an owner always knows is required: the schedules count from the
-	// odometer and the purchase, and the rest names the vehicle.
-	if in.Make == "" {
-		errs.Add("make", "Make is required")
-	}
-	if in.Model == "" {
-		errs.Add("model", "Model is required")
-	}
-	if in.Year == nil {
-		errs.Add("year", "Year is required")
-	} else if *in.Year < 1900 || *in.Year > 2100 {
+	if in.Year != nil && (*in.Year < 1900 || *in.Year > 2100) {
 		errs.Add("year", "Year must be between 1900 and 2100")
-	}
-	if in.VIN == "" {
-		errs.Add("vin", "VIN is required")
 	}
 	if !IsColor(in.Color) {
 		errs.Add("color", "Colour must look like #ff6600")
-	}
-	if in.Odometer == nil {
-		errs.Add("odometer", "Odometer is required")
 	}
 	if in.PurchasedOn == nil {
 		errs.Add("purchased_on", "Purchase date is required")
 	}
 	if in.OdometerAtPurchase == nil {
 		errs.Add("odometer_at_purchase", "Odometer at purchase is required")
-	}
-	if in.Odometer != nil && *in.Odometer < 0 {
-		errs.Add("odometer", "Odometer cannot be negative")
-	}
-	if in.Odometer != nil && *in.Odometer > MaxOdometer {
-		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
 	}
 	if in.PurchasedOn != nil {
 		if y := in.PurchasedOn.Year(); y < 1900 || y > 2100 {
@@ -338,13 +319,6 @@ func (in VehicleInput) Validate() Errors {
 			errs.Add("odometer_at_purchase", "Purchase odometer cannot be negative")
 		} else if *in.OdometerAtPurchase > MaxOdometer {
 			errs.Add("odometer_at_purchase", "That is more than "+FormatDistance(MaxOdometer))
-		}
-	}
-	if in.OdometerAtPurchase != nil && in.Odometer != nil && *in.Odometer < *in.OdometerAtPurchase {
-		if in.KeepOdometer {
-			errs.Add("odometer_at_purchase", "Purchase odometer cannot be higher than the current odometer")
-		} else {
-			errs.Add("odometer", "Current odometer cannot be lower than purchase odometer")
 		}
 	}
 	if in.HasWarranty && in.WarrantyEndsOn == nil {
@@ -371,6 +345,23 @@ func (in VehicleInput) Validate() Errors {
 	limitText(errs, maxShortText, "Plate", in.Plate)
 	limitText(errs, maxShortText, "VIN", in.VIN)
 	limitText(errs, maxLongText, "Notes", in.Notes)
+	return errs
+}
+
+// ValidateNew checks a new vehicle: Validate, and its current odometer,
+// which can't be below the purchase reading.
+func (in VehicleInput) ValidateNew() Errors {
+	errs := in.Validate()
+	switch {
+	case in.Odometer == nil:
+		errs.Add("odometer", "Odometer is required")
+	case *in.Odometer < 0:
+		errs.Add("odometer", "Odometer cannot be negative")
+	case *in.Odometer > MaxOdometer:
+		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
+	case in.OdometerAtPurchase != nil && *in.Odometer < *in.OdometerAtPurchase:
+		errs.Add("odometer", "Current odometer cannot be lower than purchase odometer")
+	}
 	return errs
 }
 

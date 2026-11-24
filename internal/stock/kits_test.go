@@ -29,7 +29,7 @@ func TestKitReadiness(t *testing.T) {
 func TestKitDue(t *testing.T) {
 	today := time.Date(2026, 10, 29, 15, 0, 0, 0, time.UTC)
 	last := func(daysAgo, odo int) *ServiceRef {
-		return &ServiceRef{PerformedOn: today.AddDate(0, 0, -daysAgo), Odometer: &odo}
+		return &ServiceRef{PerformedOn: today.AddDate(0, 0, -daysAgo), Odometer: odo}
 	}
 	tests := []struct {
 		name       string
@@ -50,12 +50,6 @@ func TestKitDue(t *testing.T) {
 		{"short interval is not soon right after", Kit{IntervalDistance: ptr(300), LastService: last(1, 10000)}, ptr(10010), DueOK},
 		{"monthly is not soon right after", Kit{IntervalMonths: ptr(1), LastService: last(0, 0)}, nil, DueOK},
 		{"monthly is soon in its second half", Kit{IntervalMonths: ptr(1), LastService: last(20, 0)}, nil, DueSoon},
-		{"distance from an earlier reading when the last service has none",
-			Kit{IntervalDistance: ptr(6000), LastService: &ServiceRef{PerformedOn: today}, LastOdometer: ptr(10000)}, ptr(16500), DueOverdue},
-		{"distance from the odometer when a service without a reading was logged",
-			Kit{IntervalDistance: ptr(6000), LastService: &ServiceRef{PerformedOn: today, OdometerAtLog: ptr(16000)}, LastOdometer: ptr(10000)}, ptr(16100), DueOK},
-		{"the service's own reading wins over the odometer at the time",
-			Kit{IntervalDistance: ptr(6000), LastService: &ServiceRef{PerformedOn: today, Odometer: ptr(15000), OdometerAtLog: ptr(16000)}}, ptr(20600), DueSoon},
 		{"new vehicle ok by distance",
 			Kit{IntervalDistance: ptr(6000), VehicleOdometerAtPurchase: ptr(0)}, ptr(1000), DueOK},
 		{"new vehicle soon by distance",
@@ -167,54 +161,6 @@ func TestFormatDistanceUnit(t *testing.T) {
 	}
 }
 
-// The day a service was logged is the app zone's: just after local
-// midnight is the next day, whatever the date is in UTC, and a DST change
-// doesn't stretch or shrink the week.
-func TestLoggedSoonAfter(t *testing.T) {
-	plus3 := time.FixedZone("UTC+3", 3*60*60)
-	plus2 := time.FixedZone("UTC+2", 2*60*60)
-	bucharest, err := time.LoadLocation("Europe/Bucharest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) } // as a date column reads
-	utc := func(m time.Month, d, h, min int) time.Time { return time.Date(2026, m, d, h, min, 0, 0, time.UTC) }
-	tests := []struct {
-		name        string
-		performedOn time.Time
-		loggedAt    time.Time
-		loc         *time.Location
-		want        bool
-	}{
-		{"UTC+3, 7 days by 00:30 local", day(10, 25), utc(10, 31, 21, 30), plus3, true},
-		{"UTC+3, 8 days by 00:30 local (7 in UTC)", day(10, 24), utc(10, 31, 21, 30), plus3, false},
-		{"UTC+3, 7 days at 23:59 local", day(10, 24), utc(10, 31, 20, 59), plus3, true},
-		{"UTC+3, given in the zone itself", day(10, 24), time.Date(2026, 11, 1, 0, 30, 0, 0, plus3), plus3, false},
-		{"UTC+2, 23:59:59 on day 7", day(11, 1), time.Date(2026, 11, 8, 21, 59, 59, 0, time.UTC), plus2, true},
-		{"UTC+2, midnight starting day 8", day(11, 1), utc(11, 8, 22, 0), plus2, false},
-		{"UTC, the same instants", day(10, 24), utc(10, 31, 21, 30), time.UTC, true},
-		{"logged the day it was done", day(10, 31), utc(10, 31, 21, 30), plus3, true},
-		{"dated tomorrow", day(11, 2), utc(10, 31, 21, 30), plus3, true},
-		// Spring forward on 29 March: the 23-hour day is in the week.
-		{"Bucharest, 23:59 on 29 Mar", day(3, 22), utc(3, 29, 20, 59), bucharest, true},
-		{"Bucharest, 00:10 on 30 Mar", day(3, 22), utc(3, 29, 21, 10), bucharest, false},
-		// Fall back on 25 October: 03:30 comes twice, and the day has 25 hours.
-		{"Bucharest, first 03:30 on 25 Oct", day(10, 18), utc(10, 25, 0, 30), bucharest, true},
-		{"Bucharest, second 03:30 on 25 Oct", day(10, 18), utc(10, 25, 1, 30), bucharest, true},
-		{"Bucharest, second 03:30, 8 days", day(10, 17), utc(10, 25, 1, 30), bucharest, false},
-		{"Bucharest, 23:59 on 25 Oct", day(10, 18), utc(10, 25, 21, 59), bucharest, true},
-		{"Bucharest, 00:00 on 26 Oct", day(10, 18), utc(10, 25, 22, 0), bucharest, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := LoggedSoonAfter(tt.loggedAt, tt.performedOn, tt.loc); got != tt.want {
-				t.Errorf("LoggedSoonAfter(%s, %s, %s) = %v, want %v", tt.loggedAt.Format(time.RFC3339),
-					tt.performedOn.Format(time.DateOnly), tt.loc, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSortKitLines(t *testing.T) {
 	lines := []KitLine{
 		{ItemID: 1, ItemName: "Oil filter", Unit: UnitPiece, Need: 1, Have: 0},    // short 1
@@ -300,7 +246,7 @@ func deref(p *int) any {
 func TestFullAndHalfService(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	svc := func(on time.Time, odo int, inter bool) *ServiceRef {
-		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: &odo, Tier: tierOf(inter)}
+		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: odo, Tier: tierOf(inter)}
 	}
 	firstFull := svc(d(2025, 1, 1), 0, false)
 	// kit is the bike bought new on 1 Jan 2024 and fully serviced on
@@ -310,11 +256,11 @@ func TestFullAndHalfService(t *testing.T) {
 		k := Kit{VehicleWarrantyEndsOn: &warrantyOn, IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true,
 			VehiclePurchasedOn: ptr(d(2024, 1, 1)), VehicleOdometerAtPurchase: ptr(0)}
 		for _, s := range append([]*ServiceRef{firstFull}, history...) {
-			k.LastService, k.LastOdometer = s, s.Odometer
+			k.LastService = s
 			if s.Intermediate() {
 				k.InterSinceFull = true
 			} else {
-				k.LastFullService, k.LastFullOdometer, k.InterSinceFull = s, s.Odometer, false
+				k.LastFullService, k.InterSinceFull = s, false
 			}
 		}
 		return k
@@ -405,8 +351,8 @@ func TestBreakIn(t *testing.T) {
 	// Logged (at 960 km): no schedule counts from it. The half one next,
 	// from the purchase (4 000 km, a year on); the full one at 8 000 km or
 	// 4 Apr 2026, not 8 960.
-	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: ptr(960), Tier: TierBreakIn}
-	k.LastService, k.LastOdometer, k.FirstServiceID = breakIn, ptr(960), breakIn.ID
+	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: 960, Tier: TierBreakIn}
+	k.LastService, k.FirstServiceID = breakIn, breakIn.ID
 	if k.NextIsBreakIn() {
 		t.Error("after the break-in: want it no longer next")
 	}

@@ -26,7 +26,7 @@ func TestUndoForAnArchivedVehicle(t *testing.T) {
 	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Chain"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-20"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
@@ -58,7 +58,7 @@ func TestUndoForAnArchivedVehicle(t *testing.T) {
 	}
 	a.ledger(t)
 	// Still no new work: neither a new service nor a new kit.
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"x"}, "performed_on": {"2026-10-29"}}),
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"x"}, "performed_on": {"2026-10-29"}}),
 		http.StatusUnprocessableEntity, "is archived")
 }
 
@@ -77,42 +77,6 @@ func TestServicesPageOfAnArchivedVehicle(t *testing.T) {
 	expectNot(t, rec, `href="/kits/new`, `href="/services/new?`, "Overdue")
 	// The archived vehicles list shows its next kit without a reminder too.
 	expectNot(t, a.get("/vehicles?archived=1"), "Overdue")
-}
-
-// Adding a reading to a service logged without one, then removing it
-// again, leaves the distance reminder counting from the odometer when it was
-// logged, as before.
-func TestAServiceKeepsItsOdometerAtLog(t *testing.T) {
-	a := newApp(t)
-	k390, _ := a.seed() // at 10,000 km
-	// Logged without a reading, as before readings were required: with the
-	// kit's distance set afterwards.
-	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}})
-	expect(t, rec, http.StatusSeeOther)
-	kit := rec.Header().Get("Location")
-	fields := url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {itoa(mustID(t, kit))}, "title": {"Oil service"}, "performed_on": {"2026-10-29"}}
-	rec = a.post("/services", fields)
-	expect(t, rec, http.StatusSeeOther)
-	svc := rec.Header().Get("Location")
-	if _, err := a.pool.Exec(context.Background(), `UPDATE service_kits SET interval_distance = 5000`); err != nil {
-		t.Fatal(err)
-	}
-	// Logged on the day it was done, as far as the reminder is concerned
-	// (the test clock is fixed, the database's isn't).
-	if _, err := a.pool.Exec(context.Background(), `UPDATE service_records SET created_at = '2026-10-29 12:00Z'`); err != nil {
-		t.Fatal(err)
-	}
-	due := "<dd>" + stock.FormatDistance(15000) + "</dd>"
-	expect(t, a.get(kit), http.StatusOK, due)
-
-	fields.Set("odometer", "10500")
-	expect(t, a.postV(svc, fields), http.StatusSeeOther)
-	expect(t, a.get(kit), http.StatusOK, "<dd>"+stock.FormatDistance(15500)+"</dd>")
-	fields.Del("odometer")
-	expect(t, a.postV(svc, fields), http.StatusSeeOther)
-	rec = a.get(kit)
-	expect(t, rec, http.StatusOK, due)
-	expectNot(t, rec, "Needs odometer")
 }
 
 // An adjustment is dated the day picked in its form, like a purchase or a use.

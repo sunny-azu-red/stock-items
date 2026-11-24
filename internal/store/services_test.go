@@ -264,7 +264,7 @@ func TestServicePartsAlwaysPointAtTheirService(t *testing.T) {
 	k390 := mustVehicle(t, s, "KTM 390")
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 4000})
 	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 2})
-	in := stock.ServiceInput{VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(),
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: k390, Title: "Oil change", PerformedOn: time.Now(),
 		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}}}
 	in.Normalize()
 	svc, err := s.CreateService(ctx, in)
@@ -373,7 +373,7 @@ func TestUpdateService(t *testing.T) {
 		t.Errorf("odometer = %d, want 12000", *v.Odometer)
 	}
 	svc, _ := s.GetService(ctx, id)
-	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || *svc.Odometer != 12000 {
+	if svc.VehicleID != k390 || *svc.LaborCost != 50 || len(svc.Parts) != 2 || svc.Odometer != 12000 {
 		t.Errorf("service = %+v", svc)
 	}
 
@@ -407,7 +407,7 @@ func TestServiceReportsEveryShortPart(t *testing.T) {
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 500})
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 1})
 	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 1})
-	in := stock.ServiceInput{VehicleID: k390, Title: "Service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: k390, Title: "Service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{
 		{ItemID: oil, Quantity: 1700}, {ItemID: filter, Quantity: 1}, {ItemID: pads, Quantity: 2}}}
 	in.Normalize()
 	_, err := s.CreateService(ctx, in)
@@ -434,7 +434,7 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := stock.ServiceInput{VehicleID: a, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now()}
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: a, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now()}
 	in.Normalize()
 	id, err := s.CreateService(ctx, in)
 	if err != nil {
@@ -450,123 +450,12 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 	}
 }
 
-// Services logged with a kit that counts its distance need a reading now;
-// ones logged before without one (made here by clearing it) still count.
-func TestKitCountsFromTheOdometerWhenAServiceHasNoReading(t *testing.T) {
-	pool := testdb.New(t)
-	s, ctx := store.New(pool), context.Background()
-	odo := 10000
-	vin := stock.VehicleInput{Name: "KTM 390", Odometer: &odo}
-	vin.Normalize()
-	v, _ := s.CreateVehicle(ctx, anchored(vin))
-	kin := stock.KitInput{VehicleID: v, Name: "Oil service", IntervalDistance: ptr(6000)}
-	kin.Normalize()
-	kit, err := s.CreateKit(ctx, kin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	logService := func(on time.Time, reading *int) int64 {
-		t.Helper()
-		in := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: on, Odometer: reading}
-		in.Normalize()
-		if reading != nil {
-			id, err := s.CreateService(ctx, in)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return id
-		}
-		// Without a reading: refused now, so logged at the vehicle's
-		// reading and cleared, as one logged before would be, the
-		// vehicle's reading kept as odometer_at_log.
-		var now int
-		if err := pool.QueryRow(ctx, `SELECT odometer FROM vehicles WHERE id = $1`, v).Scan(&now); err != nil {
-			t.Fatal(err)
-		}
-		var refused *store.ConflictError
-		if _, err := s.CreateService(ctx, in); !errors.As(err, &refused) || refused.Field != "odometer" {
-			t.Fatalf("a new service without a reading: %v, want it refused at the odometer", err)
-		}
-		in.Odometer = &now
-		id, err := s.CreateService(ctx, in)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer = NULL, odometer_at_log = $2 WHERE id = $1`, id, now); err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	logService(time.Now().AddDate(0, -5, 0), ptr(10000))
-	if err := s.SetOdometer(ctx, v, 16000); err != nil {
-		t.Fatal(err)
-	}
-	svc := logService(time.Now(), nil)
-	k, err := s.GetKit(ctx, kit)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k.LastService == nil || k.LastService.OdometerAtLog == nil || *k.LastService.OdometerAtLog != 16000 {
-		t.Fatalf("last service = %+v", k.LastService)
-	}
-	if d := k.Due(ptr(16100), time.Now()); d.State != stock.DueOK || *d.DueOdometer != 22000 {
-		t.Errorf("due = %+v, want ok at 22 000 km", d)
-	}
-
-	// One logged long after it was done says nothing about where it was
-	// done: the distance counts from the last reading again.
-	back := logService(time.Now().AddDate(0, 0, 1).AddDate(0, -1, 0), nil)
-	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service",
-		PerformedOn: time.Now().AddDate(0, -2, 0)})); err != nil {
-		t.Fatal(err)
-	}
-	if k, _ = s.GetKit(ctx, kit); k.LastService.ID != back || k.LastService.OdometerAtLog != nil {
-		t.Errorf("backdated: last service = %+v, want %d without a reading at log", k.LastService, back)
-	}
-	if _, err := s.DeleteService(ctx, back, cur(t, s, store.WhatService, back)); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()})); err != nil {
-		t.Fatal(err)
-	}
-
-	// Editing the service later keeps the reading it was logged at, and a
-	// reading entered on it wins.
-	if err := s.SetOdometer(ctx, v, 17000); err != nil {
-		t.Fatal(err)
-	}
-	edit := stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service, filter too", PerformedOn: time.Now()}
-	edit.Normalize()
-	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
-		t.Fatal(err)
-	}
-	if k, _ = s.GetKit(ctx, kit); *k.LastService.OdometerAtLog != 16000 {
-		t.Errorf("after edit: at log = %d, want 16000", *k.LastService.OdometerAtLog)
-	}
-	edit.Odometer = ptr(16500)
-	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
-		t.Fatal(err)
-	}
-	if k, _ = s.GetKit(ctx, kit); *k.LastService.Odometer != 16500 || k.Due(ptr(17000), time.Now()).DueOdometer == nil ||
-		*k.Due(ptr(17000), time.Now()).DueOdometer != 16500+6000 {
-		t.Errorf("with a reading: %+v, due %+v", k.LastService, k.Due(ptr(17000), time.Now()))
-	}
-	// Removing the reading again counts from the odometer at log once more.
-	edit.Odometer = nil
-	if err := s.UpdateService(ctx, svc, serviceV(t, s, svc, edit)); err != nil {
-		t.Fatal(err)
-	}
-	if k, _ = s.GetKit(ctx, kit); k.LastService.OdometerAtLog == nil || *k.LastService.OdometerAtLog != 16000 {
-		t.Errorf("reading removed: %+v, want at log 16000", k.LastService)
-	}
-}
-
 // Deleting a service gives its parts back, but not past the maximum.
 func TestDeletedServiceRespectsTheMaximum(t *testing.T) {
 	s, ctx := newStore(t)
 	v := mustVehicle(t, s, "KTM 390")
 	bolt := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5})
-	in := stock.ServiceInput{VehicleID: v, Title: "Bolts", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: bolt, Quantity: 5}}}
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Bolts", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: bolt, Quantity: 5}}}
 	in.Normalize()
 	svc, err := s.CreateService(ctx, in)
 	if err != nil {
@@ -618,7 +507,7 @@ func TestKitNamesAndServiceTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svcIn := stock.ServiceInput{VehicleID: v, Title: "Brembo rebuild", PerformedOn: time.Now()}
+	svcIn := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Brembo rebuild", PerformedOn: time.Now()}
 	svcIn.Normalize()
 	if _, err := s.CreateService(ctx, svcIn); err != nil {
 		t.Fatal(err)
@@ -735,8 +624,8 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 	if kit.LastService == nil || kit.LastService.ID != interID || !kit.LastService.Intermediate() {
 		t.Fatalf("LastService = %+v", kit.LastService)
 	}
-	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || *kit.LastFullOdometer != 10000 {
-		t.Fatalf("LastFullService = %+v, odometer = %v", kit.LastFullService, kit.LastFullOdometer)
+	if kit.LastFullService == nil || kit.LastFullService.ID != fullID || kit.LastFullService.Odometer != 10000 {
+		t.Fatalf("LastFullService = %+v", kit.LastFullService)
 	}
 	if !kit.InterSinceFull {
 		t.Error("InterSinceFull = false, want true")

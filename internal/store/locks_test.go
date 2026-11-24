@@ -275,7 +275,7 @@ func TestArchivingAKitWaitsForAServiceLoggedWithIt(t *testing.T) {
 	var c calls
 	var logged, archived error
 	c.run(func() {
-		_, logged = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now(),
+		_, logged = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now(),
 			Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 100}}})
 	})
 	xids := waitBlocked(t, pool, 1, []string{h.xid}, "items")
@@ -311,7 +311,7 @@ func TestMovingAKitAndLoggingAServiceWithItTakeTurns(t *testing.T) {
 	var c calls
 	var logged, moved error
 	c.run(func() {
-		_, logged = s.CreateService(ctx, stock.ServiceInput{VehicleID: to, KitID: &kit, Title: "Chain", PerformedOn: time.Now()})
+		_, logged = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: to, KitID: &kit, Title: "Chain", PerformedOn: time.Now()})
 	})
 	xids := waitBlocked(t, pool, 1, []string{h.xid}, "vehicles")
 	c.run(func() { moved = s.UpdateKit(ctx, kit, move) })
@@ -658,7 +658,7 @@ func TestRestoringWhileWhatItBelongsToIsDeleted(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()})
+			svc, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now()})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -713,7 +713,7 @@ func TestRestoringAndLoggingServicesTakeTurns(t *testing.T) {
 	oil := mustItem(t, s, stock.ItemInput{Name: "Oil", Unit: stock.UnitML, Quantity: 1000})
 	ring := mustItem(t, s, stock.ItemInput{Name: "Ring", Unit: stock.UnitPiece, Quantity: 2})
 	parts := []stock.KitLineInput{{ItemID: ring, Quantity: 1}, {ItemID: oil, Quantity: 400}}
-	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Oil service", PerformedOn: time.Now(), Parts: parts})
+	svc, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Oil service", PerformedOn: time.Now(), Parts: parts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +728,7 @@ func TestRestoringAndLoggingServicesTakeTurns(t *testing.T) {
 	c.run(func() { _, restored = s.RestoreTrash(ctx, trashID) })
 	xids := waitBlocked(t, pool, 1, []string{h.xid}, "vehicles")
 	c.run(func() {
-		_, logged = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "Top up", PerformedOn: time.Now(),
+		_, logged = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Top up", PerformedOn: time.Now(),
 			Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 400}, {ItemID: ring, Quantity: 1}}})
 	})
 	waitBlocked(t, pool, 2, xids, "vehicles")

@@ -137,7 +137,7 @@ func TestWorkingOnPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	ring := itemID(t, a.store, "Oil Filter O-Ring")
-	big := stock.ServiceInput{VehicleID: k1290, Title: "Big service", PerformedOn: stock.DateOnly(time.Now()),
+	big := stock.ServiceInput{Odometer: ptr(10000), VehicleID: k1290, Title: "Big service", PerformedOn: stock.DateOnly(time.Now()),
 		Parts: []stock.KitLineInput{{ItemID: ring, Quantity: 1, Unit: stock.UnitPiece}}}
 	big.Normalize()
 	if _, err := a.store.CreateService(ctx, big); err != nil {
@@ -419,14 +419,14 @@ func TestWorkingOnPages(t *testing.T) {
 		// The Vehicle field comes back with the other vehicle chosen and the
 		// error under it, so it can be changed; the form key is kept.
 		key := newFormKey()
-		form := url.Values{"vehicle_id": {k}, "title": {"Tyre swap"}, "performed_on": {"2026-10-29"}, "form_key": {key}}
+		form := url.Values{"odometer": {"10000"}, "vehicle_id": {k}, "title": {"Tyre swap"}, "performed_on": {"2026-10-29"}, "form_key": {key}}
 		rec := a.postWorking("/services", form, w)
 		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to log this service",
 			`value="Tyre swap"`, `id="vehicle_id"`, `value="`+key+`"`)
 		if !vehicleChecked(rec.Body.String(), k1290) {
 			t.Error("the refused form doesn't keep the other vehicle chosen")
 		}
-		rec = a.postWorking("/services", url.Values{"vehicle_id": {k}, "kit_id": {itoa(kit)}, "kit_name": {"Big kit"}, "title": {"Big kit"}, "performed_on": {"2026-10-29"}}, w)
+		rec = a.postWorking("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {k}, "kit_id": {itoa(kit)}, "kit_name": {"Big kit"}, "title": {"Big kit"}, "performed_on": {"2026-10-29"}}, w)
 		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: work on KTM 1290 first to log this service")
 		rec = a.postWorking("/kits", url.Values{"vehicle_id": {k}, "name": {"Tyre kit"}}, w)
 		expect(t, rec, http.StatusUnprocessableEntity, "You&#39;re working on KTM 390: choose it, or work on KTM 1290 first to add this kit", `value="Tyre kit"`)

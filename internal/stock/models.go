@@ -477,15 +477,9 @@ type Kit struct {
 	Lines       []KitLine
 	InterLines  []KitLine
 	LastService *ServiceRef
-	// LastOdometer is the reading of the latest service with this kit
-	// that has one; distance reminders count from it when the last service was
-	// logged without a reading.
-	LastOdometer *int
 	// LastFullService is the latest full service performed with this kit
-	// (never an intermediate one or the break-in), and LastFullOdometer the
-	// latest reading at or before it.
-	LastFullService  *ServiceRef
-	LastFullOdometer *int
+	// (never an intermediate one or the break-in).
+	LastFullService *ServiceRef
 	// InterSinceFull says an intermediate service was done after the last
 	// full one (or before the first): the full one is next.
 	InterSinceFull bool
@@ -520,11 +514,8 @@ func (k Kit) VehicleChip() Vehicle {
 type ServiceRef struct {
 	ID          int64
 	PerformedOn time.Time
-	Odometer    *int
-	// OdometerAtLog is the vehicle's reading when a service without its
-	// own reading was logged, if that was within a week of doing it.
-	OdometerAtLog *int
-	Tier          KitTier
+	Odometer    int
+	Tier        KitTier
 }
 
 // Intermediate reports whether it was an intermediate service.
@@ -588,7 +579,7 @@ type ServiceRecord struct {
 	KitName      string
 	KitTier      KitTier // with a kit; TierFull without one
 	PerformedOn  time.Time
-	Odometer     *int
+	Odometer     int
 	Title        string
 	LaborCost    *float64
 	Notes        string

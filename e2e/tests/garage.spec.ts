@@ -2613,6 +2613,10 @@ test("a save that seems stuck can be tried again, and saves once", async ({ page
   await form.waitForLoadState();
   await form.locator("#vehicle_id label.chip-toggle").filter({ hasText: exact("KTM 390") }).click();
   await form.getByLabel("Work performed").fill("Chain clean (retried)");
+  // At the vehicle's last reading, which the box shows as its placeholder.
+  const odometer = form.getByLabel("Odometer (km)");
+  await expect(odometer).toHaveAttribute("placeholder", /^Last reading \d/);
+  await odometer.fill(((await odometer.getAttribute("placeholder")) ?? "").replace(/\D/g, ""));
 
   // The first save is held on its way to the server. Once let go it is
   // saved, and only then does the retry arrive, as after a slow network.

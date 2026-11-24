@@ -94,7 +94,7 @@ func TestEditAndDeleteMovement(t *testing.T) {
 	edit := "/movements/" + itoa(purchases[0].ID)
 
 	// Service parts have no edit link, other rows do.
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, rec, http.StatusSeeOther)
 	services, _ := a.store.ListMovements(ctx, store.MovementFilter{ItemID: oil, Kind: stock.MoveService})

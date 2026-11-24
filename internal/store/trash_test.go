@@ -25,7 +25,7 @@ func TestRestoredServiceDropsItsPurgedKit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now(),
+	svc, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &kit, Title: "Oil service", PerformedOn: time.Now(),
 		Parts: []stock.KitLineInput{{ItemID: oil, Quantity: 100}}})
 	if err != nil {
 		t.Fatal(err)
@@ -573,7 +573,7 @@ func TestTrashRestoreOrderLosesNothing(t *testing.T) {
 	// A service, then its kit: the service waits for its kit.
 	kit.VehicleID, kit.Lines = v, nil
 	kitID, _ = s.CreateKit(ctx, kit)
-	in := stock.ServiceInput{VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(),
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &kitID, Title: "Oil service", PerformedOn: time.Now(),
 		Parts: []stock.KitLineInput{{ItemID: ring, Quantity: 1}}}
 	in.Normalize()
 	svc, err := s.CreateService(ctx, in)

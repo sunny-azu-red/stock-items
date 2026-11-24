@@ -64,7 +64,7 @@ func TestVehicleScopeSaysTheVehicleOnce(t *testing.T) {
 	if _, err := a.store.CreateKit(ctx, other); err != nil {
 		t.Fatal(err)
 	}
-	sin := stock.ServiceInput{VehicleID: k390, Title: "Chain clean", PerformedOn: stock.DateOnly(time.Now())}
+	sin := stock.ServiceInput{Odometer: ptr(10000), VehicleID: k390, Title: "Chain clean", PerformedOn: stock.DateOnly(time.Now())}
 	sin.Normalize()
 	if _, err := a.store.CreateService(ctx, sin); err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestSoleVehicleIsTheScope(t *testing.T) {
 	if _, err := a.store.CreateKit(ctx, kin); err != nil {
 		t.Fatal(err)
 	}
-	sin := stock.ServiceInput{VehicleID: k390, Title: "Chain clean", PerformedOn: stock.DateOnly(time.Now())}
+	sin := stock.ServiceInput{Odometer: ptr(10000), VehicleID: k390, Title: "Chain clean", PerformedOn: stock.DateOnly(time.Now())}
 	sin.Normalize()
 	if _, err := a.store.CreateService(ctx, sin); err != nil {
 		t.Fatal(err)

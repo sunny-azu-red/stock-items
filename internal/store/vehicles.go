@@ -154,7 +154,7 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo
 	var on time.Time
 	err := tx.QueryRow(ctx, `
 		SELECT odometer, performed_on FROM service_records
-		WHERE vehicle_id = $1 AND odometer IS NOT NULL ORDER BY odometer DESC LIMIT 1`, id).Scan(&top, &on)
+		WHERE vehicle_id = $1 ORDER BY odometer DESC LIMIT 1`, id).Scan(&top, &on)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -174,7 +174,7 @@ func checkVehicleOdometerAtPurchase(ctx context.Context, tx pgx.Tx, id int64, od
 	var on time.Time
 	err := tx.QueryRow(ctx, `
 		SELECT odometer, performed_on FROM service_records
-		WHERE vehicle_id = $1 AND odometer IS NOT NULL
+		WHERE vehicle_id = $1
 		ORDER BY odometer ASC LIMIT 1`, id).Scan(&lowestOdo, &on)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -225,9 +225,6 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 	if purchasedOn != nil && day.Before(stock.DateOnly(*purchasedOn)) {
 		return &ConflictError{Field: "performed_on", Message: fmt.Sprintf(
 			"Earlier than %s, when the vehicle was purchased", purchasedOn.Format("2 Jan 2006"))}
-	}
-	if in.Odometer == nil {
-		return nil
 	}
 	odo := *in.Odometer
 	if purchasedOdo != nil && odo < *purchasedOdo {

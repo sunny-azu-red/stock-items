@@ -261,6 +261,9 @@ func TestKitAndServiceMergeDuplicateLines(t *testing.T) {
 	if _, ok := errs["performed_on"]; !ok {
 		t.Errorf("date required, got %v", errs)
 	}
+	if errs["odometer"] != "Odometer is required" {
+		t.Errorf("reading required, got %v", errs)
+	}
 }
 
 func TestServiceLaborCostNormalize(t *testing.T) {

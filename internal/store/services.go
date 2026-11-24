@@ -130,10 +130,8 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		}
 		in.Title = title
 		err = tx.QueryRow(ctx, `
-			INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, odometer_at_log, title, labor_cost, notes)
-			VALUES ($1, $2, $3, $4, $5,
-			        CASE WHEN $5::integer IS NULL THEN (SELECT odometer FROM vehicles WHERE id = $1) END,
-			        $6, $7, $8)
+			INSERT INTO service_records (vehicle_id, kit_id, kit_tier, performed_on, odometer, title, labor_cost, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING id`,
 			in.VehicleID, in.KitID, in.KitTier, in.PerformedOn, in.Odometer, in.Title, in.LaborCost, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
@@ -145,7 +143,7 @@ func (s *Store) CreateService(ctx context.Context, in stock.ServiceInput) (int64
 		if err := takeServiceParts(ctx, tx, id, in); err != nil {
 			return err
 		}
-		return moveOdometer(ctx, tx, id, in.VehicleID, in.Odometer)
+		return moveOdometer(ctx, tx, id, in.VehicleID, *in.Odometer)
 	})
 	return id, err
 }
@@ -221,8 +219,6 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		}
 		// A new version (its parts count as part of the service, and get new
 		// movement ids): a form opened before this save is stale now.
-		// odometer_at_log stays as it was logged: a reading added now wins
-		// over it, and removing that reading again falls back to it.
 		if in.Title, err = spell(ctx, tx, serviceTitleSpellings, id, titleWas, in.Title); err != nil {
 			return err
 		}
@@ -243,7 +239,7 @@ func (s *Store) UpdateService(ctx context.Context, id int64, in stock.ServiceInp
 		if err := refuseOverMax(ctx, tx, ids); err != nil {
 			return err
 		}
-		return moveOdometer(ctx, tx, id, in.VehicleID, in.Odometer)
+		return moveOdometer(ctx, tx, id, in.VehicleID, *in.Odometer)
 	})
 }
 
@@ -290,9 +286,7 @@ func serviceTier(in stock.ServiceInput) stock.KitTier {
 // vehicle (none earlier by date, reading and id, the order ListKits keeps)
 // and its only break-in there (serviceID is the service being saved, 0 for a new one; a partial
 // unique index keeps it to one too). A tier it keeps stays, so an old
-// service saves unchanged. A new service needs a reading when the kit
-// counts its distance (one logged before that was required stays editable
-// without; Kit.Due falls back).
+// service saves unchanged.
 func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64, tierWas stock.KitTier) error {
 	if in.KitID == nil {
 		return nil
@@ -303,16 +297,16 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	if idKey == 0 {
 		idKey = math.MaxInt64
 	}
-	var intermediate, breakIn, countsDistance, otherBreakIn, earlier bool
+	var intermediate, breakIn, otherBreakIn, earlier bool
 	err := tx.QueryRow(ctx, `
-		SELECT intermediate, break_in_at IS NOT NULL, interval_distance IS NOT NULL,
+		SELECT intermediate, break_in_at IS NOT NULL,
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND kit_tier = 'break_in' AND id <> $2),
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND id <> $2
-		                 AND (performed_on, COALESCE(odometer, -1), id) < ($4::date, COALESCE($5::integer, -1), $6::bigint))
+		                 AND (performed_on, odometer, id) < ($4::date, $5::integer, $6::bigint))
 		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID, in.PerformedOn, in.Odometer, idKey).
-		Scan(&intermediate, &breakIn, &countsDistance, &otherBreakIn, &earlier)
+		Scan(&intermediate, &breakIn, &otherBreakIn, &earlier)
 	if err != nil {
 		return notFound(err)
 	}
@@ -326,8 +320,6 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		return &ConflictError{Field: "kit_tier", Message: "This kit has an earlier service: only its first is the break-in"}
 	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:
 		return &ConflictError{Field: "kit_tier", Message: "This kit has a break-in already"}
-	case serviceID == 0 && countsDistance && in.Odometer == nil:
-		return &ConflictError{Field: "odometer", Message: "Enter the reading: this kit counts its distance from it"}
 	}
 	return nil
 }
@@ -491,29 +483,27 @@ func refuseOverMax(ctx context.Context, tx pgx.Tx, ids []int64) error {
 }
 
 // moveOdometer moves the vehicle's odometer forward to a service's
-// reading and records on the service whether it did, and from what.
-func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, reading *int) error {
-	var current *int
-	if reading != nil {
-		// NO KEY UPDATE: inserting the service already holds a KEY SHARE lock
-		// on the vehicle (the foreign key), which FOR UPDATE would conflict
-		// with, deadlocking two services logged at once.
-		err := tx.QueryRow(ctx, `SELECT odometer FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, vehicleID).Scan(&current)
-		if err != nil {
-			return notFound(err)
-		}
+// reading and records on the service the reading it moved from
+// (odometer_before; NULL when it didn't move it).
+func moveOdometer(ctx context.Context, tx pgx.Tx, serviceID, vehicleID int64, reading int) error {
+	// NO KEY UPDATE: inserting the service already holds a KEY SHARE lock
+	// on the vehicle (the foreign key), which FOR UPDATE would conflict
+	// with, deadlocking two services logged at once.
+	var current int
+	err := tx.QueryRow(ctx, `SELECT odometer FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, vehicleID).Scan(&current)
+	if err != nil {
+		return notFound(err)
 	}
-	moved := reading != nil && (current == nil || *current < *reading)
-	if moved {
-		// No new version for the vehicle: its edit form guards the reading
-		// with odometer_was, so logging a service leaves an open form good.
-		if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer = $2, updated_at = now() WHERE id = $1`, vehicleID, *reading); err != nil {
+	var before *int
+	if current < reading {
+		// No new version for the vehicle (as SetOdometer): logging a
+		// service leaves its open edit form good.
+		if _, err := tx.Exec(ctx, `UPDATE vehicles SET odometer = $2, updated_at = now() WHERE id = $1`, vehicleID, reading); err != nil {
 			return err
 		}
-	} else {
-		current = nil
+		before = &current
 	}
-	_, err := tx.Exec(ctx, `UPDATE service_records SET odometer_before = $2, odometer_moved = $3 WHERE id = $1`, serviceID, current, moved)
+	_, err = tx.Exec(ctx, `UPDATE service_records SET odometer_before = $2 WHERE id = $1`, serviceID, before)
 	return err
 }
 
@@ -529,7 +519,7 @@ func restoreOdometer(ctx context.Context, tx pgx.Tx, serviceID int64) error {
 		     LATERAL (SELECT GREATEST(sr.odometer_before,
 		                              (SELECT max(o.odometer) FROM service_records o
 		                               WHERE o.vehicle_id = sr.vehicle_id AND o.id <> sr.id)) AS odo) back
-		WHERE sr.id = $1 AND v.id = sr.vehicle_id AND sr.odometer_moved
+		WHERE sr.id = $1 AND v.id = sr.vehicle_id AND sr.odometer_before IS NOT NULL
 		  AND v.odometer = sr.odometer
 		  AND GREATEST(back.odo, v.odometer_at_purchase) < sr.odometer`, serviceID)
 	return err

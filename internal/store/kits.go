@@ -30,37 +30,30 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.purchased_on, v.odometer_at_purchase,
 		       v.warranty_ends_on, v.warranty_ends_at,
 		       k.name, k.interval_distance, k.interval_months, k.intermediate, k.break_in_at, k.notes,
-		       ls.id, ls.performed_on, ls.odometer, ls.odometer_at_log, ls.created_at, ls.kit_tier,
-		       (SELECT sr.odometer FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
-		        ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1),
-		       lf.id, lf.performed_on, lf.odometer, lf.odometer_at_log, lf.created_at,
-		       (SELECT sr.odometer FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.odometer IS NOT NULL
-		          AND (sr.performed_on < lf.performed_on OR (sr.performed_on = lf.performed_on AND sr.id <= lf.id))
-		        ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1),
+		       ls.id, ls.performed_on, ls.odometer, ls.kit_tier,
+		       lf.id, lf.performed_on, lf.odometer,
 		       -- An intermediate service after the last full one, in the
-		       -- order above (a missing reading counts as the lowest).
+		       -- order below.
 		       EXISTS (SELECT 1 FROM service_records sr
 		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'intermediate'
-		          AND (lf.id IS NULL OR (sr.performed_on, COALESCE(sr.odometer, -1), sr.id) > (lf.performed_on, COALESCE(lf.odometer, -1), lf.id))),
+		          AND (lf.id IS NULL OR (sr.performed_on, sr.odometer, sr.id) > (lf.performed_on, lf.odometer, lf.id))),
 		       -- The earliest service, in the same order.
 		       COALESCE((SELECT sr.id FROM service_records sr WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id
-		                 ORDER BY sr.performed_on, COALESCE(sr.odometer, -1), sr.id LIMIT 1), 0),
+		                 ORDER BY sr.performed_on, sr.odometer, sr.id LIMIT 1), 0),
 		       k.archived_at
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer, sr.odometer_at_log, sr.created_at, sr.kit_tier
+			SELECT sr.id, sr.performed_on, sr.odometer, sr.kit_tier
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id -- a kit can be moved to another vehicle
-			ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1
+			ORDER BY sr.performed_on DESC, sr.odometer DESC, sr.id DESC LIMIT 1
 		) ls ON true
 		LEFT JOIN LATERAL (
-			SELECT sr.id, sr.performed_on, sr.odometer, sr.odometer_at_log, sr.created_at
+			SELECT sr.id, sr.performed_on, sr.odometer
 			FROM service_records sr
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'full' -- never a break-in
-			ORDER BY sr.performed_on DESC, sr.odometer DESC NULLS LAST, sr.id DESC LIMIT 1
+			ORDER BY sr.performed_on DESC, sr.odometer DESC, sr.id DESC LIMIT 1
 		) lf ON true
 		WHERE true`
 	if len(f.IDs) > 0 {
@@ -86,35 +79,23 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	kits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Kit, error) {
 		var k stock.Kit
 		var lsID, lfID *int64
-		var lsDate, lsLogged, lfDate, lfLogged *time.Time
+		var lsDate, lfDate *time.Time
+		var lsOdo, lfOdo *int
 		var lsTier *stock.KitTier
-		var ls, lf stock.ServiceRef
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
 			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.Notes,
-			&lsID, &lsDate, &ls.Odometer, &ls.OdometerAtLog, &lsLogged, &lsTier, &k.LastOdometer,
-			&lfID, &lfDate, &lf.Odometer, &lf.OdometerAtLog, &lfLogged, &k.LastFullOdometer,
+			&lsID, &lsDate, &lsOdo, &lsTier,
+			&lfID, &lfDate, &lfOdo,
 			&k.InterSinceFull, &k.FirstServiceID, &k.ArchivedAt)
-		if lsID != nil && lsDate != nil {
-			ls.ID, ls.PerformedOn = *lsID, *lsDate
-			if lsTier != nil {
-				ls.Tier = *lsTier
-			}
-			// The reading when it was logged says where the service was
-			// done only if it was logged within a week of being done, the
-			// day it was logged counted in the app's zone (time.Local).
-			if lsLogged == nil || !stock.LoggedSoonAfter(*lsLogged, *lsDate, time.Local) {
-				ls.OdometerAtLog = nil
-			}
-			k.LastService = &ls
+		if err != nil {
+			return k, err
 		}
-		if lfID != nil && lfDate != nil {
-			lf.ID, lf.PerformedOn = *lfID, *lfDate
-			if lfLogged == nil || !stock.LoggedSoonAfter(*lfLogged, *lfDate, time.Local) {
-				lf.OdometerAtLog = nil
-			}
-			lf.Tier = stock.TierFull
-			k.LastFullService = &lf
+		if lsID != nil {
+			k.LastService = &stock.ServiceRef{ID: *lsID, PerformedOn: *lsDate, Odometer: *lsOdo, Tier: *lsTier}
+		}
+		if lfID != nil {
+			k.LastFullService = &stock.ServiceRef{ID: *lfID, PerformedOn: *lfDate, Odometer: *lfOdo, Tier: stock.TierFull}
 		}
 		return k, err
 	})

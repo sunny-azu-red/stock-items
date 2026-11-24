@@ -146,7 +146,7 @@ func TestConcurrentSavesWithOneKeyMakeOneRecord(t *testing.T) {
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
 	key := formKey(t, a, "/services/new?vehicle="+itoa(k390), "/services")
-	form := with(url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
+	form := with(url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"100"}}, key, "")
 
 	// Hold the vehicle, which logging a service locks after claiming the key.
@@ -306,11 +306,11 @@ func TestRepeatAfterTheSaveChangesNothing(t *testing.T) {
 		{
 			name: "service", page: "/services/new", action: "/services",
 			fields: func(a *testApp) url.Values {
-				return url.Values{"vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
+				return url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
 					"part_item": {itoa(itemID(a.t, a.store, "Silkolene"))}, "part_qty": {"500"}}
 			},
 			changed: func(a *testApp) url.Values {
-				return url.Values{"vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Oil change!"}, "performed_on": {"2026-10-29"},
+				return url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Oil change!"}, "performed_on": {"2026-10-29"},
 					"part_item": {itoa(itemID(a.t, a.store, "Silkolene"))}, "part_qty": {"20"}}
 			},
 			to: func(a *testApp) string {
@@ -505,7 +505,7 @@ func TestRepeatAfterAFailedSaveSaves(t *testing.T) {
 		k390, _ := a.seed()
 		oil := itemID(t, a.store, "Silkolene")
 		key := formKey(t, a, "/services/new", "/services")
-		fields := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
+		fields := url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
 			"part_item": {itoa(oil)}, "part_qty": {"2"}, "part_unit": {"l"}}
 		rec := a.post("/services", with(fields, key, ""))
 		expect(t, rec, http.StatusUnprocessableEntity, "1 part is missing from stock")
@@ -606,7 +606,7 @@ func TestRepeatsAfterUndo(t *testing.T) {
 		k390, _ := a.seed()
 		oil := itemID(t, a.store, "Silkolene")
 		key := formKey(t, a, "/services/new", "/services")
-		form := with(url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
+		form := with(url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil change"}, "performed_on": {"2026-10-29"},
 			"part_item": {itoa(oil)}, "part_qty": {"500"}}, key, "")
 		rec := a.post("/services", form)
 		expect(t, rec, http.StatusSeeOther)

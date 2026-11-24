@@ -48,36 +48,15 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 	})
 
 	t.Run("a service logged now is logged on the local day", func(t *testing.T) {
-		// A service logged without a reading, as before readings were
-		// required: with the kit's distance set afterwards.
-		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}})
-		expect(t, rec, http.StatusSeeOther)
-		kit := rec.Header().Get("Location")
-		// Done a week ago, by the local day: the reading when it was logged
-		// still says where it was done.
-		fields := url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {itoa(mustID(t, kit))}, "title": {"Oil service"}, "performed_on": {"2026-10-25"}}
-		rec = a.post("/services", fields)
+		rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-25"}})
 		expect(t, rec, http.StatusSeeOther)
 		svc := rec.Header().Get("Location")
-		if _, err := a.pool.Exec(ctx, `UPDATE service_kits SET interval_distance = 5000`); err != nil {
-			t.Fatal(err)
-		}
 		// Logged now (the database's clock isn't the test's).
 		if _, err := a.pool.Exec(ctx, `UPDATE service_records SET created_at = $1`, now); err != nil {
 			t.Fatal(err)
 		}
-		due := "<dd>" + stock.FormatDistance(15000) + "</dd>"
-		expect(t, a.get(kit), http.StatusOK, due)
 		// The date typed is the day kept, and it was logged today.
 		expect(t, a.get(svc), http.StatusOK, "25 Oct 2026", `<dd title="today">1 Nov 2026</dd>`) // not 31 Oct, the UTC day
-
-		// Done eight days ago by the local day (seven in UTC): the reading
-		// at log no longer counts.
-		fields.Set("performed_on", "2026-10-24")
-		expect(t, a.postV(svc, fields), http.StatusSeeOther)
-		rec = a.get(kit)
-		expect(t, rec, http.StatusOK, "Needs odometer")
-		expectNot(t, rec, due)
 	})
 
 	t.Run("expiring counts from the local day", func(t *testing.T) {

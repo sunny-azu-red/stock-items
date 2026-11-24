@@ -23,7 +23,7 @@ func TestDashboardSpentThisYear(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := a.store.CreateService(ctx, stock.ServiceInput{VehicleID: k390, Title: "Chain", PerformedOn: day(2026, 3, 1), LaborCost: ptr(30.0)}); err != nil {
+	if _, err := a.store.CreateService(ctx, stock.ServiceInput{Odometer: ptr(10000), VehicleID: k390, Title: "Chain", PerformedOn: day(2026, 3, 1), LaborCost: ptr(30.0)}); err != nil {
 		t.Fatal(err)
 	}
 

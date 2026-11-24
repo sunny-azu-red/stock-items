@@ -92,12 +92,9 @@ type serviceFormPage struct {
 	ServiceTitles []string
 	// KitTiers: the tiers of its kit the service can be, when there is a
 	// choice (more than Full).
-	KitTiers []tierOption
-	// ReadingRequired: a new service with a kit that counts its distance
-	// needs a reading (store.checkKitTier).
-	ReadingRequired bool
-	KitFullParts    []lineRow
-	KitInterParts   []lineRow
+	KitTiers      []tierOption
+	KitFullParts  []lineRow
+	KitInterParts []lineRow
 	// Kits: for a new service without a kit, the active kits to start
 	// from instead, most urgent first; the form shows the chosen vehicle's.
 	Kits []kitView
@@ -165,7 +162,6 @@ func (s *Server) renderServiceForm(w http.ResponseWriter, r *http.Request, statu
 			if tiers := kitTiers(k, f); len(tiers) > 1 {
 				p.KitTiers = tiers
 			}
-			p.ReadingRequired = f.ID == 0 && k.IntervalDistance != nil
 			if f.ID == 0 && len(p.KitTiers) > 1 {
 				p.KitFullParts = kitPartRows(k.Lines)
 				describeRows(p.KitFullParts, items, true)
@@ -259,10 +255,8 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 	}
 	if f.VehicleID != 0 {
 		// The odometer starts empty: a reading copied from the vehicle would
-		// be saved as if typed, also for a service done weeks ago. Left
-		// empty, the vehicle's reading at logging counts only when the
-		// service was logged within a week (stock.LoggedSoonAfter). The
-		// form shows the last reading as its placeholder.
+		// be saved as if typed, also for a service done weeks ago. The form
+		// shows the last reading as its placeholder.
 		if _, err := s.store.GetVehicle(ctx, f.VehicleID); err != nil {
 			return err
 		}
@@ -432,7 +426,7 @@ func (s *Server) serviceEdit(w http.ResponseWriter, r *http.Request) error {
 	}
 	f := serviceForm{
 		ID: rec.ID, VehicleID: rec.VehicleID, KitName: rec.KitName, KitTier: rec.KitTier,
-		PerformedOn: rec.PerformedOn.Format("2006-01-02"), Odometer: optIntString(rec.Odometer),
+		PerformedOn: rec.PerformedOn.Format("2006-01-02"), Odometer: strconv.Itoa(rec.Odometer),
 		Title: rec.Title, Notes: rec.Notes, Version: rec.Version,
 	}
 	if rec.KitID != nil {

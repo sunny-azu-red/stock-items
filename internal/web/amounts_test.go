@@ -41,7 +41,7 @@ func TestAmountsFinerThanTwoDecimalsAreRefused(t *testing.T) {
 		return url.Values{"vehicle_id": {itoa(k390)}, "name": {"Chain"}, "line_item": {itoa(item)}, "line_qty": {qty}, "line_unit": {unit}}
 	}
 	service := func(item int64, qty, unit string) url.Values {
-		return url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
+		return url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 			"part_item": {itoa(item)}, "part_qty": {qty}, "part_unit": {unit}}
 	}
 	use := func(qty, unit string) url.Values {
@@ -114,7 +114,7 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	grease := a.grease(0.23)
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.231"}, "part_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
 	noShortRow(t, rec)
@@ -122,7 +122,7 @@ func TestNotEnoughStockNeverReadsTheSameAmountTwice(t *testing.T) {
 	expect(t, rec, http.StatusUnprocessableEntity, "Use at most two decimals of g")
 	expectNot(t, rec, "Only 0.23 g in stock")
 	// One hundredth more than there is says so plainly.
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(grease)}, "part_qty": {"0.24"}, "part_unit": {"g"}})
 	expect(t, rec, http.StatusUnprocessableEntity,
 		`<span class="badge badge-danger" data-stock-level="short" title="Need 0.24 g"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg> 0.23 g in stock</span>`)

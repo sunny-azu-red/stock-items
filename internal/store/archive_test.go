@@ -129,7 +129,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svcIn := stock.ServiceInput{VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: filter, Quantity: 1}}}
+	svcIn := stock.ServiceInput{Odometer: ptr(0), VehicleID: k390, Title: "Oil service", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: filter, Quantity: 1}}}
 	svcIn.Normalize()
 	svcID, err := s.CreateService(ctx, svcIn)
 	if err != nil {
@@ -204,7 +204,7 @@ func TestArchiveInsteadOfDelete(t *testing.T) {
 func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	s, ctx := newStore(t)
 	old, spare := mustVehicle(t, s, "Old bike"), mustVehicle(t, s, "Spare")
-	in := stock.ServiceInput{VehicleID: old, Title: "Chain", PerformedOn: time.Now(), LaborCost: ptr(80.0)}
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: old, Title: "Chain", PerformedOn: time.Now(), LaborCost: ptr(80.0)}
 	in.Normalize()
 	if _, err := s.CreateService(ctx, in); err != nil {
 		t.Fatal(err)
@@ -258,7 +258,7 @@ func TestArchiveKitWithServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := stock.ServiceInput{VehicleID: v, KitID: &used, Title: "Oil service", PerformedOn: time.Now()}
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &used, Title: "Oil service", PerformedOn: time.Now()}
 	in.Normalize()
 	svc, err := s.CreateService(ctx, in)
 	if err != nil {
@@ -311,7 +311,7 @@ func TestArchivedItemsTakeNoStockChanges(t *testing.T) {
 	filter := mustItem(t, s, stock.ItemInput{Name: "Filter", Unit: stock.UnitPiece, Quantity: 5})
 	bolt := mustItem(t, s, stock.ItemInput{Name: "Bolt", Unit: stock.UnitPiece, Quantity: 5})
 	service := func(qty float64) stock.ServiceInput {
-		in := stock.ServiceInput{VehicleID: v, Title: "Oil service", PerformedOn: time.Now(),
+		in := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Oil service", PerformedOn: time.Now(),
 			Parts: []stock.KitLineInput{{ItemID: filter, Quantity: qty}, {ItemID: bolt, Quantity: 1}}}
 		in.Normalize()
 		return in
@@ -402,7 +402,7 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svcIn := stock.ServiceInput{VehicleID: v, Title: "Chain clean", PerformedOn: time.Now()}
+	svcIn := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "Chain clean", PerformedOn: time.Now()}
 	svcIn.Normalize()
 	svc, _ := s.CreateService(ctx, svcIn)
 	svcTrash, err := s.DeleteService(ctx, svc, cur(t, s, store.WhatService, svc))

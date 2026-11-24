@@ -656,7 +656,10 @@ func (in ServiceInput) Validate() Errors {
 	if in.PerformedOn.IsZero() {
 		errs.Add("performed_on", "Date is required")
 	}
-	if in.Odometer != nil && *in.Odometer < 0 {
+	// Every service has a reading: the schedules count from it.
+	if in.Odometer == nil {
+		errs.Add("odometer", "Odometer is required")
+	} else if *in.Odometer < 0 {
 		errs.Add("odometer", "Odometer cannot be negative")
 	}
 	if !validMoney(in.LaborCost) {

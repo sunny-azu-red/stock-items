@@ -114,7 +114,7 @@ func TestSpellings(t *testing.T) {
 		if id := kit("Oil SERVICE"); col(t, `SELECT name FROM service_kits WHERE id = $1`, id) != "oil service" {
 			t.Error("the kit name in use didn't")
 		}
-		in := stock.ServiceInput{VehicleID: v, Title: "OIL Service", PerformedOn: time.Now()}
+		in := stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "OIL Service", PerformedOn: time.Now()}
 		in.Normalize()
 		id, err := s.CreateService(ctx, in)
 		if err != nil {
@@ -161,7 +161,7 @@ func TestSpellings(t *testing.T) {
 			t.Errorf("kit = %q, want Timing belt", got)
 		}
 
-		sin := stock.ServiceInput{VehicleID: car, Title: "wipers", PerformedOn: time.Now()}
+		sin := stock.ServiceInput{Odometer: ptr(0), VehicleID: car, Title: "wipers", PerformedOn: time.Now()}
 		sin.Normalize()
 		svc, err := s.CreateService(ctx, sin)
 		if err != nil {

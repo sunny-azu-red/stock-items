@@ -346,7 +346,7 @@
   <li>
     <span class="grow">
       <a class="title" href="/services/{{.ID}}">{{.Title}}</a>
-      <span class="meta">{{date .PerformedOn}}{{with .Odometer}} · {{distance .}}{{end}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
+      <span class="meta">{{date .PerformedOn}} · {{distance .Odometer}}{{if .PartCount}} · {{plural .PartCount "part"}}{{end}}{{with .LaborCost}} · {{money .}} labour{{end}}</span>
     </span>
     {{if ne .VehicleID $here}}{{template "chip" .VehicleChip}}{{end}}
   </li>

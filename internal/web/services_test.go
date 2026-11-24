@@ -79,10 +79,27 @@ func TestKitServiceAndShoppingFlow(t *testing.T) {
 func TestServiceDateIsChecked(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-12-01"}}),
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-12-01"}}),
 		http.StatusUnprocessableEntity, "Date cannot be in the future")
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}}),
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}}),
 		http.StatusSeeOther)
+}
+
+// Every service has a reading, with a kit or without: a new one without
+// is refused, and so is an edit that clears it.
+func TestServiceNeedsAReading(t *testing.T) {
+	a := newApp(t)
+	k390, _ := a.seed()
+	fields := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}}
+	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK, `<label for="odometer">Odometer (km)</label><span class="req"`)
+	expect(t, a.post("/services", fields), http.StatusUnprocessableEntity, "Odometer is required")
+	fields.Set("odometer", "10200")
+	rec := a.post("/services", fields)
+	expect(t, rec, http.StatusSeeOther)
+	svc := rec.Header().Get("Location")
+	expect(t, a.get(svc), http.StatusOK, "<dd>10 200 km</dd>")
+	fields.Set("odometer", "")
+	expect(t, a.postV(svc, fields), http.StatusUnprocessableEntity, "Odometer is required")
 }
 
 func TestDeletingAServicePutsTheOdometerBack(t *testing.T) {
@@ -153,7 +170,7 @@ func TestPartRowsHaveUnits(t *testing.T) {
 	noShortRow(t, edit) // a kit takes nothing from stock
 
 	// Every short part is marked at once.
-	form := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-29"},
+	form := url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil service"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil), itoa(pads)}, "part_qty": {"2", "3"}, "part_unit": {"l", ""}}
 	expect(t, a.post("/services", form), http.StatusUnprocessableEntity, "2 parts are missing from stock",
 		shortBadge("525 ml", "2 L"), shortBadge("1 pcs", "3 pcs"))
@@ -162,7 +179,7 @@ func TestPartRowsHaveUnits(t *testing.T) {
 func TestServicesShowLabour(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"},
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"},
 		"labor_cost": {"350"}}), http.StatusSeeOther)
 	// Each service shows its own labour; the card's footer shows the total, not its header.
 	total := `<div class="card-foot"><span class="total"><span>Labour in total</span><strong>350.00 EUR</strong></span>`
@@ -178,7 +195,7 @@ func TestServicesShowLabour(t *testing.T) {
 func TestServicesNoLabourNoFooter(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Valves"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
 	// Its kits card keeps a footer for Add kit, with no total.
 	expectNot(t, a.get("/services"), `<span class="total">`, "Labour in total")
 	// The vehicle page's Service kits keeps its footer for Add kit.
@@ -189,7 +206,7 @@ func TestServicesPaging(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
 	for i := range 101 {
-		in := stock.ServiceInput{VehicleID: k390, Title: fmt.Sprintf("Check %d", i), PerformedOn: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)}
+		in := stock.ServiceInput{Odometer: ptr(10000), VehicleID: k390, Title: fmt.Sprintf("Check %d", i), PerformedOn: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)}
 		in.Normalize()
 		if _, err := a.store.CreateService(context.Background(), in); err != nil {
 			t.Fatal(err)
@@ -214,7 +231,7 @@ func TestArchiveKitFlow(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
 	expect(t, a.get(kit), http.StatusOK, `action="`+kit+`/delete"`)
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {kit[len("/kits/"):]}, "title": {"Oil service"},
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "kit_id": {kit[len("/kits/"):]}, "title": {"Oil service"},
 		"performed_on": {"2026-10-29"}}), http.StatusSeeOther)
 	page := a.get(kit)
 	expect(t, page, http.StatusOK, `action="`+kit+`/archive"`, "1 logged service")
@@ -254,7 +271,7 @@ func TestServicePartsGoWithTheirService(t *testing.T) {
 	rec := a.post("/vehicles", url.Values{"name": {"Spare bike"}, "kind": {"motorcycle"}})
 	expect(t, rec, http.StatusSeeOther)
 	v := rec.Header().Get("Location")
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(mustID(t, v))}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(mustID(t, v))}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
@@ -396,7 +413,7 @@ func TestKitStatusIcons(t *testing.T) {
 	)
 
 	// 5. Item detail page: "Service kits" shows archived badge inline.
-	expect(t, a.post("/services", url.Values{
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"},
 		"vehicle_id":   {itoa(k390)},
 		"kit_id":       {readyPath[len("/kits/"):]},
 		"title":        {"Oil service"},
@@ -602,7 +619,7 @@ func TestServiceFormShowsKitError(t *testing.T) {
 	kit.Del("intermediate")
 	expect(t, a.postV(kitURL, kit), http.StatusSeeOther)
 
-	rec = a.post("/services", url.Values{
+	rec = a.post("/services", url.Values{"odometer": {"10000"},
 		"vehicle_id": {itoa(k390)}, "kit_id": {itoa(kitID)}, "kit_name": {"Oil Service"}, "kit_tier": {"intermediate"},
 		"title": {"Oil Service"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(oil)}, "part_qty": {"100 ml"},
@@ -962,7 +979,7 @@ func TestRestoreServiceBeforePurchaseDateIsRefused(t *testing.T) {
 	a.seed()
 	k390 := a.vehicle(t, "KTM 390")
 	vPath := vehiclePath(k390)
-	rec := a.post("/services", url.Values{
+	rec := a.post("/services", url.Values{"odometer": {"10000"},
 		"vehicle_id": {itoa(k390)}, "title": {"Oil Service"}, "performed_on": {"2026-05-01"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -1070,7 +1087,7 @@ func TestServiceFormWhenItsKitIsDeleted(t *testing.T) {
 	expect(t, a.get("/services/new?kit="+itoa(kitID)), http.StatusOK)
 	expect(t, a.postV(kitURL+"/delete", nil), http.StatusSeeOther)
 
-	svc := url.Values{"vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Chain Kit"},
+	svc := url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k1290)}, "kit_id": {itoa(kitID)}, "kit_name": {"Chain Kit"},
 		"title": {"Chain Kit"}, "performed_on": {"2026-10-20"}}
 	rec = a.post("/services", svc)
 	expect(t, rec, http.StatusUnprocessableEntity, "Its kit Chain Kit was deleted meanwhile", `id="vehicle_id"`)
@@ -1129,7 +1146,7 @@ func TestServiceButtonsSayWhatHappensToParts(t *testing.T) {
 	oil := itemID(t, a.store, "Silkolene")
 	expect(t, a.get("/services/new"), http.StatusOK, "</svg> Save service</button>")
 
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Oil top-up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"100"}})
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Message != "Logged Oil top-up and took its parts from stock" {
@@ -1138,7 +1155,7 @@ func TestServiceButtonsSayWhatHappensToParts(t *testing.T) {
 	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK,
 		`title="Its parts go back in stock. You can undo it."><svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg> Delete</button>`)
 
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain check"}, "performed_on": {"2026-10-29"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain check"}, "performed_on": {"2026-10-29"},
 		"part_item": {""}, "part_qty": {""}})
 	expect(t, rec, http.StatusSeeOther)
 	if f := flashOf(t, rec); f.Message != "Logged Chain check" {
@@ -1150,7 +1167,7 @@ func TestServiceButtonsSayWhatHappensToParts(t *testing.T) {
 func TestZeroLabourIsNoLabour(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	rec := a.post("/services", url.Values{
+	rec := a.post("/services", url.Values{"odometer": {"10000"},
 		"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"0"},
 	})
 	expect(t, rec, http.StatusSeeOther)
@@ -1166,11 +1183,11 @@ func TestZeroLabourIsNoLabour(t *testing.T) {
 	expect(t, a.get(svc), http.StatusOK, "<dt>Labour</dt><dd>—</dd>")
 	expect(t, a.get(svc+"/edit"), http.StatusOK, `name="labor_cost" value=""`)
 	// Saving the edit keeps none; a real amount shows.
-	expect(t, a.postV(svc, url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {""}}), http.StatusSeeOther)
+	expect(t, a.postV(svc, url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {""}}), http.StatusSeeOther)
 	if got, _ = a.store.GetService(context.Background(), got.ID); got.LaborCost != nil {
 		t.Errorf("after editing: labour = %v, want none", *got.LaborCost)
 	}
-	expect(t, a.postV(svc, url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"80"}}), http.StatusSeeOther)
+	expect(t, a.postV(svc, url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}, "labor_cost": {"80"}}), http.StatusSeeOther)
 	expect(t, a.get("/services"), http.StatusOK, "80.00 EUR labour")
 }
 

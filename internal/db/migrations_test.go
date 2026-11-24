@@ -166,7 +166,7 @@ func TestSchemaInvariants(t *testing.T) {
 		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 0, '2020-01-01', 0);
 		INSERT INTO items (name, quantity) VALUES ('15W50', 1000);
 		INSERT INTO stock_movements (item_id, kind, delta, total_price, occurred_on) VALUES (1, 'bought', 2000, 39.80, '2026-04-20');
-		INSERT INTO service_records (vehicle_id, performed_on, title) VALUES (1, '2026-05-01', 'Oil service');
+		INSERT INTO service_records (vehicle_id, performed_on, odometer, title) VALUES (1, '2026-05-01', 100, 'Oil service');
 		INSERT INTO stock_movements (item_id, kind, delta, occurred_on, service_record_id) VALUES (1, 'service', -1000, '2026-05-01', 1);
 	`); err != nil {
 		t.Fatal(err)
@@ -179,7 +179,7 @@ func TestSchemaInvariants(t *testing.T) {
 		{"deleting a service with parts", `DELETE FROM service_records WHERE id = 1`, "stock_movements_service_record_id_fkey"},
 		{"deleting its vehicle", `DELETE FROM vehicles WHERE id = 1`, "stock_movements_service_record_id_fkey"},
 		{"labour 0", `UPDATE service_records SET labor_cost = 0`, "service_records_labor_cost_check"},
-		{"whether it moved the odometer unknown", `UPDATE service_records SET odometer_moved = NULL`, `null value in column "odometer_moved"`},
+		{"a service without a reading", `UPDATE service_records SET odometer = NULL`, `null value in column "odometer"`},
 	} {
 		if err := refused(t, pool, tc.sql); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %s to refuse it", tc.name, err, tc.want)
@@ -360,5 +360,79 @@ func TestKitSchedulesMigration(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT (payload -> 'service_kits' -> 0 ->> 'inter_interval_distance') || ',' || (payload -> 'service_records' -> 0 ->> 'kit_intermediate')
 		|| ',' || (payload -> 'service_kits' -> 0 ? 'intermediate')::text FROM trash WHERE label = 'Kit: Gone'`).Scan(&snapshot); err != nil || snapshot != "5000,true,false" {
 		t.Errorf("after Down: trash snapshot = %q (%v), want 5000,true,false", snapshot, err)
+	}
+}
+
+// 00005 makes a service's reading required and drops odometer_at_log and
+// odometer_moved (odometer_before says it): it stops, changing nothing, on
+// a service without a reading, one that moved the odometer from none, and
+// a trash snapshot that would not restore after it (such a service, or a
+// vehicle without its odometer and purchase); it takes the dropped keys
+// out of the trash's snapshots, and Down brings both columns back.
+func TestServiceReadingRequiredMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0);
+		INSERT INTO service_records (vehicle_id, performed_on, odometer, odometer_before, odometer_moved, odometer_at_log, title) VALUES
+			(1, '2025-01-01', 4000, NULL, false, NULL, 'Oil'), (1, '2025-06-01', 12000, 8000, true, NULL, 'Chain'),
+			(1, '2025-07-01', NULL, NULL, false, 12000, 'Wash')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped := func(when, want string) {
+		t.Helper()
+		_, err := provider.UpTo(ctx, 5)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
+		}
+		if v, err := provider.GetDBVersion(ctx); err != nil || v != 4 {
+			t.Errorf("%s: version %d (%v), want 4", when, v, err)
+		}
+	}
+	stopped("a service without a reading", "services 3 have no reading")
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer = 12000 WHERE id = 3; UPDATE service_records SET odometer_before = NULL WHERE id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("a service that moved the odometer from none", "services 2 have no reading")
+	if _, err := pool.Exec(ctx, `
+		UPDATE service_records SET odometer_before = 8000 WHERE id = 2;
+		INSERT INTO trash (kind, label, payload) VALUES
+			('service', 'Service: Tyres', '{"service_records": [{"id": 60, "vehicle_id": 1, "title": "Tyres", "odometer": null, "odometer_moved": false}]}'),
+			('vehicle', 'Vehicle: Golf', '{"vehicles": [{"id": 61, "name": "Golf", "odometer": 100, "purchased_on": "2020-01-01"}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("trash snapshots that would not restore", "trash entries 1, 2 hold")
+	if _, err := pool.Exec(ctx, `
+		UPDATE trash SET payload = jsonb_set(payload, '{service_records,0,odometer}', '9000') WHERE id = 1;
+		UPDATE trash SET payload = jsonb_set(payload, '{vehicles,0,odometer_at_purchase}', '0') WHERE id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	var keys string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(k, ',' ORDER BY k) FROM trash, jsonb_object_keys(payload -> 'service_records' -> 0) k WHERE id = 1`).Scan(&keys); err != nil ||
+		keys != "id,odometer,title,vehicle_id" {
+		t.Errorf("trash snapshot keys = %q (%v), want id,odometer,title,vehicle_id", keys, err)
+	}
+	if err := refused(t, pool, `UPDATE service_records SET odometer = NULL`); err == nil {
+		t.Error("after Up: a service without a reading was taken")
+	}
+
+	if _, err := provider.DownTo(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	var moved, snapshot string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(odometer_moved::text, ',' ORDER BY id) FROM service_records`).Scan(&moved); err != nil || moved != "false,true,false" {
+		t.Errorf("after Down: odometer_moved = %q (%v), want false,true,false", moved, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT payload -> 'service_records' -> 0 ->> 'odometer_moved' FROM trash WHERE id = 1`).Scan(&snapshot); err != nil || snapshot != "false" {
+		t.Errorf("after Down: trash odometer_moved = %q (%v), want false", snapshot, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_records SET odometer = NULL, odometer_at_log = 12000 WHERE id = 3`); err != nil {
+		t.Errorf("after Down: a service without a reading refused: %v", err)
 	}
 }

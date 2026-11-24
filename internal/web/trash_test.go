@@ -15,7 +15,7 @@ func TestUndoAndRecentlyDeleted(t *testing.T) {
 	k390, _ := a.seed()
 	ctx := context.Background()
 	oil := itemID(t, a.store, "Silkolene")
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
@@ -116,7 +116,7 @@ func TestRestoreSaysWhatItLeftOut(t *testing.T) {
 func TestPermanentDeletesAskInADialog(t *testing.T) {
 	a := newApp(t)
 	k390, _ := a.seed()
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"}})
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	id := itoa(flashOf(t, a.postV(rec.Header().Get("Location")+"/delete", nil)).Undo)
 	page := a.get("/trash")

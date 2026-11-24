@@ -481,7 +481,7 @@ func TestEditHeadingsKeepTheSavedName(t *testing.T) {
 	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Brakes"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
 	for _, tt := range []struct{ path, want, heading string }{

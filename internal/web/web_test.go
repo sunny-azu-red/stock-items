@@ -542,7 +542,7 @@ func TestHostileInput(t *testing.T) {
 		{"huge odometer", "/vehicles", url.Values{"name": {"Big"}, "odometer": {"9999999999"}}, 422},
 		{"huge odometer update", "/vehicles/" + itoa(k390) + "/odometer", url.Values{"odometer": {"9999999999"}}, 303},
 		{"huge interval", "/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"K"}, "interval_distance": {"99999999999"}}, 422},
-		{"huge labour", "/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"S"}, "performed_on": {"2026-10-01"}, "labor_cost": {"1e15"}}, 422},
+		{"huge labour", "/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"S"}, "performed_on": {"2026-10-01"}, "labor_cost": {"1e15"}}, 422},
 		{"NaN suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"NaN"}}, 303},
 		{"huge suggestion", "/shopping/suggestions", url.Values{"item_id": {itoa(pads)}, "qty": {"1e20"}}, 303},
 		{"gone suggestion", "/shopping/suggestions", url.Values{"item_id": {"999999"}, "qty": {"1"}}, 303},
@@ -744,7 +744,7 @@ func TestPolish(t *testing.T) {
 	page := a.post(item+"/movements", url.Values{"kind": {"bought"}, "amount": {"1"}, "occurred_on": {"2062-01-01"}})
 	expect(t, page, http.StatusUnprocessableEntity, `id="date-bought" name="occurred_on" value="2062-01-01"`, `id="date-used" name="occurred_on" value="2026-10-29"`)
 
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(oil)}, "part_qty": {"25"}})
 	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "<th>Item</th>")
 }
@@ -784,7 +784,7 @@ func TestRacesEndInMessages(t *testing.T) {
 
 	// A store conflict no handler expects: deleting a service would give
 	// back more than the maximum.
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-29"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-29"},
 		"part_item": {itoa(pads)}, "part_qty": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
@@ -806,7 +806,7 @@ func TestRacesEndInMessages(t *testing.T) {
 func TestEmptyStatesFollowFilters(t *testing.T) {
 	a := newApp(t)
 	k390, k1290 := a.seed()
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"}}),
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain"}, "performed_on": {"2026-10-29"}}),
 		http.StatusSeeOther)
 	expect(t, a.get("/services?page=9"), http.StatusOK, "Nothing on this page", `href="/services"`)
 	expect(t, a.get("/services?v="+itoa(k1290)), http.StatusOK, "No services for this vehicle yet",
@@ -825,7 +825,7 @@ func TestAccessibilityDetails(t *testing.T) {
 	expect(t, a.get("/items/"+itoa(pads)), http.StatusOK, `id="tab-bought" aria-controls="panel-bought" aria-selected="true">`,
 		`id="tab-used" aria-controls="panel-used" aria-selected="false" tabindex="-1">`, "Total price (EUR)")
 	// A fixed vehicle is carried as a hidden input and has no vehicle picker or label.
-	rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
+	rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}})
 	expect(t, rec, http.StatusSeeOther)
 	edit := a.get(rec.Header().Get("Location") + "/edit")
 	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`" data-name="KTM 390">`)

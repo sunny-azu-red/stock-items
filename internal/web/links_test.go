@@ -83,7 +83,7 @@ func TestChipAndBadgeLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sin := stock.ServiceInput{VehicleID: k390, KitID: &kit, Title: "Air service", PerformedOn: stock.DateOnly(time.Now()),
+	sin := stock.ServiceInput{Odometer: ptr(10000), VehicleID: k390, KitID: &kit, Title: "Air service", PerformedOn: stock.DateOnly(time.Now()),
 		Parts: []stock.KitLineInput{{ItemID: filter, Quantity: 1, Unit: stock.UnitPiece}}}
 	sin.Normalize()
 	svc, err := a.store.CreateService(ctx, sin)

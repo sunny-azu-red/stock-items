@@ -201,7 +201,7 @@ func TestInUseIsArchivedNotDeleted(t *testing.T) {
 		}},
 		{"vehicle with a service", func(t *testing.T, a *testApp) (string, string, string) {
 			vehicle := "/vehicles/" + itoa(a.vehicle(t, "KTM 1290"))
-			expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(a.vehicle(t, "KTM 1290"))}, "title": {"Chain clean"},
+			expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(t, "KTM 1290"))}, "title": {"Chain clean"},
 				"performed_on": {"2026-10-29"}}), http.StatusSeeOther)
 			return vehicle, "/vehicles", "KTM 1290"
 		}},
@@ -210,7 +210,7 @@ func TestInUseIsArchivedNotDeleted(t *testing.T) {
 			rec := a.post("/kits", url.Values{"vehicle_id": {v}, "name": {"Kit to archive"}})
 			expect(t, rec, http.StatusSeeOther)
 			kit := rec.Header().Get("Location")
-			expect(t, a.post("/services", url.Values{"vehicle_id": {v}, "kit_id": {kit[len("/kits/"):]},
+			expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {v}, "kit_id": {kit[len("/kits/"):]},
 				"title": {"Used the kit"}, "performed_on": {"2026-10-29"}}), http.StatusSeeOther)
 			return kit, "/services", "Kit to archive"
 		}},

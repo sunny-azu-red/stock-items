@@ -43,7 +43,7 @@ func TestRepeatingListsEndWithOneEmptyRow(t *testing.T) {
 	})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
-	rec = a.post("/services", url.Values{
+	rec = a.post("/services", url.Values{"odometer": {"10000"},
 		"vehicle_id": {itoa(k390)}, "title": {"Brakes"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(pads)}, "part_qty": {"1"},
 	})
@@ -108,7 +108,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	expect(t, a.get("/services/new?vehicle="+itoa(k390)), http.StatusOK,
 		`<div class="field" id="kit-starts">`, `data-kit-vehicle="`+itoa(k390)+`"><a`, start, "Start from a kit",
 		`Oil service<span class="badge badge-ok">On track</span></a>`,
-		`name="odometer" value="" inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
+		`name="odometer" value="" required inputmode="numeric" placeholder="Last reading 10`+"\u202f"+`000 km"`,
 		`data-odometer="10`+"\u202f"+`000 km"`)
 	// Started from a kit that counts its distance: the reading is required.
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `name="odometer" value="" required inputmode="numeric" placeholder="Last reading 10`,
@@ -118,7 +118,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 	expect(t, a.get("/services/new?vehicle="+itoa(k1290)), http.StatusOK, `id="kit-starts" hidden`)
 	// Already from a kit, or editing: no section.
 	expectNot(t, a.get("/services/new?kit="+kitID), "kit-starts")
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}})
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Chain clean"}, "performed_on": {"2026-10-20"}})
 	expect(t, rec, http.StatusSeeOther)
 	expectNot(t, a.get(rec.Header().Get("Location")+"/edit"), "kit-starts")
 
@@ -134,7 +134,7 @@ func TestLogServiceOffersTheVehiclesKits(t *testing.T) {
 		rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {name}, "interval_months": {months}})
 		expect(t, rec, http.StatusSeeOther)
 		id := rec.Header().Get("Location")[len("/kits/"):]
-		expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {id}, "title": {name}, "performed_on": {on}}), http.StatusSeeOther)
+		expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "kit_id": {id}, "title": {name}, "performed_on": {on}}), http.StatusSeeOther)
 		return id
 	}
 	coolant := logKit("Coolant", "24", "2026-10-01")
@@ -231,7 +231,7 @@ func TestPartRowsTakeTypedNames(t *testing.T) {
 		expect(t, a.post("/kits", f), http.StatusUnprocessableEntity, "2 items are called “oil filter”: pick one from the list")
 	})
 	t.Run("a service's part, and its edit form names it", func(t *testing.T) {
-		rec := a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-20"},
+		rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Top up"}, "performed_on": {"2026-10-20"},
 			"part_item": {""}, "part_item_text": {"Silkolene 15W50 PRO 4 XP"}, "part_qty": {"100 ml"}})
 		expect(t, rec, http.StatusSeeOther)
 		svc, err := a.store.GetService(ctx, mustID(t, rec.Header().Get("Location")))

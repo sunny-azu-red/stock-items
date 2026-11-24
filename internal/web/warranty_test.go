@@ -243,8 +243,7 @@ func TestVehicleWarrantyRestored(t *testing.T) {
 // kit reminds it until something is logged with it, Log service starts as
 // it with the full parts, and the full schedule doesn't count from it: the
 // first full service is still 8 000 km or a year from the purchase. A kit
-// has one break-in at most, and a new service with a kit that counts its
-// distance needs a reading.
+// has one break-in at most, and a service needs a reading.
 func TestBreakIn(t *testing.T) {
 	a := warrantyApp(t) // 23 Nov 2026
 	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"300"},
@@ -267,7 +266,7 @@ func TestBreakIn(t *testing.T) {
 	// A new service with this kit needs a reading.
 	service := url.Values{"vehicle_id": {id}, "kit_id": {itoa(kitID)}, "kit_tier": {"break_in"}, "title": {"Oil Service (Break-in)"},
 		"performed_on": {"2026-06-20"}}
-	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "Enter the reading: this kit counts its distance from it")
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "Odometer is required")
 	service.Set("odometer", "960")
 	rec = a.post("/services", service)
 	expect(t, rec, http.StatusSeeOther)

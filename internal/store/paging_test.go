@@ -31,7 +31,7 @@ func TestPagingAndTotals(t *testing.T) {
 		} else {
 			labor += *cost
 		}
-		in := stock.ServiceInput{VehicleID: vehicle, Title: "Check", PerformedOn: *day(1 + i/2), LaborCost: cost}
+		in := stock.ServiceInput{Odometer: ptr(0), VehicleID: vehicle, Title: "Check", PerformedOn: *day(1 + i/2), LaborCost: cost}
 		in.Normalize()
 		if _, err := s.CreateService(ctx, in); err != nil {
 			t.Fatal(err)

@@ -123,14 +123,14 @@ func records() []record {
 		{
 			name: "service",
 			make: func(t *testing.T, a *testApp) (string, string) {
-				rec := a.post("/services", url.Values{"vehicle_id": {itoa(a.vehicle(t, "KTM 390"))}, "title": {"Chain clean"},
+				rec := a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(t, "KTM 390"))}, "title": {"Chain clean"},
 					"performed_on": {"2026-10-29"}, "part_item": {itoa(itemID(t, a.store, "Silkolene"))}, "part_qty": {"25"}})
 				expect(t, rec, http.StatusSeeOther)
 				p := rec.Header().Get("Location")
 				return p, p
 			},
 			fields: func(a *testApp, note string) url.Values {
-				return url.Values{"vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"},
+				return url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(a.t, "KTM 390"))}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"},
 					"part_item": {itoa(itemID(a.t, a.store, "Silkolene"))}, "part_qty": {"25"}, "notes": {note}}
 			},
 			note: func(a *testApp, action string) string {
@@ -302,7 +302,7 @@ func TestStaleButtonsAreRefused(t *testing.T) {
 	// inUse logs a service with the record (an item, vehicle or kit), so
 	// it is archived instead of deleted.
 	inUse := func(t *testing.T, a *testApp, action string) {
-		form := url.Values{"vehicle_id": {itoa(a.vehicle(t, "KTM 390"))}, "title": {"Used"}, "performed_on": {"2026-10-29"}}
+		form := url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(a.vehicle(t, "KTM 390"))}, "title": {"Used"}, "performed_on": {"2026-10-29"}}
 		switch {
 		case strings.HasPrefix(action, "/items/"):
 			form.Set("part_item", itoa(mustID(t, action)))

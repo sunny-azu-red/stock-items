@@ -27,7 +27,7 @@ func TestConcurrentServicesDoNotDeadlock(t *testing.T) {
 				parts[0], parts[1] = parts[1], parts[0]
 			}
 			for range 20 {
-				_, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(), Parts: parts})
+				_, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "x", PerformedOn: time.Now(), Parts: parts})
 				if err != nil {
 					errs <- err
 				}
@@ -74,7 +74,7 @@ func TestKitSavesAndServicesDoNotDeadlock(t *testing.T) {
 						err = nil // the other saver got in between: refused, as two tabs would be
 					}
 				} else {
-					_, err = s.CreateService(ctx, stock.ServiceInput{VehicleID: v, Title: "x", PerformedOn: time.Now(),
+					_, err = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, Title: "x", PerformedOn: time.Now(),
 						Parts: []stock.KitLineInput{{ItemID: a, Quantity: 1}, {ItemID: b, Quantity: 1}}})
 				}
 				if err != nil {

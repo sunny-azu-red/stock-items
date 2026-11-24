@@ -105,7 +105,7 @@ func TestVehicleChips(t *testing.T) {
 		t.Error("a refused kit form drops its vehicle")
 	}
 	// None picked: the error is the field's.
-	rec = a.post("/services", url.Values{"title": {"Wash"}, "performed_on": {"2026-10-20"}})
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "title": {"Wash"}, "performed_on": {"2026-10-20"}})
 	expect(t, rec, http.StatusUnprocessableEntity, `<fieldset class="field span-all has-error" id="vehicle_id" aria-describedby="vehicle_id-err">`,
 		`<p class="field-error" id="vehicle_id-err">`)
 }
@@ -136,12 +136,12 @@ func TestPartsFitTheVehicle(t *testing.T) {
 	for _, v := range []int64{k390, k1290} {
 		expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(v)}, "name": {"Shared and General"},
 			"line_item": {itoa(ring), itoa(cleaner)}, "line_qty": {"1", "1"}}), http.StatusSeeOther)
-		expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(v)}, "title": {"Clean"}, "performed_on": {"2026-10-20"},
+		expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(v)}, "title": {"Clean"}, "performed_on": {"2026-10-20"},
 			"part_item": {""}, "part_item_text": {"motip brake cleaner"}, "part_qty": {"1"}}), http.StatusSeeOther)
 	}
 	// Another vehicle's item, on a service: picked or typed.
 	hiflo := itemID(t, a.store, "Hiflofiltro")
-	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Filter"}, "performed_on": {"2026-10-20"},
+	expect(t, a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Filter"}, "performed_on": {"2026-10-20"},
 		"part_item": {itoa(hiflo)}, "part_item_text": {"Hiflofiltro Oil Filter"}, "part_qty": {"1"}}), http.StatusUnprocessableEntity,
 		"“Hiflofiltro Oil Filter” isn&#39;t for KTM 390: pick one from the list")
 
@@ -163,12 +163,12 @@ func TestPartsFitTheVehicle(t *testing.T) {
 	// A service is a record of what was done: its edit keeps the parts it
 	// has, retagged since or not; a new part must still fit.
 	retag(t, a, pads, k390)
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-21"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Pads"}, "performed_on": {"2026-10-21"},
 		"part_item": {itoa(pads)}, "part_item_text": {"OEM Rear Brake Pads"}, "part_qty": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	svc := rec.Header().Get("Location")
 	retag(t, a, pads, k1290)
-	edit := url.Values{"vehicle_id": {itoa(k390)}, "title": {"Pads (front too)"}, "performed_on": {"2026-10-21"},
+	edit := url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "title": {"Pads (front too)"}, "performed_on": {"2026-10-21"},
 		"part_item": {itoa(pads)}, "part_item_text": {"OEM Rear Brake Pads"}, "part_qty": {"1"}}
 	expect(t, a.postV(svc, edit), http.StatusSeeOther)
 	expect(t, a.get(svc), http.StatusOK, "Pads (front too)", "OEM Rear Brake Pads")

@@ -142,7 +142,7 @@ func TestServiceFormStockBadges(t *testing.T) {
 	noShortRow(t, edit)
 
 	// Saving refuses the short parts and marks their rows.
-	rec = a.post("/services", url.Values{"vehicle_id": {itoa(k390)}, "kit_id": {kit[len("/kits/"):]}, "title": {"Oil service"},
+	rec = a.post("/services", url.Values{"odometer": {"10000"}, "vehicle_id": {itoa(k390)}, "kit_id": {kit[len("/kits/"):]}, "title": {"Oil service"},
 		"performed_on": {"2026-10-20"}, "part_item": {itoa(filter), itoa(oil), itoa(ring)}, "part_qty": {"1", "1.7 L", "2"}})
 	expect(t, rec, http.StatusUnprocessableEntity, "2 parts are missing from stock", outBadge, shortBadge("525 ml", "1.7 L"), haveBadge("6 pcs"))
 	expectNot(t, rec, "Only 525 ml in stock", "Only 0 pcs in stock")

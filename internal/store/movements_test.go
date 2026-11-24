@@ -135,7 +135,7 @@ func TestSpentThisYear(t *testing.T) {
 		if err := s.AddMovement(ctx, stock.MovementInput{ItemID: oil, Kind: stock.MoveBought, Delta: 1, TotalPrice: ptr(c.price), OccurredOn: &c.on}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: bike, Title: "Labour", PerformedOn: c.on, LaborCost: ptr(c.price * 2)}); err != nil {
+		if _, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: bike, Title: "Labour", PerformedOn: c.on, LaborCost: ptr(c.price * 2)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -269,7 +269,7 @@ func TestServiceMovementsChangeOnlyThroughTheService(t *testing.T) {
 	s, ctx := newStore(t)
 	k390 := mustVehicle(t, s, "KTM 390")
 	pads := mustItem(t, s, stock.ItemInput{Name: "Pads", Unit: stock.UnitPiece, Quantity: 2})
-	in := stock.ServiceInput{VehicleID: k390, Title: "Brakes", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: pads, Quantity: 1}}}
+	in := stock.ServiceInput{Odometer: ptr(0), VehicleID: k390, Title: "Brakes", PerformedOn: time.Now(), Parts: []stock.KitLineInput{{ItemID: pads, Quantity: 1}}}
 	in.Normalize()
 	if _, err := s.CreateService(ctx, in); err != nil {
 		t.Fatal(err)
@@ -341,7 +341,7 @@ func TestMovementsOfAVehicle(t *testing.T) {
 	buy(shared, 2030, 40)
 	buy(general, 2030, 80)
 	// B's service uses the shared part: a change of B's, not of A's.
-	if _, err := s.CreateService(ctx, stock.ServiceInput{VehicleID: b, Title: "B job", PerformedOn: time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC),
+	if _, err := s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: b, Title: "B job", PerformedOn: time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC),
 		Parts: []stock.KitLineInput{{ItemID: shared, Quantity: 1}}}); err != nil {
 		t.Fatal(err)
 	}

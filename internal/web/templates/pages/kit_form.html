@@ -44,7 +44,7 @@
       </div>
       {{/* Shows once there is a distance (CSS): the break-in comes before it. */}}
       <div class="field span-2{{if index $e "break_in_at"}} has-error{{end}}" id="break-in-field">
-        <div class="label-row"><label for="break_in_at">Break-in at ({{distUnit}})</label>{{template "tip" (dict "For" "Break-in at" "ID" "break-in-tip" "Text" "A new vehicle's first service, at this reading as its manual says, with the full parts. The schedule still counts from the purchase.")}}</div>
+        <div class="label-row"><label for="break_in_at">Break-in at ({{distUnit}})</label>{{template "tip" (dict "For" "Break-in at" "ID" "break-in-tip" "Text" "A new vehicle's first service, at this reading as its manual says (above the reading it was bought at), with the full parts. The schedule still counts from the purchase.")}}</div>
         <input class="input" id="break_in_at" name="break_in_at" value="{{$f.BreakInAt}}" inputmode="numeric" placeholder="e.g. 1000" {{invalid (index $e "break_in_at") "break_in_at" "break-in-tip"}}>
         {{template "field-err" (fieldErr (index $e "break_in_at") "break_in_at")}}
       </div>

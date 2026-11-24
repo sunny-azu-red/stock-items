@@ -91,7 +91,7 @@
         {{else}}
         <div><dt>Every</dt><dd>{{template "kit-interval" (dict "Distance" $k.IntervalDistance "Months" $k.IntervalMonths)}}</dd></div>
         {{end}}
-        {{with $k.BreakInAt}}<div><dt>Break-in at</dt><dd>{{distance .}}</dd></div>{{end}}
+        {{if $k.HasBreakIn}}<div><dt>Break-in at</dt><dd>{{distance $k.BreakInAt}}</dd></div>{{end}}
         <div><dt>Last done</dt><dd>{{with $k.LastService}}<a href="/services/{{.ID}}">{{date .PerformedOn}}</a>{{if and $k.Intermediate .Intermediate}} <span class="muted small">(intermediate)</span>{{else if .BreakIn}} <span class="muted small">(break-in)</span>{{end}} <span class="muted small">({{distance .Odometer}})</span>{{else}}Never{{end}}</dd></div>
         {{if $due.DueOdometer}}<div><dt>Due at</dt><dd>{{distance $due.DueOdometer}}</dd></div>{{end}}
         {{if $due.DueDate}}<div><dt>Due by</dt><dd>{{date $due.DueDate}}</dd></div>{{end}}

@@ -750,23 +750,87 @@ func TestServiceTierChecks(t *testing.T) {
 			t.Errorf("a break-in on %s without a Break-in at: %v, want it refused", other.Name, err)
 		}
 	}
+}
 
-	// A vehicle bought used, past the kit's Break-in at, has none either.
-	usedIn := stock.VehicleInput{Name: "LittleJoy", Odometer: ptr(2148), OdometerAtPurchase: ptr(2148)}
+// A kit's Break-in at is above its vehicle's purchase reading: a break-in
+// is a new vehicle's, and Pitbox tracks the work since it was bought. A kit
+// save refuses one at or below it (also one the kit already holds, saved
+// before the check, which a break-in can't be logged with either), moving a
+// kit to a vehicle bought past it is refused, and so is raising a
+// vehicle's purchase reading past a kit's.
+func TestBreakInAtAboveThePurchase(t *testing.T) {
+	pool := testdb.New(t)
+	s, ctx := store.New(pool), context.Background()
+	usedIn := stock.VehicleInput{Name: "LittleJoy", Odometer: ptr(2500), OdometerAtPurchase: ptr(2148)}
 	usedIn.Normalize()
 	used, err := s.CreateVehicle(ctx, anchored(usedIn))
 	if err != nil {
 		t.Fatal(err)
 	}
-	usedKit := stock.KitInput{VehicleID: used, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}
-	usedKit.Normalize()
-	usedKitID, err := s.CreateKit(ctx, usedKit)
+	newBike := mustVehicle(t, s, "GreyJoy") // bought at 0
+	var conflict *store.ConflictError
+	for _, at := range []int{1000, 2148} {
+		in := stock.KitInput{VehicleID: used, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(at)}
+		in.Normalize()
+		if _, err := s.CreateKit(ctx, in); !errors.As(err, &conflict) || conflict.Field != "break_in_at" ||
+			conflict.Message != "LittleJoy was bought at 2\u202f148 km, past its break-in" {
+			t.Errorf("Break-in at %d on a vehicle bought at 2 148: %v, want it refused", at, err)
+		}
+	}
+	in := stock.KitInput{VehicleID: used, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(3000)}
+	in.Normalize()
+	if _, err := s.CreateKit(ctx, in); err != nil {
+		t.Errorf("Break-in at 3 000 on a vehicle bought at 2 148: %v, want it saved", err)
+	}
+
+	// A value saved before the check: no break-in with it, and the kit's
+	// next save asks to clear it.
+	in = stock.KitInput{VehicleID: used, Name: "Chain", IntervalDistance: ptr(8000)}
+	in.Normalize()
+	kit, err := s.CreateKit(ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := stock.ServiceInput{VehicleID: used, KitID: &usedKitID, KitTier: stock.TierBreakIn, Title: "Oil", PerformedOn: day(5, 1), Odometer: ptr(2500)}
+	if _, err := pool.Exec(ctx, `UPDATE service_kits SET break_in_at = 1000 WHERE id = $1`, kit); err != nil {
+		t.Fatal(err)
+	}
+	svc := stock.ServiceInput{VehicleID: used, KitID: &kit, KitTier: stock.TierBreakIn, Title: "Chain", PerformedOn: time.Now(), Odometer: ptr(2500)}
+	svc.Normalize()
+	if _, err := s.CreateService(ctx, svc); !errors.As(err, &conflict) || conflict.Message != "This kit has no break-in on this vehicle" {
+		t.Errorf("a break-in with a Break-in at below the purchase: %v, want it refused", err)
+	}
+	in.BreakInAt = ptr(1000)
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, in)); !errors.As(err, &conflict) || conflict.Field != "break_in_at" {
+		t.Errorf("saving the kit as it is: %v, want it refused", err)
+	}
+	in.BreakInAt = nil
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, in)); err != nil {
+		t.Errorf("saving the kit with it cleared: %v", err)
+	}
+
+	// A new bike's kit with a break-in can't move to the used one, and the
+	// new bike's purchase reading can't go past it.
+	in = stock.KitInput{VehicleID: newBike, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}
 	in.Normalize()
-	if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Message != "This kit has no break-in on this vehicle" {
-		t.Errorf("a break-in on a vehicle bought past it: %v, want it refused", err)
+	oil, err := s.CreateKit(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.VehicleID = used
+	if err := s.UpdateKit(ctx, oil, kitV(t, s, oil, in)); !errors.As(err, &conflict) || conflict.Field != "break_in_at" {
+		t.Errorf("moving it to a vehicle bought past it: %v, want it refused", err)
+	}
+	if err := s.SetOdometer(ctx, newBike, 5000); err != nil {
+		t.Fatal(err)
+	}
+	bike := stock.VehicleInput{Name: "GreyJoy", OdometerAtPurchase: ptr(1000)}
+	bike.Normalize()
+	if err := s.UpdateVehicle(ctx, newBike, anchored(vehicleV(t, s, newBike, bike))); !errors.As(err, &conflict) ||
+		conflict.Field != "odometer_at_purchase" || conflict.Message != "Its kit Oil has a break-in at 1\u202f000 km: clear it there first" {
+		t.Errorf("purchase reading at the kit's break-in: %v, want it refused", err)
+	}
+	bike.OdometerAtPurchase = ptr(999)
+	if err := s.UpdateVehicle(ctx, newBike, anchored(vehicleV(t, s, newBike, bike))); err != nil {
+		t.Errorf("purchase reading below the kit's break-in: %v, want it saved", err)
 	}
 }

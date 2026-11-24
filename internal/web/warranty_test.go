@@ -305,17 +305,35 @@ func TestBreakIn(t *testing.T) {
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {airFilter}, "kit_tier": {"break_in"}, "title": {"Air Filter"},
 		"performed_on": {"2026-06-20"}, "odometer": {"960"}}), http.StatusUnprocessableEntity, "This kit has no break-in on this vehicle")
 
-	// A vehicle bought used, past the kit's Break-in at, has no break-in
-	// either: none offered, none reminded.
+	// A vehicle bought used, past a break-in, has none: its kits can't say
+	// one (the form comes back with what was typed), and one saved before
+	// that check is neither shown, reminded nor offered.
 	rec = a.post("/vehicles", url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#e8a33d"}, "odometer": {"2500"},
 		"purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"2148"}})
 	expect(t, rec, http.StatusSeeOther)
-	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(mustID(t, rec.Header().Get("Location")))}, "name": {"Oil Service"},
-		"interval_distance": {"8000"}, "break_in_at": {"1000"}})
+	used := itoa(mustID(t, rec.Header().Get("Location")))
+	kitForm := url.Values{"vehicle_id": {used}, "name": {"Oil Service"}, "interval_distance": {"8000"}, "break_in_at": {"1000"}}
+	expect(t, a.post("/kits", kitForm), http.StatusUnprocessableEntity, "LittleJoy was bought at 2\u202f148 km, past its break-in",
+		`name="break_in_at" value="1000"`)
+	kitForm.Del("break_in_at")
+	rec = a.post("/kits", kitForm)
 	expect(t, rec, http.StatusSeeOther)
 	usedKit := rec.Header().Get("Location")
-	expectNot(t, a.get(usedKit), "Next: Break-in")
+	if _, err := a.pool.Exec(context.Background(), `UPDATE service_kits SET break_in_at = 1000 WHERE id = $1`, mustID(t, usedKit)); err != nil {
+		t.Fatal(err)
+	}
+	expectNot(t, a.get(usedKit), "Next: Break-in", "<dt>Break-in at</dt>")
 	expectNot(t, a.get("/services/new?kit="+itoa(mustID(t, usedKit))), `name="kit_tier"`)
+
+	// A new vehicle's purchase reading can't go past its kit's break-in.
+	rec = a.post("/vehicles", url.Values{"name": {"Duke"}, "kind": {"motorcycle"}, "odometer": {"5000"},
+		"purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"0"}})
+	expect(t, rec, http.StatusSeeOther)
+	duke := rec.Header().Get("Location")
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(mustID(t, duke))}, "name": {"Oil Service"}, "interval_distance": {"8000"},
+		"break_in_at": {"1000"}}), http.StatusSeeOther)
+	expect(t, a.postV(duke, url.Values{"name": {"Duke"}, "kind": {"motorcycle"}, "purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"1000"}}),
+		http.StatusUnprocessableEntity, "Its kit Oil Service has a break-in at 1\u202f000 km: clear it there first")
 }
 
 // A service logged as Full before break-ins were kept (GreyJoy's first)

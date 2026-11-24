@@ -89,6 +89,9 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 		if err := checkVehicleOdometerAtPurchase(ctx, tx, id, *in.OdometerAtPurchase); err != nil {
 			return err
 		}
+		if err := checkVehicleBreakIns(ctx, tx, id, *in.OdometerAtPurchase); err != nil {
+			return err
+		}
 		if err := checkVehiclePurchasedOn(ctx, tx, id, *in.PurchasedOn); err != nil {
 			return err
 		}
@@ -154,6 +157,27 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo
 			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatDistance(top))}
 	}
 	return nil
+}
+
+// checkVehicleBreakIns refuses a purchase reading at or above a kit's
+// Break-in at (archived kits too: they can be restored), which would no
+// longer apply (checkKitBreakIn). The caller holds the vehicle's lock, which
+// kit saves take first too.
+func checkVehicleBreakIns(ctx context.Context, tx pgx.Tx, id int64, odo int) error {
+	var name string
+	var at int
+	err := tx.QueryRow(ctx, `
+		SELECT name, break_in_at FROM service_kits
+		WHERE vehicle_id = $1 AND break_in_at <= $2
+		ORDER BY break_in_at DESC, id LIMIT 1`, id, odo).Scan(&name, &at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return &ConflictError{Field: "odometer_at_purchase", Message: fmt.Sprintf(
+		"Its kit %s has a break-in at %s: clear it there first", name, stock.FormatDistance(at))}
 }
 
 // checkVehicleOdometerAtPurchase refuses a purchase odometer higher than any service logged.

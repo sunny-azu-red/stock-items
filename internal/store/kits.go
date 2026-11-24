@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -157,6 +158,9 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 		if err := checkActiveVehicle(ctx, tx, in.VehicleID); err != nil {
 			return err
 		}
+		if err := checkKitBreakIn(ctx, tx, in.VehicleID, in.BreakInAt); err != nil {
+			return err
+		}
 		name, err := spell(ctx, tx, kitNameSpellings, 0, "", in.Name)
 		if err != nil {
 			return err
@@ -235,6 +239,9 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 				return &ConflictError{Field: "form", Message: target + " is archived; restore it first."}
 			}
 		}
+		if err := checkKitBreakIn(ctx, tx, in.VehicleID, in.BreakInAt); err != nil {
+			return err
+		}
 		name, err := spell(ctx, tx, kitNameSpellings, id, nameWas, in.Name)
 		if err != nil {
 			return err
@@ -255,6 +262,27 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		}
 		return replaceKitLines(ctx, tx, id, in.Lines, in.InterLines)
 	})
+}
+
+// checkKitBreakIn refuses a Break-in at that can't apply: at or below the
+// reading the kit's vehicle was bought at (a break-in is a new vehicle's,
+// stock.Kit.HasBreakIn). A value the kit already holds is refused too, so
+// one saved before this check is cleared on the kit's next save. The
+// caller holds the vehicle's lock, as UpdateVehicle takes it to change the
+// purchase reading (checkVehicleBreakIns).
+func checkKitBreakIn(ctx context.Context, tx pgx.Tx, vehicleID int64, breakInAt *int) error {
+	if breakInAt == nil {
+		return nil
+	}
+	var name string
+	var bought int
+	if err := tx.QueryRow(ctx, `SELECT name, odometer_at_purchase FROM vehicles WHERE id = $1`, vehicleID).Scan(&name, &bought); err != nil {
+		return notFound(err)
+	}
+	if *breakInAt <= bought {
+		return &ConflictError{Field: "break_in_at", Message: fmt.Sprintf("%s was bought at %s, past its break-in", name, stock.FormatDistance(bought))}
+	}
+	return nil
 }
 
 // replaceKitLines replaces a kit's full and intermediate lines. Their items

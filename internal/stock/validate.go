@@ -648,10 +648,13 @@ func (in ServiceInput) Validate() Errors {
 		errs.Add("performed_on", "Date is required")
 	}
 	// Every service has a reading: the schedules count from it.
-	if in.Odometer == nil {
+	switch {
+	case in.Odometer == nil:
 		errs.Add("odometer", "Odometer is required")
-	} else if *in.Odometer < 0 {
+	case *in.Odometer < 0:
 		errs.Add("odometer", "Odometer cannot be negative")
+	case *in.Odometer > MaxOdometer:
+		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
 	}
 	if !validMoney(in.LaborCost) {
 		errs.Add("labor_cost", "Enter a cost between 0 and "+FormatInt(MaxMoney))
@@ -666,9 +669,6 @@ func (in ServiceInput) Validate() Errors {
 	}
 	if utf8.RuneCountInString(in.Title) > maxShortText {
 		errs.Add("title", "Work performed is too long (max 200 characters)")
-	}
-	if in.Odometer != nil && *in.Odometer > MaxOdometer {
-		errs.Add("odometer", "That is more than "+FormatDistance(MaxOdometer))
 	}
 	limitText(errs, maxLongText, "Notes", in.Notes)
 	return errs

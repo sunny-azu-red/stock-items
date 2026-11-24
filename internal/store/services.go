@@ -282,10 +282,11 @@ func serviceTier(in stock.ServiceInput) stock.KitTier {
 // locked FOR SHARE, as checkServiceKit does). A tier it takes now (tierWas
 // is the one it had with this kit, "" for a new service or kit) must fit
 // the kit: an intermediate service needs the kit to have one, and a
-// break-in needs a Break-in at and is the kit's first service on this
-// vehicle (none earlier by date, reading and id, the order ListKits keeps)
-// and its only break-in there (serviceID is the service being saved, 0 for a new one; a partial
-// unique index keeps it to one too). A tier it keeps stays, so an old
+// break-in needs a Break-in at above the vehicle's purchase reading (a
+// new vehicle) and is the kit's first service on this vehicle (none
+// earlier by date, reading and id, the order ListKits keeps) and its only
+// break-in there (serviceID is the service being saved, 0 for a new one; a
+// partial unique index keeps it to one too). A tier it keeps stays, so an old
 // service saves unchanged.
 func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, serviceID int64, tierWas stock.KitTier) error {
 	if in.KitID == nil {
@@ -299,7 +300,9 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	}
 	var intermediate, breakIn, otherBreakIn, earlier bool
 	err := tx.QueryRow(ctx, `
-		SELECT intermediate, break_in_at IS NOT NULL,
+		SELECT intermediate,
+		       -- A break-in on the service's vehicle (stock.Kit.HasBreakIn).
+		       COALESCE(break_in_at > (SELECT odometer_at_purchase FROM vehicles WHERE id = $3), false),
 		       EXISTS (SELECT 1 FROM service_records
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND kit_tier = 'break_in' AND id <> $2),
 		       EXISTS (SELECT 1 FROM service_records
@@ -315,7 +318,7 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	case changed && in.KitTier == stock.TierIntermediate && !intermediate:
 		return &ConflictError{Field: "kit_id", Message: "This kit has no intermediate service"}
 	case changed && in.KitTier == stock.TierBreakIn && !breakIn:
-		return &ConflictError{Field: "kit_tier", Message: "This kit has no break-in"}
+		return &ConflictError{Field: "kit_tier", Message: "This kit has no break-in on this vehicle"}
 	case changed && in.KitTier == stock.TierBreakIn && earlier:
 		return &ConflictError{Field: "kit_tier", Message: "This kit has an earlier service: only its first is the break-in"}
 	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:

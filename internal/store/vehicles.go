@@ -84,7 +84,7 @@ func (s *Store) UpdateVehicle(ctx context.Context, id int64, in stock.VehicleInp
 		}
 		if *in.OdometerAtPurchase > currentOdo {
 			return &ConflictError{Field: "odometer_at_purchase", Message: fmt.Sprintf(
-				"Higher than the current odometer (%s)", stock.FormatDistance(currentOdo))}
+				"Higher than the current odometer (%s). Change that on the vehicle's page first.", stock.FormatDistance(currentOdo))}
 		}
 		if err := checkVehicleOdometerAtPurchase(ctx, tx, id, *in.OdometerAtPurchase); err != nil {
 			return err

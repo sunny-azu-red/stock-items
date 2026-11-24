@@ -746,8 +746,27 @@ func TestServiceTierChecks(t *testing.T) {
 		}
 		in := stock.ServiceInput{VehicleID: v1, KitID: &id, KitTier: stock.TierBreakIn, Title: other.Name, PerformedOn: day(5, 1), Odometer: ptr(5000)}
 		in.Normalize()
-		if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Field != "kit_tier" || conflict.Message != "This kit has no break-in" {
+		if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Field != "kit_tier" || conflict.Message != "This kit has no break-in on this vehicle" {
 			t.Errorf("a break-in on %s without a Break-in at: %v, want it refused", other.Name, err)
 		}
+	}
+
+	// A vehicle bought used, past the kit's Break-in at, has none either.
+	usedIn := stock.VehicleInput{Name: "LittleJoy", Odometer: ptr(2148), OdometerAtPurchase: ptr(2148)}
+	usedIn.Normalize()
+	used, err := s.CreateVehicle(ctx, anchored(usedIn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	usedKit := stock.KitInput{VehicleID: used, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}
+	usedKit.Normalize()
+	usedKitID, err := s.CreateKit(ctx, usedKit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := stock.ServiceInput{VehicleID: used, KitID: &usedKitID, KitTier: stock.TierBreakIn, Title: "Oil", PerformedOn: day(5, 1), Odometer: ptr(2500)}
+	in.Normalize()
+	if _, err := s.CreateService(ctx, in); !errors.As(err, &conflict) || conflict.Message != "This kit has no break-in on this vehicle" {
+		t.Errorf("a break-in on a vehicle bought past it: %v, want it refused", err)
 	}
 }

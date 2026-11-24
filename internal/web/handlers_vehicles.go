@@ -527,10 +527,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 	out := make([]kitView, len(kits))
 	for i, k := range kits {
 		odo := k.VehicleOdometer
-		v, ok := byVehicle[k.VehicleID]
-		if ok {
-			odo = v.Odometer
-		}
+		v := byVehicle[k.VehicleID]
 		out[i] = kitView{
 			Kit:             k,
 			Readiness:       k.ReadinessAt(odo, today),

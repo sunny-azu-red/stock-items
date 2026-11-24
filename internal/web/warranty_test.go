@@ -78,7 +78,11 @@ func TestVehicleWarrantyBoughtUsed(t *testing.T) {
 		"odometer": {"27102"}, "purchased_on": {"2024-07-04"}, "odometer_at_purchase": {"2148"},
 		"has_warranty": {"1"}, "warranty_ends_on": {"2023-11-11"}, "warranty_ends_at": {"2000"}})
 	expect(t, rec, http.StatusSeeOther)
-	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "Warranty ended</span>", "<dt>Warranty ended</dt><dd>11 Nov 2023 · 2\u202f000 km</dd>")
+	path := rec.Header().Get("Location")
+	expect(t, a.get(path), http.StatusOK, "Warranty ended</span>", "<dt>Warranty ended</dt><dd>11 Nov 2023 · 2\u202f000 km</dd>")
+	// Its edit form has the box ticked, the ended warranty in it.
+	expect(t, a.get(path+"/edit"), http.StatusOK, `id="has_warranty" name="has_warranty" value="1" checked> Has a warranty`,
+		`name="warranty_ends_on" value="2023-11-11"`)
 }
 
 // A stale edit form comes back with the warranty as it was typed.
@@ -299,7 +303,19 @@ func TestBreakIn(t *testing.T) {
 	airFilter := itoa(mustID(t, rec.Header().Get("Location")))
 	expectNot(t, a.get("/services/new?kit="+airFilter), `name="kit_tier"`)
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {airFilter}, "kit_tier": {"break_in"}, "title": {"Air Filter"},
-		"performed_on": {"2026-06-20"}, "odometer": {"960"}}), http.StatusUnprocessableEntity, "This kit has no break-in")
+		"performed_on": {"2026-06-20"}, "odometer": {"960"}}), http.StatusUnprocessableEntity, "This kit has no break-in on this vehicle")
+
+	// A vehicle bought used, past the kit's Break-in at, has no break-in
+	// either: none offered, none reminded.
+	rec = a.post("/vehicles", url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#e8a33d"}, "odometer": {"2500"},
+		"purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"2148"}})
+	expect(t, rec, http.StatusSeeOther)
+	rec = a.post("/kits", url.Values{"vehicle_id": {itoa(mustID(t, rec.Header().Get("Location")))}, "name": {"Oil Service"},
+		"interval_distance": {"8000"}, "break_in_at": {"1000"}})
+	expect(t, rec, http.StatusSeeOther)
+	usedKit := rec.Header().Get("Location")
+	expectNot(t, a.get(usedKit), "Next: Break-in")
+	expectNot(t, a.get("/services/new?kit="+itoa(mustID(t, usedKit))), `name="kit_tier"`)
 }
 
 // A service logged as Full before break-ins were kept (GreyJoy's first)

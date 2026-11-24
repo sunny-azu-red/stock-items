@@ -81,6 +81,13 @@ func TestVehicleEditFormHasNoOdometer(t *testing.T) {
 	if v, _ := a.store.GetVehicle(context.Background(), k390); v.Odometer != 12500 || v.Plate != "B-123" {
 		t.Errorf("vehicle = %+v", v)
 	}
+	// Back with an error, or stale, it still has none.
+	rec := a.postV(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "purchased_on": {""}})
+	expect(t, rec, http.StatusUnprocessableEntity, "Purchase date is required", "<h2>Purchase</h2>")
+	expectNot(t, rec, `name="odometer"`)
+	rec = a.post(path, url.Values{"name": {"KTM 390"}, "kind": {"motorcycle"}, "version": {version}})
+	expect(t, rec, http.StatusUnprocessableEntity, "changed since you opened it", "<h2>Purchase</h2>")
+	expectNot(t, rec, `name="odometer"`)
 	// Archived vehicles still show their kits.
 	expect(t, a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Oil service"}}), http.StatusSeeOther)
 	expect(t, a.postV(path+"/archive", nil), http.StatusSeeOther)
@@ -101,6 +108,22 @@ func TestVehicleDisplayFieldsAreOptional(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	page := a.get(rec.Header().Get("Location"))
 	expect(t, page, http.StatusOK, "<dt>Make</dt><dd>—</dd>", "<dt>Model</dt><dd>—</dd>", "<dt>Year</dt><dd>—</dd>")
+}
+
+// A vehicle at 0 km (a pedal bike, or one bought new) shows its reading
+// as 0 km wherever a reading shows, never as nothing.
+func TestZeroKilometres(t *testing.T) {
+	a := newApp(t)
+	rec := a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}, "odometer": {"0"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(mustID(t, rec.Header().Get("Location")))
+	expect(t, a.get("/vehicles"), http.StatusOK, "<strong>0</strong><span>km</span>")
+	expect(t, a.get("/"), http.StatusOK, "0 items · 0 km")
+	expect(t, a.get("/services/new?vehicle="+id), http.StatusOK, `placeholder="Last reading 0 km"`, `data-odometer="0 km"`)
+	rec = a.post("/services", url.Values{"vehicle_id": {id}, "title": {"Chain clean"}, "performed_on": {"2026-10-29"}, "odometer": {"0"}})
+	expect(t, rec, http.StatusSeeOther)
+	expect(t, a.get(rec.Header().Get("Location")), http.StatusOK, "<dt>Odometer</dt><dd>0 km</dd>")
+	expect(t, a.get("/services"), http.StatusOK, "29 Oct 2026 · 0 km")
 }
 
 func TestVehicleMakeModelSuggestions(t *testing.T) {

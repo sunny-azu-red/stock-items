@@ -139,10 +139,24 @@ New migrations are applied automatically on start; to apply them separately, run
 **00003 (vehicle warranty).** It adds two empty warranty columns, so nothing changes until a warranty is entered, with one exception: a kit with an intermediate schedule whose Intermediate months is empty used to count as under warranty (the full service keeping its own deadline), and now the vehicle's warranty decides. Right after deploying it, open each vehicle under warranty and enter its end (Under warranty, Warranty ends on); until then its kits count as alternating.
 
 **00004 (kit schedules).** One migration for the kit schedule work (vehicle required fields, intermediate service, break-in):
-- A vehicle's odometer, purchase date and purchase reading become required (`NOT NULL`). Nothing is filled in: if a vehicle lacks any of them, the migration fails, changes nothing and the app doesn't start. Before deploying, check that every vehicle has them and fill in any that doesn't on its edit form (a deleted vehicle in the trash without them would fail to restore: restore it and fill them in, or empty it from the trash). The form now also requires make, model, year and VIN, and a warranty's end date: open each vehicle and save it once to see whether anything is missing.
+- A vehicle's odometer, purchase date and purchase reading become required (`NOT NULL`). Nothing is filled in: if a vehicle lacks any of them, the migration fails, changes nothing and the app doesn't start. Before deploying, check that every vehicle has them and fill in any that doesn't on its edit form (a deleted vehicle in the trash without them would fail to restore: restore it and fill them in, or empty it from the trash). The form also required make, model, year and VIN then (optional again since 00005's release).
 - A kit's intermediate distance and months become `intermediate`: a kit that had either now has one intermediate service, halfway through its distance at its months (deleted kits in the trash too). It needs the distance: a kit with intermediate intervals and no distance fails the migration; give it a distance, or empty its intermediate months, first (a deleted one in the trash restores without an intermediate service).
 - A service's `kit_intermediate` becomes `kit_tier` (`full`, `intermediate`, `break_in`), in the trash too; kits get an empty `break_in_at`, and a kit may have one break-in on a vehicle (a unique index).
 After deploying, enter **Break-in at** on a kit whose vehicle was bought new, and mark that vehicle's first service as **Break-in** on its edit form if it was one: the full schedule then counts from the purchase again.
+
+**00005 (every service has a reading).** A service's `odometer` becomes required (`NOT NULL`), and `odometer_at_log` and `odometer_moved` are dropped (`odometer_before` set says the service moved the odometer). Nothing is filled in: the migration stops, changes nothing and the app doesn't start when
+- a service has no reading: enter one on its edit form (in the image before this one);
+- a service says it moved the odometer from no reading (`odometer_moved` without `odometer_before`, possible only before 00004): open it and save it once, which records the move again;
+- a deleted service in the trash has no reading, or a deleted vehicle lacks its odometer, purchase date or purchase reading: restore it and fix it, or empty it from the trash.
+
+The error names the services or trash entries. Before deploying, check `public` read-only:
+
+```sql
+SELECT id FROM service_records WHERE odometer IS NULL OR (odometer_moved AND odometer_before IS NULL);
+SELECT t.id FROM trash t WHERE t.payload::text LIKE '%service_records%' OR t.payload::text LIKE '%vehicles%';
+```
+
+The second lists the trash entries holding a service or a vehicle: none means nothing there can stop it. On a stop, pin `PITBOX_TAG` to the image before and fix the data there.
 
 ## Health check
 

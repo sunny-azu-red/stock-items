@@ -238,12 +238,17 @@ func ptrTo(n int) *int { return &n }
 // doesn't ask for one). The break-in takes the full parts (ActiveLines),
 // and no schedule counts from it (counted, LastFullService).
 func (k Kit) NextIsBreakIn() bool {
-	if k.BreakInAt == nil || k.LastService != nil || k.Archived() {
+	if !k.HasBreakIn() || k.LastService != nil || k.Archived() {
 		return false
 	}
-	bought := k.VehicleOdometerAtPurchase
-	pastFirst := k.IntervalDistance != nil && k.VehicleOdometer >= bought+*k.IntervalDistance
-	return bought < *k.BreakInAt && !pastFirst
+	return k.IntervalDistance == nil || k.VehicleOdometer < k.VehicleOdometerAtPurchase+*k.IntervalDistance
+}
+
+// HasBreakIn reports whether the kit has a break-in on its vehicle: it says
+// at what reading (BreakInAt), and the vehicle was bought below it (new).
+// Only then can a service with it be one (store.checkKitTier).
+func (k Kit) HasBreakIn() bool {
+	return k.BreakInAt != nil && k.VehicleOdometerAtPurchase < *k.BreakInAt
 }
 
 // BreakInDue computes when the break-in is due (NextIsBreakIn): at the

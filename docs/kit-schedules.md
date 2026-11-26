@@ -8,11 +8,12 @@ The worked examples are the kit schedule matrix (artifact <https://claude.ai/art
 
 | Term | Meaning | Code |
 |---|---|---|
-| Kit | A recurring job on one vehicle: parts, and optionally a distance (`interval_distance`) and/or months (`interval_months`). | `stock.Kit` |
+| Kit | A recurring job on one vehicle: parts, and optionally an interval. | `stock.Kit` |
+| Interval | When the job repeats: its **Distance** (`interval_distance`) and/or **Time** in months (`interval_months`), whichever comes first (the kit form's Interval section). | `IntervalDistance`, `IntervalMonths` |
 | Full | The kit's main service, with its full parts. | `TierFull` |
-| Intermediate | With **Halfway between full services** ticked: a lighter service at half the distance, at the full months. Needs an even distance. | `Kit.Intermediate`, `InterStep` |
+| Intermediate | With **Halfway between full services** ticked: a lighter service halfway through the interval. On a kit with a distance, at half the distance (an even one) at the full time; on a kit with a time only, at half the time (an even number of months: Coolant every 48 months, its intermediate at 24). | `Kit.Intermediate`, `InterStep`, `InterMonths` |
 | Break-in | A new vehicle's first service at the kit's **Break-in at** reading, with the full parts. Only on a vehicle bought below that reading. | `TierBreakIn`, `Kit.HasBreakIn` |
-| Step | Half the distance and the full months (with halfway). | `InterStep` |
+| Step | With halfway, from one service to the next: half the distance and the full time, or half the time on a kit with a time only. | `InterStep`, `InterMonths` |
 | Counted from | The service a schedule counts from: the last service of any kind (`counted`, never the break-in) or the last Full (`LastFullService`); the purchase (`purchased_on`, `odometer_at_purchase`) before the first. | `Kit.counted` |
 | Required by the warranty | A kit checkbox: the warranty asks for this kit's break-in and Full on time. | `Kit.WarrantyRequired`, `service_kits.warranty_required` |
 | Grace | How late a required service may be before the warranty is lost: 10% of its distance (100 km on a break-in at 1 000, 1 500 on a 15 000 km interval) and 30 days, whatever the interval. | `WarrantyGrace`, `WarrantyGraceDays` |
@@ -69,7 +70,7 @@ The vehicle page shows it in two places. Its facts say when (*Warranty lost*: th
 |---|---|---|
 | **Break-in** | Due at Break-in at, by distance only. Only as the kit's first service on the vehicle, once. No schedule counts from it. | The same. |
 | **Intermediate** | A step after the last service of any kind (`InterDue`). | The same. |
-| **Full** | Its own distance and months from the last Full (`FullDue`). Intermediates never move it. | Without halfway: the full interval from the last service. With halfway, **services take turns**: one step after an intermediate, two steps (the full distance, twice the months) after anything else. While the break-in is waited for, its own interval from the purchase (below). |
+| **Full** | Its own distance and months from the last Full (`FullDue`). Intermediates never move it. | Without halfway: the full interval from the last service. With halfway, **services take turns**: one step after an intermediate, two steps after anything else (the full distance at twice the time, or the full time on a kit with a time only). While the break-in is waited for, its own interval from the purchase (below). |
 
 Losing or ending the warranty changes the Full the same day, also for services done while it ran: a light rider whose Full is a month past its year sees an overdue Intermediate next, with the Full at 24 months (W13). Decided 2026-11-26, as for an ended warranty on 2026-11-23: "if the warranty ended, it should not force you into an overdue full service"; looked at again and kept the same day, in the fresh-eyes review. Without a warranty the Full can stay in 24 months for a light rider (N9, N10): decided, the distance matters more than the duration.
 
@@ -112,13 +113,16 @@ Log service offers Break-in on a new service until one is logged with the kit (`
 
 | Kit | Message |
 |---|---|
-| Halfway without a distance | Enter the distance: the intermediate service comes halfway through it |
+| Distance 0 or less | Distance must be greater than zero |
+| Time 0 or less | Time must be greater than zero |
+| Halfway with no distance or time | Enter a distance or time: the intermediate service comes halfway through it |
 | Halfway with an odd distance | Enter an even distance: the intermediate service comes halfway through it |
+| Halfway with an odd time and no distance | Enter an even number of months: the intermediate service comes halfway through the time |
 | Break-in at without a distance | Enter the distance: the break-in comes before it |
 | Break-in at 0 | Break-in reading must be more than 0 |
 | Break-in at at or past halfway (with halfway) | The break-in comes before the first 5 000 km: with Halfway ticked, the intermediate service is due there |
 | Break-in at at or past the distance | The break-in comes before the first 10 000 km |
-| Required by the warranty with no distance or months | Enter a distance or months: the warranty asks for the job on time |
+| Required by the warranty with no distance or time | Enter a distance or time: the warranty asks for the job at its interval |
 | Break-in at at or below the vehicle's purchase reading (store) | LittleJoy was bought at 2 148 km, past its break-in |
 
 The vehicle form refuses raising the purchase reading past a kit's Break-in at (`checkVehicleBreakIns`). A kit ticked Required by the warranty can't be archived (above).
@@ -143,13 +147,19 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
   - Editing a ticked kit's numbers re-judges its history: documented, not prevented.
   - Log service offers Break-in until one is logged, to backfill it.
   - A Full standing in for the waited-for break-in is due by Break-in at too (the scan's slow rider lost the warranty without a warning). It stays a Full, not a break-in that restarts the clock: one rule fewer.
+- 2026-11-27 (halfway by time):
+  - A kit with a time only can have an intermediate service, halfway through the time (an even number of months). The full scan of the prototype: 16 350 scenarios, no rule broken, every existing result unchanged; a break-in needs a distance, so it never meets this, and intermediate services never count for the warranty.
+  - Halfway goes by distance on a kit with one (at the full time, as before), by time on a kit without: adding a distance to Coolant moves its intermediate service from 24 months to 48. The kit page's "Intermediate every" shows it. Halving the time on every kit was not taken: it would move GreyJoy's intermediate service to 6 months.
+  - Migration 00007 loosens the CHECK (a distance or a time).
+  - The kit form's section is **Interval**, its fields **Distance (km)** and **Time (months)**: "interval" names the pair, as a manual's service interval does.
 
 ## Tests
 
-- `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestBreakInWaitOwnInterval`, `TestBreakInStandInDue`, `TestFullTakesOver`.
+- `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestBreakInWaitOwnInterval`, `TestBreakInStandInDue`, `TestHalfwayByTime`, `TestFullTakesOver`.
 - `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`, `TestWarrantyLostNamesTheEarliestMiss`, `TestWarrantyMisses` (every miss, `LostOn`).
 - `internal/store/archive_test.go`: `TestArchiveKitRequiredByWarranty`.
+- `internal/db/migrations_test.go`: `TestHalfwayByTimeMigration`.
 - `internal/stock/validate_test.go`: the kit form rows above.
-- Over HTTP, `internal/web/warranty_test.go`: `TestBreakIn`, `TestBreakInLateRefused`, `TestBreakInWaitWithoutWarranty`, `TestBreakInBackfill`, `TestWarrantyLostAndBackfilled`, `TestWarrantyLostHistory`, `TestWarrantyLostCard`, `TestArchiveRequiredKit`, `TestWarrantyDecidesKitSchedule`.
+- Over HTTP, `internal/web/warranty_test.go`: `TestBreakIn`, `TestBreakInLateRefused`, `TestBreakInWaitWithoutWarranty`, `TestBreakInBackfill`, `TestWarrantyLostAndBackfilled`, `TestWarrantyLostHistory`, `TestWarrantyLostCard`, `TestArchiveRequiredKit`, `TestHalfwayByTime`, `TestWarrantyDecidesKitSchedule`.
 - e2e, `e2e/tests/garage.spec.ts`: "a missed service the warranty asks for shows in a red card" (and the page-wide tests then measure the card).
 - The full scan (the matrix's last section): every valid kit shape × 5 vehicles × 30 riders over four years, against twelve rules (R1–R12), with a throwaway harness run through `go run -overlay`.

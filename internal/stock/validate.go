@@ -509,6 +509,7 @@ type KitInput struct {
 	IntervalMonths   *int
 	Intermediate     bool // see Kit.Intermediate
 	BreakInAt        *int // see Kit.BreakInAt
+	WarrantyRequired bool // see Kit.WarrantyRequired
 	Notes            string
 	Lines            []KitLineInput
 	InterLines       []KitLineInput
@@ -568,9 +569,17 @@ func (in KitInput) Validate() Errors {
 		case in.IntervalDistance == nil:
 			// The break-in comes before the full schedule's first distance.
 			errs.Add("interval_distance", "Enter the distance: the break-in comes before it")
+		case in.Intermediate && *in.BreakInAt >= *in.IntervalDistance/2:
+			// The intermediate service counts from the purchase too, so a
+			// break-in past it would leave it overdue.
+			errs.Add("break_in_at", "The break-in comes before the first "+FormatDistance(*in.IntervalDistance/2)+
+				": with Halfway ticked, the intermediate service is due there")
 		case *in.BreakInAt >= *in.IntervalDistance:
 			errs.Add("break_in_at", "The break-in comes before the first "+FormatDistance(*in.IntervalDistance))
 		}
+	}
+	if in.WarrantyRequired && in.IntervalDistance == nil && in.IntervalMonths == nil {
+		errs.Add("interval_distance", "Enter a distance or months: the warranty asks for the job on time")
 	}
 	for i, l := range in.Lines {
 		switch {

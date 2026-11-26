@@ -397,6 +397,9 @@ func TestTextAndNumberLimits(t *testing.T) {
 		{"kit break-in without a distance", KitInput{VehicleID: 1, Name: "A", BreakInAt: ptr(1000)}.Validate(), "interval_distance"},
 		{"kit break-in past the distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(8000)}.Validate(), "break_in_at"},
 		{"kit break-in at 0", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(0)}.Validate(), "break_in_at"},
+		{"kit break-in at halfway", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), Intermediate: true, BreakInAt: ptr(5000)}.Validate(), "break_in_at"},
+		{"kit break-in past halfway", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), Intermediate: true, BreakInAt: ptr(6000)}.Validate(), "break_in_at"},
+		{"kit required by the warranty without a schedule", KitInput{VehicleID: 1, Name: "A", WarrantyRequired: true}.Validate(), "interval_distance"},
 		{"service tier unknown", ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), KitTier: "half"}.Validate(), "kit_tier"},
 		{"service part over the maximum", func() Errors {
 			in := ServiceInput{VehicleID: 1, Title: "A", PerformedOn: time.Now(), Parts: []KitLineInput{{ItemID: 1, Quantity: MaxQuantity}, {ItemID: 1, Quantity: 1}}}
@@ -434,5 +437,23 @@ func TestIsColor(t *testing.T) {
 		if got := IsColor(tc.in); got != tc.want {
 			t.Errorf("IsColor(%q) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+// What the kit form accepts around the break-in and the warranty box.
+func TestKitBreakInAndWarrantyAccepted(t *testing.T) {
+	for name, in := range map[string]KitInput{
+		"break-in below halfway":            {VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), Intermediate: true, BreakInAt: ptr(4999)},
+		"break-in past halfway, no halfway": {VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), BreakInAt: ptr(6000)},
+		"required with months only":         {VehicleID: 1, Name: "A", IntervalMonths: ptr(24), WarrantyRequired: true},
+		"required with a distance only":     {VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), WarrantyRequired: true},
+	} {
+		if errs := in.Validate(); errs.Any() {
+			t.Errorf("%s: %v", name, errs)
+		}
+	}
+	errs := KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(10000), Intermediate: true, BreakInAt: ptr(6000)}.Validate()
+	if want := "The break-in comes before the first 5\u202f000 km: with Halfway ticked, the intermediate service is due there"; errs["break_in_at"] != want {
+		t.Errorf("break-in past halfway: %q, want %q", errs["break_in_at"], want)
 	}
 }

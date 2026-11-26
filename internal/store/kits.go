@@ -30,7 +30,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	sql := `
 		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.purchased_on, v.odometer_at_purchase,
 		       v.warranty_ends_on, v.warranty_ends_at,
-		       k.name, k.interval_distance, k.interval_months, k.intermediate, k.break_in_at, k.notes,
+		       k.name, k.interval_distance, k.interval_months, k.intermediate, k.break_in_at, k.warranty_required, k.notes,
 		       ls.id, ls.performed_on, ls.odometer, ls.kit_tier,
 		       lf.id, lf.performed_on, lf.odometer,
 		       -- An intermediate service after the last full one, in the
@@ -85,7 +85,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsTier *stock.KitTier
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
 			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
-			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.Notes,
+			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.WarrantyRequired, &k.Notes,
 			&lsID, &lsDate, &lsOdo, &lsTier,
 			&lfID, &lfDate, &lfOdo,
 			&k.InterSinceFull, &k.FirstServiceID, &k.ArchivedAt)
@@ -106,9 +106,18 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 
 	ids := make([]int64, len(kits))
 	pos := make(map[int64]int, len(kits))
+	var vehicleIDs []int64
 	for i, k := range kits {
 		ids[i] = k.ID
 		pos[k.ID] = i
+		vehicleIDs = append(vehicleIDs, k.VehicleID)
+	}
+	warrantyKits, err := loadWarrantyKits(ctx, s.pool, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range kits {
+		kits[i].VehicleWarrantyKits = warrantyKits[kits[i].VehicleID]
 	}
 	rows, err = s.pool.Query(ctx, `
 		SELECT l.kit_id, l.item_id, i.brand, i.name, i.unit, l.quantity, i.quantity, i.archived_at, l.intermediate
@@ -139,6 +148,49 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	return kits, rows.Err()
 }
 
+// loadWarrantyKits returns, for each of the vehicles, its kits the warranty
+// asks for on time (stock.WarrantyKit): not archived, ticked, with their
+// break-in and full services on the vehicle, oldest first.
+func loadWarrantyKits(ctx context.Context, q querier, vehicleIDs []int64) (map[int64][]stock.WarrantyKit, error) {
+	out := map[int64][]stock.WarrantyKit{}
+	if len(vehicleIDs) == 0 {
+		return out, nil
+	}
+	rows, err := q.Query(ctx, `
+		SELECT k.vehicle_id, k.id, k.name, k.interval_distance, k.interval_months, k.break_in_at,
+		       sr.id, sr.performed_on, sr.odometer, sr.kit_tier
+		FROM service_kits k
+		LEFT JOIN service_records sr ON sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier IN ('full', 'break_in')
+		WHERE k.vehicle_id = ANY($1) AND k.warranty_required AND k.archived_at IS NULL
+		ORDER BY k.vehicle_id, k.id, sr.performed_on, sr.odometer, sr.id`, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var vid int64
+		var k stock.WarrantyKit
+		var srID *int64
+		var srDate *time.Time
+		var srOdo *int
+		var srTier *stock.KitTier
+		if err := rows.Scan(&vid, &k.KitID, &k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.BreakInAt,
+			&srID, &srDate, &srOdo, &srTier); err != nil {
+			return nil, err
+		}
+		list := out[vid]
+		if n := len(list); n == 0 || list[n-1].KitID != k.KitID {
+			list = append(list, k)
+		}
+		if srID != nil {
+			last := &list[len(list)-1]
+			last.Services = append(last.Services, stock.ServiceRef{ID: *srID, PerformedOn: *srDate, Odometer: *srOdo, Tier: *srTier})
+		}
+		out[vid] = list
+	}
+	return out, rows.Err()
+}
+
 // GetKit returns one kit.
 func (s *Store) GetKit(ctx context.Context, id int64) (stock.Kit, error) {
 	kits, err := s.ListKits(ctx, KitFilter{IDs: []int64{id}})
@@ -167,9 +219,9 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 		}
 		in.Name = name
 		err = tx.QueryRow(ctx, `
-			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, intermediate, break_in_at, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt, in.Notes).Scan(&id)
+			INSERT INTO service_kits (vehicle_id, name, interval_distance, interval_months, intermediate, break_in_at, warranty_required, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+			in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt, in.WarrantyRequired, in.Notes).Scan(&id)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}
@@ -251,9 +303,10 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
 			UPDATE service_kits SET version = version + 1, vehicle_id = $2, name = $3, interval_distance = $4,
-			       interval_months = $5, intermediate = $6, break_in_at = $7, notes = $8,
+			       interval_months = $5, intermediate = $6, break_in_at = $7, warranty_required = $8, notes = $9,
 			       updated_at = now()
-			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt, in.Notes)
+			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt,
+			in.WarrantyRequired, in.Notes)
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}

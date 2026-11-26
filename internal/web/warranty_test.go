@@ -378,3 +378,100 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 	expect(t, a.postV(laterSvc, later), http.StatusUnprocessableEntity, "This kit has an earlier service: only its first is the break-in")
 	expect(t, a.get(svc+"/edit"), http.StatusOK, `value="break_in" autocomplete="off"`)
 }
+
+// A break-in read past Break-in at and its grace (10%) is refused: one done
+// that late is a full service, logged as Full.
+func TestBreakInLateRefused(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"300"},
+		"purchased_on": {"2026-06-01"}, "odometer_at_purchase": {"0"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(mustID(t, rec.Header().Get("Location")))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"10000"}, "interval_months": {"12"},
+		"intermediate": {"1"}, "break_in_at": {"1000"}})
+	expect(t, rec, http.StatusSeeOther)
+	kitID := itoa(mustID(t, rec.Header().Get("Location")))
+	// Past its grace with nothing logged: the full service is next, overdue
+	// since 1 000 km, and Log service starts as Full; Break-in stays on the
+	// form to backfill one done on time.
+	expect(t, a.post("/vehicles/"+id+"/odometer", url.Values{"odometer": {"1200"}}), http.StatusSeeOther)
+	kit := "/kits/" + kitID
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>1 000 km</dd>")
+	expectNot(t, a.get(kit), "Next: Break-in")
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK, `value="full" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service" checked`,
+		`value="break_in"`)
+
+	service := url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"break_in"}, "title": {"Oil Service (Break-in)"},
+		"performed_on": {"2026-07-01"}, "odometer": {"1101"}}
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity,
+		"The break-in is due by 1 000 km (1 100 km at the latest): log this one as Full", `name="odometer" value="1101"`)
+	service.Set("odometer", "1100")
+	rec = a.post("/services", service)
+	expect(t, rec, http.StatusSeeOther)
+	// Nor can its edit move it past.
+	breakIn := rec.Header().Get("Location")
+	service.Set("odometer", "6000")
+	expect(t, a.postV(breakIn, service), http.StatusUnprocessableEntity, "log this one as Full")
+
+	// The kit form refuses a Break-in at past halfway.
+	expect(t, a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service 2"}, "interval_distance": {"10000"}, "intermediate": {"1"},
+		"break_in_at": {"6000"}}), http.StatusUnprocessableEntity,
+		"The break-in comes before the first 5 000 km: with Halfway ticked, the intermediate service is due there")
+}
+
+// A kit ticked "Required by the warranty" whose break-in or full service
+// was missed loses the vehicle's warranty: a red badge, what was missed on
+// the vehicle page, and its kits scheduled as without one. Logging the
+// missed services on time (backfilling) gets it back; an unticked kit
+// never loses it.
+func TestWarrantyLostAndBackfilled(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	vehicle := url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"10500"},
+		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-12-31"}}
+	rec := a.post("/vehicles", vehicle)
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	kitForm := url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"10000"}, "interval_months": {"12"},
+		"intermediate": {"1"}, "break_in_at": {"1000"}}
+	rec = a.post("/kits", kitForm)
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	kitID := itoa(mustID(t, kit))
+
+	// Not ticked: the break-in missed doesn't count.
+	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-ok">`, "Under warranty")
+	expect(t, a.get(kit+"/edit"), http.StatusOK,
+		`<label class="toggle"><input type="checkbox" id="warranty_required" name="warranty_required" value="1"> Required by the warranty</label>`)
+
+	// Ticked: lost, by the break-in (1 000 km, nothing logged at 10 500).
+	kitForm.Set("warranty_required", "1")
+	expect(t, a.postV(kit, kitForm), http.StatusSeeOther)
+	expect(t, a.get(kit+"/edit"), http.StatusOK, `id="warranty_required" name="warranty_required" value="1" checked`)
+	expect(t, a.get(kit), http.StatusOK, "<dt>Warranty</dt><dd>Required</dd>")
+	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-danger">`, "Warranty lost",
+		"<dt>Warranty lost</dt><dd>Oil Service: break-in due by 1 000 km, not logged</dd>")
+	expect(t, a.get("/vehicles"), http.StatusOK, "Warranty lost")
+	// Lost: services take turns, so nothing logged means the full one, two
+	// steps from the purchase (10 000 km, two years).
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>10 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2028</dd>")
+
+	// Backfilled: the break-in at 1 000, then a full one late by distance
+	// (11 200, past 11 000): still lost, by that full service.
+	logged := func(tier, on, odo string) string {
+		t.Helper()
+		rec := a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {tier}, "title": {"Oil Service"},
+			"performed_on": {on}, "odometer": {odo}})
+		expect(t, rec, http.StatusSeeOther)
+		return rec.Header().Get("Location")
+	}
+	logged("break_in", "2026-02-01", "1000")
+	late := logged("full", "2026-10-01", "11200")
+	expect(t, a.get(path), http.StatusOK, "<dt>Warranty lost</dt><dd>Oil Service: full service due by 10 000 km or 1 Jan 2027, done at 11 200 km on 1 Oct 2026</dd>")
+	// Its reading corrected to 10 900, inside the grace: back under warranty.
+	expect(t, a.postV(late, url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
+		"performed_on": {"2026-10-01"}, "odometer": {"10900"}}), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-ok">`, "Under warranty")
+	expectNot(t, a.get(path), "Warranty lost")
+	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>15 900 km</dd>")
+}

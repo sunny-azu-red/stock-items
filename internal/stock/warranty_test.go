@@ -58,6 +58,7 @@ func TestWarrantyOfCountsDays(t *testing.T) {
 func TestWarrantyLabels(t *testing.T) {
 	for s, want := range map[WarrantyState]string{
 		WarrantyNone: "", WarrantyActive: "Under warranty", WarrantySoon: "Warranty ends soon", WarrantyEnded: "Warranty ended",
+		WarrantyLost: "Warranty lost",
 	} {
 		if got := s.Label(); got != want {
 			t.Errorf("%s.Label() = %q, want %q", s, got, want)
@@ -109,5 +110,92 @@ func TestVehicleWarrantyValidate(t *testing.T) {
 				t.Errorf("no error on %s (errors %v)", tt.field, tt.errs)
 			}
 		})
+	}
+}
+
+// A warranty is lost when a kit it asks for (WarrantyKit) had its break-in
+// or a full service done past its limit and the grace (10% of the distance,
+// 30 days), or is past them and not done. Logging the missing services on
+// time (backfilling) gets it back, and intermediate services never count.
+func TestWarrantyLost(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	bought := day(2025, 1, 1)
+	svc := func(tier KitTier, on time.Time, odo int) ServiceRef {
+		return ServiceRef{ID: int64(odo) + 1, PerformedOn: on, Odometer: odo, Tier: tier}
+	}
+	oil := func(dist int, breakIn *int, s ...ServiceRef) WarrantyKit {
+		return WarrantyKit{KitID: 1, Name: "Oil", IntervalDistance: ptr(dist), IntervalMonths: ptr(12), BreakInAt: breakIn, Services: s}
+	}
+	b := ptr(1000)
+	tests := []struct {
+		name     string
+		kits     []WarrantyKit
+		endsOn   time.Time
+		odo      int
+		today    time.Time
+		want     WarrantyState
+		wantTier KitTier
+	}{
+		{"break-in on time", []WarrantyKit{oil(10000, b, svc(TierBreakIn, day(2025, 2, 1), 1000))}, day(2030, 1, 1), 3000, day(2025, 4, 1), WarrantyActive, ""},
+		{"break-in at 1 100, the grace", []WarrantyKit{oil(10000, b, svc(TierBreakIn, day(2025, 2, 1), 1100))}, day(2030, 1, 1), 3000, day(2025, 4, 1), WarrantyActive, ""},
+		{"B6 break-in done at 6 000, logged as Full", []WarrantyKit{oil(10000, b, svc(TierFull, day(2025, 6, 1), 6000))}, day(2030, 1, 1), 6200, day(2025, 6, 6), WarrantyLost, TierBreakIn},
+		{"break-in at 1 101", []WarrantyKit{oil(10000, b, svc(TierBreakIn, day(2025, 2, 1), 1101))}, day(2030, 1, 1), 3000, day(2025, 4, 1), WarrantyLost, TierBreakIn},
+		{"no break-in yet at 1 100", []WarrantyKit{oil(10000, b)}, day(2030, 1, 1), 1100, day(2025, 2, 1), WarrantyActive, ""},
+		{"B10 kit added late, nothing logged at 10 500", []WarrantyKit{oil(10000, b)}, day(2030, 1, 1), 10500, day(2025, 10, 1), WarrantyLost, TierBreakIn},
+		{"B10 backfilled on time", []WarrantyKit{oil(10000, b, svc(TierBreakIn, day(2025, 2, 1), 1000), svc(TierFull, day(2025, 9, 1), 9800))}, day(2030, 1, 1), 10500, day(2025, 10, 1), WarrantyActive, ""},
+		{"B17 only an intermediate first: the break-in missed", []WarrantyKit{oil(10000, b, svc(TierFull, day(2025, 12, 1), 10000))}, day(2030, 1, 1), 10200, day(2025, 12, 5), WarrantyLost, TierBreakIn},
+		{"full at 11 000, the grace", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2025, 10, 1), 11000))}, day(2030, 1, 1), 12000, day(2025, 11, 1), WarrantyActive, ""},
+		{"full at 11 001", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2025, 10, 1), 11001))}, day(2030, 1, 1), 12000, day(2025, 11, 1), WarrantyLost, TierFull},
+		{"GreyJoy: full at 16 500 on a 15 000 kit", []WarrantyKit{oil(15000, nil, svc(TierFull, day(2025, 10, 1), 16500))}, day(2030, 1, 1), 17000, day(2025, 11, 1), WarrantyActive, ""},
+		{"GreyJoy: full at 16 501", []WarrantyKit{oil(15000, nil, svc(TierFull, day(2025, 10, 1), 16501))}, day(2030, 1, 1), 17000, day(2025, 11, 1), WarrantyLost, TierFull},
+		{"full 30 days past the year", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2026, 1, 31), 4000))}, day(2030, 1, 1), 4500, day(2026, 2, 5), WarrantyActive, ""},
+		{"full 31 days past the year", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2026, 2, 1), 4000))}, day(2030, 1, 1), 4500, day(2026, 2, 5), WarrantyLost, TierFull},
+		{"no full yet, 30 days past the year", []WarrantyKit{oil(10000, nil)}, day(2030, 1, 1), 4000, day(2026, 1, 31), WarrantyActive, ""},
+		{"no full yet, 31 days past the year", []WarrantyKit{oil(10000, nil)}, day(2030, 1, 1), 4000, day(2026, 2, 1), WarrantyLost, TierFull},
+		{"the second full counts from the first", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2025, 9, 1), 9000), svc(TierFull, day(2026, 6, 1), 20001))}, day(2030, 1, 1), 21000, day(2026, 7, 1), WarrantyLost, TierFull},
+		{"intermediates never count", []WarrantyKit{oil(10000, nil, svc(TierIntermediate, day(2025, 6, 1), 9000))}, day(2030, 1, 1), 9500, day(2025, 7, 1), WarrantyActive, ""},
+		{"a second kit missed", []WarrantyKit{oil(10000, nil), {KitID: 2, Name: "Brake fluid", IntervalMonths: ptr(24)}}, day(2030, 1, 1), 5000, day(2027, 3, 1), WarrantyLost, TierFull},
+		{"ended shows over lost", []WarrantyKit{oil(10000, b)}, day(2025, 9, 30), 10500, day(2025, 10, 1), WarrantyEnded, ""},
+		{"no warranty: never lost", []WarrantyKit{oil(10000, b)}, time.Time{}, 10500, day(2025, 10, 1), WarrantyNone, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var endsOn *time.Time
+			if !tt.endsOn.IsZero() {
+				endsOn = &tt.endsOn
+			}
+			v := Vehicle{Odometer: tt.odo, PurchasedOn: bought, WarrantyEndsOn: endsOn, WarrantyKits: tt.kits}
+			w := v.Warranty(tt.today)
+			if w.State != tt.want {
+				t.Fatalf("state = %s, want %s (missed %+v)", w.State, tt.want, w.Missed)
+			}
+			if (w.Missed != nil) != (tt.want == WarrantyLost) || (w.Missed != nil && w.Missed.Tier != tt.wantTier) {
+				t.Errorf("missed = %+v, want a %q", w.Missed, tt.wantTier)
+			}
+		})
+	}
+}
+
+// Once lost, the kits are scheduled as without a warranty: services take
+// turns from the last one (B6: a Full at 6 000, the intermediate at 11 000,
+// the full one at 16 000).
+func TestWarrantyLostSchedulesInTurns(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	full := ServiceRef{ID: 1, PerformedOn: day(2025, 6, 1), Odometer: 6000, Tier: TierFull}
+	k := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
+		VehiclePurchasedOn: day(2025, 1, 1), VehicleWarrantyEndsOn: ptr(day(2030, 12, 31)),
+		LastService: &full, LastFullService: &full, FirstServiceID: 1}
+	k.VehicleWarrantyKits = []WarrantyKit{{KitID: 1, Name: "Oil", IntervalDistance: k.IntervalDistance, IntervalMonths: k.IntervalMonths,
+		BreakInAt: k.BreakInAt, Services: []ServiceRef{full}}}
+	today := day(2025, 6, 6)
+	if got := k.Warranty(6200, today).State; got != WarrantyLost {
+		t.Fatalf("state = %s, want lost", got)
+	}
+	if k.UnderWarranty(6200, today) {
+		t.Error("lost: want no longer under warranty")
+	}
+	checkNext(t, k, 6200, today, "inter", DueOK, ptr(11000), "2026-06-01")
+	if f := k.FullDue(6200, today); f.DueOdometer == nil || *f.DueOdometer != 16000 {
+		t.Errorf("full due = %v, want 16 000", deref(f.DueOdometer))
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"time"
@@ -299,8 +300,9 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		idKey = math.MaxInt64
 	}
 	var intermediate, breakIn, otherBreakIn, earlier bool
+	var breakInAt *int
 	err := tx.QueryRow(ctx, `
-		SELECT intermediate,
+		SELECT intermediate, break_in_at,
 		       -- A break-in on the service's vehicle (stock.Kit.HasBreakIn).
 		       COALESCE(break_in_at > (SELECT odometer_at_purchase FROM vehicles WHERE id = $3), false),
 		       EXISTS (SELECT 1 FROM service_records
@@ -309,7 +311,7 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		               WHERE kit_id = $1 AND vehicle_id = $3 AND id <> $2
 		                 AND (performed_on, odometer, id) < ($4::date, $5::integer, $6::bigint))
 		FROM service_kits WHERE id = $1 FOR SHARE`, *in.KitID, serviceID, in.VehicleID, in.PerformedOn, in.Odometer, idKey).
-		Scan(&intermediate, &breakIn, &otherBreakIn, &earlier)
+		Scan(&intermediate, &breakInAt, &breakIn, &otherBreakIn, &earlier)
 	if err != nil {
 		return notFound(err)
 	}
@@ -323,6 +325,14 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		return &ConflictError{Field: "kit_tier", Message: "This kit has an earlier service: only its first is the break-in"}
 	case changed && in.KitTier == stock.TierBreakIn && otherBreakIn:
 		return &ConflictError{Field: "kit_tier", Message: "This kit has a break-in already"}
+	case in.KitTier == stock.TierBreakIn && breakIn && in.Odometer != nil &&
+		*in.Odometer > *breakInAt+stock.WarrantyGrace(*breakInAt):
+		// A break-in done this late is a full service (the warranty counts
+		// it missed, stock.WarrantyKit), so it is logged as one: then the
+		// schedules count from it. Checked on every save of one, so an
+		// edit can't move it past its reading either.
+		return &ConflictError{Field: "odometer", Message: fmt.Sprintf("The break-in is due by %s (%s at the latest): log this one as Full",
+			stock.FormatDistance(*breakInAt), stock.FormatDistance(*breakInAt+stock.WarrantyGrace(*breakInAt)))}
 	}
 	return nil
 }

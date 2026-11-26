@@ -33,13 +33,39 @@ func (s *Store) ListVehicles(ctx context.Context) ([]stock.Vehicle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Vehicle, error) { return scanVehicle(r) })
+	vehicles, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Vehicle, error) { return scanVehicle(r) })
+	if err != nil {
+		return nil, err
+	}
+	return vehicles, withWarrantyKits(ctx, s.pool, vehicles)
 }
 
 // GetVehicle returns one vehicle.
 func (s *Store) GetVehicle(ctx context.Context, id int64) (stock.Vehicle, error) {
 	v, err := scanVehicle(s.pool.QueryRow(ctx, vehicleSelect+` WHERE v.id = $1`, id))
-	return v, notFound(err)
+	if err != nil {
+		return v, notFound(err)
+	}
+	vs := []stock.Vehicle{v}
+	err = withWarrantyKits(ctx, s.pool, vs)
+	return vs[0], err
+}
+
+// withWarrantyKits fills in the vehicles' WarrantyKits (loadWarrantyKits),
+// which their warranty is worked out from.
+func withWarrantyKits(ctx context.Context, q querier, vehicles []stock.Vehicle) error {
+	ids := make([]int64, len(vehicles))
+	for i, v := range vehicles {
+		ids[i] = v.ID
+	}
+	kits, err := loadWarrantyKits(ctx, q, ids)
+	if err != nil {
+		return err
+	}
+	for i := range vehicles {
+		vehicles[i].WarrantyKits = kits[vehicles[i].ID]
+	}
+	return nil
 }
 
 func vehicleConflict(err error) error {

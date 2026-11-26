@@ -734,7 +734,7 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 
 	// A kit with two schedules names the one its header counts.
 	rec = a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
 		"intermediate": {"1"},
 		"line_item":    {itoa(oil)}, "line_qty": {"5 L"},
 		"inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"},
@@ -742,7 +742,9 @@ func TestKitAddMissingInPartsCard(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	page = a.get(rec.Header().Get("Location"))
 	expect(t, page, http.StatusOK)
-	// Never done, no warranty: the intermediate one is next.
+	// Never done, no warranty: the intermediate one is next (by distance
+	// only: the seed's vehicle was bought in 2020, so a year's months would
+	// make the full one overdue, and it would take over).
 	if head := pageHead(t, page); !strings.Contains(head, "Intermediate: 1 part missing") {
 		t.Errorf("the header doesn't name the schedule:\n%s", head)
 	}
@@ -801,7 +803,7 @@ func TestKitMissingStates(t *testing.T) {
 	// Two schedules: the intermediate one is next (no warranty: they take
 	// turns) and misses 2 pads (the list asks for 2 of the 4); the header
 	// names only it, as the full one is ready.
-	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+	interURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
 		"intermediate": {"1"},
 		"line_item":    {itoa(oil)}, "line_qty": {"100 ml"}, "inter_line_item": {itoa(pads)}, "inter_line_qty": {"4"}})
 	page = a.get(interURL)
@@ -835,7 +837,7 @@ func TestKitMissingStates(t *testing.T) {
 	coolant := itemID(t, a.store, "M3.0")
 	otherURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"},
 		"line_item": {itoa(coolant)}, "line_qty": {"2 L"}})
-	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+	twoURL, _ := kitOf(url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
 		"intermediate": {"1"},
 		"line_item":    {itoa(coolant)}, "line_qty": {"5 L"}, "inter_line_item": {itoa(coolant)}, "inter_line_qty": {"100 ml"}})
 	v, err := a.store.GetVehicle(ctx, k1290)
@@ -870,7 +872,7 @@ func TestKitShortfallDoesNotFallBackWhenListed(t *testing.T) {
 	expect(t, rec, http.StatusSeeOther)
 	plugID := mustID(t, rec.Header().Get("Location"))
 	rec = a.post("/kits", url.Values{
-		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"}, "interval_months": {"12"},
+		"vehicle_id": {itoa(k390)}, "name": {"Major & Minor"}, "interval_distance": {"15000"},
 		"intermediate": {"1"},
 		"line_item":    {itoa(oil)}, "line_qty": {"1.7 L"},
 		"inter_line_item": {itoa(plugID)}, "inter_line_qty": {"2"},

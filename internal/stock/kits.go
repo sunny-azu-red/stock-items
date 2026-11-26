@@ -195,6 +195,8 @@ func (k Kit) counted() *ServiceRef {
 
 // FullDue computes when the kit's full service is next due. No schedule
 // counts from a break-in (counted, LastFullService).
+//   - A break-in missed (breakInMissed) is due as the full service, at
+//     the break-in's reading.
 //   - While the vehicle is under warranty (UnderWarranty), it counts its
 //     own interval from the last full service, or from the purchase before
 //     the first: intermediate services never move it, as a warranty asks.
@@ -207,6 +209,12 @@ func (k Kit) counted() *ServiceRef {
 func (k Kit) FullDue(currentOdo int, today time.Time) Due {
 	if (k.IntervalDistance == nil && k.IntervalMonths == nil) || k.Archived() {
 		return Due{State: DueNone}
+	}
+	if k.breakInMissed() {
+		// A break-in done this late is a full service: due since the
+		// break-in's reading, by distance only, as the break-in was.
+		from := k.VehicleOdometerAtPurchase
+		return dueFrom(nil, k.VehiclePurchasedOn, from, ptrTo(*k.BreakInAt-from), nil, currentOdo, today)
 	}
 	if k.UnderWarranty(currentOdo, today) {
 		return dueFrom(k.LastFullService, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
@@ -237,11 +245,30 @@ func ptrTo(n int) *int { return &n }
 // past its first full distance since (a kit added long after the break-in
 // doesn't ask for one). The break-in takes the full parts (ActiveLines),
 // and no schedule counts from it (counted, LastFullService).
+//
+// Past Break-in at and its grace (WarrantyGrace) it is missed
+// (breakInMissed): a break-in can no longer be logged at the reading
+// (store.checkKitTier), so the full service is next, due since the
+// break-in's reading.
 func (k Kit) NextIsBreakIn() bool {
+	return k.breakInPending() && !k.breakInMissed()
+}
+
+// breakInPending reports whether the kit still waits for the vehicle's
+// break-in: it has one, nothing has been logged with it, and the vehicle
+// hasn't gone past its first full distance.
+func (k Kit) breakInPending() bool {
 	if !k.HasBreakIn() || k.LastService != nil || k.Archived() {
 		return false
 	}
 	return k.IntervalDistance == nil || k.VehicleOdometer < k.VehicleOdometerAtPurchase+*k.IntervalDistance
+}
+
+// breakInMissed reports whether the break-in is still waited for but the
+// vehicle is past Break-in at and its grace: then the full service is
+// next, due at the break-in's reading (FullDue).
+func (k Kit) breakInMissed() bool {
+	return k.breakInPending() && k.VehicleOdometer > *k.BreakInAt+WarrantyGrace(*k.BreakInAt)
 }
 
 // HasBreakIn reports whether the kit has a break-in on its vehicle: it says
@@ -269,22 +296,50 @@ func (k Kit) UnderWarranty(currentOdo int, today time.Time) bool {
 
 // NextIsIntermediate reports whether the intermediate service is next.
 //   - Once it has been done since the last full service, the full one is.
+//   - The full one takes over once it is close (fullClose), with a warranty
+//     or without: an intermediate service skipped, or never reached by a
+//     light rider, doesn't stay next until the full one is overdue.
 //   - Without a warranty running, they take turns.
-//   - Under warranty the full service keeps its own deadline: it comes
-//     first once it is due soon or overdue, or when the intermediate one
-//     wouldn't fall due before it (dueBefore).
+//   - Under warranty the full service keeps its own deadline: it also comes
+//     first when the intermediate one wouldn't fall due before it
+//     (dueBefore).
 func (k Kit) NextIsIntermediate(currentOdo int, today time.Time) bool {
-	if !k.Intermediate || k.Archived() || k.InterSinceFull || k.NextIsBreakIn() {
+	if !k.Intermediate || k.Archived() || k.InterSinceFull || k.breakInPending() {
+		return false
+	}
+	full := k.FullDue(currentOdo, today)
+	if k.fullClose(full) {
 		return false
 	}
 	if !k.UnderWarranty(currentOdo, today) {
 		return true
 	}
-	full := k.FullDue(currentOdo, today)
-	if full.State == DueSoon || full.State == DueOverdue {
-		return false
-	}
 	return dueBefore(k.InterDue(currentOdo, today), full)
+}
+
+// FullTakesOver is the share of the kit's interval (its distance, and its
+// months in days) left before the full service, within which the full
+// service is next rather than the intermediate one: the last quarter.
+const FullTakesOver = 4
+
+// fullClose reports whether the full service (full, FullDue) is close
+// enough to come before an intermediate one: overdue, due soon, or within
+// the last quarter of the kit's interval (FullTakesOver: 2 500 km or about 3
+// months on a 10 000 km / 12 month kit), by distance or by date.
+func (k Kit) fullClose(full Due) bool {
+	if full.State == DueSoon || full.State == DueOverdue {
+		return true
+	}
+	if full.DistanceLeft != nil && k.IntervalDistance != nil && *full.DistanceLeft <= *k.IntervalDistance/FullTakesOver {
+		return true
+	}
+	if full.DaysLeft != nil && k.IntervalMonths != nil {
+		days := int(full.DueDate.Sub(addMonths(*full.DueDate, -*k.IntervalMonths)).Hours() / 24)
+		if *full.DaysLeft <= days/FullTakesOver {
+			return true
+		}
+	}
+	return false
 }
 
 // dueBefore reports whether a may fall due strictly before b. Each falls

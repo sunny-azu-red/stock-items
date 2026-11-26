@@ -118,7 +118,7 @@ var oldOrder = []struct {
 	{"items", []string{"id", "name", "brand", "category", "unit", "quantity", "min_quantity", "expires_on",
 		"location", "notes", "created_at", "updated_at", "archived_at", "version"}},
 	{"service_kits", []string{"id", "vehicle_id", "name", "interval_distance", "interval_months", "notes",
-		"created_at", "updated_at", "archived_at", "version", "intermediate", "break_in_at"}},
+		"created_at", "updated_at", "archived_at", "version", "intermediate", "break_in_at", "warranty_required"}},
 	{"service_records", []string{"id", "vehicle_id", "kit_id", "performed_on", "odometer", "title", "notes",
 		"labor_cost", "created_at", "odometer_before", "version", "kit_tier"}},
 	{"stock_movements", []string{"id", "item_id", "kind", "delta", "total_price", "supplier", "note",

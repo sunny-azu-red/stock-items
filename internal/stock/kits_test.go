@@ -385,9 +385,18 @@ func TestBreakIn(t *testing.T) {
 	if late.NextIsBreakIn() {
 		t.Error("at 8 000 km, a kit's first full distance: want no break-in")
 	}
-	late.VehicleOdometer = 7999
+	// Past Break-in at and its 10% grace, a break-in can't be logged at
+	// the reading: the full service is next, overdue since 1 000 km.
+	late.VehicleOdometer = 1100
 	if !late.NextIsBreakIn() {
-		t.Error("at 7 999 km: want the break-in still next (late)")
+		t.Error("at 1 100 km, the grace: want the break-in still next (late)")
+	}
+	for _, odo := range []int{1101, 7999} {
+		late.VehicleOdometer = odo
+		if late.NextIsBreakIn() || late.NextIsIntermediate(odo, d(2025, 6, 1)) {
+			t.Errorf("at %d km: want the break-in missed and the full service next", odo)
+		}
+		checkNext(t, late, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "")
 	}
 	// Archived: none either.
 	archived := kit()
@@ -442,5 +451,57 @@ func TestKitLineListed(t *testing.T) {
 	}
 	if n := ToList(lines, nil); n != 4 {
 		t.Errorf("ToList with nothing listed = %d, want 4", n)
+	}
+}
+
+// The full service takes over from the intermediate one in the last quarter
+// of the kit's interval (2 500 km or about 3 months on 10 000 km / 12
+// months), with a warranty or without: a light rider sees the full service
+// three months ahead, and a skipped intermediate service doesn't stay next
+// until the full one is overdue.
+func TestFullTakesOver(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	kit := func(warranty bool, last *ServiceRef) Kit {
+		k := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true,
+			VehiclePurchasedOn: d(2025, 1, 1), VehicleOdometerAtPurchase: 0}
+		if warranty {
+			k.VehicleWarrantyEndsOn = ptr(d(2030, 12, 31))
+		}
+		if last != nil {
+			k.LastService, k.LastFullService = last, last
+		}
+		return k
+	}
+	fullAt := func(on time.Time, odo int) *ServiceRef {
+		return &ServiceRef{ID: 1, PerformedOn: on, Odometer: odo, Tier: TierFull}
+	}
+	light := fullAt(d(2026, 1, 1), 3600)   // W11, W12
+	normal := fullAt(d(2025, 9, 1), 10000) // W1, W7, W8, N6
+	tests := []struct {
+		name      string
+		k         Kit
+		odo       int
+		today     time.Time
+		wantNext  string
+		wantState DueState
+		wantOdo   int
+		wantDate  string
+	}{
+		{"W11 light rider, 92 days before the year: still the intermediate", kit(true, light), 6600, d(2026, 10, 1), "inter", DueOK, 8600, "2027-01-01"},
+		{"W11 light rider, 91 days before the year: the full one", kit(true, light), 6600, d(2026, 10, 2), "full", DueOK, 13600, "2027-01-01"},
+		{"W12 light rider, 25 days before", kit(true, light), 7100, d(2026, 12, 7), "full", DueSoon, 13600, "2027-01-01"},
+		{"W1 normal rider: the intermediate at 15 000", kit(true, normal), 12000, d(2025, 10, 1), "inter", DueOK, 15000, "2026-09-01"},
+		{"W8 intermediate overdue, full 4 000 away: still the intermediate", kit(true, normal), 16000, d(2026, 1, 1), "inter", DueOverdue, 15000, "2026-09-01"},
+		{"intermediate skipped, 2 501 before the full: the intermediate", kit(true, normal), 17499, d(2026, 2, 1), "inter", DueOverdue, 15000, "2026-09-01"},
+		{"intermediate skipped, 2 500 before the full: the full one", kit(true, normal), 17500, d(2026, 2, 1), "full", DueOK, 20000, "2026-09-01"},
+		{"N6 no warranty, intermediate skipped, at 19 200: the full one", kit(false, normal), 19200, d(2026, 4, 1), "full", DueSoon, 20000, "2027-09-01"},
+		{"N6 no warranty, at 17 000: still the intermediate", kit(false, normal), 17000, d(2026, 4, 1), "inter", DueOverdue, 15000, "2026-09-01"},
+		{"B11 no warranty, nothing logged, at 10 500: the full one", kit(false, nil), 10500, d(2025, 10, 1), "full", DueOverdue, 10000, "2027-01-01"},
+		{"N9 no warranty, light rider: the intermediate at the year", kit(false, light), 6600, d(2026, 11, 1), "inter", DueOK, 8600, "2027-01-01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkNext(t, tt.k, tt.odo, tt.today, tt.wantNext, tt.wantState, &tt.wantOdo, tt.wantDate)
+		})
 	}
 }

@@ -205,6 +205,7 @@ type kitForm struct {
 	Name, IntervalDistance, IntervalMonths string
 	Intermediate                           bool // see stock.Kit.Intermediate
 	BreakInAt                              string
+	WarrantyRequired                       bool // see stock.Kit.WarrantyRequired
 	Notes                                  string
 	Lines                                  []lineRow
 	InterLines                             []lineRow
@@ -260,13 +261,15 @@ func (s *Server) parseKitForm(r *http.Request) (kitForm, stock.KitInput, error) 
 	f := kitForm{
 		Name: formText(r, "name"), IntervalDistance: formText(r, "interval_distance"), IntervalMonths: formText(r, "interval_months"),
 		Intermediate: formText(r, "intermediate") == "1", BreakInAt: formText(r, "break_in_at"),
-		Notes: formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
+		WarrantyRequired: formText(r, "warranty_required") == "1",
+		Notes:            formText(r, "notes"), Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
 	}
 	checkFormKey(f.Errors, f.FormKey)
 	if id := parseOptID(formText(r, "vehicle_id")); id != nil {
 		f.VehicleID = *id
 	}
-	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Intermediate: f.Intermediate, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
+	in := stock.KitInput{VehicleID: f.VehicleID, Name: f.Name, Intermediate: f.Intermediate, WarrantyRequired: f.WarrantyRequired,
+		Notes: f.Notes, Version: f.Version, FormKey: f.FormKey}
 	if in.IntervalDistance, err = parseOptInt(f.IntervalDistance); err != nil {
 		f.Errors.Add("interval_distance", err.Error())
 	}
@@ -304,7 +307,7 @@ func kitFormFrom(k stock.Kit) kitForm {
 	f := kitForm{
 		ID: k.ID, VehicleID: k.VehicleID, Name: k.Name, Stored: k.Name, IntervalDistance: optIntString(k.IntervalDistance),
 		IntervalMonths: optIntString(k.IntervalMonths), Intermediate: k.Intermediate, BreakInAt: optIntString(k.BreakInAt),
-		Notes: k.Notes, Version: k.Version,
+		WarrantyRequired: k.WarrantyRequired, Notes: k.Notes, Version: k.Version,
 	}
 	for _, l := range k.Lines {
 		f.Lines = append(f.Lines, partRow(l.ItemID, l.Need, l.Unit))

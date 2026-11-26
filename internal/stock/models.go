@@ -70,10 +70,14 @@ type Vehicle struct {
 	// the reading it ends past; whichever comes first ends it (Warranty).
 	WarrantyEndsOn *time.Time
 	WarrantyEndsAt *int
-	Notes          string
-	ItemCount      int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// WarrantyKits are its kits the warranty asks for on time
+	// (Kit.WarrantyRequired), with their services: a missed one loses the
+	// warranty (Warranty).
+	WarrantyKits []WarrantyKit
+	Notes        string
+	ItemCount    int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists
 	// and pickers, but their services and kits stay.
 	ArchivedAt *time.Time
@@ -467,20 +471,27 @@ type Kit struct {
 	VehicleOdometerAtPurchase int
 	VehicleWarrantyEndsOn     *time.Time
 	VehicleWarrantyEndsAt     *int
-	Name                      string
-	IntervalDistance          *int
-	IntervalMonths            *int
+	// VehicleWarrantyKits are the vehicle's kits the warranty asks for on
+	// time (Vehicle.WarrantyKits), this one too if it is.
+	VehicleWarrantyKits []WarrantyKit
+	Name                string
+	IntervalDistance    *int
+	IntervalMonths      *int
 	// Intermediate says the kit has an intermediate service halfway between
 	// two full ones, by distance (InterStep), at the full months. It needs
 	// the distance.
 	Intermediate bool
 	// BreakInAt is the reading a new vehicle's break-in service is due at
 	// (NextIsBreakIn); nil without one.
-	BreakInAt   *int
-	Notes       string
-	Lines       []KitLine
-	InterLines  []KitLine
-	LastService *ServiceRef
+	BreakInAt *int
+	// WarrantyRequired says the vehicle's warranty asks for this kit's
+	// break-in and full services on time: one done late, or not done,
+	// loses it (Warranty). It doesn't change the kit's schedule.
+	WarrantyRequired bool
+	Notes            string
+	Lines            []KitLine
+	InterLines       []KitLine
+	LastService      *ServiceRef
 	// LastFullService is the latest full service performed with this kit
 	// (never an intermediate one or the break-in).
 	LastFullService *ServiceRef

@@ -68,12 +68,13 @@
 {{define "schedule-ready-badge"}}{{$r := .R}}{{$p := ""}}{{with .Name}}{{$p = print . ": "}}{{end}}{{if $r.Ready}}<span class="badge badge-ok">{{icon "check"}} {{if $p}}{{$p}}parts ready{{else}}Parts ready{{end}}</span>{{else if eq $r.Lines 0}}<span class="badge badge-muted">{{if $p}}{{$p}}no parts{{else}}No parts{{end}}</span>{{else}}<span class="badge badge-danger">{{icon "x"}} {{$p}}{{plural $r.ShortLines "part"}} missing</span>{{end}}{{end}}
 
 {{/* A vehicle's warranty (stock.Warranty), never written by hand: Under
-     warranty, Warranty ends soon or Warranty ended; nothing without one. */}}
-{{define "warranty-badge"}}{{if eq .State "active"}}<span class="badge badge-ok">{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span class="badge badge-muted">{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
+     warranty, Warranty ends soon, Warranty lost (a service it asks for was
+     missed) or Warranty ended; nothing without one. */}}
+{{define "warranty-badge"}}{{if eq .State "active"}}<span class="badge badge-ok">{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "lost"}}<span class="badge badge-danger">{{icon "shield-x"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span class="badge badge-muted">{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
 
 {{/* The warranty badge's icon and words without its colour, where a
      vehicle is one line of a list (the /vehicles cards' stats). */}}
-{{define "warranty-text"}}{{if eq .State "active"}}<span>{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span>{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span>{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
+{{define "warranty-text"}}{{if eq .State "active"}}<span>{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span>{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "lost"}}<span>{{icon "shield-x"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span>{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
 
 {{define "archived-badge"}}<span class="badge badge-muted"{{with .}} title="Archived {{date .}}"{{end}}>{{icon "archive"}} Archived</span>{{end}}
 

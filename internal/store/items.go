@@ -400,6 +400,11 @@ type queryRower interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// querier is a pool or a transaction, for reads either can run.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
 func itemUsage(ctx context.Context, q queryRower, id int64) (stock.ItemUsage, error) {
 	var u stock.ItemUsage
 	err := q.QueryRow(ctx, `

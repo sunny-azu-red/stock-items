@@ -77,14 +77,14 @@ Losing or ending the warranty changes the Full the same day, also for services d
 
 A **missed break-in** (`breakInMissed`): still waited for (nothing logged, the vehicle not past its first full distance) but the odometer is past Break-in at + 10%. A break-in can no longer be logged at that reading, so the Full is due in its place, at the break-in's reading or the kit's months after the purchase, overdue (`FullDue`; B2). Past the first full distance with nothing logged, the kit no longer waits for a break-in at all (B10, B11).
 
-The **Full also comes before a waited-for break-in once it is close** (`breakInYields`: its last quarter, due soon or overdue): a light rider whose first Full's date comes before Break-in at (under 83 km a month on a 12-month kit) sees the Full about 3 months ahead, instead of a break-in due by distance only while that date passes. Logged by Break-in at + 10%, that Full counts as the break-in for the warranty.
+The **Full also comes before a waited-for break-in once it is close** (`breakInYields`: its last quarter, due soon or overdue): a light rider whose first Full's date comes before Break-in at (under 83 km a month on a 12-month kit) sees the Full about 3 months ahead, instead of a break-in due by distance only while that date passes. Logged by Break-in at + 10%, that Full counts as the break-in for the warranty. **It stands in for the break-in, so it is due by Break-in at too**, or its date, whichever comes first (`Kit.Due`): "Full · in 100 km · in 91 days". Showing its own 10 000 km hid the reading: a rider of 100 km a month saw "Full · in 9 100 km" at 900 km and lost the warranty at 1 101 km before anything showed overdue (found by the full scan's 50 km/month rider, 2026-11-26). Logged as Full rather than Break-in on purpose: it is also the yearly service, and a break-in restarts no schedule, so the Full would be overdue the next day.
 
 ## Which service is next
 
 `Kit.Due` gives the next one, `NextIsBreakIn` and `NextIsIntermediate` which kind it is; Log service preselects that kind (`handlers_services.go`).
 
 1. **Break-in**, if the kit waits for one, it isn't missed, and the Full isn't close (`NextIsBreakIn`).
-2. **Full**, if the break-in gives way (missed, or the Full close), or an intermediate was done since the last Full (`InterSinceFull`).
+2. **Full**, if the break-in gives way (missed, or the Full close: then due by Break-in at or the kit's months from the purchase), or an intermediate was done since the last Full (`InterSinceFull`).
 3. **Full**, if it is in its **last quarter**, due soon or overdue (`fullClose`), with a warranty or without (W11, N6, E7, B11).
 4. Under warranty only: **Full**, unless the intermediate falls due strictly before it by distance or by date (`dueBefore`).
 5. Otherwise **Intermediate**.
@@ -142,10 +142,11 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
   - Every miss is listed, in a red card on the vehicle page, sorted by the day it lost the warranty; the facts give the first one's day ("the day it actually happened; later misses can't lose it again").
   - Editing a ticked kit's numbers re-judges its history: documented, not prevented.
   - Log service offers Break-in until one is logged, to backfill it.
+  - A Full standing in for the waited-for break-in is due by Break-in at too (the scan's slow rider lost the warranty without a warning). It stays a Full, not a break-in that restarts the clock: one rule fewer.
 
 ## Tests
 
-- `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestBreakInWaitOwnInterval`, `TestFullTakesOver`.
+- `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestBreakInWaitOwnInterval`, `TestBreakInStandInDue`, `TestFullTakesOver`.
 - `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`, `TestWarrantyLostNamesTheEarliestMiss`, `TestWarrantyMisses` (every miss, `LostOn`).
 - `internal/store/archive_test.go`: `TestArchiveKitRequiredByWarranty`.
 - `internal/stock/validate_test.go`: the kit form rows above.

@@ -379,9 +379,19 @@ func dueBefore(a, b Due) bool {
 
 // Due computes when the kit's next service (break-in, intermediate or full)
 // is due, given the vehicle's current odometer reading and today's date.
+// A full service standing in for a break-in still waited for (close, or
+// the break-in missed: breakInYields) is due by Break-in at too, or the
+// kit's months from the purchase, whichever comes first: done by Break-in
+// at + 10% it counts as the break-in (WarrantyKit.misses), so a light rider
+// who follows the reminder keeps the warranty, and its own 10 000 km would
+// hide that reading.
 func (k Kit) Due(currentOdo int, today time.Time) Due {
 	if k.NextIsBreakIn(currentOdo, today) {
 		return k.BreakInDue(currentOdo, today)
+	}
+	if k.breakInPending(currentOdo) && (k.IntervalDistance != nil || k.IntervalMonths != nil) {
+		from := k.VehicleOdometerAtPurchase
+		return dueFrom(nil, k.VehiclePurchasedOn, from, ptrTo(*k.BreakInAt-from), k.IntervalMonths, currentOdo, today)
 	}
 	if k.NextIsIntermediate(currentOdo, today) {
 		return k.InterDue(currentOdo, today)

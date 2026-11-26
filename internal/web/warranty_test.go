@@ -572,10 +572,11 @@ func TestBreakInWaitWithoutWarranty(t *testing.T) {
 		kit = rec.Header().Get("Location")
 		return kit, itoa(mustID(t, kit))
 	}
-	// No warranty, 450 km since 1 Jan 2026: the Full, due by 1 Jan 2027.
+	// No warranty, 450 km since 1 Jan 2026: the Full, due by 1 Jan 2027,
+	// and by 1 000 km as it stands in for the break-in.
 	kit, kitID := kitFor(url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"450"},
 		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}}, false)
-	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>10 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>1 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
 	expectNot(t, a.get(kit), "Next: Break-in")
 	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
 		`value="full" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service" checked`, `value="break_in"`)
@@ -587,6 +588,23 @@ func TestBreakInWaitWithoutWarranty(t *testing.T) {
 	page := a.get(kit)
 	expect(t, page, http.StatusOK, "Next: Full", "<dt>Due by</dt><dd>1 Oct 2026</dd>", "Overdue")
 	expectNot(t, page, "Next: Break-in")
+
+	// Under warranty, ticked, 900 km 39 days before the year: the Full
+	// stands in for the break-in, due by 1 000 km (not its own 10 000,
+	// which hid the reading the warranty needs); logged there, it counts as
+	// the break-in and the warranty holds.
+	kit, kitID = kitFor(url.Values{"name": {"KillJoy"}, "kind": {"motorcycle"}, "color": {"#2563eb"}, "odometer": {"900"},
+		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2030-12-31"}}, true)
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>1 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>", "Due soon")
+	k, err := a.store.GetKit(context.Background(), mustID(t, kit))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vehicle := "/vehicles/" + itoa(k.VehicleID)
+	expect(t, a.post("/services", url.Values{"vehicle_id": {itoa(k.VehicleID)}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
+		"performed_on": {"2026-11-23"}, "odometer": {"1000"}}), http.StatusSeeOther)
+	expect(t, a.get(vehicle), http.StatusOK, "Under warranty")
+	expectNot(t, a.get(vehicle), "Warranty lost")
 }
 
 // A kit ticked Required by the warranty can't be archived: archiving would

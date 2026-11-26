@@ -204,7 +204,7 @@ func TestWarrantyLostSchedulesInTurns(t *testing.T) {
 }
 
 // With several kits the warranty asks for, the miss it names is the
-// earliest, whatever the kits' order.
+// earliest (TestWarrantyMisses runs both orders).
 func TestWarrantyLostNamesTheEarliestMiss(t *testing.T) {
 	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 	full := func(on time.Time, odo int) ServiceRef {

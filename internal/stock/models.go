@@ -478,8 +478,9 @@ type Kit struct {
 	IntervalDistance    *int
 	IntervalMonths      *int
 	// Intermediate says the kit has an intermediate service halfway between
-	// two full ones, by distance (InterStep), at the full months. It needs
-	// the distance.
+	// two full ones: halfway through the distance at the full time
+	// (InterStep), or, with a time only, halfway through the time
+	// (InterMonths). It needs a distance or a time.
 	Intermediate bool
 	// BreakInAt is the reading a new vehicle's break-in service is due at
 	// (NextIsBreakIn); nil without one.

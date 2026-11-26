@@ -561,6 +561,7 @@ func (in KitInput) Validate() Errors {
 			// (Kit.InterMonths), in whole months.
 			errs.Add("interval_months", "Enter an even number of months: the intermediate service comes halfway through the time")
 		case in.IntervalDistance == nil:
+			// A time only, even: nothing to check on a distance.
 		case *in.IntervalDistance%2 != 0:
 			// An even distance halves exactly, so a full service and the
 			// intermediate one always add up to it.

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sunny-azu-red/stock-items/internal/stock"
 )
 
 // warrantyToday is the clock of the warranty tests: 23 Nov 2026.
@@ -764,4 +766,48 @@ func TestWarrantyLostCard(t *testing.T) {
 	page := a.get(path)
 	expect(t, page, http.StatusOK, "Under warranty")
 	expectNot(t, page, `id="warranty-lost"`, "<dt>Warranty lost</dt>")
+}
+
+// A kit with a time only (Coolant every 48 months) can have an
+// intermediate service, halfway through the time: an odd time is refused
+// (keeping what was typed), the kit page says every 24 months and reminds
+// it first, Log service starts as it with its parts, and the Full comes a
+// step after it. A distance added later makes it halfway by distance, at
+// the full time.
+func TestHalfwayByTime(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"20000"},
+		"purchased_on": {"2025-01-01"}, "odometer_at_purchase": {"0"}})
+	expect(t, rec, http.StatusSeeOther)
+	id := itoa(mustID(t, rec.Header().Get("Location")))
+	item, err := a.store.CreateItem(context.Background(), stock.ItemInput{Name: "Coolant", Unit: stock.UnitPiece, Quantity: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"vehicle_id": {id}, "name": {"Coolant"}, "interval_months": {"9"}, "intermediate": {"1"},
+		"line_item": {itoa(item)}, "line_qty": {"2"}, "inter_line_item": {itoa(item)}, "inter_line_qty": {"1"}}
+	expect(t, a.post("/kits", form), http.StatusUnprocessableEntity,
+		"Enter an even number of months: the intermediate service comes halfway through the time",
+		`name="interval_months" value="9"`, `id="intermediate" name="intermediate" value="1" checked`)
+	form.Set("interval_months", "48")
+	rec = a.post("/kits", form)
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	kitID := itoa(mustID(t, kit))
+	page := a.get(kit)
+	expect(t, page, http.StatusOK, "<dt>Full every</dt><dd>48 months</dd>", "<dt>Intermediate every</dt><dd>24 months</dd>",
+		"Next: Intermediate", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+	expectNot(t, page, "<dt>Due at</dt>")
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
+		`value="intermediate" autocomplete="off" data-kit-tier="inter" data-kit-title="Coolant (Intermediate)" checked`)
+
+	// Done today: the Full a step (24 months) after it, no warranty.
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"intermediate"}, "title": {"Coolant (Intermediate)"},
+		"performed_on": {"2026-11-23"}, "odometer": {"20000"}, "part_item": {itoa(item)}, "part_qty": {"1"}}), http.StatusSeeOther)
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due by</dt><dd>23 Nov 2028</dd>")
+
+	// A distance added: halfway by distance, at the full time.
+	form.Set("interval_distance", "10000")
+	expect(t, a.postV(kit, form), http.StatusSeeOther)
+	expect(t, a.get(kit), http.StatusOK, "<dt>Intermediate every</dt><dd>5 000 km or 48 months</dd>")
 }

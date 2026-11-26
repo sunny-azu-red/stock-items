@@ -392,7 +392,8 @@ func TestTextAndNumberLimits(t *testing.T) {
 			in.Normalize()
 			return in.Validate()
 		}(), "lines"},
-		{"kit intermediate service with months only", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(48), Intermediate: true}.Validate(), "interval_distance"},
+		{"kit intermediate service with no distance or time", KitInput{VehicleID: 1, Name: "A", Intermediate: true}.Validate(), "interval_distance"},
+		{"kit intermediate service with an odd time only", KitInput{VehicleID: 1, Name: "A", IntervalMonths: ptr(9), Intermediate: true}.Validate(), "interval_months"},
 		{"kit intermediate service with an odd distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(2999), Intermediate: true}.Validate(), "interval_distance"},
 		{"kit break-in without a distance", KitInput{VehicleID: 1, Name: "A", BreakInAt: ptr(1000)}.Validate(), "interval_distance"},
 		{"kit break-in past the distance", KitInput{VehicleID: 1, Name: "A", IntervalDistance: ptr(8000), BreakInAt: ptr(8000)}.Validate(), "break_in_at"},

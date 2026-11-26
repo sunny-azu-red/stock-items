@@ -436,3 +436,57 @@ func TestServiceReadingRequiredMigration(t *testing.T) {
 		t.Errorf("after Down: a service without a reading refused: %v", err)
 	}
 }
+
+// 00007 lets a kit with a time only have an intermediate service (halfway
+// through the time); Down stops, changing nothing, while one has, live or
+// in the trash, and then brings the old CHECK back.
+func TestHalfwayByTimeMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('KTM 390', 12000, '2024-03-01', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	coolant := `INSERT INTO service_kits (vehicle_id, name, interval_months, intermediate) VALUES (1, 'Coolant', 48, true)`
+	if err := refused(t, pool, coolant); err == nil {
+		t.Error("before 00007: a time-only intermediate service was taken")
+	}
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, coolant); err != nil {
+		t.Fatalf("after Up: %v", err)
+	}
+	if err := refused(t, pool, `INSERT INTO service_kits (vehicle_id, name, intermediate) VALUES (1, 'Nothing', true)`); err == nil {
+		t.Error("after Up: an intermediate service without a distance or time was taken")
+	}
+	stopped := func(when, want string) {
+		t.Helper()
+		_, err := provider.DownTo(ctx, 6)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want it stopped with %q", when, err, want)
+		}
+		if v, err := provider.GetDBVersion(ctx); err != nil || v != 7 {
+			t.Errorf("%s: version %d (%v), want 7", when, v, err)
+		}
+	}
+	stopped("a live kit", "kits Coolant have an intermediate service by time only")
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM service_kits;
+		INSERT INTO trash (kind, label, payload) VALUES ('kit', 'Kit: Coolant',
+			'{"service_kits": [{"id": 60, "vehicle_id": 1, "name": "Coolant", "interval_distance": null, "interval_months": 48, "intermediate": true}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	stopped("a kit in the trash", "trash entries 1 hold")
+	if _, err := pool.Exec(ctx, `DELETE FROM trash`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.DownTo(ctx, 6); err != nil {
+		t.Fatal(err)
+	}
+	if err := refused(t, pool, coolant); err == nil {
+		t.Error("after Down: a time-only intermediate service was taken")
+	}
+}

@@ -822,12 +822,13 @@
      isn't, so nothing needs clearing. */
   .toggled-fields { margin-top: var(--gap); }
   .form-section:has(> .toggle input:not(:checked)) > .toggled-fields { display: none; }
-  /* A kit's intermediate service comes halfway through its distance and
-     its break-in before it: both show once there is a distance, and while
+  /* A kit's intermediate service comes halfway through its distance, or
+     its time without one: it shows once there is either. Its break-in
+     comes before the distance: it shows once there is one. Both stay while
      they hold something (the box ticked, a reading typed), so a cleared
-     distance can be followed by clearing them. */
+     interval can be followed by clearing them. */
   .page-form:has(#interval_distance:placeholder-shown):has(#break_in_at:placeholder-shown) #break-in-field,
-  .page-form:has(#interval_distance:placeholder-shown):not(:has(#intermediate:checked)) #inter-schedule { display: none; }
+  .page-form:has(#interval_distance:placeholder-shown):has(#interval_months:placeholder-shown):not(:has(#intermediate:checked)) #inter-schedule { display: none; }
   /* A line between sections: over each one with a section shown before
      it, whatever hidden inputs or hidden sections sit in between. */
   .form-section {

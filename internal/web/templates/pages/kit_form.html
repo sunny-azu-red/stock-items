@@ -69,9 +69,10 @@
     <template id="kit-line-template">{{template "line-row" (dict "Row" (emptyLine) "Prefix" "line")}}</template>
     <button class="btn btn-sm mt" type="button" data-add-row="kit-line-template" data-rows="kit-lines">{{icon "plus"}} Add part</button>
   </div>
-  {{/* The intermediate service comes halfway through the distance, so its
-       section shows once there is one, and its parts while its box is
-       ticked (CSS). The server drops the parts when it isn't. */}}
+  {{/* The intermediate service comes halfway through the distance, or the
+       time without one, so its section shows once there is either, and its
+       parts while its box is ticked (CSS). The server drops the parts when
+       it isn't. */}}
   <div class="form-section" id="inter-schedule">
     <h2>Intermediate service</h2>
     <p class="hint">A lighter job halfway between full services (like an oil &amp; filter change), with its own, smaller set of parts. It comes at half the distance above (an even one), at its months.</p>

@@ -2700,10 +2700,17 @@ test("Enter in the new item form saves the item", async ({ page }) => {
   await expect(page.locator("h1")).toContainText("Brake cleaner");
 });
 
-test("a kit's break-in and intermediate service show with a distance, and while they hold something", async ({ page }) => {
+test("a kit's break-in shows with a distance, its intermediate service with a distance or time, and while they hold something", async ({ page }) => {
   await page.goto("/kits/new");
   const breakIn = page.locator("#break-in-field"), inter = page.locator("#inter-schedule");
   await expect(breakIn).toBeHidden();
+  await expect(inter).toBeHidden();
+  // A time alone: the intermediate service (halfway through the time),
+  // not the break-in (a reading, before the distance).
+  await page.locator("#interval_months").fill("48");
+  await expect(inter).toBeVisible();
+  await expect(breakIn).toBeHidden();
+  await page.locator("#interval_months").fill("");
   await expect(inter).toBeHidden();
   await page.locator("#interval_distance").fill("8000");
   await page.locator("#break_in_at").fill("1000");

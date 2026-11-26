@@ -513,9 +513,24 @@ type Kit struct {
 // Archived reports whether the kit has been archived.
 func (k Kit) Archived() bool { return k.ArchivedAt != nil }
 
+// InterMonths is the time from one service to the next when the kit has an
+// intermediate service: the kit's full months on a kit with a distance (the
+// intermediate service comes halfway through the distance, InterStep), half
+// of them on a kit with a time only (Coolant every 48 months: its
+// intermediate service at 24), which is even (KitInput.Validate). Without
+// an intermediate service, the kit's months. Nil without a time.
+func (k Kit) InterMonths() *int {
+	if !k.Intermediate || k.IntervalMonths == nil || k.IntervalDistance != nil {
+		return k.IntervalMonths
+	}
+	half := *k.IntervalMonths / 2
+	return &half
+}
+
 // InterStep is the distance from one service to the next when the kit has
 // an intermediate service: half the full distance, which is even
-// (KitInput.Validate). Nil without one.
+// (KitInput.Validate). Nil without one, or on a kit with a time only
+// (InterMonths halves the time instead).
 func (k Kit) InterStep() *int {
 	if !k.Intermediate || k.IntervalDistance == nil {
 		return nil

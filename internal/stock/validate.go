@@ -554,8 +554,13 @@ func (in KitInput) Validate() Errors {
 	}
 	if in.Intermediate {
 		switch {
+		case in.IntervalDistance == nil && in.IntervalMonths == nil:
+			errs.Add("interval_distance", "Enter a distance or time: the intermediate service comes halfway through it")
+		case in.IntervalDistance == nil && *in.IntervalMonths%2 != 0:
+			// With a time only it comes halfway through the time
+			// (Kit.InterMonths), in whole months.
+			errs.Add("interval_months", "Enter an even number of months: the intermediate service comes halfway through the time")
 		case in.IntervalDistance == nil:
-			errs.Add("interval_distance", "Enter the distance: the intermediate service comes halfway through it")
 		case *in.IntervalDistance%2 != 0:
 			// An even distance halves exactly, so a full service and the
 			// intermediate one always add up to it.

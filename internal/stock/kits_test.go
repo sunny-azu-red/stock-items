@@ -607,3 +607,86 @@ func TestFullTakesOver(t *testing.T) {
 		})
 	}
 }
+
+// A kit with a time only (Coolant every 48 months) has its intermediate
+// service halfway through the time: at 24 months, then the Full, taking
+// turns. With a distance, the intermediate service is halfway through the
+// distance at the full time, as before.
+func TestHalfwayByTime(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	in := KitInput{VehicleID: 1, Name: "Coolant", IntervalMonths: ptr(48), Intermediate: true}
+	if errs := in.Validate(); errs.Any() {
+		t.Fatalf("48 months, halfway: %v", errs)
+	}
+	for _, tt := range []struct {
+		in         KitInput
+		field, msg string
+	}{
+		{KitInput{VehicleID: 1, Name: "Coolant", IntervalMonths: ptr(9), Intermediate: true}, "interval_months",
+			"Enter an even number of months: the intermediate service comes halfway through the time"},
+		{KitInput{VehicleID: 1, Name: "Coolant", Intermediate: true}, "interval_distance",
+			"Enter a distance or time: the intermediate service comes halfway through it"},
+	} {
+		if got := tt.in.Validate()[tt.field]; got != tt.msg {
+			t.Errorf("%+v: %s = %q, want %q", tt.in, tt.field, got, tt.msg)
+		}
+	}
+
+	coolant := func(warranty bool) Kit {
+		k := Kit{IntervalMonths: ptr(48), Intermediate: true, VehiclePurchasedOn: d(2025, 1, 1)}
+		if warranty {
+			k.VehicleWarrantyEndsOn = ptr(d(2034, 12, 31))
+		}
+		return k
+	}
+	if m := coolant(false).InterMonths(); m == nil || *m != 24 {
+		t.Errorf("InterMonths = %v, want 24", deref(m))
+	}
+	// Nothing logged: the intermediate service at 24 months, with a
+	// warranty or without.
+	for _, w := range []bool{false, true} {
+		checkNext(t, coolant(w), 0, d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
+	}
+	// Done late (1 Jul 2027): under warranty the Full keeps its 48 months
+	// from the purchase; without, it is a step (24 months) after it.
+	inter := ServiceRef{ID: 1, PerformedOn: d(2027, 7, 1), Tier: TierIntermediate}
+	for _, tt := range []struct {
+		warranty bool
+		want     string
+	}{{true, "2029-01-01"}, {false, "2029-07-01"}} {
+		k := coolant(tt.warranty)
+		k.LastService, k.InterSinceFull, k.FirstServiceID = &inter, true, 1
+		checkNext(t, k, 0, d(2027, 8, 1), "full", DueOK, nil, tt.want)
+	}
+	// Skipped under warranty: overdue, until the Full's last quarter (its
+	// last 12 months), when the Full takes over.
+	w := coolant(true)
+	checkNext(t, w, 0, d(2027, 6, 1), "inter", DueOverdue, nil, "2027-01-01")
+	checkNext(t, w, 0, d(2028, 1, 2), "full", DueOK, nil, "2029-01-01")
+	// After a Full without a warranty: the intermediate service 24 months
+	// on, the Full 48.
+	full := ServiceRef{ID: 2, PerformedOn: d(2029, 1, 1), Tier: TierFull}
+	n := coolant(false)
+	n.LastService, n.LastFullService, n.FirstServiceID = &full, &full, 2
+	checkNext(t, n, 0, d(2029, 3, 1), "inter", DueOK, nil, "2031-01-01")
+	if f := n.FullDue(0, d(2029, 3, 1)); f.DueDate == nil || !f.DueDate.Equal(d(2033, 1, 1)) {
+		t.Errorf("full due = %v, want 2033-01-01", f.DueDate)
+	}
+	// With a distance, halfway is by distance, at the full time.
+	km := coolant(false)
+	km.IntervalDistance = ptr(10000)
+	if m := km.InterMonths(); m == nil || *m != 48 {
+		t.Errorf("with a distance: InterMonths = %v, want 48", deref(m))
+	}
+	checkNext(t, km, 0, d(2025, 6, 1), "inter", DueOK, ptr(5000), "2029-01-01")
+	// Ticked: only the Fulls count. The intermediate service late or not
+	// done never loses the warranty; a Full 31 days past its 48 months does.
+	wk := WarrantyKit{KitID: 1, Name: "Coolant", IntervalMonths: ptr(48)}
+	v := Vehicle{PurchasedOn: d(2025, 1, 1), WarrantyEndsOn: ptr(d(2034, 12, 31)), WarrantyKits: []WarrantyKit{wk}}
+	if got := v.Warranty(d(2028, 6, 1)).State; got != WarrantyActive {
+		t.Errorf("intermediate never done: %s, want active", got)
+	}
+	if got := v.Warranty(d(2029, 2, 1)).State; got != WarrantyLost {
+		t.Errorf("no Full 31 days past 48 months: %s, want lost", got)
+	}
+}

@@ -290,6 +290,20 @@ func TestWarrantyMisses(t *testing.T) {
 	if w.FirstMiss() == nil || w.FirstMiss().Tier != TierBreakIn {
 		t.Errorf("first miss = %+v, want the break-in", w.FirstMiss())
 	}
+	// A reading passed with nothing logged: dated by the first service
+	// logged past it, with any kit (a tyre change at 17 200 on 3 Jun 2026),
+	// "by" that day; with none, today, not dated.
+	air := WarrantyKit{KitID: 3, Name: "Air Filter", IntervalDistance: ptr(15000),
+		Readings: []ServiceRef{{PerformedOn: day(2026, 3, 1), Odometer: 14000}, {PerformedOn: day(2026, 6, 3), Odometer: 17200}}}
+	w = Vehicle{Odometer: 18000, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: []WarrantyKit{air}}.Warranty(day(2026, 7, 1))
+	if m := w.FirstMiss(); m == nil || !m.LostOn.Equal(day(2026, 6, 3)) || !m.Dated || m.LostOnExact {
+		t.Errorf("dated by a reading: %+v, want by 3 Jun 2026", m)
+	}
+	air.Readings = nil
+	w = Vehicle{Odometer: 18000, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: []WarrantyKit{air}}.Warranty(day(2026, 7, 1))
+	if m := w.FirstMiss(); m == nil || !m.LostOn.Equal(day(2026, 7, 1)) || m.Dated {
+		t.Errorf("no reading past it: %+v, want today, not dated", m)
+	}
 	// Not lost: no misses.
 	if w := (Vehicle{Odometer: 500, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: []WarrantyKit{oil}}).Warranty(day(2025, 6, 1)); w.Misses != nil || w.FirstMiss() != nil {
 		t.Errorf("not lost: misses = %+v", w.Misses)

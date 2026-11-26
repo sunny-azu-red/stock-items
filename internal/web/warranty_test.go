@@ -774,13 +774,16 @@ func TestWarrantyLostCard(t *testing.T) {
 		"Due by 15\u202f000 km · 16\u202f500 km at the latest",
 		`Done at <a href="` + valveSvc + `">16` + "\u202f" + `953 km on 1 Jun 2026</a> · lost by 1 Jun 2026`,
 		`<a class="title" href="/kits/` + air + `">Air Filter · full service</a>`,
-		"Not logged · lost past 16\u202f500 km",
+		// Its 16 500 km passed with nothing logged: dated by the first
+		// service logged past it (the valve check's).
+		"Not logged · lost by 1 Jun 2026",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("card lacks %q:\n%s", want, got)
 		}
 	}
-	// The first to lose it first: Oil (1 Feb), Valve (1 Jun), Air (no day).
+	// The first to lose it first: Oil (1 Feb), Valve and Air (1 Jun, in the
+	// kits' order).
 	if o, v, f := strings.Index(got, "Oil Service ·"), strings.Index(got, "Valve Check ·"), strings.Index(got, "Air Filter ·"); o > v || v > f {
 		t.Errorf("order: oil %d, valve %d, air %d", o, v, f)
 	}

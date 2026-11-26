@@ -199,7 +199,50 @@ func loadWarrantyKits(ctx context.Context, q querier, vehicleIDs []int64) (map[i
 		}
 		out[vid] = list
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return out, withReadings(ctx, q, out)
+}
+
+// withReadings fills in the warranty kits' Readings: every service of their
+// vehicle, with any kit or none, oldest first. They date a reading a kit's
+// service passed with nothing logged (stock.WarrantyMiss.LostOn).
+func withReadings(ctx context.Context, q querier, kits map[int64][]stock.WarrantyKit) error {
+	if len(kits) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(kits))
+	for id := range kits {
+		ids = append(ids, id)
+	}
+	rows, err := q.Query(ctx, `
+		SELECT vehicle_id, id, performed_on, odometer FROM service_records
+		WHERE vehicle_id = ANY($1)
+		ORDER BY vehicle_id, performed_on, odometer, id`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	readings := map[int64][]stock.ServiceRef{}
+	for rows.Next() {
+		var vid int64
+		var r stock.ServiceRef
+		if err := rows.Scan(&vid, &r.ID, &r.PerformedOn, &r.Odometer); err != nil {
+			return err
+		}
+		readings[vid] = append(readings[vid], r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for vid, list := range kits {
+		for i := range list {
+			list[i].Readings = readings[vid]
+		}
+	}
+	return nil
 }
 
 // GetKit returns one kit.

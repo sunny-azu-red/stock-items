@@ -197,6 +197,9 @@ func (k Kit) counted() *ServiceRef {
 // counts from a break-in (counted, LastFullService).
 //   - A break-in missed (breakInMissed) is due as the full service, at
 //     the break-in's reading.
+//   - While the break-in is waited for (breakInPending), its own interval
+//     from the purchase, with a warranty or without: the first service is
+//     the break-in or the full one, so nothing takes turns yet.
 //   - While the vehicle is under warranty (UnderWarranty), it counts its
 //     own interval from the last full service, or from the purchase before
 //     the first: intermediate services never move it, as a warranty asks.
@@ -215,6 +218,12 @@ func (k Kit) FullDue(currentOdo int, today time.Time) Due {
 		// break-in's reading, or the kit's months after the purchase.
 		from := k.VehicleOdometerAtPurchase
 		return dueFrom(nil, k.VehiclePurchasedOn, from, ptrTo(*k.BreakInAt-from), k.IntervalMonths, currentOdo, today)
+	}
+	if k.breakInPending(currentOdo) {
+		// Waiting for the break-in, the first service is the break-in or the
+		// full one (never an intermediate), so nothing takes turns yet: the
+		// kit's own interval from the purchase, with a warranty or without.
+		return dueFrom(nil, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	if k.UnderWarranty(currentOdo, today) {
 		return dueFrom(k.LastFullService, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)

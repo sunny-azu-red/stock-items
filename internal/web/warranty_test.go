@@ -548,3 +548,41 @@ func TestWarrantyLostHistory(t *testing.T) {
 	expect(t, a.postV(kit, kitForm), http.StatusSeeOther)
 	expect(t, a.get("/kits/new?from="+kitID), http.StatusOK, `id="warranty_required" name="warranty_required" value="1">`)
 }
+
+// While a kit waits for the break-in, its full service counts the kit's own
+// months from the purchase, with a warranty or without: a light rider sees
+// the Full come due in its year (not two years, with no date before the
+// break-in's reading), and a lost warranty leaves an overdue Full overdue
+// instead of turning it back into a break-in with no date.
+func TestBreakInWaitWithoutWarranty(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	kitFor := func(vehicle url.Values, required bool) (kit, kitID string) {
+		t.Helper()
+		rec := a.post("/vehicles", vehicle)
+		expect(t, rec, http.StatusSeeOther)
+		form := url.Values{"vehicle_id": {itoa(mustID(t, rec.Header().Get("Location")))}, "name": {"Oil Service"},
+			"interval_distance": {"10000"}, "interval_months": {"12"}, "intermediate": {"1"}, "break_in_at": {"1000"}}
+		if required {
+			form.Set("warranty_required", "1")
+		}
+		rec = a.post("/kits", form)
+		expect(t, rec, http.StatusSeeOther)
+		kit = rec.Header().Get("Location")
+		return kit, itoa(mustID(t, kit))
+	}
+	// No warranty, 450 km since 1 Jan 2026: the Full, due by 1 Jan 2027.
+	kit, kitID := kitFor(url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"450"},
+		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}}, false)
+	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>10 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2027</dd>")
+	expectNot(t, a.get(kit), "Next: Break-in")
+	expect(t, a.get("/services/new?kit="+kitID), http.StatusOK,
+		`value="full" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service" checked`, `value="break_in"`)
+
+	// Under warranty, ticked, the Full not done by 31 Oct 2026 (a month
+	// past its year): lost, and the Full stays overdue.
+	kit, _ = kitFor(url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#e8a33d"}, "odometer": {"500"},
+		"purchased_on": {"2025-10-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-09-30"}}, true)
+	page := a.get(kit)
+	expect(t, page, http.StatusOK, "Next: Full", "<dt>Due by</dt><dd>1 Oct 2026</dd>", "Overdue")
+	expectNot(t, page, "Next: Break-in")
+}

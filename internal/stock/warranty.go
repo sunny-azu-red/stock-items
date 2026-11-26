@@ -1,6 +1,9 @@
 package stock
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // WarrantyState says where a vehicle's warranty stands.
 type WarrantyState string
@@ -11,7 +14,7 @@ const (
 	WarrantySoon   WarrantyState = "soon"   // runs, but ends soon
 	WarrantyEnded  WarrantyState = "ended"
 	// WarrantyLost: it would still run, but a service it asks for was done
-	// late or not at all (Warranty.Missed).
+	// late or not at all (Warranty.Misses).
 	WarrantyLost WarrantyState = "lost"
 )
 
@@ -27,8 +30,19 @@ type Warranty struct {
 	// the odometer reading it ends past.
 	EndsOn *time.Time
 	EndsAt *int
-	// Missed is the service that lost it (WarrantyLost), nil otherwise.
-	Missed *WarrantyMiss
+	// Misses are the services it asked for that were done late or not at
+	// all (WarrantyLost), the one that lost it first (FirstMiss); none
+	// otherwise.
+	Misses []WarrantyMiss
+}
+
+// FirstMiss is the miss that lost the warranty, the earliest by LostOn;
+// nil when it isn't lost.
+func (w Warranty) FirstMiss() *WarrantyMiss {
+	if len(w.Misses) == 0 {
+		return nil
+	}
+	return &w.Misses[0]
 }
 
 // WarrantyKit is a kit the warranty asks for on time (Kit.WarrantyRequired),
@@ -50,11 +64,23 @@ type WarrantyMiss struct {
 	KitID int64
 	Kit   string
 	Tier  KitTier // TierBreakIn or TierFull
-	// DueOdometer and DueDate are the limit, without the grace.
-	DueOdometer *int
-	DueDate     *time.Time
+	// DueOdometer and DueDate are the limit, without the grace;
+	// LatestOdometer and LatestDate with it: the last reading and day it
+	// could be done.
+	DueOdometer    *int
+	DueDate        *time.Time
+	LatestOdometer *int
+	LatestDate     *time.Time
 	// Done is the service done late; nil when it hasn't been done.
 	Done *ServiceRef
+	// LostOn is the day the warranty was lost by this miss, as far as the
+	// app can tell. With LostOnExact, the day after LatestDate: the date
+	// alone was missed. Otherwise a reading was missed (on a day no reading
+	// was kept), so it was lost by then: the day after LatestDate if the
+	// date was missed too, else the day the late service was done, else
+	// today.
+	LostOn      time.Time
+	LostOnExact bool
 }
 
 // WarrantyGraceDays is how many days past its date a service the warranty
@@ -99,40 +125,45 @@ func WarrantyOf(endsOn *time.Time, endsAt *int, odo int, today time.Time) Warran
 }
 
 // warrantyWithKits works out a warranty as WarrantyOf does, and, while it
-// runs, whether a kit it asks for (kits) missed a service: then it is lost.
-// Every limit that passed fell while it ran (it runs from the purchase to
-// its end), so once it has ended it shows as ended, lost or not.
+// runs, whether the kits it asks for (kits) missed a service: then it is
+// lost, and Misses lists them all, the earliest by LostOn first (kits in
+// their order on a tie). Every limit that passed fell while it ran (it runs
+// from the purchase to its end), so once it has ended it shows as ended,
+// lost or not.
 func warrantyWithKits(endsOn *time.Time, endsAt *int, purchasedOn time.Time, purchaseOdo int, kits []WarrantyKit, odo int, today time.Time) Warranty {
 	w := WarrantyOf(endsOn, endsAt, odo, today)
 	if !w.Runs() {
 		return w
 	}
-	// The earliest miss of all its kits: the day it was done late, or
-	// today for one not done.
-	when := func(m *WarrantyMiss) time.Time {
-		if m.Done != nil {
-			return m.Done.PerformedOn
-		}
-		return today
-	}
 	for _, k := range kits {
-		if m := k.missed(purchasedOn, purchaseOdo, odo, today); m != nil && (w.Missed == nil || when(m).Before(when(w.Missed))) {
-			w.State, w.Missed = WarrantyLost, m
-		}
+		w.Misses = append(w.Misses, k.misses(purchasedOn, purchaseOdo, odo, today)...)
+	}
+	if len(w.Misses) > 0 {
+		w.State = WarrantyLost
+		slices.SortStableFunc(w.Misses, func(a, b WarrantyMiss) int { return a.LostOn.Compare(b.LostOn) })
 	}
 	return w
 }
 
-// missed returns the first service of the kit the warranty asked for that
-// was done past its limit and the grace, or is past them now (the odometer
-// odo, the day today) and not done, or nil.
+// Dated reports whether LostOn is a day the app knows: the day it was lost
+// (LostOnExact), or the latest it can have been, by a late service or a
+// date missed too. Not for a reading passed with nothing logged: no reading
+// was kept the day it passed, so it only says it is past LatestOdometer.
+func (m WarrantyMiss) Dated() bool {
+	return m.LostOnExact || m.Done != nil || (m.LatestDate != nil && m.LostOn.After(*m.LatestDate))
+}
+
+// misses returns the services of the kit the warranty asked for that were
+// done past their limit and the grace, or are past them now (the odometer
+// odo, the day today) and not done, oldest first.
 //   - The break-in, on a vehicle bought below the kit's Break-in at: by its
 //     reading only, done as the kit's first break-in or full service (one
 //     logged as Full on time counts; an intermediate one doesn't).
 //   - Each full service: its distance and months after the last full one,
-//     or after the purchase before the first (no schedule counts from the
-//     break-in, Kit.counted).
-func (k WarrantyKit) missed(purchasedOn time.Time, purchaseOdo, odo int, today time.Time) *WarrantyMiss {
+//     late or not, or after the purchase before the first (no schedule
+//     counts from the break-in, Kit.counted).
+func (k WarrantyKit) misses(purchasedOn time.Time, purchaseOdo, odo int, today time.Time) []WarrantyMiss {
+	var out []WarrantyMiss
 	var full []ServiceRef
 	for _, s := range k.Services {
 		if s.Tier == TierFull || s.Tier == TierBreakIn {
@@ -141,34 +172,40 @@ func (k WarrantyKit) missed(purchasedOn time.Time, purchaseOdo, odo int, today t
 	}
 	if k.BreakInAt != nil && *k.BreakInAt > purchaseOdo {
 		limit := *k.BreakInAt + WarrantyGrace(*k.BreakInAt)
-		miss := &WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierBreakIn, DueOdometer: ptrTo(*k.BreakInAt)}
-		if len(full) > 0 && full[0].Odometer > limit {
+		miss := WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierBreakIn, DueOdometer: ptrTo(*k.BreakInAt), LatestOdometer: &limit}
+		switch {
+		case len(full) > 0 && full[0].Odometer > limit:
 			done := full[0]
-			miss.Done = &done
-			return miss
-		}
-		if len(full) == 0 && odo > limit {
-			return miss
+			miss.Done, miss.LostOn = &done, DateOnly(done.PerformedOn)
+			out = append(out, miss)
+		case len(full) == 0 && odo > limit:
+			miss.LostOn = DateOnly(today)
+			out = append(out, miss)
 		}
 	}
 	if k.IntervalDistance == nil && k.IntervalMonths == nil {
-		return nil
+		return out
 	}
 	fromDate, fromOdo := purchasedOn, purchaseOdo
+	// late checks a full service done (or not, by now) at the reading atOdo
+	// on the day on, counted from the last full one.
 	late := func(atOdo int, on time.Time) *WarrantyMiss {
-		m := &WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierFull}
-		over := false
+		m := &WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierFull, LostOn: DateOnly(on)}
+		byOdo, byDate := false, false
 		if k.IntervalDistance != nil {
-			due := fromOdo + *k.IntervalDistance
-			m.DueOdometer = &due
-			over = over || atOdo > due+WarrantyGrace(*k.IntervalDistance)
+			due, latest := fromOdo+*k.IntervalDistance, fromOdo+*k.IntervalDistance+WarrantyGrace(*k.IntervalDistance)
+			m.DueOdometer, m.LatestOdometer = &due, &latest
+			byOdo = atOdo > latest
 		}
 		if k.IntervalMonths != nil {
 			due := addMonths(DateOnly(fromDate), *k.IntervalMonths)
-			m.DueDate = &due
-			over = over || DateOnly(on).After(due.AddDate(0, 0, WarrantyGraceDays))
+			latest := due.AddDate(0, 0, WarrantyGraceDays)
+			m.DueDate, m.LatestDate = &due, &latest
+			if byDate = DateOnly(on).After(latest); byDate {
+				m.LostOn, m.LostOnExact = latest.AddDate(0, 0, 1), !byOdo
+			}
 		}
-		if over {
+		if byOdo || byDate {
 			return m
 		}
 		return nil
@@ -180,11 +217,14 @@ func (k WarrantyKit) missed(purchasedOn time.Time, purchaseOdo, odo int, today t
 		if m := late(s.Odometer, s.PerformedOn); m != nil {
 			done := s
 			m.Done = &done
-			return m
+			out = append(out, *m)
 		}
 		fromDate, fromOdo = s.PerformedOn, s.Odometer
 	}
-	return late(odo, today)
+	if m := late(odo, today); m != nil {
+		out = append(out, *m)
+	}
+	return out
 }
 
 // Runs reports whether the warranty is in force (ending soon or not).

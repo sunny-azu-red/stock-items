@@ -71,6 +71,12 @@
      warranty, Warranty ends soon, Warranty lost (a service it asks for was
      missed) or Warranty ended; nothing without one. */}}
 {{define "warranty-badge"}}{{if eq .State "active"}}<span class="badge badge-ok">{{icon "shield-check"}} {{.State.Label}}</span>{{else if eq .State "soon"}}<span class="badge badge-warn">{{icon "shield-alert"}} {{.State.Label}}</span>{{else if eq .State "lost"}}<span class="badge badge-danger">{{icon "shield-x"}} {{.State.Label}}</span>{{else if eq .State "ended"}}<span class="badge badge-muted">{{icon "shield"}} {{.State.Label}}</span>{{end}}{{end}}
+{{/* When a missed service lost the warranty (stock.WarrantyMiss): the day,
+     "by" a day when only a reading tells, or the reading it passed when
+     nothing was logged (no reading is kept for the day it passed). */}}
+{{define "miss-when"}}{{if .LostOnExact}}{{date .LostOn}}{{else if .Dated}}by {{date .LostOn}}{{else}}past {{with .LatestOdometer}}{{distance .}}{{end}}{{end}}{{end}}
+{{/* A limit of a missed service: a reading, a day, or both ("or"). */}}
+{{define "miss-limit"}}{{with .Odo}}{{distance .}}{{end}}{{if and .Odo .Date}} or {{end}}{{with .Date}}{{date .}}{{end}}{{end}}
 
 {{/* The warranty badge's icon and words without its colour, where a
      vehicle is one line of a list (the /vehicles cards' stats). */}}

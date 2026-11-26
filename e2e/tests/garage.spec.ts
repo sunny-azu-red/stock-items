@@ -1947,6 +1947,38 @@ async function misaligned(page: Page) {
   });
 }
 
+// KTM 390 was bought on 1 Mar 2024 and its oil service first logged long
+// after that year: ticked Required by the warranty, the warranty is lost on
+// 1 Apr 2025 (a year and 30 days on). The vehicle page says when in its
+// facts and what in a red card under the odometer. It stays lost, so the
+// page-wide tests below measure the card too.
+test("a missed service the warranty asks for shows in a red card", async ({ page }) => {
+  await page.goto("/vehicles");
+  await page.locator("a.vehicle-card").filter({ has: page.locator(".name", { hasText: exact("KTM 390") }) }).click();
+  const vehicle = page.url();
+  await expect(page.locator("#warranty-lost")).toHaveCount(0);
+  await page.locator("a.kit-row").filter({ hasText: "Oil Service" }).click();
+  await (await headAction(page, "link", "Edit", true)).click();
+  await page.getByLabel("Required by the warranty").check();
+  await page.getByRole("button", { name: "Save kit" }).click();
+  await expect(page.locator(".flash-success")).toBeVisible();
+
+  await page.goto(vehicle);
+  await expect(page.locator(".page-head .badge-danger")).toHaveText("Warranty lost");
+  const card = page.locator("#warranty-lost");
+  await expect(card.getByRole("heading", { name: "Warranty lost" })).toBeVisible();
+  await expect(card.locator("li")).toHaveCount(1);
+  await expect(card.locator("li .title")).toHaveText("Oil Service · full service");
+  await expect(card.locator("li")).toContainText("lost on 1 Apr 2025");
+  // Under the odometer, before the facts.
+  const order = await page.locator(".stack:has(> #warranty-lost) > *").evaluateAll((els) => els.map((e) => e.id || e.querySelector("h2")?.textContent?.trim() || "facts"));
+  expect(order).toEqual(["Odometer", "warranty-lost", "facts", "Service history"]);
+  // The facts say when, and lead to the card.
+  const when = page.locator('dt:text-is("Warranty lost") + dd a');
+  await expect(when).toHaveText("1 Apr 2025");
+  await expect(when).toHaveAttribute("href", "#warranty-lost");
+});
+
 test("every box sits on whole pixels and its text lines up", async ({ page }) => {
   // Every page's offenders, so one run shows them all.
   const problems: string[] = [];

@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -169,10 +170,10 @@ func TestWarrantyLost(t *testing.T) {
 			v := Vehicle{Odometer: tt.odo, PurchasedOn: bought, WarrantyEndsOn: endsOn, WarrantyKits: tt.kits}
 			w := v.Warranty(tt.today)
 			if w.State != tt.want {
-				t.Fatalf("state = %s, want %s (missed %+v)", w.State, tt.want, w.Missed)
+				t.Fatalf("state = %s, want %s (missed %+v)", w.State, tt.want, w.FirstMiss())
 			}
-			if (w.Missed != nil) != (tt.want == WarrantyLost) || (w.Missed != nil && w.Missed.Tier != tt.wantTier) {
-				t.Errorf("missed = %+v, want a %q", w.Missed, tt.wantTier)
+			if (w.FirstMiss() != nil) != (tt.want == WarrantyLost) || (w.FirstMiss() != nil && w.FirstMiss().Tier != tt.wantTier) {
+				t.Errorf("missed = %+v, want a %q", w.FirstMiss(), tt.wantTier)
 			}
 		})
 	}
@@ -213,7 +214,84 @@ func TestWarrantyLostNamesTheEarliestMiss(t *testing.T) {
 	coolant := WarrantyKit{KitID: 2, Name: "Coolant", IntervalMonths: ptr(12), Services: []ServiceRef{full(day(2026, 2, 15), 11000)}}
 	v := Vehicle{Odometer: 13000, PurchasedOn: day(2025, 1, 1), WarrantyEndsOn: ptr(day(2030, 1, 1)), WarrantyKits: []WarrantyKit{oil, coolant}}
 	w := v.Warranty(day(2026, 4, 1))
-	if w.State != WarrantyLost || w.Missed == nil || w.Missed.Kit != "Coolant" {
-		t.Errorf("state %s, missed %+v; want lost by Coolant (15 Feb, before Oil's 1 Mar)", w.State, w.Missed)
+	if w.State != WarrantyLost || w.FirstMiss() == nil || w.FirstMiss().Kit != "Coolant" {
+		t.Errorf("state %s, missed %+v; want lost by Coolant (1 Feb, before Oil's 1 Mar)", w.State, w.FirstMiss())
+	}
+}
+
+// Misses lists every service the warranty asked for that was missed, the
+// first to lose it first: a miss is dated the day after its date limit and
+// the grace when the date was missed, else the day the late service was
+// done (a reading tells only that it was by then), else today. A service
+// still not done no longer passes behind one done late since.
+func TestWarrantyMisses(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	full := func(on time.Time, odo int) ServiceRef {
+		return ServiceRef{ID: int64(odo), PerformedOn: on, Odometer: odo, Tier: TierFull}
+	}
+	type want struct {
+		kit    string
+		tier   KitTier
+		done   int // the late service's reading, 0 when not done
+		lostOn time.Time
+		exact  bool
+		latest string // LatestOdometer / LatestDate
+	}
+	check := func(t *testing.T, w Warranty, wants []want) {
+		t.Helper()
+		if len(w.Misses) != len(wants) {
+			t.Fatalf("misses = %+v, want %d", w.Misses, len(wants))
+		}
+		for i, m := range w.Misses {
+			wt := wants[i]
+			done := 0
+			if m.Done != nil {
+				done = m.Done.Odometer
+			}
+			latest := fmt.Sprint(deref(m.LatestOdometer))
+			if m.LatestDate != nil {
+				latest += " / " + m.LatestDate.Format(time.DateOnly)
+			}
+			if m.Kit != wt.kit || m.Tier != wt.tier || done != wt.done || !m.LostOn.Equal(wt.lostOn) || m.LostOnExact != wt.exact || latest != wt.latest {
+				t.Errorf("miss %d = %s %s done %d lost %s exact %v latest %s; want %+v", i, m.Kit, m.Tier, done,
+					m.LostOn.Format(time.DateOnly), m.LostOnExact, latest, wt)
+			}
+		}
+	}
+	ends := ptr(day(2029, 12, 31))
+	bought := day(2025, 1, 1)
+
+	// The explainer's two kits: the oil change never done (past 11 000 km
+	// in December, past its date on 31 Jan), the valve check done late on
+	// 1 Jun. The oil change lost it first.
+	oil := WarrantyKit{KitID: 1, Name: "Oil Service", IntervalDistance: ptr(10000), IntervalMonths: ptr(12)}
+	valve := WarrantyKit{KitID: 2, Name: "Valve Check", IntervalDistance: ptr(15000), Services: []ServiceRef{full(day(2026, 6, 1), 16953)}}
+	for _, kits := range [][]WarrantyKit{{oil, valve}, {valve, oil}} {
+		w := Vehicle{Odometer: 23000, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: kits}.Warranty(day(2026, 11, 26))
+		check(t, w, []want{
+			{"Oil Service", TierFull, 0, day(2026, 2, 1), false, "11000 / 2026-01-31"},
+			{"Valve Check", TierFull, 16953, day(2026, 6, 1), false, "16500"},
+		})
+	}
+
+	// One kit, every miss: the break-in done at 1 500, a Full late by its
+	// date only (exact), the next counted from it and late by distance, and
+	// the one after not done, past its reading only (today).
+	k := WarrantyKit{KitID: 1, Name: "Oil Service", IntervalDistance: ptr(10000), IntervalMonths: ptr(12), BreakInAt: ptr(1000),
+		Services: []ServiceRef{{ID: 1, PerformedOn: day(2025, 3, 1), Odometer: 1500, Tier: TierBreakIn},
+			full(day(2026, 3, 1), 9000), full(day(2026, 12, 1), 20500)}}
+	w := Vehicle{Odometer: 31600, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: []WarrantyKit{k}}.Warranty(day(2027, 6, 1))
+	check(t, w, []want{
+		{"Oil Service", TierBreakIn, 1500, day(2025, 3, 1), false, "1100"},
+		{"Oil Service", TierFull, 9000, day(2026, 2, 1), true, "11000 / 2026-01-31"},
+		{"Oil Service", TierFull, 20500, day(2026, 12, 1), false, "20000 / 2027-03-31"},
+		{"Oil Service", TierFull, 0, day(2027, 6, 1), false, "31500 / 2027-12-31"},
+	})
+	if w.FirstMiss() == nil || w.FirstMiss().Tier != TierBreakIn {
+		t.Errorf("first miss = %+v, want the break-in", w.FirstMiss())
+	}
+	// Not lost: no misses.
+	if w := (Vehicle{Odometer: 500, PurchasedOn: bought, WarrantyEndsOn: ends, WarrantyKits: []WarrantyKit{oil}}).Warranty(day(2025, 6, 1)); w.Misses != nil || w.FirstMiss() != nil {
+		t.Errorf("not lost: misses = %+v", w.Misses)
 	}
 }

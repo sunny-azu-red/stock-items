@@ -478,6 +478,16 @@
   .card-actions { justify-content: flex-start; & .inline-form { display: flex; } }
   .pager { padding: 8px var(--inset); }
   .card > .pager { border-top: 1px solid var(--border); }
+  /* A card that says something is wrong (the vehicle page's Warranty
+     lost): the whole card red, like the dashboard's .danger tile, its
+     heading in red, its rules a red line. */
+  .card-danger {
+    background: var(--danger-soft);
+    --border: color-mix(in oklab, var(--danger) 18%, var(--danger-soft));
+    & .card-head h2, & .card-head h2 .icon { color: var(--danger); }
+    & .list .meta { display: block; }
+    & .meta a { text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 3px; &:hover { color: var(--accent-strong); } }
+  }
 
   .grid { display: grid; gap: var(--gap); }
   /* auto-fill, not auto-fit: two cards keep a card's width on a wide window.

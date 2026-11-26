@@ -66,6 +66,26 @@
       </div>
     </section>
 
+    {{/* Every service the warranty asked for that was missed, the first to
+         lose it first: worked out from the history, so logging a missed
+         service with its real date and reading, or correcting a wrong one,
+         takes it off. */}}
+    {{with ($v.Warranty $.Today).Misses}}
+    <section class="card card-danger" id="warranty-lost" aria-labelledby="warranty-lost-h">
+      <div class="card-head"><h2 id="warranty-lost-h">{{icon "shield-x"}} Warranty lost</h2></div>
+      <ul class="list">
+      {{range .}}
+        <li><span class="grow">
+          <a class="title" href="/kits/{{.KitID}}">{{.Kit}} · {{if eq .Tier "break_in"}}break-in{{else}}full service{{end}}</a>
+          <span class="meta">Due by {{template "miss-limit" (dict "Odo" .DueOdometer "Date" .DueDate)}} · {{template "miss-limit" (dict "Odo" .LatestOdometer "Date" .LatestDate)}} at the latest</span>
+          <span class="meta">{{with .Done}}Done at <a href="/services/{{.ID}}">{{distance .Odometer}} on {{date .PerformedOn}}</a>{{else}}Not logged{{end}} · lost {{if .LostOnExact}}on {{end}}{{template "miss-when" .}}</span>
+        </span></li>
+      {{end}}
+      </ul>
+      <div class="card-foot"><p class="hint">Log a missed service with its real date and reading, or correct a wrong one, and it comes off this list.</p></div>
+    </section>
+    {{end}}
+
     <section class="card card-pad">
       <dl class="facts">
         <div><dt>Make</dt><dd>{{or $v.Make "—"}}</dd></div>
@@ -75,8 +95,8 @@
         <div><dt>VIN</dt><dd{{if $v.VIN}} class="mono"{{end}}>{{or $v.VIN "—"}}</dd></div>
         <div><dt>Purchased</dt><dd>{{date $v.PurchasedOn}} · {{distance $v.OdometerAtPurchase}}</dd></div>
         {{if or $v.WarrantyEndsOn $v.WarrantyEndsAt}}<div><dt>Warranty {{if eq ($v.Warranty $.Today).State "ended"}}ended{{else}}ends{{end}}</dt><dd>{{with $v.WarrantyEndsOn}}{{date .}}{{end}}{{if and $v.WarrantyEndsOn $v.WarrantyEndsAt}} · {{end}}{{with $v.WarrantyEndsAt}}{{distance .}}{{end}}</dd></div>{{end}}
-        {{/* What lost the warranty: logging it on time (backfilling) gets it back. */}}
-        {{with ($v.Warranty $.Today).Missed}}<div><dt>Warranty lost</dt><dd>{{.Kit}}: {{if eq .Tier "break_in"}}break-in{{else}}full service{{end}} due by {{with .DueOdometer}}{{distance .}}{{end}}{{if and .DueOdometer .DueDate}} or {{end}}{{with .DueDate}}{{date .}}{{end}}, {{with .Done}}done at {{distance .Odometer}} on {{date .PerformedOn}}{{else}}not logged{{end}}</dd></div>{{end}}
+        {{/* When it was lost (the first miss); the Warranty lost card says what was missed. */}}
+        {{with ($v.Warranty $.Today).FirstMiss}}<div><dt>Warranty lost</dt><dd><a href="#warranty-lost">{{template "miss-when" .}}</a></dd></div>{{end}}
       </dl>
       {{with $v.Notes}}<hr><p class="notes">{{.}}</p>{{end}}
     </section>

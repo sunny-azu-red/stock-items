@@ -547,10 +547,10 @@ func (in KitInput) Validate() Errors {
 		errs.Add("name", "Name is required")
 	}
 	if in.IntervalDistance != nil && *in.IntervalDistance <= 0 {
-		errs.Add("interval_distance", "Interval must be greater than zero")
+		errs.Add("interval_distance", "Distance must be greater than zero")
 	}
 	if in.IntervalMonths != nil && *in.IntervalMonths <= 0 {
-		errs.Add("interval_months", "Interval must be greater than zero")
+		errs.Add("interval_months", "Time must be greater than zero")
 	}
 	if in.Intermediate {
 		switch {
@@ -584,7 +584,7 @@ func (in KitInput) Validate() Errors {
 		}
 	}
 	if in.WarrantyRequired && in.IntervalDistance == nil && in.IntervalMonths == nil {
-		errs.Add("interval_distance", "Enter a distance or months: the warranty asks for the job on time")
+		errs.Add("interval_distance", "Enter a distance or time: the warranty asks for the job at its interval")
 	}
 	for i, l := range in.Lines {
 		switch {

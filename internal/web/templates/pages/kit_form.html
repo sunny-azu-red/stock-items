@@ -29,8 +29,8 @@
     </div>
   </div>
   <div class="form-section">
-    <h2>Schedule</h2>
-    <p class="hint">Repeat every this distance or this many months, whichever comes first. The dashboard reminds you when the job is due.</p>
+    <h2>Interval</h2>
+    <p class="hint">The job repeats at this distance or time, whichever comes first. The dashboard reminds you when it is due.</p>
     <div class="form-grid">
       <div class="field{{if index $e "interval_distance"}} has-error{{end}}">
         <label for="interval_distance">Distance ({{distUnit}})</label>
@@ -38,7 +38,7 @@
         {{template "field-err" (fieldErr (index $e "interval_distance") "interval_distance")}}
       </div>
       <div class="field{{if index $e "interval_months"}} has-error{{end}}">
-        <label for="interval_months">Months</label>
+        <label for="interval_months">Time (months)</label>
         <input class="input" id="interval_months" name="interval_months" value="{{$f.IntervalMonths}}" inputmode="numeric" placeholder="e.g. 12" {{invalid (index $e "interval_months") "interval_months"}}>
         {{template "field-err" (fieldErr (index $e "interval_months") "interval_months")}}
       </div>
@@ -53,7 +53,7 @@
   {{/* Which kits the warranty checks (stock.Kit.WarrantyRequired). */}}
   <div class="form-section">
     <h2>Warranty</h2>
-    <p class="hint">Tick it for a job the vehicle's warranty asks for on time, like the oil service. While the warranty runs, a break-in or full service done more than 10% of its distance or 30 days late loses it, judged by this kit's distance and months as they are now. To change the job, edit its kit rather than adding a new one: a new kit has none of the old one's services, so every service due since the purchase counts as missed.</p>
+    <p class="hint">Tick it for a job the vehicle's warranty asks for on time, like the oil service. While the warranty runs, a break-in or full service done more than 10% of its distance or 30 days late loses it, judged by this kit's interval as it is now. To change the job, edit its kit rather than adding a new one: a new kit has none of the old one's services, so every service due since the purchase counts as missed.</p>
     <label class="toggle"><input type="checkbox" id="warranty_required" name="warranty_required" value="1"{{if $f.WarrantyRequired}} checked{{end}}> Required by the warranty</label>
   </div>
   <div class="form-section">
@@ -75,7 +75,7 @@
        it isn't. */}}
   <div class="form-section" id="inter-schedule">
     <h2>Intermediate service</h2>
-    <p class="hint">A lighter job halfway between full services (like an oil &amp; filter change), with its own, smaller set of parts. It comes at half the distance above (an even one), at its months.</p>
+    <p class="hint">A lighter job halfway between full services (like an oil &amp; filter change), with its own, smaller set of parts. It comes at half the distance (an even one) at the full time, or, with a time only, at half the time (an even number of months).</p>
     <label class="toggle"><input type="checkbox" id="intermediate" name="intermediate" value="1"{{if $f.Intermediate}} checked{{end}}> Halfway between full services</label>
     <div class="toggled-fields">
       <h3>Intermediate parts</h3>

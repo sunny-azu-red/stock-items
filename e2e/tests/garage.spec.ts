@@ -258,7 +258,7 @@ test("plan an oil service, shop for what is missing and log it", async ({ page }
 
   await field(page, "Name").fill("Oil Service");
   await page.getByLabel("Distance (km)", { exact: true }).fill("7500");
-  await page.getByLabel("Months", { exact: true }).fill("12");
+  await page.getByLabel("Time (months)", { exact: true }).fill("12");
   const items = page.locator('input[name="line_item_text"]');
   const qtys = page.locator('input[name="line_qty"]');
   // The list puts the vehicle's items first, under their heading.

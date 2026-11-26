@@ -262,7 +262,7 @@ func TestArchiveKitRequiredByWarranty(t *testing.T) {
 	}
 	var conflict *store.ConflictError
 	err = s.ArchiveKit(ctx, id, cur(t, s, store.WhatKit, id))
-	if !errors.As(err, &conflict) || conflict.Message != "Untick Required by the warranty before archiving Oil Service: its services count for the warranty." {
+	if !errors.As(err, &conflict) || conflict.Message != `Untick "Required by the warranty" before archiving Oil Service: its services count for the warranty.` {
 		t.Fatalf("ticked: want the ConflictError, got %v", err)
 	}
 	if k, _ := s.GetKit(ctx, id); k.Archived() {
@@ -277,6 +277,16 @@ func TestArchiveKitRequiredByWarranty(t *testing.T) {
 	}
 	if k, _ := s.GetKit(ctx, id); !k.Archived() {
 		t.Error("unticked kit not archived")
+	}
+	// Archived, it can't be ticked again (the warranty would ignore it):
+	// restore it first. Its other fields still save.
+	kit.WarrantyRequired, kit.Version = true, cur(t, s, store.WhatKit, id)
+	if err := s.UpdateKit(ctx, id, kit); !errors.As(err, &conflict) || conflict.Message != `Restore Oil Service before ticking "Required by the warranty".` {
+		t.Errorf("ticking an archived kit: %v, want it refused", err)
+	}
+	kit.WarrantyRequired, kit.Notes = false, "Old"
+	if err := s.UpdateKit(ctx, id, kit); err != nil {
+		t.Errorf("editing an archived kit: %v", err)
 	}
 	if err := s.ArchiveKit(ctx, id+1000, 1); err == nil {
 		t.Error("missing kit: want an error")
@@ -472,7 +482,7 @@ func TestArchivedVehiclesAndKitsTakeNothingNew(t *testing.T) {
 	otherKit := stock.KitInput{VehicleID: other, Name: "Brakes"}
 	otherKit.Normalize()
 	brakes, _ := s.CreateKit(ctx, otherKit)
-	wantConflict(t, "move a kit to it", s.UpdateKit(ctx, brakes, kitV(t, s, brakes, moved)), "KTM 390 is archived")
+	wantConflict(t, "move a kit to it", s.UpdateKit(ctx, brakes, kitV(t, s, brakes, moved)), "A kit stays with its vehicle")
 
 	// A kit staying with its archived vehicle can still be edited.
 	kin.Name = "Chain kit"

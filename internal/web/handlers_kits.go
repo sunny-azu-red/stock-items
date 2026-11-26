@@ -220,6 +220,9 @@ type kitFormPage struct {
 	Form     kitForm
 	IsNew    bool
 	Vehicles []stock.Vehicle
+	// Vehicle is an edited kit's: it stays with it (store.UpdateKit), so
+	// the form shows it as a chip, as an edited service's form does.
+	Vehicle  *stock.Vehicle
 	Picker   itemPicker // the part rows' items
 	KitNames []string
 }
@@ -246,10 +249,12 @@ func (s *Server) renderKitForm(w http.ResponseWriter, r *http.Request, status in
 	if !isNew {
 		title = "Edit " + f.Stored
 	}
-	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: kitFormPage{
-		Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), Picker: newItemPicker("part-items", items, vehicles, nil, true),
-		KitNames: names,
-	}})
+	p := kitFormPage{Form: f, IsNew: isNew, Vehicles: activeVehicles(vehicles, f.VehicleID), Picker: newItemPicker("part-items", items, vehicles, nil, true),
+		KitNames: names}
+	if !isNew {
+		p.Vehicle = findVehicle(vehicles, f.VehicleID)
+	}
+	s.render(w, r, status, "kit_form", View{Title: title, Nav: "services", Data: p})
 	return nil
 }
 

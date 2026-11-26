@@ -632,7 +632,7 @@ func TestArchiveRequiredKit(t *testing.T) {
 
 	rec = a.postV(kit+"/archive", nil)
 	expect(t, rec, http.StatusSeeOther)
-	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "Untick Required by the warranty before archiving Oil Service: its services count for the warranty." {
+	if f := flashOf(t, rec); f.Kind != "error" || f.Message != `Untick "Required by the warranty" before archiving Oil Service: its services count for the warranty.` {
 		t.Errorf("flash = %+v", f)
 	}
 	if rec.Header().Get("Location") != kit {
@@ -650,6 +650,29 @@ func TestArchiveRequiredKit(t *testing.T) {
 		t.Errorf("flash = %+v", f)
 	}
 	expect(t, a.get(kit), http.StatusOK, "Archived")
+	// Archived, it can't be ticked again (the warranty counts only kits that
+	// aren't): the form comes back with the box ticked and a banner.
+	kitForm.Set("warranty_required", "1")
+	expect(t, a.postV(kit, kitForm), http.StatusUnprocessableEntity, "Restore Oil Service before ticking &#34;Required by the warranty&#34;.",
+		`id="warranty_required" name="warranty_required" value="1" checked`)
+	expect(t, a.get(path), http.StatusOK, "Under warranty")
+}
+
+// A kit stays with its vehicle (its services are there; Duplicate makes one
+// for another): its edit form shows the vehicle as a chip, with no Vehicle
+// field, and a form posting another vehicle is refused.
+func TestKitStaysWithItsVehicle(t *testing.T) {
+	a := warrantyApp(t)
+	k390, k1290 := a.seed()
+	rec := a.post("/kits", url.Values{"vehicle_id": {itoa(k390)}, "name": {"Chain"}, "interval_distance": {"1000"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	edit := a.get(kit + "/edit")
+	expect(t, edit, http.StatusOK, `<input type="hidden" name="vehicle_id" value="`+itoa(k390)+`" data-name="KTM 390">`, `class="chip`)
+	expectNot(t, edit, `name="vehicle_id" value="`+itoa(k1290)+`"`)
+	expect(t, a.postV(kit, url.Values{"vehicle_id": {itoa(k1290)}, "name": {"Chain"}, "interval_distance": {"1000"}}),
+		http.StatusUnprocessableEntity, "A kit stays with its vehicle: duplicate it for another vehicle.")
+	expect(t, a.get("/kits/new"), http.StatusOK, `name="vehicle_id" value="`+itoa(k1290)+`"`) // a new kit still chooses
 }
 
 // A break-in forgotten while later services were logged can be backfilled:

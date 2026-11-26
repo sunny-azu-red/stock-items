@@ -138,9 +138,11 @@ func TestKitsAndServices(t *testing.T) {
 	}
 }
 
-// A kit moved to another vehicle starts without the old vehicle's history.
-func TestKitMovedToAnotherVehicle(t *testing.T) {
-	s, ctx := newStore(t)
+// A kit stays with its vehicle: saving it for another is refused (its
+// services stay there; Duplicate makes one for another vehicle). One moved
+// before that rule starts there without the old vehicle's history.
+func TestKitStaysWithItsVehicle(t *testing.T) {
+	s, pool, ctx := newStorePool(t)
 	v1, v2 := mustVehicle(t, s, "KTM 390"), mustVehicle(t, s, "KTM 1290")
 	in := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000)}
 	kit, err := s.CreateKit(ctx, in)
@@ -151,7 +153,15 @@ func TestKitMovedToAnotherVehicle(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.VehicleID = v2
-	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, in)); err != nil {
+	var conflict *store.ConflictError
+	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, in)); !errors.As(err, &conflict) || conflict.Field != "form" ||
+		conflict.Message != "A kit stays with its vehicle: duplicate it for another vehicle." {
+		t.Fatalf("moving a kit: %v, want it refused", err)
+	}
+	if k, _ := s.GetKit(ctx, kit); k.VehicleID != v1 {
+		t.Fatalf("the kit moved to %d", k.VehicleID)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE service_kits SET vehicle_id = $1 WHERE id = $2`, v2, kit); err != nil {
 		t.Fatal(err)
 	}
 	k, err := s.GetKit(ctx, kit)
@@ -426,7 +436,7 @@ func TestServiceReportsEveryShortPart(t *testing.T) {
 }
 
 func TestEditAServiceWhoseKitMoved(t *testing.T) {
-	s, ctx := newStore(t)
+	s, pool, ctx := newStorePool(t)
 	a, b := mustVehicle(t, s, "Bike A"), mustVehicle(t, s, "Bike B")
 	kit := stock.KitInput{VehicleID: a, Name: "Oil service"}
 	kit.Normalize()
@@ -440,8 +450,8 @@ func TestEditAServiceWhoseKitMoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kit.VehicleID = b
-	if err := s.UpdateKit(ctx, kitID, kitV(t, s, kitID, kit)); err != nil {
+	// Moved before kits stayed with their vehicle.
+	if _, err := pool.Exec(ctx, `UPDATE service_kits SET vehicle_id = $1 WHERE id = $2`, b, kitID); err != nil {
 		t.Fatal(err)
 	}
 	in.Notes = "fixed a typo"
@@ -665,7 +675,7 @@ func TestKitIntermediateStoreFlow(t *testing.T) {
 // refused, also from the trash, and a kit moved to another vehicle may
 // have its own there; a kit without a Break-in at has none.
 func TestServiceTierChecks(t *testing.T) {
-	s, ctx := newStore(t)
+	s, pool, ctx := newStorePool(t)
 	v1 := mustVehicle(t, s, "KTM 390")
 	v2 := mustVehicle(t, s, "KTM 690")
 	kitIn := stock.KitInput{VehicleID: v1, Name: "Oil", IntervalDistance: ptr(6000), Intermediate: true, BreakInAt: ptr(1000)}
@@ -732,9 +742,9 @@ func TestServiceTierChecks(t *testing.T) {
 		t.Errorf("restoring a second break-in: %v, want it refused", err)
 	}
 
-	// The kit moved to another vehicle: a break-in of its own there.
-	kitIn.VehicleID = v2
-	if err := s.UpdateKit(ctx, kit, kitV(t, s, kit, kitIn)); err != nil {
+	// A kit moved to another vehicle (before kits stayed with theirs): a
+	// break-in of its own there.
+	if _, err := pool.Exec(ctx, `UPDATE service_kits SET vehicle_id = $1 WHERE id = $2`, v2, kit); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := log(v2, stock.TierBreakIn, day(4, 1), 400); err != nil {
@@ -815,8 +825,8 @@ func TestBreakInAtAboveThePurchase(t *testing.T) {
 		t.Errorf("saving the kit with it cleared: %v", err)
 	}
 
-	// A new bike's kit with a break-in can't move to the used one, and the
-	// new bike's purchase reading can't go past it.
+	// A new bike's kit with a break-in can't move to the used one (no kit
+	// moves), and the new bike's purchase reading can't go past it.
 	in = stock.KitInput{VehicleID: newBike, Name: "Oil", IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}
 	in.Normalize()
 	oil, err := s.CreateKit(ctx, in)
@@ -824,7 +834,7 @@ func TestBreakInAtAboveThePurchase(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.VehicleID = used
-	if err := s.UpdateKit(ctx, oil, kitV(t, s, oil, in)); !errors.As(err, &conflict) || conflict.Field != "break_in_at" {
+	if err := s.UpdateKit(ctx, oil, kitV(t, s, oil, in)); !errors.As(err, &conflict) || conflict.Field != "form" {
 		t.Errorf("moving it to a vehicle bought past it: %v, want it refused", err)
 	}
 	if err := s.SetOdometer(ctx, newBike, 5000); err != nil {

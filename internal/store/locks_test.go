@@ -292,41 +292,36 @@ func TestArchivingAKitWaitsForAServiceLoggedWithIt(t *testing.T) {
 	}
 }
 
-// Moving a kit to another vehicle while a service is logged for that
-// vehicle with the kit: the kit's save locks both vehicles before the kit,
-// as a service locks its vehicle before the kit, so they take turns.
-func TestMovingAKitAndLoggingAServiceWithItTakeTurns(t *testing.T) {
+// Saving a kit while a service is logged with it: the kit's save locks its
+// vehicle before the kit, as a service locks its vehicle before the kit
+// (checkServiceKit, FOR SHARE), so they take turns and both save.
+func TestSavingAKitAndLoggingAServiceWithItTakeTurns(t *testing.T) {
 	s, pool, ctx := newStorePool(t)
-	from, to := mustVehicle(t, s, "KTM 390"), mustVehicle(t, s, "KTM 1290")
-	kin := stock.KitInput{VehicleID: from, Name: "Chain"}
+	v := mustVehicle(t, s, "KTM 390")
+	kin := stock.KitInput{VehicleID: v, Name: "Chain"}
 	kin.Normalize()
 	kit, err := s.CreateKit(ctx, kin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	move := stock.KitInput{VehicleID: to, Name: "Chain", Version: cur(t, s, store.WhatKit, kit)}
-	move.Normalize()
+	save := stock.KitInput{VehicleID: v, Name: "Chain kit", Version: cur(t, s, store.WhatKit, kit)}
+	save.Normalize()
 
-	h := hold(t, pool, `SELECT 1 FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, to)
+	h := hold(t, pool, `SELECT 1 FROM vehicles WHERE id = $1 FOR NO KEY UPDATE`, v)
 	var c calls
-	var logged, moved error
+	var logged, saved error
 	c.run(func() {
-		_, logged = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: to, KitID: &kit, Title: "Chain", PerformedOn: time.Now()})
+		_, logged = s.CreateService(ctx, stock.ServiceInput{Odometer: ptr(0), VehicleID: v, KitID: &kit, Title: "Chain", PerformedOn: time.Now()})
 	})
 	xids := waitBlocked(t, pool, 1, []string{h.xid}, "vehicles")
-	c.run(func() { moved = s.UpdateKit(ctx, kit, move) })
+	c.run(func() { saved = s.UpdateKit(ctx, kit, save) })
 	waitBlocked(t, pool, 2, xids, "vehicles", "service_kits")
 	h.release(t)
 	c.wait()
 	noDeadlock(t, "log service", logged)
-	noDeadlock(t, "move kit", moved)
-	if moved != nil {
-		t.Errorf("move kit: %v", moved)
-	}
-	// The service came first, when the kit still belonged to the other one.
-	var conflict *store.ConflictError
-	if !errors.As(logged, &conflict) {
-		t.Errorf("log service = %v, want the kit refused as another vehicle's", logged)
+	noDeadlock(t, "save kit", saved)
+	if logged != nil || saved != nil {
+		t.Errorf("log service = %v, save kit = %v; want both saved, one after the other", logged, saved)
 	}
 }
 

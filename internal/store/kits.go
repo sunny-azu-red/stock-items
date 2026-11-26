@@ -236,65 +236,44 @@ func (s *Store) CreateKit(ctx context.Context, in stock.KitInput) (int64, error)
 	return id, err
 }
 
-// UpdateKit replaces a kit's fields and lines. A kit changed since
-// in.Version fails with a *StaleError.
+// UpdateKit replaces a kit's fields and lines. A kit stays with its
+// vehicle: its services stay there, so one for another vehicle is a
+// duplicate (a *ConflictError if in names another). An archived kit can't
+// be ticked Required by the warranty: the warranty counts only kits that
+// aren't archived (ArchiveKit refuses the other way round). A kit changed
+// since in.Version fails with a *StaleError.
 func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) error {
 	return s.inFormTx(ctx, in.FormKey, WhatKit, &id, func(tx pgx.Tx) error {
-		// The vehicles (the kit's and the one it moves to, in id order)
-		// before the kit, as logging a service with the kit locks its
-		// vehicle before the kit (checkServiceKit): the two can't deadlock.
-		// The kit's vehicle is read without a lock first; a kit moved since
-		// has a new version, so the check below refuses it.
-		var was int64
+		// Its vehicle before the kit, as logging a service with the kit
+		// locks its vehicle before the kit (checkServiceKit): the two can't
+		// deadlock. A kit's vehicle never changes, so reading it unlocked
+		// first is safe.
+		var vehicle int64
 		var nameWas string
-		err := tx.QueryRow(ctx, `SELECT vehicle_id, name FROM service_kits WHERE id = $1`, id).Scan(&was, &nameWas)
+		err := tx.QueryRow(ctx, `SELECT vehicle_id, name FROM service_kits WHERE id = $1`, id).Scan(&vehicle, &nameWas)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return goneError(ctx, tx, WhatKit, id)
 		}
 		if err != nil {
 			return err
 		}
-		vehicles, err := tx.Query(ctx, `SELECT id, name, archived_at IS NOT NULL FROM vehicles WHERE id IN ($1, $2) ORDER BY id FOR NO KEY UPDATE`,
-			was, in.VehicleID)
-		if err != nil {
+		if _, _, err := lockVehicle(ctx, tx, vehicle); err != nil {
 			return err
 		}
-		defer vehicles.Close()
-		var target string
-		var targetArchived, found bool
-		for vehicles.Next() {
-			var vid int64
-			var name string
-			var archived bool
-			if err := vehicles.Scan(&vid, &name, &archived); err != nil {
-				return err
-			}
-			if vid == in.VehicleID {
-				target, targetArchived, found = name, archived, true
-			}
-		}
-		if err := vehicles.Err(); err != nil {
-			return err
-		}
-		var now int64
 		var version int
-		err = tx.QueryRow(ctx, `SELECT version, vehicle_id FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).Scan(&version, &now)
+		var archived, required bool
+		err = tx.QueryRow(ctx, `SELECT version, archived_at IS NOT NULL, warranty_required FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).
+			Scan(&version, &archived, &required)
 		if err := lockedVersion(ctx, tx, err, version, in.Version, WhatKit, id); err != nil {
 			return err
 		}
-		if now != was {
-			return &StaleError{What: WhatKit}
+		if in.VehicleID != vehicle {
+			return &ConflictError{Field: "form", Message: "A kit stays with its vehicle: duplicate it for another vehicle."}
 		}
-		// A kit can stay with its archived vehicle, but not move to one.
-		if was != in.VehicleID {
-			if !found {
-				return ErrNotFound
-			}
-			if targetArchived {
-				return &ConflictError{Field: "form", Message: target + " is archived; restore it first."}
-			}
+		if archived && in.WarrantyRequired && !required {
+			return &ConflictError{Field: "form", Message: "Restore " + nameWas + ` before ticking "Required by the warranty".`}
 		}
-		if err := checkKitBreakIn(ctx, tx, in.VehicleID, in.BreakInAt); err != nil {
+		if err := checkKitBreakIn(ctx, tx, vehicle, in.BreakInAt); err != nil {
 			return err
 		}
 		name, err := spell(ctx, tx, kitNameSpellings, id, nameWas, in.Name)
@@ -305,14 +284,11 @@ func (s *Store) UpdateKit(ctx context.Context, id int64, in stock.KitInput) erro
 		// A new version (its lines count as part of the kit): a form opened
 		// before this save is stale now.
 		tag, err := tx.Exec(ctx, `
-			UPDATE service_kits SET version = version + 1, vehicle_id = $2, name = $3, interval_distance = $4,
-			       interval_months = $5, intermediate = $6, break_in_at = $7, warranty_required = $8, notes = $9,
+			UPDATE service_kits SET version = version + 1, name = $2, interval_distance = $3,
+			       interval_months = $4, intermediate = $5, break_in_at = $6, warranty_required = $7, notes = $8,
 			       updated_at = now()
-			WHERE id = $1`, id, in.VehicleID, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt,
+			WHERE id = $1`, id, in.Name, in.IntervalDistance, in.IntervalMonths, in.Intermediate, in.BreakInAt,
 			in.WarrantyRequired, in.Notes)
-		if isForeignKeyViolation(err) {
-			return ErrNotFound
-		}
 		if err := checkAffected(tag, err); err != nil {
 			return err
 		}
@@ -490,7 +466,7 @@ func (s *Store) ArchiveKit(ctx context.Context, id int64, version int) error {
 			return err
 		}
 		if required {
-			return &ConflictError{Field: "form", Message: "Untick Required by the warranty before archiving " + name + ": its services count for the warranty."}
+			return &ConflictError{Field: "form", Message: `Untick "Required by the warranty" before archiving ` + name + ": its services count for the warranty."}
 		}
 		// Archiving changes the kit's page: a new version.
 		return checkAffected(tx.Exec(ctx, `UPDATE service_kits SET version = version + 1, updated_at = now(), archived_at = COALESCE(archived_at, now())

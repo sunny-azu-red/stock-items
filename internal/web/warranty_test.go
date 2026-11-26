@@ -586,3 +586,46 @@ func TestBreakInWaitWithoutWarranty(t *testing.T) {
 	expect(t, page, http.StatusOK, "Next: Full", "<dt>Due by</dt><dd>1 Oct 2026</dd>", "Overdue")
 	expectNot(t, page, "Next: Break-in")
 }
+
+// A kit ticked Required by the warranty can't be archived: archiving would
+// drop what it missed and give the warranty back. Its Archive button says
+// to untick it first; unticked (which gives the warranty back, as it
+// should), it archives.
+func TestArchiveRequiredKit(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"11500"},
+		"purchased_on": {"2025-11-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-12-31"}})
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	kitForm := url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"10000"}, "interval_months": {"12"},
+		"warranty_required": {"1"}}
+	rec = a.post("/kits", kitForm)
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	// A Full late by distance (11 500, past 11 000): lost.
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service"},
+		"performed_on": {"2026-11-01"}, "odometer": {"11500"}}), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Warranty lost")
+
+	rec = a.postV(kit+"/archive", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind != "error" || f.Message != "Untick Required by the warranty before archiving Oil Service: its services count for the warranty." {
+		t.Errorf("flash = %+v", f)
+	}
+	if rec.Header().Get("Location") != kit {
+		t.Errorf("redirect = %s, want %s", rec.Header().Get("Location"), kit)
+	}
+	expectNot(t, a.get(kit), "Archived")
+	expect(t, a.get(path), http.StatusOK, "Warranty lost")
+
+	kitForm.Del("warranty_required")
+	expect(t, a.postV(kit, kitForm), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Under warranty")
+	rec = a.postV(kit+"/archive", nil)
+	expect(t, rec, http.StatusSeeOther)
+	if f := flashOf(t, rec); f.Kind == "error" || f.Message != "Archived Oil Service. Its services keep it; restore it any time." {
+		t.Errorf("flash = %+v", f)
+	}
+	expect(t, a.get(kit), http.StatusOK, "Archived")
+}

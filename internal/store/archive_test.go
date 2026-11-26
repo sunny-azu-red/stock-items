@@ -244,6 +244,45 @@ func TestArchiveVehicleInsteadOfDelete(t *testing.T) {
 	}
 }
 
+// A kit ticked Required by the warranty can't be archived (the warranty
+// counts only kits that aren't, so its misses would go): untick it first.
+// A stale version is still stale, and a missing kit gone.
+func TestArchiveKitRequiredByWarranty(t *testing.T) {
+	s, ctx := newStore(t)
+	v := mustVehicle(t, s, "GreyJoy")
+	kit := stock.KitInput{VehicleID: v, Name: "Oil Service", IntervalMonths: ptr(12), WarrantyRequired: true}
+	kit.Normalize()
+	id, err := s.CreateKit(ctx, kit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stale *store.StaleError
+	if err := s.ArchiveKit(ctx, id, cur(t, s, store.WhatKit, id)-1); !errors.As(err, &stale) {
+		t.Errorf("stale version: want StaleError, got %v", err)
+	}
+	var conflict *store.ConflictError
+	err = s.ArchiveKit(ctx, id, cur(t, s, store.WhatKit, id))
+	if !errors.As(err, &conflict) || conflict.Message != "Untick Required by the warranty before archiving Oil Service: its services count for the warranty." {
+		t.Fatalf("ticked: want the ConflictError, got %v", err)
+	}
+	if k, _ := s.GetKit(ctx, id); k.Archived() {
+		t.Error("archived while ticked")
+	}
+	kit.WarrantyRequired, kit.Version = false, cur(t, s, store.WhatKit, id)
+	if err := s.UpdateKit(ctx, id, kit); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveKit(ctx, id, cur(t, s, store.WhatKit, id)); err != nil {
+		t.Fatalf("unticked: %v", err)
+	}
+	if k, _ := s.GetKit(ctx, id); !k.Archived() {
+		t.Error("unticked kit not archived")
+	}
+	if err := s.ArchiveKit(ctx, id+1000, 1); err == nil {
+		t.Error("missing kit: want an error")
+	}
+}
+
 func TestArchiveKitWithServices(t *testing.T) {
 	s, ctx := newStore(t)
 	v := mustVehicle(t, s, "KTM 390")

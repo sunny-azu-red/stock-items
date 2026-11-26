@@ -471,11 +471,28 @@ func (s *Store) DeleteKit(ctx context.Context, id int64, version int) (trashID i
 
 // ArchiveKit hides a kit from lists, reminders and suggestions while its
 // services keep it. A kit changed since version fails with a *StaleError.
+// A kit ticked Required by the warranty fails with a *ConflictError: the
+// warranty counts only kits that aren't archived, so archiving it would
+// drop what it missed; unticking it says the warranty no longer asks for
+// it.
 func (s *Store) ArchiveKit(ctx context.Context, id int64, version int) error {
-	// Archiving changes the kit's page: a new version.
-	tag, err := s.pool.Exec(ctx, `UPDATE service_kits SET version = version + 1, updated_at = now(), archived_at = COALESCE(archived_at, now())
-		WHERE id = $1 AND version = $2`, id, version)
-	return versionedUpdate(ctx, s.pool, tag, err, WhatKit, id)
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		// The lock the UPDATE below takes anyway, taken first to check.
+		var have int
+		var name string
+		var required bool
+		err := tx.QueryRow(ctx, `SELECT version, name, warranty_required FROM service_kits WHERE id = $1 FOR NO KEY UPDATE`, id).
+			Scan(&have, &name, &required)
+		if err := lockedVersion(ctx, tx, err, have, version, WhatKit, id); err != nil {
+			return err
+		}
+		if required {
+			return &ConflictError{Field: "form", Message: "Untick Required by the warranty before archiving " + name + ": its services count for the warranty."}
+		}
+		// Archiving changes the kit's page: a new version.
+		return checkAffected(tx.Exec(ctx, `UPDATE service_kits SET version = version + 1, updated_at = now(), archived_at = COALESCE(archived_at, now())
+			WHERE id = $1`, id))
+	})
 }
 
 // RestoreKit brings an archived kit back. A kit changed since version

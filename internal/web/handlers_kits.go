@@ -524,8 +524,13 @@ func (s *Server) kitArchive(w http.ResponseWriter, r *http.Request) error {
 	} else if err != nil {
 		return err
 	}
+	var conflict *store.ConflictError
 	err = s.store.ArchiveKit(r.Context(), id, parseVersion(r))
 	if s.staleButton(w, r, err, page, "/services") {
+		return nil
+	} else if errors.As(err, &conflict) {
+		s.setFlash(w, "error", conflict.Message)
+		s.redirect(w, r, page, "")
 		return nil
 	} else if err != nil {
 		return err

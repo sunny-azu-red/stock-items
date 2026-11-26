@@ -501,10 +501,11 @@ type Kit struct {
 	// FirstServiceID is the kit's earliest service on its vehicle (0 with
 	// none): the only one that can be its break-in.
 	FirstServiceID int64
-	// BreakInLogged says a break-in has been logged with the kit on its
-	// vehicle. Until then Log service offers one, to backfill a break-in
-	// done before the services already logged.
-	BreakInLogged bool
+	// BreakIn is the break-in logged with the kit on its vehicle, nil
+	// before. Until then Log service offers one, to backfill a break-in
+	// done before the services already logged; one that is also the first
+	// full service restarts the schedules' time (Kit.breakInFull).
+	BreakIn *ServiceRef
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time

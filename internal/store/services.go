@@ -331,6 +331,16 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		// break-in); an intermediate one first would leave the break-in
 		// unloggable and the warranty lost without a reminder.
 		return &ConflictError{Field: "kit_tier", Message: "This kit's first service is its break-in: log it as Break-in or Full"}
+	case in.KitTier == stock.TierFull && breakIn && !earlier && !otherBreakIn && in.Odometer != nil &&
+		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&
+		*in.Odometer <= *breakInAt+stock.WarrantyGrace(*breakInAt):
+		// The kit's first service read by Break-in at + 10% is its
+		// break-in: a light rider's, done when the year is close, counts as
+		// the first full service too (stock.BreakInIsFull). Checked when it
+		// becomes a full service or its reading changes, so one saved before
+		// this rule still saves unchanged.
+		return &ConflictError{Field: "kit_tier", Message: fmt.Sprintf("This is the kit's break-in (due by %s, %s at the latest): log it as Break-in",
+			stock.FormatDistance(*breakInAt), stock.FormatDistance(*breakInAt+stock.WarrantyGrace(*breakInAt)))}
 	case in.KitTier == stock.TierBreakIn && breakIn && in.Odometer != nil &&
 		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&
 		*in.Odometer > *breakInAt+stock.WarrantyGrace(*breakInAt):

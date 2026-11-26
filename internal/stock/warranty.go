@@ -160,8 +160,10 @@ func (m WarrantyMiss) Dated() bool {
 //     reading only, done as the kit's first break-in or full service (one
 //     logged as Full on time counts; an intermediate one doesn't).
 //   - Each full service: its distance and months after the last full one,
-//     late or not, or after the purchase before the first (no schedule
-//     counts from the break-in, Kit.counted).
+//     late or not, or after the purchase before the first. No schedule
+//     counts from the break-in, unless it is also the first full service
+//     (BreakInIsFull): then its time counts, the distance still from the
+//     purchase (Kit.breakInFull).
 func (k WarrantyKit) misses(purchasedOn time.Time, purchaseOdo, odo int, today time.Time) []WarrantyMiss {
 	var out []WarrantyMiss
 	var full []ServiceRef
@@ -211,7 +213,11 @@ func (k WarrantyKit) misses(purchasedOn time.Time, purchaseOdo, odo int, today t
 		return nil
 	}
 	for _, s := range full {
-		if s.Tier != TierFull {
+		isFull := s.Tier == TierFull
+		// A break-in that is also the first full service (a light rider's,
+		// done once that service's time was close) counts as it, by its
+		// time: the distance still counts from the purchase.
+		if !isFull && !BreakInIsFull(s, purchasedOn, k.IntervalMonths) {
 			continue
 		}
 		if m := late(s.Odometer, s.PerformedOn); m != nil {
@@ -219,7 +225,10 @@ func (k WarrantyKit) misses(purchasedOn time.Time, purchaseOdo, odo int, today t
 			m.Done = &done
 			out = append(out, *m)
 		}
-		fromDate, fromOdo = s.PerformedOn, s.Odometer
+		fromDate = s.PerformedOn
+		if isFull {
+			fromOdo = s.Odometer
+		}
 	}
 	if m := late(odo, today); m != nil {
 		out = append(out, *m)

@@ -41,9 +41,9 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		       -- The earliest service, in the same order.
 		       COALESCE((SELECT sr.id FROM service_records sr WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id
 		                 ORDER BY sr.performed_on, sr.odometer, sr.id LIMIT 1), 0),
-		       -- A break-in logged (Log service offers one until then).
-		       EXISTS (SELECT 1 FROM service_records sr
-		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'break_in'),
+		       -- The break-in logged (Log service offers one until then;
+		       -- stock.Kit.breakInFull).
+		       bi.id, bi.performed_on, bi.odometer,
 		       k.archived_at
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
@@ -59,6 +59,11 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'full' -- never a break-in
 			ORDER BY sr.performed_on DESC, sr.odometer DESC, sr.id DESC LIMIT 1
 		) lf ON true
+		LEFT JOIN LATERAL (
+			SELECT sr.id, sr.performed_on, sr.odometer
+			FROM service_records sr
+			WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'break_in' -- one at most
+		) bi ON true
 		WHERE true`
 	if len(f.IDs) > 0 {
 		sql += " AND k.id = ANY(" + args.add(f.IDs) + ")"
@@ -82,16 +87,16 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 	}
 	kits, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stock.Kit, error) {
 		var k stock.Kit
-		var lsID, lfID *int64
-		var lsDate, lfDate *time.Time
-		var lsOdo, lfOdo *int
+		var lsID, lfID, biID *int64
+		var lsDate, lfDate, biDate *time.Time
+		var lsOdo, lfOdo, biOdo *int
 		var lsTier *stock.KitTier
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
 			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.WarrantyRequired, &k.Notes,
 			&lsID, &lsDate, &lsOdo, &lsTier,
 			&lfID, &lfDate, &lfOdo,
-			&k.InterSinceFull, &k.FirstServiceID, &k.BreakInLogged, &k.ArchivedAt)
+			&k.InterSinceFull, &k.FirstServiceID, &biID, &biDate, &biOdo, &k.ArchivedAt)
 		if err != nil {
 			return k, err
 		}
@@ -100,6 +105,9 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		}
 		if lfID != nil {
 			k.LastFullService = &stock.ServiceRef{ID: *lfID, PerformedOn: *lfDate, Odometer: *lfOdo, Tier: stock.TierFull}
+		}
+		if biID != nil {
+			k.BreakIn = &stock.ServiceRef{ID: *biID, PerformedOn: *biDate, Odometer: *biOdo, Tier: stock.TierBreakIn}
 		}
 		return k, err
 	})

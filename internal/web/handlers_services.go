@@ -75,7 +75,7 @@ func kitTiers(k stock.Kit, f serviceForm) []tierOption {
 	if (k.Intermediate && !first) || f.KitTier == stock.TierIntermediate {
 		tiers = append(tiers, stock.TierIntermediate)
 	}
-	if f.KitTier == stock.TierBreakIn || (k.HasBreakIn() && ((f.ID == 0 && !k.BreakInLogged) || editsFirst)) {
+	if f.KitTier == stock.TierBreakIn || (k.HasBreakIn() && ((f.ID == 0 && k.BreakIn == nil) || editsFirst)) {
 		tiers = append(tiers, stock.TierBreakIn)
 	}
 	var out []tierOption

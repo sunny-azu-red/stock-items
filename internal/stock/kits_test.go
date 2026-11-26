@@ -341,9 +341,10 @@ func TestBreakIn(t *testing.T) {
 	if !k.NextIsBreakIn(300, d(2025, 4, 20)) || k.NextIsIntermediate(300, d(2025, 4, 20)) {
 		t.Fatal("a new kit with a break-in reading: want the break-in next")
 	}
-	checkNext(t, k, 300, d(2025, 4, 20), "full", DueOK, ptr(1000), "")
-	checkNext(t, k, 600, d(2025, 4, 25), "full", DueSoon, ptr(1000), "")
-	checkNext(t, k, 1100, d(2025, 5, 5), "full", DueOverdue, ptr(1000), "")
+	// Due at Break-in at or the kit's year, whichever comes first.
+	checkNext(t, k, 300, d(2025, 4, 20), "full", DueOK, ptr(1000), "2026-04-04")
+	checkNext(t, k, 600, d(2025, 4, 25), "full", DueSoon, ptr(1000), "2026-04-04")
+	checkNext(t, k, 1100, d(2025, 5, 5), "full", DueOverdue, ptr(1000), "2026-04-04")
 	if r := k.ReadinessAt(300, d(2025, 4, 20)); !r.Ready() {
 		t.Errorf("the break-in takes the full parts, which are in stock: %+v", r)
 	}
@@ -398,17 +399,12 @@ func TestBreakIn(t *testing.T) {
 		}
 		checkNext(t, late, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "2026-04-04")
 	}
-	// A light rider: the full service's date comes before Break-in at. In
-	// its last quarter (about 3 months) the full service takes over, so its
-	// date doesn't pass behind a break-in due by distance only.
+	// A light rider: the year comes before Break-in at. The break-in stays
+	// next, due by the year too, so its date doesn't pass unseen.
 	slow := kit()
-	if !slow.NextIsBreakIn(700, d(2026, 1, 2)) {
-		t.Error("700 km, 92 days before the year: want the break-in still")
+	if !slow.NextIsBreakIn(700, d(2026, 1, 3)) || slow.NextIsIntermediate(700, d(2026, 1, 3)) {
+		t.Error("700 km, 91 days before the year: want the break-in still")
 	}
-	if slow.NextIsBreakIn(700, d(2026, 1, 3)) || slow.NextIsIntermediate(700, d(2026, 1, 3)) {
-		t.Error("700 km, 91 days before the year (a quarter): want the full service")
-	}
-	// It stands in for the break-in, so it is due by Break-in at too.
 	checkNext(t, slow, 700, d(2026, 1, 3), "full", DueSoon, ptr(1000), "2026-04-04")
 	// Archived: none either.
 	archived := kit()
@@ -420,36 +416,32 @@ func TestBreakIn(t *testing.T) {
 
 // checkNext checks which schedule the kit offers next and when it is due.
 // While the break-in is waited for, the full service counts the kit's own
-// interval from the purchase, with a warranty or without: an intermediate
-// can't come first, so taking turns (two steps, 24 months) would leave a
-// light rider with no date until the break-in's reading, 20 months on at
-// 50 km a month.
+// interval from the purchase, with a warranty or without: the first
+// service is the break-in (or, past its grace, the Full), never an
+// intermediate, so nothing takes turns yet. The break-in itself is due by
+// the kit's year too, and stays next, also once the warranty is lost.
 func TestBreakInWaitOwnInterval(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
 	kit := func() Kit {
 		return Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
 			VehiclePurchasedOn: d(2025, 1, 1)}
 	}
-	// No warranty: the break-in, then the full service in its last quarter,
-	// by 1 Jan 2026 (not 2027), and by 1 000 km as it stands in for the
-	// break-in.
+	// No warranty: the full service at 10 000 km or 1 Jan 2026 (not 2027).
 	k := kit()
-	if !k.NextIsBreakIn(400, d(2025, 9, 1)) {
-		t.Error("400 km in September: want the break-in")
+	if f := k.FullDue(450, d(2025, 10, 2)); f.DueDate == nil || !f.DueDate.Equal(d(2026, 1, 1)) || *f.DueOdometer != 10000 {
+		t.Errorf("full due = %v / %v, want 10 000 km / 2026-01-01", deref(f.DueOdometer), f.DueDate)
 	}
-	if k.NextIsBreakIn(450, d(2025, 10, 2)) {
-		t.Error("450 km, 91 days before the year: want the full service")
-	}
+	// The break-in next all along, due by 1 000 km or the year.
 	checkNext(t, k, 450, d(2025, 10, 2), "full", DueOK, ptr(1000), "2026-01-01")
 	checkNext(t, k, 610, d(2026, 1, 2), "full", DueOverdue, ptr(1000), "2026-01-01")
-	// Under warranty: the same as before.
-	w := kit()
-	w.VehicleWarrantyEndsOn = ptr(d(2029, 12, 31))
-	checkNext(t, w, 450, d(2025, 10, 2), "full", DueOK, ptr(1000), "2026-01-01")
-	// Ticked, under warranty, the full service not done a month past its
-	// date: the warranty is lost, and the full service stays overdue (it
-	// went back to a break-in with no date for eight months).
-	lost := w
+	if !k.NextIsBreakIn(610, d(2026, 1, 2)) {
+		t.Error("610 km, past the year: want the break-in, overdue")
+	}
+	// Ticked, under warranty, nothing done a month past the year: lost. The
+	// break-in stays next, overdue, until its grace (1 100); past it, the
+	// full service in its place.
+	lost := kit()
+	lost.VehicleWarrantyEndsOn = ptr(d(2029, 12, 31))
 	lost.VehicleWarrantyKits = []WarrantyKit{{KitID: 1, Name: "Oil", IntervalDistance: lost.IntervalDistance, IntervalMonths: lost.IntervalMonths, BreakInAt: lost.BreakInAt}}
 	if got := lost.Warranty(651, d(2026, 2, 1)).State; got != WarrantyLost {
 		t.Fatalf("state = %s, want lost", got)
@@ -457,54 +449,91 @@ func TestBreakInWaitOwnInterval(t *testing.T) {
 	for _, at := range []struct {
 		odo int
 		day time.Time
-	}{{651, d(2026, 2, 1)}, {1000, d(2026, 9, 1)}, {1050, d(2026, 10, 2)}} {
-		if lost.NextIsBreakIn(at.odo, at.day) {
-			t.Errorf("%d km on %s: want the overdue full service, not the break-in", at.odo, at.day.Format(time.DateOnly))
+	}{{651, d(2026, 2, 1)}, {1000, d(2026, 9, 1)}, {1100, d(2026, 10, 2)}} {
+		if !lost.NextIsBreakIn(at.odo, at.day) {
+			t.Errorf("%d km on %s: want the break-in", at.odo, at.day.Format(time.DateOnly))
 		}
 		checkNext(t, lost, at.odo, at.day, "full", DueOverdue, ptr(1000), "2026-01-01")
 	}
-	// Once the break-in (or the full service in its place) is logged, they
-	// take turns as before: the intermediate a year on, the full one two.
-	full := &ServiceRef{ID: 1, PerformedOn: d(2026, 1, 1), Odometer: 600, Tier: TierFull}
-	k.LastService, k.LastFullService, k.FirstServiceID = full, full, 1
-	checkNext(t, k, 700, d(2026, 3, 1), "inter", DueOK, ptr(5600), "2027-01-01")
-	if f := k.FullDue(700, d(2026, 3, 1)); f.DueDate == nil || !f.DueDate.Equal(d(2028, 1, 1)) {
-		t.Errorf("full due = %v, want 2028-01-01", f.DueDate)
+	if lost.NextIsBreakIn(1101, d(2026, 11, 2)) {
+		t.Error("1 101 km: want the full service in the break-in's place")
+	}
+	checkNext(t, lost, 1101, d(2026, 11, 2), "full", DueOverdue, ptr(1000), "2026-01-01")
+	// The very light rider's break-in on the year's date, at 600: it is the
+	// yearly service too, so the time counts from it (the distance from the
+	// purchase): the intermediate service at 5 000 km or a year on, the Full
+	// two steps on (no warranty).
+	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2026, 1, 1), Odometer: 600, Tier: TierBreakIn}
+	k.LastService, k.BreakIn, k.FirstServiceID = breakIn, breakIn, 1
+	checkNext(t, k, 700, d(2026, 3, 1), "inter", DueOK, ptr(5000), "2027-01-01")
+	if f := k.FullDue(700, d(2026, 3, 1)); f.DueDate == nil || !f.DueDate.Equal(d(2028, 1, 1)) || *f.DueOdometer != 10000 {
+		t.Errorf("full due = %v / %v, want 10 000 km / 2028-01-01", deref(f.DueOdometer), f.DueDate)
 	}
 }
 
-// A full service standing in for the break-in is due by Break-in at too:
-// it counts as the break-in only by Break-in at + 10%, and its own
-// 10 000 km would hide that reading. A rider of 100 km a month saw "in
-// 9 100 km" at 900 km and lost the warranty at 1 101 with nothing
-// overdue before.
-func TestBreakInStandInDue(t *testing.T) {
+// The break-in window: the kit's first service by Break-in at + 10% is its
+// break-in (the store refuses a Full there). A break-in done once the first
+// Full's time is close (its last quarter) is that Full too: the time counts
+// from it, the distance still from the purchase (a break-in at 1 000 km
+// never moves the Full past 10 000). A normal rider's, in the first months,
+// restarts nothing.
+func TestBreakInWindow(t *testing.T) {
 	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
-	k := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
-		VehiclePurchasedOn: d(2025, 1, 1), VehicleWarrantyEndsOn: ptr(d(2029, 12, 31)), WarrantyRequired: true}
-	k.VehicleWarrantyKits = []WarrantyKit{{KitID: 1, Name: "Oil", IntervalDistance: k.IntervalDistance, IntervalMonths: k.IntervalMonths, BreakInAt: k.BreakInAt}}
-	checkNext(t, k, 798, d(2025, 9, 1), "full", DueSoon, ptr(1000), "")
-	if !k.NextIsBreakIn(798, d(2025, 9, 1)) {
-		t.Error("1 Sep, 798 km: want the break-in")
+	bought := d(2025, 1, 1)
+	for _, tt := range []struct {
+		on   time.Time
+		want bool
+	}{{d(2025, 2, 13), false}, {d(2025, 10, 1), false}, {d(2025, 10, 2), true}, {d(2026, 1, 1), true}, {d(2026, 3, 1), true}} {
+		if got := BreakInIsFull(ServiceRef{PerformedOn: tt.on}, bought, ptr(12)); got != tt.want {
+			t.Errorf("break-in on %s: is full = %v, want %v", tt.on.Format(time.DateOnly), got, tt.want)
+		}
 	}
-	// 2 Oct, 900 km: the full service takes over, in 100 km.
-	if k.NextIsBreakIn(900, d(2025, 10, 2)) {
-		t.Error("2 Oct: want the full service")
+	if BreakInIsFull(ServiceRef{PerformedOn: d(2026, 3, 1)}, bought, nil) {
+		t.Error("a kit without months: want never")
 	}
-	checkNext(t, k, 900, d(2025, 10, 2), "full", DueSoon, ptr(1000), "2026-01-01")
-	if due := k.Due(900, d(2025, 10, 2)); due.Summary() != "in 100 km · in 91 days" {
+	kit := func() Kit {
+		k := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
+			VehiclePurchasedOn: bought, VehicleWarrantyEndsOn: ptr(d(2029, 12, 31)), WarrantyRequired: true}
+		k.VehicleWarrantyKits = []WarrantyKit{{KitID: 1, Name: "Oil", IntervalDistance: k.IntervalDistance, IntervalMonths: k.IntervalMonths, BreakInAt: k.BreakInAt}}
+		return k
+	}
+	logged := func(k Kit, br ServiceRef) Kit {
+		k.LastService, k.BreakIn, k.FirstServiceID = &br, &br, br.ID
+		k.VehicleWarrantyKits[0].Services = []ServiceRef{br}
+		return k
+	}
+	// A light rider (100 km a month): the break-in next at 900 km on 2 Oct,
+	// in 100 km or 91 days.
+	light := kit()
+	if !light.NextIsBreakIn(900, d(2025, 10, 2)) {
+		t.Error("900 km on 2 Oct: want the break-in")
+	}
+	if due := light.Due(900, d(2025, 10, 2)); due.Summary() != "in 100 km · in 91 days" {
 		t.Errorf("summary = %q", due.Summary())
 	}
-	checkNext(t, k, 1050, d(2025, 11, 17), "full", DueOverdue, ptr(1000), "2026-01-01")
-	// Logged at 1 000 km on 2 Nov, it counts as the break-in: the warranty
-	// holds, and the schedules count from it as a full service.
-	full := ServiceRef{ID: 1, PerformedOn: d(2025, 11, 2), Odometer: 1000, Tier: TierFull}
-	k.LastService, k.LastFullService, k.FirstServiceID = &full, &full, 1
-	k.VehicleWarrantyKits[0].Services = []ServiceRef{full}
-	if w := k.Warranty(1200, d(2025, 12, 2)); w.State != WarrantyActive {
-		t.Errorf("warranty = %s, want active", w.State)
+	// Logged at 1 000 on 2 Nov: also the first Full. Next the intermediate
+	// service at 5 000 km or 2 Nov 2026, the Full at 10 000 or 2 Nov 2026;
+	// the warranty counts from it too (not lost on 1 Feb 2026).
+	light = logged(light, ServiceRef{ID: 1, PerformedOn: d(2025, 11, 2), Odometer: 1000, Tier: TierBreakIn})
+	checkNext(t, light, 1200, d(2025, 12, 2), "inter", DueOK, ptr(5000), "2026-11-02")
+	if f := light.FullDue(1200, d(2025, 12, 2)); *f.DueOdometer != 10000 || !f.DueDate.Equal(d(2026, 11, 2)) {
+		t.Errorf("full due = %v / %v, want 10 000 km / 2026-11-02", deref(f.DueOdometer), f.DueDate)
 	}
-	checkNext(t, k, 1200, d(2025, 12, 2), "inter", DueOK, ptr(6000), "2026-11-02")
+	if got := light.Warranty(2000, d(2026, 6, 1)).State; got != WarrantyActive {
+		t.Errorf("light rider, 1 Jun 2026: %s, want active", got)
+	}
+	if w := light.Warranty(2300, d(2026, 12, 3)); w.State != WarrantyLost || w.FirstMiss().DueDate == nil || !w.FirstMiss().DueDate.Equal(d(2026, 11, 2)) {
+		t.Errorf("light rider, no Full a month past 2 Nov 2026: %+v, want lost by that Full", w)
+	}
+	// A normal rider's break-in on 13 Feb, at 1 000: nothing restarts.
+	normal := logged(kit(), ServiceRef{ID: 1, PerformedOn: d(2025, 2, 13), Odometer: 1000, Tier: TierBreakIn})
+	checkNext(t, normal, 2000, d(2025, 3, 1), "inter", DueOK, ptr(5000), "2026-01-01")
+	if f := normal.FullDue(2000, d(2025, 3, 1)); *f.DueOdometer != 10000 || !f.DueDate.Equal(d(2026, 1, 1)) {
+		t.Errorf("full due = %v / %v, want 10 000 km / 2026-01-01", deref(f.DueOdometer), f.DueDate)
+	}
+	if got := normal.Warranty(8000, d(2026, 2, 1)).State; got != WarrantyLost {
+		t.Errorf("normal rider, no Full a month past 1 Jan 2026: %s, want lost", got)
+	}
 }
 
 func checkNext(t *testing.T, k Kit, odo int, today time.Time, wantNext string, wantState DueState, wantOdo *int, wantDate string) {

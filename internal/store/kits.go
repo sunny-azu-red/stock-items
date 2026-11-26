@@ -41,6 +41,9 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		       -- The earliest service, in the same order.
 		       COALESCE((SELECT sr.id FROM service_records sr WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id
 		                 ORDER BY sr.performed_on, sr.odometer, sr.id LIMIT 1), 0),
+		       -- A break-in logged (Log service offers one until then).
+		       EXISTS (SELECT 1 FROM service_records sr
+		        WHERE sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier = 'break_in'),
 		       k.archived_at
 		FROM service_kits k
 		JOIN vehicles v ON v.id = k.vehicle_id
@@ -88,7 +91,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.WarrantyRequired, &k.Notes,
 			&lsID, &lsDate, &lsOdo, &lsTier,
 			&lfID, &lfDate, &lfOdo,
-			&k.InterSinceFull, &k.FirstServiceID, &k.ArchivedAt)
+			&k.InterSinceFull, &k.FirstServiceID, &k.BreakInLogged, &k.ArchivedAt)
 		if err != nil {
 			return k, err
 		}

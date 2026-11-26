@@ -63,17 +63,19 @@ func kitTitle(name string, t stock.KitTier) string {
 // kitTiers lists the tiers a service of kit k can be: Full; Intermediate
 // when the kit has an intermediate service; Break-in, for a kit with a
 // break-in on its vehicle (Kit.HasBreakIn: a Break-in at, the vehicle bought
-// below it), as its first service: a new one while it has none, or the edit
-// of its earliest (store.checkKitTier). The tier the form holds is
-// always among them.
+// below it): on a new service while none is logged (the store takes it only
+// as the kit's first service, so one dated before the services logged
+// backfills it), or the edit of its earliest (store.checkKitTier). The tier
+// the form holds is always among them.
 func kitTiers(k stock.Kit, f serviceForm) []tierOption {
 	tiers := []stock.KitTier{stock.TierFull}
+	editsFirst := f.ID != 0 && f.ID == k.FirstServiceID
 	// Not as the first service of a kit with a break-in (store.checkKitTier).
-	first := k.HasBreakIn() && ((f.ID == 0 && k.FirstServiceID == 0) || (f.ID != 0 && f.ID == k.FirstServiceID))
+	first := k.HasBreakIn() && ((f.ID == 0 && k.FirstServiceID == 0) || editsFirst)
 	if (k.Intermediate && !first) || f.KitTier == stock.TierIntermediate {
 		tiers = append(tiers, stock.TierIntermediate)
 	}
-	if f.KitTier == stock.TierBreakIn || (k.HasBreakIn() && ((f.ID == 0 && k.FirstServiceID == 0) || (f.ID != 0 && f.ID == k.FirstServiceID))) {
+	if f.KitTier == stock.TierBreakIn || (k.HasBreakIn() && ((f.ID == 0 && !k.BreakInLogged) || editsFirst)) {
 		tiers = append(tiers, stock.TierBreakIn)
 	}
 	var out []tierOption

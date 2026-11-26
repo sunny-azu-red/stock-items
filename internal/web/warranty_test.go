@@ -629,3 +629,37 @@ func TestArchiveRequiredKit(t *testing.T) {
 	}
 	expect(t, a.get(kit), http.StatusOK, "Archived")
 }
+
+// A break-in forgotten while later services were logged can be backfilled:
+// Log service offers Break-in until one is logged, the store takes it dated
+// before the services already logged (as the kit's first), and refuses it
+// dated after them. Backfilled on time, it gives the warranty back.
+func TestBreakInBackfill(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"10500"},
+		"purchased_on": {"2026-01-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-12-31"}})
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"10000"}, "interval_months": {"12"},
+		"intermediate": {"1"}, "break_in_at": {"1000"}, "warranty_required": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kitID := itoa(mustID(t, rec.Header().Get("Location")))
+	svc := func(tier, on, odo string) url.Values {
+		return url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {tier}, "title": {"Oil Service"}, "performed_on": {on}, "odometer": {odo}}
+	}
+	// The Full at 10 500 logged first: on time, but the break-in isn't.
+	expect(t, a.post("/services", svc("full", "2026-11-01", "10500")), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Warranty lost")
+	form := a.get("/services/new?kit=" + kitID)
+	expect(t, form, http.StatusOK, `value="break_in" autocomplete="off" data-kit-tier="full" data-kit-title="Oil Service (Break-in)">`)
+	// Dated after the Full: refused.
+	expect(t, a.post("/services", svc("break_in", "2026-11-20", "10600")), http.StatusUnprocessableEntity,
+		"This kit has an earlier service: only its first is the break-in")
+	// Dated before it, at 1 000: saved, and the warranty is back.
+	expect(t, a.post("/services", svc("break_in", "2026-02-01", "1000")), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Under warranty")
+	expectNot(t, a.get(path), "Warranty lost")
+	// Logged: no longer offered.
+	expectNot(t, a.get("/services/new?kit="+kitID), `value="break_in"`)
+}

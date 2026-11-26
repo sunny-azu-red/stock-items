@@ -42,11 +42,12 @@ Worked out from the history every time it is read (`warrantyWithKits`, `Warranty
 2. **Each Full**: within the kit's distance + 10% and months + 30 days of the last Full, or of the purchase before the first one (never of the break-in). Done later, or not done while past them, loses it (L7, L9, L11).
 3. **Intermediates never count**, early, late or skipped (W12).
 
-Every limit that passed fell while the warranty ran (it runs from the purchase until its end), so no dates need comparing. The first miss found is `Warranty.Missed`. The vehicle page shows it ("Oil Service: full service due by 10 000 km or 1 Jan 2027, done at 11 200 km on 1 Oct 2026").
+Every limit that passed fell while the warranty ran (it runs from the purchase until its end), so no dates need comparing. `Warranty.Missed` is the earliest miss of all the kits (by the day the late service was done, today for one not done). The vehicle page shows it ("Oil Service: full service due by 10 000 km or 1 Jan 2027, done at 11 200 km on 1 Oct 2026").
 
 - **Backfilling clears it**: logging the missed services with their real dates and readings (B10 → L4), or correcting a wrongly entered reading, puts the warranty back.
 - **Otherwise it stays lost**: on-time services after a late Full don't bring it back (L14). Decided 2026-11-26.
 - A kit not ticked never loses it (L5). Ticking only decides that; it doesn't change the kit's schedule.
+- Only kits that aren't archived count, and a kit's history is its own: archiving a required kit drops its misses, and a new kit replacing one starts from the purchase (its first Full is due an interval after it), so log its past services before ticking it. The kit form's hint says so. Duplicate starts unticked: the other vehicle's warranty may not ask for it.
 - The **Overdue** badge still shows from the limit itself: the app aims at the limit, and the grace only decides the warranty.
 
 ## The schedules
@@ -59,14 +60,16 @@ Every limit that passed fell while the warranty ran (it runs from the purchase u
 
 Losing or ending the warranty changes the Full the same day, also for services done while it ran: a light rider whose Full is a month past its year sees an overdue Intermediate next, with the Full at 24 months (W13). Decided 2026-11-26, as for an ended warranty on 2026-11-23: "if the warranty ended, it should not force you into an overdue full service". Without a warranty the Full can stay in 24 months for a light rider (N9, N10): decided, the distance matters more than the duration.
 
-A **missed break-in** (`breakInMissed`): still waited for (nothing logged, the vehicle not past its first full distance) but the odometer is past Break-in at + 10%. A break-in can no longer be logged at that reading, so the Full is due in its place, at the break-in's reading, overdue (`FullDue`; B2). Past the first full distance with nothing logged, the kit no longer waits for a break-in at all (B10, B11).
+A **missed break-in** (`breakInMissed`): still waited for (nothing logged, the vehicle not past its first full distance) but the odometer is past Break-in at + 10%. A break-in can no longer be logged at that reading, so the Full is due in its place, at the break-in's reading or the kit's months after the purchase, overdue (`FullDue`; B2). Past the first full distance with nothing logged, the kit no longer waits for a break-in at all (B10, B11).
+
+The **Full also comes before a waited-for break-in once it is close** (`breakInYields`: its last quarter, due soon or overdue): a light rider whose first Full's date comes before Break-in at (under 83 km a month on a 12-month kit) sees the Full about 3 months ahead, instead of a break-in due by distance only while that date passes. Logged by Break-in at + 10%, that Full counts as the break-in for the warranty.
 
 ## Which service is next
 
 `Kit.Due` gives the next one, `NextIsBreakIn` and `NextIsIntermediate` which kind it is; Log service preselects that kind (`handlers_services.go`).
 
-1. **Break-in**, if the kit waits for one and it isn't missed (`NextIsBreakIn`).
-2. **Full**, if the break-in is missed, or an intermediate was done since the last Full (`InterSinceFull`).
+1. **Break-in**, if the kit waits for one, it isn't missed, and the Full isn't close (`NextIsBreakIn`).
+2. **Full**, if the break-in gives way (missed, or the Full close), or an intermediate was done since the last Full (`InterSinceFull`).
 3. **Full**, if it is in its **last quarter**, due soon or overdue (`fullClose`), with a warranty or without (W11, N6, E7, B11).
 4. Under warranty only: **Full**, unless the intermediate falls due strictly before it by distance or by date (`dueBefore`).
 5. Otherwise **Intermediate**.
@@ -85,9 +88,10 @@ Without halfway it is always the Full (after the break-in).
 | Break-in with a kit without Break-in at, or on a vehicle bought past it | This kit has no break-in on this vehicle |
 | Break-in after another service with the kit | This kit has an earlier service: only its first is the break-in |
 | A second break-in | This kit has a break-in already |
-| Break-in read past Break-in at + 10% (also on an edit) | The break-in is due by 1 000 km (1 100 km at the latest): log this one as Full |
+| Intermediate as the first service of a kit with a break-in | This kit's first service is its break-in: log it as Break-in or Full |
+| Break-in read past Break-in at + 10%, when it becomes a break-in or its reading changes | The break-in is due by 1 000 km (1 100 km at the latest): log this one as Full |
 
-A missed break-in is still offered on Log service, to backfill one done on time. Services before the purchase, and with an archived kit or vehicle, are refused too ([data-model.md](data-model.md)).
+A missed break-in is still offered on Log service, to backfill one done on time; Intermediate isn't offered as a break-in kit's first service. A break-in saved late before the 10% rule still saves while its kind and reading stay (it counts as missed for the warranty). Services before the purchase, and with an archived kit or vehicle, are refused too ([data-model.md](data-model.md)).
 
 **The kit form** (`KitInput.Validate`, and `store.checkKitBreakIn` where the vehicle is needed):
 
@@ -115,10 +119,12 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
   - The Full takes over in the last quarter, in both modes.
   - Break-in at is below halfway.
   - Lost works as no warranty at once, and stays lost.
+- 2026-11-26 (independent review and full scan): the Full comes before a waited-for break-in once close; an intermediate can't be a break-in kit's first service; late break-ins saved before the rule stay editable; the earliest miss is named; Duplicate starts unticked.
 
 ## Tests
 
 - `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestFullTakesOver`.
-- `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`.
+- `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`, `TestWarrantyLostNamesTheEarliestMiss`.
 - `internal/stock/validate_test.go`: the kit form rows above.
-- Over HTTP, `internal/web/warranty_test.go`: `TestBreakIn`, `TestBreakInLateRefused`, `TestWarrantyLostAndBackfilled`, `TestWarrantyDecidesKitSchedule`.
+- Over HTTP, `internal/web/warranty_test.go`: `TestBreakIn`, `TestBreakInLateRefused`, `TestWarrantyLostAndBackfilled`, `TestWarrantyLostHistory`, `TestWarrantyDecidesKitSchedule`.
+- The full scan (the matrix's last section): every valid kit shape × 5 vehicles × 25 riders over four years, against eleven rules (R1–R11), with a throwaway harness run through `go run -overlay`.

@@ -107,10 +107,17 @@ func warrantyWithKits(endsOn *time.Time, endsAt *int, purchasedOn time.Time, pur
 	if !w.Runs() {
 		return w
 	}
+	// The earliest miss of all its kits: the day it was done late, or
+	// today for one not done.
+	when := func(m *WarrantyMiss) time.Time {
+		if m.Done != nil {
+			return m.Done.PerformedOn
+		}
+		return today
+	}
 	for _, k := range kits {
-		if m := k.missed(purchasedOn, purchaseOdo, odo, today); m != nil {
+		if m := k.missed(purchasedOn, purchaseOdo, odo, today); m != nil && (w.Missed == nil || when(m).Before(when(w.Missed))) {
 			w.State, w.Missed = WarrantyLost, m
-			return w
 		}
 	}
 	return w

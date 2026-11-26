@@ -53,7 +53,7 @@
   {{/* Which kits the warranty checks (stock.Kit.WarrantyRequired). */}}
   <div class="form-section">
     <h2>Warranty</h2>
-    <p class="hint">Tick it for a job the vehicle's warranty asks for on time, like the oil service. While the warranty runs, a break-in or full service done more than 10% of its distance or 30 days late loses it.</p>
+    <p class="hint">Tick it for a job the vehicle's warranty asks for on time, like the oil service. While the warranty runs, a break-in or full service done more than 10% of its distance or 30 days late loses it. Log the services done before you tick it: one that isn't logged counts as missed.</p>
     <label class="toggle"><input type="checkbox" id="warranty_required" name="warranty_required" value="1"{{if $f.WarrantyRequired}} checked{{end}}> Required by the warranty</label>
   </div>
   <div class="form-section">

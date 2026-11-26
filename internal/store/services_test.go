@@ -681,7 +681,14 @@ func TestServiceTierChecks(t *testing.T) {
 	}
 	day := func(m time.Month, d int) time.Time { return time.Date(2025, m, d, 0, 0, 0, 0, time.UTC) }
 
-	// An intermediate service, then the kit drops its intermediate service.
+	// An intermediate service (after a Full: a break-in kit's first
+	// service can't be one), then the kit drops its intermediate service.
+	if _, err := log(v1, stock.TierIntermediate, day(2, 1), 2000); !errors.As(err, new(*store.ConflictError)) {
+		t.Errorf("an intermediate as the break-in kit's first service: %v, want it refused", err)
+	}
+	if _, err := log(v1, stock.TierFull, day(2, 1), 2000); err != nil {
+		t.Fatal(err)
+	}
 	inter, err := log(v1, stock.TierIntermediate, day(3, 1), 3000)
 	if err != nil {
 		t.Fatal(err)

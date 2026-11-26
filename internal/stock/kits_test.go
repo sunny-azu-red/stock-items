@@ -338,7 +338,7 @@ func TestBreakIn(t *testing.T) {
 			Lines: []KitLine{{ItemID: 1, Need: 1, Have: 1}}, InterLines: []KitLine{{ItemID: 2, Need: 1, Have: 0}}}
 	}
 	k := kit()
-	if !k.NextIsBreakIn() || k.NextIsIntermediate(300, d(2025, 4, 20)) {
+	if !k.NextIsBreakIn(300, d(2025, 4, 20)) || k.NextIsIntermediate(300, d(2025, 4, 20)) {
 		t.Fatal("a new kit with a break-in reading: want the break-in next")
 	}
 	checkNext(t, k, 300, d(2025, 4, 20), "full", DueOK, ptr(1000), "")
@@ -352,7 +352,7 @@ func TestBreakIn(t *testing.T) {
 	// 4 Apr 2026, not 8 960.
 	breakIn := &ServiceRef{ID: 1, PerformedOn: d(2025, 4, 30), Odometer: 960, Tier: TierBreakIn}
 	k.LastService, k.FirstServiceID = breakIn, breakIn.ID
-	if k.NextIsBreakIn() {
+	if k.NextIsBreakIn(2000, d(2025, 6, 1)) {
 		t.Error("after the break-in: want it no longer next")
 	}
 	checkNext(t, k, 2000, d(2025, 6, 1), "inter", DueOK, ptr(4000), "2026-04-04")
@@ -376,32 +376,43 @@ func TestBreakIn(t *testing.T) {
 	// A vehicle bought used, past the break-in reading: no break-in.
 	used := kit()
 	used.VehicleOdometerAtPurchase = 2148
-	if used.NextIsBreakIn() {
+	if used.NextIsBreakIn(2500, d(2025, 6, 1)) {
 		t.Error("bought at 2 148 km: want no break-in")
 	}
 	// A kit added long after: the vehicle is past its first full distance.
 	late := kit()
 	late.VehicleOdometer = 8000
-	if late.NextIsBreakIn() {
+	if late.NextIsBreakIn(late.VehicleOdometer, d(2025, 6, 1)) {
 		t.Error("at 8 000 km, a kit's first full distance: want no break-in")
 	}
 	// Past Break-in at and its 10% grace, a break-in can't be logged at
 	// the reading: the full service is next, overdue since 1 000 km.
 	late.VehicleOdometer = 1100
-	if !late.NextIsBreakIn() {
+	if !late.NextIsBreakIn(late.VehicleOdometer, d(2025, 6, 1)) {
 		t.Error("at 1 100 km, the grace: want the break-in still next (late)")
 	}
 	for _, odo := range []int{1101, 7999} {
 		late.VehicleOdometer = odo
-		if late.NextIsBreakIn() || late.NextIsIntermediate(odo, d(2025, 6, 1)) {
+		if late.NextIsBreakIn(odo, d(2025, 6, 1)) || late.NextIsIntermediate(odo, d(2025, 6, 1)) {
 			t.Errorf("at %d km: want the break-in missed and the full service next", odo)
 		}
-		checkNext(t, late, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "")
+		checkNext(t, late, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "2026-04-04")
 	}
+	// A light rider: the full service's date comes before Break-in at. In
+	// its last quarter (about 3 months) the full service takes over, so its
+	// date doesn't pass behind a break-in due by distance only.
+	slow := kit()
+	if !slow.NextIsBreakIn(700, d(2026, 1, 2)) {
+		t.Error("700 km, 92 days before the year: want the break-in still")
+	}
+	if slow.NextIsBreakIn(700, d(2026, 1, 3)) || slow.NextIsIntermediate(700, d(2026, 1, 3)) {
+		t.Error("700 km, 91 days before the year (a quarter): want the full service")
+	}
+	checkNext(t, slow, 700, d(2026, 1, 3), "full", DueOK, ptr(8000), "2026-04-04")
 	// Archived: none either.
 	archived := kit()
 	archived.ArchivedAt = ptr(d(2025, 5, 1))
-	if archived.NextIsBreakIn() || archived.Due(300, d(2025, 5, 1)).State != DueNone {
+	if archived.NextIsBreakIn(300, d(2025, 5, 1)) || archived.Due(300, d(2025, 5, 1)).State != DueNone {
 		t.Error("archived kit: want no break-in")
 	}
 }
@@ -498,6 +509,8 @@ func TestFullTakesOver(t *testing.T) {
 		{"N6 no warranty, at 17 000: still the intermediate", kit(false, normal), 17000, d(2026, 4, 1), "inter", DueOverdue, 15000, "2026-09-01"},
 		{"B11 no warranty, nothing logged, at 10 500: the full one", kit(false, nil), 10500, d(2025, 10, 1), "full", DueOverdue, 10000, "2027-01-01"},
 		{"N9 no warranty, light rider: the intermediate at the year", kit(false, light), 6600, d(2026, 11, 1), "inter", DueOK, 8600, "2027-01-01"},
+		{"no warranty, light rider, intermediate skipped: still it 93 days before the Full's 24 months", kit(false, light), 9000, d(2027, 9, 30), "inter", DueOverdue, 8600, "2027-01-01"},
+		{"no warranty, light rider: the Full in the last quarter of a year before its 24 months", kit(false, light), 9000, d(2027, 10, 5), "full", DueOK, 13600, "2028-01-01"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -68,7 +68,9 @@ func kitTitle(name string, t stock.KitTier) string {
 // always among them.
 func kitTiers(k stock.Kit, f serviceForm) []tierOption {
 	tiers := []stock.KitTier{stock.TierFull}
-	if k.Intermediate || f.KitTier == stock.TierIntermediate {
+	// Not as the first service of a kit with a break-in (store.checkKitTier).
+	first := k.HasBreakIn() && ((f.ID == 0 && k.FirstServiceID == 0) || (f.ID != 0 && f.ID == k.FirstServiceID))
+	if (k.Intermediate && !first) || f.KitTier == stock.TierIntermediate {
 		tiers = append(tiers, stock.TierIntermediate)
 	}
 	if f.KitTier == stock.TierBreakIn || (k.HasBreakIn() && ((f.ID == 0 && k.FirstServiceID == 0) || (f.ID != 0 && f.ID == k.FirstServiceID))) {
@@ -228,7 +230,7 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) error {
 		f.KitID, f.KitName, f.VehicleID, f.Title = k.ID, k.Name, k.VehicleID, k.Name
 		// The service due next.
 		switch {
-		case k.NextIsBreakIn():
+		case k.NextIsBreakIn(k.VehicleOdometer, s.now()):
 			f.KitTier = stock.TierBreakIn
 		case k.NextIsIntermediate(k.VehicleOdometer, s.now()):
 			f.KitTier = stock.TierIntermediate

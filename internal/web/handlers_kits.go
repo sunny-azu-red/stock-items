@@ -372,6 +372,9 @@ func (s *Server) kitNew(w http.ResponseWriter, r *http.Request) error {
 func duplicateKitForm(k stock.Kit, vehicleID int64) kitForm {
 	f := kitFormFrom(k)
 	f.ID, f.Version, f.Stored, f.VehicleID = 0, 0, "", vehicleID
+	// Another vehicle's warranty may not ask for it, and a kit ticked with
+	// no services logged yet can lose that warranty at once.
+	f.WarrantyRequired = false
 	f.Lines, f.InterLines = nil, nil
 	for _, l := range k.Lines {
 		if !l.Archived {

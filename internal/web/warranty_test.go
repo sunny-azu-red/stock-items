@@ -475,3 +475,76 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	expectNot(t, a.get(path), "Warranty lost")
 	expect(t, a.get(kit), http.StatusOK, "Next: Intermediate", "<dt>Due at</dt><dd>15 900 km</dd>")
 }
+
+// The history behind Warranty lost, over HTTP: an intermediate can't be a
+// break-in kit's first service, a break-in saved late before that rule
+// still saves unchanged, deleting and restoring a late Full is seen at
+// once, unticking the kit gives the warranty back, and a duplicate isn't
+// ticked.
+func TestWarrantyLostHistory(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"900"},
+		"purchased_on": {"2025-11-01"}, "odometer_at_purchase": {"0"}, "has_warranty": {"1"}, "warranty_ends_on": {"2029-12-31"}})
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	kitForm := url.Values{"vehicle_id": {id}, "name": {"Oil Service"}, "interval_distance": {"10000"}, "interval_months": {"12"},
+		"intermediate": {"1"}, "break_in_at": {"1000"}, "warranty_required": {"1"}}
+	rec = a.post("/kits", kitForm)
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	kitID := itoa(mustID(t, kit))
+	svc := func(tier, on, odo string) url.Values {
+		return url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {tier}, "title": {"Oil Service"}, "performed_on": {on}, "odometer": {odo}}
+	}
+
+	// No intermediate first: not offered, and refused.
+	expectNot(t, a.get("/services/new?kit="+kitID), `value="intermediate"`)
+	expect(t, a.post("/services", svc("intermediate", "2025-12-01", "900")), http.StatusUnprocessableEntity,
+		"This kit&#39;s first service is its break-in: log it as Break-in or Full")
+
+	// A break-in saved at 1 500 before the 10% rule (as old data may
+	// hold): its edit saves while its reading stays, not when it moves.
+	rec = a.post("/services", svc("break_in", "2025-12-01", "1000"))
+	expect(t, rec, http.StatusSeeOther)
+	breakIn := rec.Header().Get("Location")
+	if _, err := a.pool.Exec(context.Background(), `UPDATE service_records SET odometer = 1500 WHERE id = $1`, mustID(t, breakIn)); err != nil {
+		t.Fatal(err)
+	}
+	old := svc("break_in", "2025-12-01", "1500")
+	old.Set("notes", "Dealer")
+	expect(t, a.postV(breakIn, old), http.StatusSeeOther)
+	old.Set("odometer", "1600")
+	expect(t, a.postV(breakIn, old), http.StatusUnprocessableEntity, "log this one as Full")
+	expect(t, a.get(path), http.StatusOK, "<dt>Warranty lost</dt><dd>Oil Service: break-in due by 1 000 km, done at 1 500 km on 1 Dec 2025</dd>")
+	if _, err := a.pool.Exec(context.Background(), `UPDATE service_records SET odometer = 1000 WHERE id = $1`, mustID(t, breakIn)); err != nil {
+		t.Fatal(err)
+	}
+
+	// A late Full (11 500, past 11 000): lost. Deleted (the odometer goes
+	// back with it, and its year isn't up), the warranty is back; restored,
+	// it is the miss again.
+	rec = a.post("/services", svc("full", "2026-10-01", "11500"))
+	expect(t, rec, http.StatusSeeOther)
+	full := rec.Header().Get("Location")
+	expect(t, a.get(path), http.StatusOK, "done at 11 500 km on 1 Oct 2026")
+	undo := flashOf(t, saveFresh(t, a, full, full+"/delete", nil)).Undo
+	if undo == 0 {
+		t.Fatal("no Undo")
+	}
+	expect(t, a.get(path), http.StatusOK, "Under warranty")
+	expectNot(t, a.get(path), "Warranty lost")
+	expect(t, a.post("/trash/"+itoa(undo)+"/restore", nil), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "done at 11 500 km on 1 Oct 2026")
+
+	// Unticked: the warranty is back.
+	kitForm.Del("warranty_required")
+	expect(t, a.postV(kit, kitForm), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Under warranty")
+	expectNot(t, a.get(path), "Warranty lost")
+
+	// A duplicate starts unticked.
+	kitForm.Set("warranty_required", "1")
+	expect(t, a.postV(kit, kitForm), http.StatusSeeOther)
+	expect(t, a.get("/kits/new?from="+kitID), http.StatusOK, `id="warranty_required" name="warranty_required" value="1">`)
+}

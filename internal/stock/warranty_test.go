@@ -143,7 +143,9 @@ func TestWarrantyLost(t *testing.T) {
 		{"no break-in yet at 1 100", []WarrantyKit{oil(10000, b)}, day(2030, 1, 1), 1100, day(2025, 2, 1), WarrantyActive, ""},
 		{"B10 kit added late, nothing logged at 10 500", []WarrantyKit{oil(10000, b)}, day(2030, 1, 1), 10500, day(2025, 10, 1), WarrantyLost, TierBreakIn},
 		{"B10 backfilled on time", []WarrantyKit{oil(10000, b, svc(TierBreakIn, day(2025, 2, 1), 1000), svc(TierFull, day(2025, 9, 1), 9800))}, day(2030, 1, 1), 10500, day(2025, 10, 1), WarrantyActive, ""},
-		{"B17 only an intermediate first: the break-in missed", []WarrantyKit{oil(10000, b, svc(TierFull, day(2025, 12, 1), 10000))}, day(2030, 1, 1), 10200, day(2025, 12, 5), WarrantyLost, TierBreakIn},
+		{"a Full first at 10 000: the break-in missed", []WarrantyKit{oil(10000, b, svc(TierFull, day(2025, 12, 1), 10000))}, day(2030, 1, 1), 10200, day(2025, 12, 5), WarrantyLost, TierBreakIn},
+		{"L13 an intermediate first: the break-in missed", []WarrantyKit{oil(10000, b, svc(TierIntermediate, day(2025, 6, 1), 900))}, day(2030, 1, 1), 1200, day(2025, 6, 5), WarrantyLost, TierBreakIn},
+		{"a Full by 1 100 counts as the break-in", []WarrantyKit{oil(10000, b, svc(TierFull, day(2025, 10, 1), 700))}, day(2030, 1, 1), 1500, day(2025, 11, 1), WarrantyActive, ""},
 		{"full at 11 000, the grace", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2025, 10, 1), 11000))}, day(2030, 1, 1), 12000, day(2025, 11, 1), WarrantyActive, ""},
 		{"full at 11 001", []WarrantyKit{oil(10000, nil, svc(TierFull, day(2025, 10, 1), 11001))}, day(2030, 1, 1), 12000, day(2025, 11, 1), WarrantyLost, TierFull},
 		{"GreyJoy: full at 16 500 on a 15 000 kit", []WarrantyKit{oil(15000, nil, svc(TierFull, day(2025, 10, 1), 16500))}, day(2030, 1, 1), 17000, day(2025, 11, 1), WarrantyActive, ""},
@@ -197,5 +199,21 @@ func TestWarrantyLostSchedulesInTurns(t *testing.T) {
 	checkNext(t, k, 6200, today, "inter", DueOK, ptr(11000), "2026-06-01")
 	if f := k.FullDue(6200, today); f.DueOdometer == nil || *f.DueOdometer != 16000 {
 		t.Errorf("full due = %v, want 16 000", deref(f.DueOdometer))
+	}
+}
+
+// With several kits the warranty asks for, the miss it names is the
+// earliest, whatever the kits' order.
+func TestWarrantyLostNamesTheEarliestMiss(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	full := func(on time.Time, odo int) ServiceRef {
+		return ServiceRef{ID: int64(odo), PerformedOn: on, Odometer: odo, Tier: TierFull}
+	}
+	oil := WarrantyKit{KitID: 1, Name: "Oil", IntervalDistance: ptr(10000), Services: []ServiceRef{full(day(2026, 3, 1), 12000)}}
+	coolant := WarrantyKit{KitID: 2, Name: "Coolant", IntervalMonths: ptr(12), Services: []ServiceRef{full(day(2026, 2, 15), 11000)}}
+	v := Vehicle{Odometer: 13000, PurchasedOn: day(2025, 1, 1), WarrantyEndsOn: ptr(day(2030, 1, 1)), WarrantyKits: []WarrantyKit{oil, coolant}}
+	w := v.Warranty(day(2026, 4, 1))
+	if w.State != WarrantyLost || w.Missed == nil || w.Missed.Kit != "Coolant" {
+		t.Errorf("state %s, missed %+v; want lost by Coolant (15 Feb, before Oil's 1 Mar)", w.State, w.Missed)
 	}
 }

@@ -70,12 +70,12 @@ type Vehicle struct {
 	// the reading it ends past; whichever comes first ends it (Warranty).
 	WarrantyEndsOn *time.Time
 	WarrantyEndsAt *int
+	Notes          string
+	ItemCount      int
 	// WarrantyKits are its kits the warranty asks for on time
 	// (Kit.WarrantyRequired), with their services: a missed one loses the
 	// warranty (Warranty).
 	WarrantyKits []WarrantyKit
-	Notes        string
-	ItemCount    int
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	// ArchivedAt is set for vehicles no longer kept: they leave the lists

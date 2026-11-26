@@ -536,7 +536,7 @@ func (s *Server) kitViews(kits []stock.Kit, vehicles []stock.Vehicle) []kitView 
 			Due:             k.Due(odo, today),
 			FullDue:         k.FullDue(odo, today),
 			NextInter:       k.NextIsIntermediate(odo, today),
-			NextBreakIn:     k.NextIsBreakIn(),
+			NextBreakIn:     k.NextIsBreakIn(odo, today),
 			VehicleArchived: v.Archived(),
 			Warranty:        k.Warranty(odo, today),
 		}

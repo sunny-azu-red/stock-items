@@ -2,8 +2,10 @@
 -- The day a vehicle was first registered (its delivery certificate's
 -- Registration date), empty for one bought new. Before the first service
 -- with a kit, the kit's schedule counts from the manual's milestones from 0
--- and that day, not from the purchase (stock.Start). It starts empty, so no
--- value changes and every schedule stays as it was until it is entered. It
+-- and that day, not from the purchase (stock.Start). It starts empty: no
+-- value changes, and the months count from the purchase day until it is
+-- entered, but a vehicle bought above 0 has its distance counted from the
+-- milestones from 0 at once (00009 then requires it for such a vehicle). It
 -- goes before the purchase columns (TestColumnOrder). Trash snapshots of a
 -- vehicle taken before this restore with it empty (jsonb_populate_recordset
 -- leaves a missing key NULL).

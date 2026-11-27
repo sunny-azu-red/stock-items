@@ -22,7 +22,7 @@ The worked examples are the kit schedule matrix (artifact <https://claude.ai/art
 | Grace | How late a required service may be before the warranty is lost: 10% of its distance (100 km on a break-in at 1 000, 1 500 on a 15 000 km interval) and 30 days, whatever the interval. | `WarrantyGrace`, `WarrantyGraceDays` |
 | Last quarter | A quarter of the kit's own distance and of its months in days (2 500 km or about 91 days on 10 000 km / 12 months): the Full takes over from the intermediate inside it. | `FullTakesOver`, `Kit.fullClose` |
 
-Schedules only count from the user's own services: nothing is logged before the purchase (date or reading), and a vehicle bought past Break-in at has no break-in ([data-model.md](data-model.md)). Before the first one, they take the first owner's part as kept to the manual (Start): LittleJoy, bought at 2 148 km and first registered on 11 Nov 2021, owes its 15 000 km Valve Check at 15 000 (16 500 at the latest), not 17 148; a bike bought at 20 000 km owes its 15 000 km job at 30 000; a demo bike registered 4 months before it was bought owes its first Full 12 months after the registration. A vehicle bought new (Bought New: at 0, registered when bought) counts as it always did.
+Schedules only count from the user's own services: nothing is logged before the purchase (date or reading), and a vehicle bought past Break-in at has no break-in ([data-model.md](data-model.md)). Before the first one, they take the first owner's part as kept to the manual (Start): LittleJoy, bought at 2 148 km and first registered on 11 Nov 2021, owes its 15 000 km Valve Check at 15 000, not 17 148; a bike bought at 20 000 km owes its 15 000 km job at 30 000; a demo bike registered 4 months before it was bought owes its first Full 12 months after the registration. A vehicle bought new (Bought New: at 0, registered when bought) counts as it always did.
 
 ## The warranty
 
@@ -46,17 +46,19 @@ Worked out from the history every time it is read (`warrantyWithKits`, `Warranty
 2. **Each Full**: within the kit's distance + 10% and months + 30 days of the last Full, or, before the first one, of the first milestone after the purchase (Start). A break-in that is also the first Full counts as it, by its date (the distance still from 0); any other break-in doesn't. Done later, or not done while past them, loses it (L7, L9, L11).
 3. **Intermediates never count**, early, late or skipped (W12).
 
-Every limit that passed fell while the warranty ran (it runs from the purchase until its end, and the first limit is the first milestone after the purchase), so no dates need comparing. Each Full is checked from the one before it, late or not, so a kit can miss several. `Warranty.Misses` lists every miss of every kit, sorted by **the day it lost the warranty** (`WarrantyMiss.LostOn`); the first (`FirstMiss`) is the one that lost it:
+Every limit that passed fell while the warranty ran (it runs from the purchase until its end, and the first limit is the first milestone after the purchase), so no dates need comparing. Each Full is checked from the one before it, late or not, so a kit can miss several. `Warranty.Misses` lists every miss of every kit, sorted by **the day it lost the warranty** (`WarrantyMiss.lostOn`, unexported: it only orders the list); the first is the one that lost it:
 
-| The miss | `LostOn` | Shown as |
-|---|---|---|
-| Its date (+ 30 days) passed, its reading didn't | the day after the date + 30 days (`LostOnExact`) | 1 Feb 2026 |
-| Its reading passed (done late or not) | the day of the first service logged past the reading, with any kit or none (`WarrantyKit.Readings`; the late service itself when none came earlier), or the day after the date + 30 days if the date passed too and that came first | by 1 Jun 2026 |
-| Its reading passed, not done, and no service was logged past it (only an odometer typed in shows it) | today, not dated (`Dated` false; sorted last) | past 16 500 km |
+| The miss | `lostOn` |
+|---|---|
+| Its date (+ 30 days) passed, its reading didn't | the day after the date + 30 days |
+| Its reading passed (done late or not) | the day of the first service logged past the reading, with any kit or none (`WarrantyKit.Readings`; the late service itself when none came earlier), or the day after the date + 30 days if the date passed too and that came first |
+| Its reading passed, not done, and no service was logged past it (only an odometer typed in shows it) | today (sorted last) |
 
-The app keeps no reading for a day except a service's, so a reading's miss is dated "by" the first service logged past it: the day it was lost or later.
+The app keeps no reading for a day except a service's, so a reading's miss is dated by the first service logged past it: the day it was lost or later.
 
-The vehicle page shows it in two places. Its facts say when (*Warranty lost*: the first miss's day, linking to the card). A red card under the Odometer, **Warranty lost**, lists every miss, the first first: the kit (linked), and the kind missed on a kit with more than one (halfway, or a break-in on the vehicle: Oil Service · full service; Spark Plugs alone), due by and the latest it could be done (the limit + 10% and 30 days), and what happened: done at a reading on a day (linked to the service) or not logged, and when it lost the warranty.
+**The grace is applied, never shown.** The app aims at the limit itself: a dealer may not allow the grace, so showing it would make it look like the limit to plan to. Nothing on a page says the latest a service could be done or the day or reading the warranty was lost by; `WarrantyMiss` keeps those unexported (`latestOdometer`, `latestDate`, `lostOn`), out of the templates' reach, and the service form's refusals name only the limit. Decided 2026-11-27.
+
+The vehicle page shows it with the red **Warranty lost** badge, its facts' *Warranty ends* followed by "· lost" in red (it would still run, so the date alone would read as covered), and a red card under the Odometer, **Warranty lost**, listing every miss, the first first: the kit (linked), and the kind missed on a kit with more than one (halfway, or a break-in on the vehicle: Oil Service · full service; Spark Plugs alone), due by (the limit), and what happened: done at a reading on a day (linked to the service) or not logged.
 
 - **Backfilling clears it**: logging the missed services with their real dates and readings (B10 → L4), or correcting a wrongly entered reading, puts the warranty back.
 - **Otherwise it stays lost**: on-time services after a late Full don't bring it back (L14). Decided 2026-11-26.
@@ -108,8 +110,8 @@ Without halfway it is always the Full (after the break-in).
 | Break-in after another service with the kit | This kit has an earlier service: only its first is the break-in |
 | A second break-in | This kit has a break-in already |
 | Intermediate as the first service of a kit with a break-in | This kit's first service is its break-in: log it as Break-in or Full |
-| Break-in read past Break-in at + 10%, when it becomes a break-in or its reading changes | The break-in is due by 1 000 km (1 100 km at the latest): log this one as Full |
-| Full as the kit's first service read by Break-in at + 10% (a kit with a break-in), when it becomes a Full or its reading changes | This is the kit's break-in (due by 1 000 km, 1 100 km at the latest): log it as Break-in |
+| Break-in read past Break-in at + 10%, when it becomes a break-in or its reading changes | The break-in was due by 1 000 km, and this one is too late for it: log it as Full |
+| Full as the kit's first service read by Break-in at + 10% (a kit with a break-in), when it becomes a Full or its reading changes | This is the kit's break-in (due by 1 000 km): log it as Break-in |
 
 Log service offers Break-in on a new service until one is logged with the kit (`Kit.BreakIn`), also after other services, to backfill one done on time: the store takes it only as the kit's first service, so it must be dated before them, and refuses it dated after ("This kit has an earlier service: only its first is the break-in"). It starts with the kind due next, never Break-in once something is logged. Intermediate isn't offered as a break-in kit's first service. A break-in saved late before the 10% rule, or a Full saved in the window before the window rule, still saves while its kind and reading stay. Services before the purchase, and with an archived kit or vehicle, are refused too ([data-model.md](data-model.md)).
 
@@ -171,10 +173,14 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
   - Not built: a per-kit last service before the purchase, for a used vehicle bought under warranty whose first owner's dealer serviced it off the milestones ([roadmap.md](roadmap.md)).
   - Then, the same day: the vehicle form asks **Bought: New · Used or demo** (nothing picked to start) instead of an optional First registered on. New was at 0 and registered when bought (no fields; the server writes them); Used or demo needs both, a demo or pre-registered bike included, as its schedules need the same two facts. An empty `first_registered_on` now means bought new, at 0 (migration 00009's CHECK), so the two half-filled states are gone: a used vehicle without a registration (its months silently from the purchase: LittleJoy's bug) and a new one with a reading. 00009 gave a vehicle bought above 0 without a date its purchase day, which its schedules already counted from, to be corrected on its page. The schedules didn't change for the states kept; the scan, run again on them alone, broke no rule.
 
+- 2026-11-27 (the grace on the Warranty lost card, "10 500 km or 27 Dec 2027 at the latest"):
+  - The grace is applied, never shown: the card says due by (the limit) and what happened, not the latest or when it was lost, and the service form's refusals name only the limit. A user would take the grace for the limit to plan to, and a dealer may not give it.
+  - The facts' *Warranty lost* is gone (the badge and the card say it); *Warranty ends* says "· lost" in red while it is lost.
+
 ## Tests
 
 - `internal/stock/kits_test.go`: `TestFullAndHalfService`, `TestBreakIn`, `TestBreakInWaitOwnInterval`, `TestBreakInWindow`, `TestHalfwayByTime`, `TestFullTakesOver`, `TestScheduleStart` (the milestones).
-- `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`, `TestWarrantyLostNamesTheEarliestMiss`, `TestWarrantyMisses` (every miss, `LostOn`), `TestWarrantyMissesFromStart`.
+- `internal/stock/warranty_test.go`: `TestWarrantyLost` (the grace edges), `TestWarrantyLostSchedulesInTurns`, `TestWarrantyLostNamesTheEarliestMiss`, `TestWarrantyMisses` (every miss, `lostOn` and the grace edge), `TestWarrantyMissesFromStart`.
 - `internal/store/archive_test.go`: `TestArchiveKitRequiredByWarranty` (also: an archived kit can't be ticked).
 - `internal/store/services_test.go`: `TestKitStaysWithItsVehicle`; `locks_test.go`: `TestSavingAKitAndLoggingAServiceWithItTakeTurns`.
 - `internal/db/migrations_test.go`: `TestHalfwayByTimeMigration`, `TestBoughtNewMigration`.

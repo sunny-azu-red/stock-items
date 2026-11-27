@@ -339,8 +339,10 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		// the first full service too (stock.BreakInIsFull). Checked when it
 		// becomes a full service or its reading changes, so one saved before
 		// this rule still saves unchanged.
-		return &ConflictError{Field: "kit_tier", Message: fmt.Sprintf("This is the kit's break-in (due by %s, %s at the latest): log it as Break-in",
-			stock.FormatDistance(*breakInAt), stock.FormatDistance(*breakInAt+stock.WarrantyGrace(*breakInAt)))}
+		// The messages name the limit, never the grace: it is what to aim
+		// at (stock.WarrantyMiss).
+		return &ConflictError{Field: "kit_tier", Message: fmt.Sprintf("This is the kit's break-in (due by %s): log it as Break-in",
+			stock.FormatDistance(*breakInAt))}
 	case in.KitTier == stock.TierBreakIn && breakIn && in.Odometer != nil &&
 		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&
 		*in.Odometer > *breakInAt+stock.WarrantyGrace(*breakInAt):
@@ -349,8 +351,8 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		// schedules count from it. Checked when it becomes a break-in or
 		// its reading changes, so one saved before this rule still saves
 		// unchanged.
-		return &ConflictError{Field: "odometer", Message: fmt.Sprintf("The break-in is due by %s (%s at the latest): log this one as Full",
-			stock.FormatDistance(*breakInAt), stock.FormatDistance(*breakInAt+stock.WarrantyGrace(*breakInAt)))}
+		return &ConflictError{Field: "odometer", Message: fmt.Sprintf("The break-in was due by %s, and this one is too late for it: log it as Full",
+			stock.FormatDistance(*breakInAt))}
 	}
 	return nil
 }

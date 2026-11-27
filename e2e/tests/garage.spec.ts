@@ -1977,10 +1977,11 @@ async function misaligned(page: Page) {
 }
 
 // KTM 390 was bought on 1 Mar 2024 and its oil service first logged long
-// after that year: ticked Required by the warranty, the warranty is lost on
-// 1 Apr 2025 (a year and 30 days on). The vehicle page says when in its
-// facts and what in a red card under the odometer. It stays lost, so the
-// page-wide tests below measure the card too.
+// after that year: ticked Required by the warranty, the warranty is lost.
+// The vehicle page says what in a red card under the odometer, naming the
+// limit (due by 1 Mar 2025), never the grace, and its facts' Warranty ends
+// says lost. It stays lost, so the page-wide tests below measure the card
+// too.
 test("a missed service the warranty asks for shows in a red card", async ({ page }) => {
   await page.goto("/vehicles");
   await page.locator("a.vehicle-card").filter({ has: page.locator(".name", { hasText: exact("KTM 390") }) }).click();
@@ -1999,14 +2000,18 @@ test("a missed service the warranty asks for shows in a red card", async ({ page
   await expect(card.locator("li")).toHaveCount(1);
   // One kind of service (no halfway, no break-in): named alone.
   await expect(card.locator("li .title")).toHaveText("Oil Service");
-  await expect(card.locator("li")).toContainText("lost on 1 Apr 2025");
+  // The kit counts 7 500 km and 12 months; the vehicle was bought used.
+  await expect(card.locator("li")).toContainText(/Due by .+ km or 1 Mar 2025/);
+  await expect(card.locator("li")).not.toContainText("at the latest");
+  await expect(card.locator("li")).not.toContainText("1 Apr 2025");
   // Under the odometer, before the facts.
   const order = await page.locator(".stack:has(> #warranty-lost) > *").evaluateAll((els) => els.map((e) => e.id || e.querySelector("h2")?.textContent?.trim() || "facts"));
   expect(order).toEqual(["Odometer", "warranty-lost", "facts", "Service history"]);
-  // The facts say when, and lead to the card.
-  const when = page.locator('dt:text-is("Warranty lost") + dd a');
-  await expect(when).toHaveText("1 Apr 2025");
-  await expect(when).toHaveAttribute("href", "#warranty-lost");
+  // The facts' Warranty ends says lost, in red; no Warranty lost there.
+  await expect(page.locator('dt:text-is("Warranty lost")')).toHaveCount(0);
+  const ends = page.locator('dt:text-is("Warranty ends") + dd');
+  await expect(ends).toHaveText(/ · lost$/);
+  await expect(ends.locator(".lost")).toHaveText("lost");
 });
 
 test("every box sits on whole pixels and its text lines up", async ({ page }) => {

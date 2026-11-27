@@ -1558,6 +1558,7 @@
     & dt { color: var(--muted); font-size: .75rem; font-weight: 500; }
     & dd { font-weight: 600; overflow-wrap: anywhere; margin-top: 1px; }
     & dd .muted { font-weight: 500; }
+    & dd .lost { color: var(--danger); }
     & a { text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 3px; &:hover { color: var(--accent-strong); } }
   }
 

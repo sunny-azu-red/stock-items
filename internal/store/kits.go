@@ -208,7 +208,7 @@ func loadWarrantyKits(ctx context.Context, q querier, vehicleIDs []int64) (map[i
 
 // withReadings fills in the warranty kits' Readings: every service of their
 // vehicle, with any kit or none, oldest first. They date a reading a kit's
-// service passed with nothing logged (stock.WarrantyMiss.LostOn).
+// service passed with nothing logged (the day it lost the warranty, stock.WarrantyMiss).
 func withReadings(ctx context.Context, q querier, kits map[int64][]stock.WarrantyKit) error {
 	if len(kits) == 0 {
 		return nil

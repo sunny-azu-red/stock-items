@@ -522,7 +522,7 @@ func TestBreakInWindow(t *testing.T) {
 	if got := light.Warranty(2000, d(2026, 6, 1)).State; got != WarrantyActive {
 		t.Errorf("light rider, 1 Jun 2026: %s, want active", got)
 	}
-	if w := light.Warranty(2300, d(2026, 12, 3)); w.State != WarrantyLost || w.FirstMiss().DueDate == nil || !w.FirstMiss().DueDate.Equal(d(2026, 11, 2)) {
+	if w := light.Warranty(2300, d(2026, 12, 3)); w.State != WarrantyLost || firstMiss(w).DueDate == nil || !firstMiss(w).DueDate.Equal(d(2026, 11, 2)) {
 		t.Errorf("light rider, no Full a month past 2 Nov 2026: %+v, want lost by that Full", w)
 	}
 	// A normal rider's break-in on 13 Feb, at 1 000: nothing restarts.

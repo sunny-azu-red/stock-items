@@ -113,7 +113,7 @@ func TestBought(t *testing.T) {
 	kit := rec.Header().Get("Location")
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Valve Check"},
 		"performed_on": {"2025-10-02"}, "odometer": {"21679"}}), http.StatusSeeOther)
-	expect(t, a.get(path), http.StatusOK, "Due by 15\u202f000 km</span>")
+	expect(t, a.get(path), http.StatusOK, "Was due by 15\u202f000 km</span>")
 	expectNot(t, a.get(path), "16\u202f500 km", "at the latest")
 	// After a service of the user's own, the next counts from it, as a
 	// dealer resets the dash: 21 679 + 15 000.
@@ -162,7 +162,7 @@ func TestBought(t *testing.T) {
 	edit.Set("odometer_at_purchase", "2148")
 	edit.Set("first_registered_on", "2021-11-11")
 	expect(t, a.postV(path, edit), http.StatusSeeOther)
-	expect(t, a.get(path), http.StatusOK, "<dt>First registered</dt><dd>11 Nov 2021</dd>", "Due by 15\u202f000 km")
+	expect(t, a.get(path), http.StatusOK, "<dt>First registered</dt><dd>11 Nov 2021</dd>", "Was due by 15\u202f000 km")
 }
 
 // A stale edit form comes back with the warranty as it was typed.
@@ -546,7 +546,7 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	// lost by. The facts' Warranty ends says lost; no Warranty lost there.
 	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-danger">`, "Warranty lost",
 		`<dt>Warranty ends</dt><dd>31 Dec 2029 · <span class="lost">lost</span></dd>`, "Oil Service · break-in</a>",
-		`<span class="meta">Due by 1 000 km</span>`, `<span class="meta">Not logged</span>`)
+		`<span class="meta">Was due by 1 000 km</span>`, `<span class="meta">Not logged</span>`)
 	expectNot(t, a.get(path), "1 100 km", "at the latest", "<dt>Warranty lost</dt>", "lost past", "lost by")
 	expect(t, a.get("/vehicles"), http.StatusOK, "Warranty lost")
 	// Lost: services take turns, so nothing logged means the full one, two
@@ -565,7 +565,7 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	logged("break_in", "2026-02-01", "1000")
 	late := logged("full", "2026-10-01", "11200")
 	expect(t, a.get(path), http.StatusOK, "Oil Service · full service</a>",
-		`<span class="meta">Due by 10 000 km or 1 Jan 2027</span>`, "11 200 km on 1 Oct 2026</a></span>")
+		`<span class="meta">Was due by 10 000 km or 1 Jan 2027</span>`, "11 200 km on 1 Oct 2026</a></span>")
 	expectNot(t, a.get(path), "11 000 km", "31 Jan 2027", "lost by")
 	// Its reading corrected to 10 900, inside the grace: back under warranty.
 	expect(t, a.postV(late, url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
@@ -854,10 +854,10 @@ func TestWarrantyLostCard(t *testing.T) {
 		// Kits with one kind of service are named alone (no halfway, no
 		// break-in on the vehicle).
 		`<a class="title" href="/kits/` + oil + `">Oil Service</a>`,
-		`<span class="meta">Due by 10` + "\u202f" + `000 km or 1 Jan 2026</span>`,
+		`<span class="meta">Was due by 10` + "\u202f" + `000 km or 1 Jan 2026</span>`,
 		`<span class="meta">Not logged</span>`,
 		`<a class="title" href="/kits/` + valve + `">Valve Check</a>`,
-		`<span class="meta">Due by 15` + "\u202f" + `000 km</span>`,
+		`<span class="meta">Was due by 15` + "\u202f" + `000 km</span>`,
 		`Done at <a href="` + valveSvc + `">16` + "\u202f" + `953 km on 1 Jun 2026</a></span>`,
 		`<a class="title" href="/kits/` + air + `">Air Filter</a>`,
 	} {

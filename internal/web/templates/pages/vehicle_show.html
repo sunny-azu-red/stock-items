@@ -70,7 +70,8 @@
          lose it first: worked out from the history, so logging a missed
          service with its real date and reading, or correcting a wrong one,
          takes it off. It names the limit, never the grace (the latest it
-         could be done, the day it was lost): the limit is what to aim at. */}}
+         could be done, the day it was lost): the limit is what to aim at.
+         Every limit here has passed: "Was due by". */}}
     {{with ($v.Warranty $.Today).Misses}}
     <section class="card card-danger" id="warranty-lost" aria-labelledby="warranty-lost-h">
       <div class="card-head"><h2 id="warranty-lost-h">{{icon "shield-x"}} Warranty lost</h2></div>
@@ -78,7 +79,7 @@
       {{range .}}
         <li><span class="grow">
           <a class="title" href="/kits/{{.KitID}}">{{.Kit}}{{if .Kinds}} · {{if eq .Tier "break_in"}}break-in{{else}}full service{{end}}{{end}}</a>
-          <span class="meta">Due by {{template "miss-limit" (dict "Odo" .DueOdometer "Date" .DueDate)}}</span>
+          <span class="meta">Was due by {{template "miss-limit" (dict "Odo" .DueOdometer "Date" .DueDate)}}</span>
           <span class="meta">{{with .Done}}Done at <a href="/services/{{.ID}}">{{distance .Odometer}} on {{date .PerformedOn}}</a>{{else}}Not logged{{end}}</span>
         </span></li>
       {{end}}

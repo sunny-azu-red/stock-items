@@ -1979,7 +1979,7 @@ async function misaligned(page: Page) {
 // KTM 390 was bought on 1 Mar 2024 and its oil service first logged long
 // after that year: ticked Required by the warranty, the warranty is lost.
 // The vehicle page says what in a red card under the odometer, naming the
-// limit (due by 1 Mar 2025), never the grace, and its facts' Warranty ends
+// limit (was due by 1 Mar 2025), never the grace, and its facts' Warranty ends
 // says lost. It stays lost, so the page-wide tests below measure the card
 // too.
 test("a missed service the warranty asks for shows in a red card", async ({ page }) => {
@@ -2001,7 +2001,7 @@ test("a missed service the warranty asks for shows in a red card", async ({ page
   // One kind of service (no halfway, no break-in): named alone.
   await expect(card.locator("li .title")).toHaveText("Oil Service");
   // The kit counts 7 500 km and 12 months; the vehicle was bought used.
-  await expect(card.locator("li")).toContainText(/Due by .+ km or 1 Mar 2025/);
+  await expect(card.locator("li")).toContainText(/Was due by .+ km or 1 Mar 2025/);
   await expect(card.locator("li")).not.toContainText("at the latest");
   await expect(card.locator("li")).not.toContainText("1 Apr 2025");
   // Under the odometer, before the facts.

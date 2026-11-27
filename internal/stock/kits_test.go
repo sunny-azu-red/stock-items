@@ -265,7 +265,7 @@ func TestFullAndHalfService(t *testing.T) {
 	}
 	runs, ended := d(2030, 1, 1), d(2024, 12, 31)
 	half := svc(d(2025, 8, 1), 4000, true)
-	lateHalf := svc(d(2025, 9, 1), 5000, true)
+	overdueHalf := svc(d(2025, 9, 1), 5000, true)
 	tests := []struct {
 		name      string
 		k         Kit
@@ -279,12 +279,12 @@ func TestFullAndHalfService(t *testing.T) {
 		{"warranty, after a full: the half one at 4 000 km", kit(runs), 3000, d(2025, 3, 1), "inter", DueOK, 4000, "2026-01-01"},
 		{"warranty, low use, no half done: the full one at the year", kit(runs), 3000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
 		{"warranty, after a half: the full one at 8 000 km or its year", kit(runs, half), 6000, d(2025, 9, 1), "full", DueOK, 8000, "2026-01-01"},
-		{"warranty, a late half doesn't push the full one back", kit(runs, lateHalf), 6000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
+		{"warranty, an overdue half doesn't push the full one back", kit(runs, overdueHalf), 6000, d(2025, 12, 10), "full", DueSoon, 8000, "2026-01-01"},
 		{"warranty, after the next full: the half one counts from it", kit(runs, half, svc(d(2025, 12, 20), 7900, false)), 8500, d(2026, 2, 1), "inter", DueOK, 11900, "2026-12-20"},
 		{"no warranty, low use: the half one at the year, no full one forced", kit(ended), 3000, d(2025, 12, 10), "inter", DueSoon, 4000, "2026-01-01"},
 		{"no warranty, after a half: the full one a half step later", kit(ended, half), 6000, d(2025, 12, 10), "full", DueOK, 8000, "2026-08-01"},
 		{"no warranty, low use, a half at the year: the full one a year later", kit(ended, svc(d(2026, 1, 1), 3000, true)), 4500, d(2026, 6, 1), "full", DueOK, 7000, "2027-01-01"},
-		{"warranty ended after the half: the full one no longer by the warranty's year", kit(d(2025, 11, 30), lateHalf), 6000, d(2025, 12, 10), "full", DueOK, 9000, "2026-09-01"},
+		{"warranty ended after the half: the full one no longer by the warranty's year", kit(d(2025, 11, 30), overdueHalf), 6000, d(2025, 12, 10), "full", DueOK, 9000, "2026-09-01"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -380,23 +380,23 @@ func TestBreakIn(t *testing.T) {
 		t.Error("bought at 2 148 km: want no break-in")
 	}
 	// A kit added long after: the vehicle is past its first full distance.
-	late := kit()
-	late.VehicleOdometer = 8000
-	if late.NextIsBreakIn(late.VehicleOdometer, d(2025, 6, 1)) {
+	overdue := kit()
+	overdue.VehicleOdometer = 8000
+	if overdue.NextIsBreakIn(overdue.VehicleOdometer, d(2025, 6, 1)) {
 		t.Error("at 8 000 km, a kit's first full distance: want no break-in")
 	}
 	// Past Break-in at and its 10% grace, a break-in can't be logged at
 	// the reading: the full service is next, overdue since 1 000 km.
-	late.VehicleOdometer = 1100
-	if !late.NextIsBreakIn(late.VehicleOdometer, d(2025, 6, 1)) {
-		t.Error("at 1 100 km, the grace: want the break-in still next (late)")
+	overdue.VehicleOdometer = 1100
+	if !overdue.NextIsBreakIn(overdue.VehicleOdometer, d(2025, 6, 1)) {
+		t.Error("at 1 100 km, the grace: want the break-in still next (overdue)")
 	}
 	for _, odo := range []int{1101, 7999} {
-		late.VehicleOdometer = odo
-		if late.NextIsBreakIn(odo, d(2025, 6, 1)) || late.NextIsIntermediate(odo, d(2025, 6, 1)) {
+		overdue.VehicleOdometer = odo
+		if overdue.NextIsBreakIn(odo, d(2025, 6, 1)) || overdue.NextIsIntermediate(odo, d(2025, 6, 1)) {
 			t.Errorf("at %d km: want the break-in missed and the full service next", odo)
 		}
-		checkNext(t, late, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "2026-04-04")
+		checkNext(t, overdue, odo, d(2025, 6, 1), "full", DueOverdue, ptr(1000), "2026-04-04")
 	}
 	// A light rider: the year comes before Break-in at. The break-in stays
 	// next, due by the year too, so its date doesn't pass unseen.
@@ -675,7 +675,7 @@ func TestHalfwayByTime(t *testing.T) {
 	for _, w := range []bool{false, true} {
 		checkNext(t, coolant(w), 0, d(2025, 6, 1), "inter", DueOK, nil, "2027-01-01")
 	}
-	// Done late (1 Jul 2027): under warranty the Full keeps its 48 months
+	// Done overdue (1 Jul 2027): under warranty the Full keeps its 48 months
 	// from the purchase; without, it is a step (24 months) after it.
 	inter := ServiceRef{ID: 1, PerformedOn: d(2027, 7, 1), Tier: TierIntermediate}
 	for _, tt := range []struct {
@@ -707,7 +707,7 @@ func TestHalfwayByTime(t *testing.T) {
 		t.Errorf("with a distance: InterMonths = %v, want 48", deref(m))
 	}
 	checkNext(t, km, 0, d(2025, 6, 1), "inter", DueOK, ptr(5000), "2029-01-01")
-	// Ticked: only the Fulls count. The intermediate service late or not
+	// Ticked: only the Fulls count. The intermediate service overdue or not
 	// done never loses the warranty; a Full 31 days past its 48 months does.
 	wk := WarrantyKit{KitID: 1, Name: "Coolant", IntervalMonths: ptr(48)}
 	v := Vehicle{PurchasedOn: d(2025, 1, 1), WarrantyEndsOn: ptr(d(2034, 12, 31)), WarrantyKits: []WarrantyKit{wk}}

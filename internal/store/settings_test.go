@@ -129,7 +129,7 @@ func TestSettingsSuggestionLists(t *testing.T) {
 }
 
 // The break-in window follows the grace setting: a break-in read past
-// Break-in at and its grace is refused as too late.
+// Break-in at and its grace is refused as overdue.
 func TestBreakInWindowFollowsTheGrace(t *testing.T) {
 	for _, tt := range []struct {
 		grace int

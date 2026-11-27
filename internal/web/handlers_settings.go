@@ -70,7 +70,7 @@ var settingSections = []settingSection{
 		Names: []string{"sku_search_url", "sku_search_prefix", "expiring_days", "categories"}},
 	{Title: "Services", Note: "When a kit's next service shows Due soon, and the names its forms offer. Overdue always starts at the limit itself.",
 		Names: []string{"due_soon_days", "due_soon_percent", "due_soon_min_distance", "work_names"}},
-	{Title: "Warranty", Note: "When a warranty shows Ends soon, and how late a service it asks for may be before it's lost. " +
+	{Title: "Warranty", Note: "When a warranty shows Ends soon, and how overdue a service it asks for may be before it's lost. " +
 		"Changing these checks every vehicle again at once. The grace is applied, never shown: pages aim at the limit itself, since a dealer may not give it.",
 		Names: []string{"warranty_soon_distance", "warranty_soon_days", "warranty_grace_percent", "warranty_grace_days"}},
 }

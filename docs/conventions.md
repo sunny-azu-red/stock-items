@@ -122,7 +122,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | Low stock (the tile, the filter and the dashboard card) · Below the minimum of 2 pcs | Running low, Below minimum of |
 | Short for the Air Filter kit · Short for the Oil change service (a shopping reason or note, `stock.ShortNote`: what needs the part; its vehicle is a chip, never text) | Short for GreyJoy: Air Filter |
 | Service history (a vehicle's or all services) · No services yet | Service log, Nothing logged yet |
-| 300 km overdue · 3 days overdue | over, late |
+| 300 km overdue · 3 days overdue · done overdue | over, late, too late |
 | Empty trash · Delete permanently · Save odometer | Empty, Update |
 | All vehicles · All types · All categories · All years · Clear filters | All, Everything, clear filters |
 | All services → · All activity → · Full history → (a card's link names where it goes) | Manage →, All →, Everything → |

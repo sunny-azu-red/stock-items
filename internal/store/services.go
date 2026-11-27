@@ -346,13 +346,13 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	case in.KitTier == stock.TierBreakIn && breakIn && in.Odometer != nil &&
 		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&
 		*in.Odometer > *breakInAt+stock.WarrantyGrace(*breakInAt):
-		// A break-in done this late is a full service (the warranty counts
+		// A break-in this overdue is a full service (the warranty counts
 		// it missed, stock.WarrantyKit), so it is logged as one: then the
 		// schedules count from it. Checked when it becomes a break-in or
 		// its reading changes, so one saved before this rule still saves
 		// unchanged.
-		return &ConflictError{Field: "odometer", Message: fmt.Sprintf("The break-in was due by %s, and this one is too late for it: log it as Full",
-			stock.FormatDistance(*breakInAt))}
+		return &ConflictError{Field: "odometer", Message: fmt.Sprintf("The break-in was due by %s, and this one is %s overdue: log it as Full",
+			stock.FormatDistance(*breakInAt), stock.FormatDistance(*in.Odometer-*breakInAt))}
 	}
 	return nil
 }

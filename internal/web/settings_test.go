@@ -207,7 +207,7 @@ func TestGraceSettingOverHTTP(t *testing.T) {
 	kitID := itoa(mustID(t, rec.Header().Get("Location")))
 	service := url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"break_in"}, "title": {"Oil Service (Break-in)"},
 		"performed_on": {"2026-03-01"}, "odometer": {"1150"}}
-	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "too late for it")
+	expect(t, a.post("/services", service), http.StatusUnprocessableEntity, "150 km overdue: log it as Full")
 
 	saveSettings(t, a, func(s *stock.Settings) { s.GracePercent = 20 })
 	expect(t, a.post("/services", service), http.StatusSeeOther)

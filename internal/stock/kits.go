@@ -337,7 +337,7 @@ func (k Kit) FullDue(currentOdo int, today time.Time) Due {
 		return Due{State: DueNone}
 	}
 	if k.breakInMissed(currentOdo) {
-		// A break-in done this late is a full service: due since the
+		// A break-in this overdue is a full service: due since the
 		// break-in's reading, or the break-in's year.
 		return k.breakInDue(currentOdo, today)
 	}

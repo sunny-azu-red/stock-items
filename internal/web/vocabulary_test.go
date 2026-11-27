@@ -56,6 +56,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `[Ii]ntermediate schedule|services in between|[Hh]alf-way|[Hh]alf service|at thirds`, use: `"intermediate service" (a kit's one halfway between full ones; "Intermediate" for the tier)`},
 		{re: `this many months|every X \{\{distUnit\}\} / months|every X km / months`, use: `a kit's "interval": its "distance or time"`},
 		{re: `<label for="interval_months">Months<|<h2>Schedule</h2>`, use: `"Time (months)", in the kit form's "Interval" section`, uiOnly: true},
+		{re: `\b[Ll]ate\b`, use: `"overdue": "300 km overdue", "done overdue", "how overdue"`},
 		{re: `style="[^"{]*[0-9](px|rem|em)\b`, use: "a class in app.css (whole pixels, no lengths inline)", uiOnly: true},
 	}
 	// A link's text starts with a capital, also mid-sentence.

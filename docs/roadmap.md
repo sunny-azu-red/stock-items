@@ -29,7 +29,7 @@ Ideas to come back to, with why they were left for later. Nothing here is decide
 
 ## A used vehicle bought under warranty
 
-**Now:** before the first service with a kit, its schedule counts from the manual's milestones (`stock.Start`): it takes the first owner's part as kept to them. A dealer resets the dash at each service, so a first owner serviced at 13 000 km on a 15 000 km kit is next due at 28 000, while Pitbox says 30 000. Under a warranty that still runs, aiming at 30 000 could make the user late.
+**Now:** before the first service with a kit, its schedule counts from the manual's milestones (`stock.Start`): it takes the first owner's part as kept to them. A dealer resets the dash at each service, so a first owner serviced at 13 000 km on a 15 000 km kit is next due at 28 000, while Pitbox says 30 000. Under a warranty that still runs, aiming at 30 000 could leave the service overdue.
 
 **If it is wanted:** an optional per-kit *Last done before you bought it* (reading and date, from the service book's last stamp or the dash reminder), which the kit counts from instead of the milestones. It is a little of the first owner's history, which Pitbox otherwise leaves out (only the user's own work is logged), so it waits for a vehicle that needs it.
 

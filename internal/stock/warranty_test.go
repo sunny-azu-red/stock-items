@@ -232,9 +232,9 @@ func TestWarrantyLostNamesTheEarliestMiss(t *testing.T) {
 
 // Misses lists every service the warranty asked for that was missed, the
 // first to lose it first: a miss is dated the day after its date limit and
-// the grace when the date was missed, else the day the late service was
+// the grace when the date was missed, else the day the overdue service was
 // done (a reading tells only that it was by then), else today. A service
-// still not done no longer passes behind one done late since.
+// still not done no longer passes behind one done overdue since.
 func TestWarrantyMisses(t *testing.T) {
 	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 	full := func(on time.Time, odo int) ServiceRef {
@@ -243,7 +243,7 @@ func TestWarrantyMisses(t *testing.T) {
 	type want struct {
 		kit    string
 		tier   KitTier
-		done   int // the late service's reading, 0 when not done
+		done   int // the overdue service's reading, 0 when not done
 		lostOn time.Time
 		latest string // latestOdometer / latestDate
 	}
@@ -272,7 +272,7 @@ func TestWarrantyMisses(t *testing.T) {
 	bought := day(2025, 1, 1)
 
 	// The explainer's two kits: the oil change never done (past 11 000 km
-	// in December, past its date on 31 Jan), the valve check done late on
+	// in December, past its date on 31 Jan), the valve check done overdue on
 	// 1 Jun. The oil change lost it first.
 	oil := WarrantyKit{KitID: 1, Name: "Oil Service", IntervalDistance: ptr(10000), IntervalMonths: ptr(12)}
 	valve := WarrantyKit{KitID: 2, Name: "Valve Check", IntervalDistance: ptr(15000), Services: []ServiceRef{full(day(2026, 6, 1), 16953)}}
@@ -284,8 +284,8 @@ func TestWarrantyMisses(t *testing.T) {
 		})
 	}
 
-	// One kit, every miss: the break-in done at 1 500, a Full late by its
-	// date only, the next counted from it and late by distance, and
+	// One kit, every miss: the break-in done at 1 500, a Full overdue by its
+	// date only, the next counted from it and overdue by distance, and
 	// the one after not done, past its reading only (today).
 	k := WarrantyKit{KitID: 1, Name: "Oil Service", IntervalDistance: ptr(10000), IntervalMonths: ptr(12), BreakInAt: ptr(1000),
 		Services: []ServiceRef{{ID: 1, PerformedOn: day(2025, 3, 1), Odometer: 1500, Tier: TierBreakIn},
@@ -298,7 +298,7 @@ func TestWarrantyMisses(t *testing.T) {
 		{"Oil Service", TierFull, 0, day(2027, 6, 1), "31500 / 2027-12-31"},
 	})
 	// Each names only the limits it missed (the page's "Was due by"): the
-	// break-in and the late-by-distance Full their readings, the Full late
+	// break-in and the overdue-by-distance Full their readings, the Full overdue
 	// by its date that date, the one not done (past 31 500, not yet past
 	// 31 Dec 2027) its reading.
 	for i, want := range []struct{ odo, date bool }{{true, false}, {false, true}, {true, false}, {true, false}} {

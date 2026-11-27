@@ -493,7 +493,7 @@ type Kit struct {
 	// (NextIsBreakIn); nil without one.
 	BreakInAt *int
 	// WarrantyRequired says the vehicle's warranty asks for this kit's
-	// break-in and full services on time: one done late, or not done,
+	// break-in and full services on time: one done overdue, or not done,
 	// loses it (Warranty). It doesn't change the kit's schedule.
 	WarrantyRequired bool
 	Notes            string

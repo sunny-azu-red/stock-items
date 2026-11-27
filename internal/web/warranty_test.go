@@ -272,7 +272,7 @@ func TestVehicleWarrantyArchived(t *testing.T) {
 }
 
 // The warranty decides how an intermediate service counts: while it runs, a
-// late one doesn't move the full service; once it has ended, the full one
+// overdue one doesn't move the full service; once it has ended, the full one
 // comes a step after it, in distance and in the full months.
 func TestWarrantyDecidesKitSchedule(t *testing.T) {
 	a := warrantyApp(t) // 23 Nov 2026
@@ -286,7 +286,7 @@ func TestWarrantyDecidesKitSchedule(t *testing.T) {
 		"intermediate": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
-	// A late intermediate service, at 8 000 km instead of 7 500.
+	// An overdue intermediate service, at 8 000 km instead of 7 500.
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"intermediate"},
 		"title": {"Oil Service (Intermediate)"}, "performed_on": {"2026-08-01"}, "odometer": {"8000"}}), http.StatusSeeOther)
 
@@ -470,7 +470,7 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 }
 
 // A break-in read past Break-in at and its grace (10%) is refused: one done
-// that late is a full service, logged as Full.
+// that overdue is a full service, logged as Full.
 func TestBreakInLateRefused(t *testing.T) {
 	a := warrantyApp(t) // 23 Nov 2026
 	rec := a.post("/vehicles", url.Values{"name": {"GreyJoy"}, "kind": {"motorcycle"}, "color": {"#d65151"}, "odometer": {"300"},
@@ -496,7 +496,7 @@ func TestBreakInLateRefused(t *testing.T) {
 	// It names the limit, never the grace (1 100 km).
 	rec = a.post("/services", service)
 	expect(t, rec, http.StatusUnprocessableEntity,
-		"The break-in was due by 1 000 km, and this one is too late for it: log it as Full", `name="odometer" value="1101"`)
+		"The break-in was due by 1 000 km, and this one is 101 km overdue: log it as Full", `name="odometer" value="1101"`)
 	expectNot(t, rec, "1 100 km", "at the latest")
 	service.Set("odometer", "1100")
 	rec = a.post("/services", service)
@@ -538,7 +538,7 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 		`<label class="toggle"><input type="checkbox" id="warranty_required" name="warranty_required" value="1"> Required by the warranty</label>`)
 	// Its hint says what loses the warranty, never the grace.
 	for _, page := range []string{kit + "/edit", "/kits/new?vehicle=" + id} {
-		expect(t, a.get(page), http.StatusOK, "a break-in or full service done late, or not done, loses it")
+		expect(t, a.get(page), http.StatusOK, "a break-in or full service done overdue, or not done, loses it")
 		expectNot(t, a.get(page), "10%", "30 days")
 	}
 
@@ -565,7 +565,7 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	// steps from the purchase (10 000 km, two years).
 	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>10 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2028</dd>")
 
-	// Backfilled: the break-in at 1 000, then a full one late by distance
+	// Backfilled: the break-in at 1 000, then a full one overdue by distance
 	// (11 200, past 11 000): still lost, by that full service.
 	logged := func(tier, on, odo string) string {
 		t.Helper()
@@ -575,13 +575,13 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 		return rec.Header().Get("Location")
 	}
 	logged("break_in", "2026-02-01", "1000")
-	late := logged("full", "2026-10-01", "11200")
+	overdue := logged("full", "2026-10-01", "11200")
 	expect(t, a.get(path), http.StatusOK, "Oil Service · full service</a>",
 		`<span class="meta">Was due by 10 000 km</span>`, "11 200 km on 1 Oct 2026</a></span>")
 	// Missed by its reading: 1 Jan 2027, still ahead, isn't named.
 	expectNot(t, a.get(path), "11 000 km", "1 Jan 2027", "31 Jan 2027", "lost by")
 	// Its reading corrected to 10 900, inside the grace: back under warranty.
-	expect(t, a.postV(late, url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
+	expect(t, a.postV(overdue, url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
 		"performed_on": {"2026-10-01"}, "odometer": {"10900"}}), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-ok">`, "Under warranty", "<dt>Warranty ends</dt><dd>31 Dec 2029</dd>")
 	expectNot(t, a.get(path), "Warranty lost")
@@ -589,8 +589,8 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 }
 
 // The history behind Warranty lost, over HTTP: an intermediate can't be a
-// break-in kit's first service, a break-in saved late before that rule
-// still saves unchanged, deleting and restoring a late Full is seen at
+// break-in kit's first service, a break-in saved overdue before that rule
+// still saves unchanged, deleting and restoring an overdue Full is seen at
 // once, unticking the kit gives the warranty back, and a duplicate isn't
 // ticked.
 func TestWarrantyLostHistory(t *testing.T) {
@@ -633,7 +633,7 @@ func TestWarrantyLostHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A late Full (11 500, past 11 000): lost. Deleted (the odometer goes
+	// An overdue Full (11 500, past 11 000): lost. Deleted (the odometer goes
 	// back with it, and its year isn't up), the warranty is back; restored,
 	// it is the miss again.
 	rec = a.post("/services", svc("full", "2026-10-01", "11500"))
@@ -735,7 +735,7 @@ func TestArchiveRequiredKit(t *testing.T) {
 	rec = a.post("/kits", kitForm)
 	expect(t, rec, http.StatusSeeOther)
 	kit := rec.Header().Get("Location")
-	// A Full late by distance (11 500, past 11 000): lost.
+	// A Full overdue by distance (11 500, past 11 000): lost.
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Oil Service"},
 		"performed_on": {"2026-11-01"}, "odometer": {"11500"}}), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, "Warranty lost")
@@ -821,7 +821,7 @@ func TestBreakInBackfill(t *testing.T) {
 
 // The vehicle page lists every service the warranty asked for that was
 // missed, in a red card under the odometer, the first to lose it first: the
-// kit (linked), what was due, and what happened (the late service linked).
+// kit (linked), what was due, and what happened (the overdue service linked).
 // Never the grace: not the latest it could be done, nor when it was lost.
 // The facts' Warranty ends says lost. Backfilling a miss takes it off.
 func TestWarrantyLostCard(t *testing.T) {

@@ -49,19 +49,20 @@
   <div class="stack">
     <section class="card">
       <div class="card-head"><h2>{{icon "gauge"}} Odometer</h2></div>
-      {{/* Under a box goes only its error: the card's note is in its foot,
-           as on the Warranty lost card. */}}
+      {{/* Under a box goes only its error: the card's note comes first, as
+           a section's note does, over what it is about. */}}
       <div class="card-body">
       {{if $v.Archived}}
-      <p>{{distance $v.Odometer}}</p>
+      <p class="hint">Restore this vehicle to log services or add kits.</p>
+      <p class="mt">{{distance $v.Odometer}}</p>
       {{else}}
-      <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input">
+      <p class="hint" id="odometer-note">Used for distance-based service reminders. Logging a service also updates it.</p>
+      <form method="post" action="/vehicles/{{$v.ID}}/odometer" class="qty-input mt">
         <input class="input" name="odometer" value="{{$v.Odometer}}" inputmode="numeric" placeholder="e.g. 12500" aria-label="Odometer in {{distUnit}}" aria-describedby="odometer-note">
         <button class="btn" type="submit">Save odometer</button>
       </form>
       {{end}}
       </div>
-      <div class="card-foot">{{if $v.Archived}}<p class="hint">Restore this vehicle to log services or add kits.</p>{{else}}<p class="hint" id="odometer-note">Used for distance-based service reminders. Logging a service also updates it.</p>{{end}}</div>
     </section>
 
     {{/* Every service the warranty asked for that was missed, the first to

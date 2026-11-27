@@ -21,6 +21,7 @@ type vehicleForm struct {
 	ID                                 int64
 	Name, Kind, Make, Model, Year      string
 	Plate, VIN, Color, Odometer, Notes string
+	FirstRegisteredOn                  string
 	PurchasedOn, OdometerAtPurchase    string
 	// ShowWarranty is the Has a warranty box; WarrantyEndsOn and
 	// WarrantyEndsAt are its fields, shown while it is ticked.
@@ -51,7 +52,7 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
-		Plate: v.Plate, VIN: v.VIN, Color: v.Color,
+		Plate: v.Plate, VIN: v.VIN, Color: v.Color, FirstRegisteredOn: day(v.FirstRegisteredOn),
 		PurchasedOn: v.PurchasedOn.Format("2006-01-02"), OdometerAtPurchase: strconv.Itoa(v.OdometerAtPurchase),
 		ShowWarranty:   v.WarrantyEndsOn != nil || v.WarrantyEndsAt != nil,
 		WarrantyEndsOn: day(v.WarrantyEndsOn), WarrantyEndsAt: optIntString(v.WarrantyEndsAt), Notes: v.Notes,
@@ -63,7 +64,8 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
+		FirstRegisteredOn: formText(r, "first_registered_on"),
+		PurchasedOn:       formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
 		ShowWarranty: formText(r, "has_warranty") == "1", WarrantyEndsOn: formText(r, "warranty_ends_on"), WarrantyEndsAt: formText(r, "warranty_ends_at"),
 		Notes:   formText(r, "notes"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
@@ -93,6 +95,11 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 		f.Errors.Add("purchased_on", err.Error())
 	} else if in.PurchasedOn != nil && in.PurchasedOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
 		f.Errors.Add("purchased_on", "Date cannot be in the future")
+	}
+	if in.FirstRegisteredOn, err = parseOptDate(f.FirstRegisteredOn); err != nil {
+		f.Errors.Add("first_registered_on", err.Error())
+	} else if in.FirstRegisteredOn != nil && in.FirstRegisteredOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
+		f.Errors.Add("first_registered_on", "Date cannot be in the future")
 	}
 	if f.ShowWarranty {
 		in.HasWarranty = true

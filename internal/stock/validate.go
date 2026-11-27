@@ -253,7 +253,10 @@ type VehicleInput struct {
 	// Odometer is the current reading: only Add vehicle has it
 	// (ValidateNew). An update leaves the vehicle's, which changes on its
 	// page (store.SetOdometer) and by logging a service.
-	Odometer           *int
+	Odometer *int
+	// FirstRegisteredOn is the delivery certificate's Registration date,
+	// optional (Vehicle.FirstRegisteredOn).
+	FirstRegisteredOn  *time.Time
 	PurchasedOn        *time.Time
 	OdometerAtPurchase *int
 	// HasWarranty is the form's Has a warranty box: ticked, the warranty
@@ -312,6 +315,15 @@ func (in VehicleInput) Validate() Errors {
 	if in.PurchasedOn != nil {
 		if y := in.PurchasedOn.Year(); y < 1900 || y > 2100 {
 			errs.Add("purchased_on", "Date year must be between 1900 and 2100")
+		}
+	}
+	if in.FirstRegisteredOn != nil {
+		if y := in.FirstRegisteredOn.Year(); y < 1900 || y > 2100 {
+			errs.Add("first_registered_on", "Date year must be between 1900 and 2100")
+		} else if in.PurchasedOn != nil && in.FirstRegisteredOn.After(*in.PurchasedOn) {
+			// A vehicle is registered by the time it is sold to its owner
+			// (the column's CHECK too).
+			errs.Add("first_registered_on", "First registered on can't be after the purchase date")
 		}
 	}
 	if in.OdometerAtPurchase != nil {

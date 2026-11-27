@@ -309,3 +309,52 @@ func TestWarrantyMisses(t *testing.T) {
 		t.Errorf("not lost: misses = %+v", w.Misses)
 	}
 }
+
+// The warranty's first limit for a kit is its first milestone after the
+// purchase (Start): LittleJoy's Valve Check was due at 15 000 (16 500 at
+// the latest), so the one done at 21 679 missed it. Milestones before the
+// purchase were the first owner's: no miss falls before it.
+func TestWarrantyMissesFromStart(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	valve := WarrantyKit{KitID: 1, Name: "Valve Check", IntervalDistance: ptr(15000),
+		Services: []ServiceRef{{ID: 1, PerformedOn: day(2025, 10, 2), Odometer: 21679, Tier: TierFull}}}
+	lj := Vehicle{Odometer: 27102, PurchasedOn: day(2024, 7, 4), OdometerAtPurchase: 2148,
+		WarrantyEndsOn: ptr(day(2032, 11, 11)), WarrantyKits: []WarrantyKit{valve}}
+	for _, tt := range []struct {
+		registered  *time.Time
+		due, latest int
+		lostOn      time.Time
+	}{
+		{ptr(day(2021, 11, 11)), 15000, 16500, day(2025, 10, 2)},
+		{nil, 15000, 16500, day(2025, 10, 2)}, // the distance grid needs no date
+	} {
+		v := lj
+		v.FirstRegisteredOn = tt.registered
+		w := v.Warranty(day(2026, 11, 27))
+		if len(w.Misses) != 1 {
+			t.Fatalf("misses = %+v, want the Valve Check", w.Misses)
+		}
+		m := w.Misses[0]
+		if deref(m.DueOdometer) != tt.due || deref(m.LatestOdometer) != tt.latest || m.Done == nil || m.Done.Odometer != 21679 || !m.LostOn.Equal(tt.lostOn) {
+			t.Errorf("miss due %v, latest %v, done %+v, lost %s; want %d, %d, 21 679, %s", deref(m.DueOdometer), deref(m.LatestOdometer),
+				m.Done, m.LostOn.Format(time.DateOnly), tt.due, tt.latest, tt.lostOn.Format(time.DateOnly))
+		}
+	}
+
+	// Bought at 20 000 three years after the first registration: 10 000 and
+	// 20 000 and two anniversaries passed before the purchase. Nothing is
+	// missed until 30 000 or the next anniversary (+ the grace).
+	oil := WarrantyKit{KitID: 2, Name: "Oil Service", IntervalDistance: ptr(10000), IntervalMonths: ptr(12)}
+	v := Vehicle{Odometer: 20100, PurchasedOn: day(2025, 1, 1), OdometerAtPurchase: 20000, FirstRegisteredOn: ptr(day(2021, 11, 11)),
+		WarrantyEndsOn: ptr(day(2029, 12, 31)), WarrantyKits: []WarrantyKit{oil}}
+	if w := v.Warranty(day(2025, 1, 2)); w.State != WarrantyActive {
+		t.Errorf("the day after buying it: %s %+v, want active", w.State, w.Misses)
+	}
+	v.Odometer = 29000
+	if w := v.Warranty(day(2025, 12, 11)); w.State != WarrantyActive {
+		t.Errorf("by 11 Dec 2025 (11 Nov + 30 days): %s, want active", w.State)
+	}
+	if w := v.Warranty(day(2025, 12, 12)); w.State != WarrantyLost || w.FirstMiss().LatestOdometer == nil || *w.FirstMiss().LatestOdometer != 31000 {
+		t.Errorf("12 Dec 2025: %s %+v, want lost, latest 31 000", w.State, w.FirstMiss())
+	}
+}

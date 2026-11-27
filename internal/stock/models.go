@@ -60,10 +60,14 @@ type Vehicle struct {
 	VIN     string
 	Color   string
 	// Odometer is the current reading, and PurchasedOn and
-	// OdometerAtPurchase the day and reading the vehicle was bought at:
-	// every schedule counts from them (the columns are NOT NULL). Make,
-	// Model, Year, VIN and Plate are only shown, and optional.
+	// OdometerAtPurchase the day and reading the vehicle was bought at: the
+	// floor for its services (the columns are NOT NULL). FirstRegisteredOn
+	// is the delivery certificate's Registration date (nil for a vehicle
+	// bought new: the purchase day): before the first service with a kit,
+	// its schedule counts from the manual's milestones from 0 and that day
+	// (Start). Make, Model, Year, VIN and Plate are only shown, and optional.
 	Odometer           int
+	FirstRegisteredOn  *time.Time
 	PurchasedOn        time.Time
 	OdometerAtPurchase int
 	// WarrantyEndsOn is the last day the warranty covers, and WarrantyEndsAt
@@ -467,6 +471,7 @@ type Kit struct {
 	VehicleName               string
 	VehicleColor              string
 	VehicleOdometer           int
+	VehicleFirstRegisteredOn  *time.Time
 	VehiclePurchasedOn        time.Time
 	VehicleOdometerAtPurchase int
 	VehicleWarrantyEndsOn     *time.Time

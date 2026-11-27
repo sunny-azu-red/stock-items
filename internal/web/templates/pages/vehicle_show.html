@@ -93,6 +93,7 @@
         <div><dt>Year</dt><dd>{{with $v.Year}}{{.}}{{else}}—{{end}}</dd></div>
         <div><dt>Plate</dt><dd>{{or $v.Plate "—"}}</dd></div>
         <div><dt>VIN</dt><dd{{if $v.VIN}} class="mono"{{end}}>{{or $v.VIN "—"}}</dd></div>
+        <div><dt>First registered</dt><dd>{{with $v.FirstRegisteredOn}}{{date .}}{{else}}—{{end}}</dd></div>
         <div><dt>Purchased</dt><dd>{{date $v.PurchasedOn}} · {{distance $v.OdometerAtPurchase}}</dd></div>
         {{if or $v.WarrantyEndsOn $v.WarrantyEndsAt}}<div><dt>Warranty {{if eq ($v.Warranty $.Today).State "ended"}}ended{{else}}ends{{end}}</dt><dd>{{with $v.WarrantyEndsOn}}{{date .}}{{end}}{{if and $v.WarrantyEndsOn $v.WarrantyEndsAt}} · {{end}}{{with $v.WarrantyEndsAt}}{{distance .}}{{end}}</dd></div>{{end}}
         {{/* When it was lost (the first miss); the Warranty lost card says what was missed. */}}

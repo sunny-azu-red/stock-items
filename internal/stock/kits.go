@@ -131,14 +131,83 @@ func dueSoonDistance(intervalDistance int) int {
 	return min(max(500, intervalDistance/10), intervalDistance/2)
 }
 
+// Start is where a vehicle's schedules count from before its first
+// service with a kit: the manual's milestones, from 0 and the day it was
+// first registered (Vehicle.FirstRegisteredOn, the purchase day when not
+// entered), as if the first owner had kept to them. Only the user's own
+// services are logged, so the first one due is the next milestone after the
+// purchase (Purchased, at the reading Odo): LittleJoy, bought at 2 148 km,
+// owes its 15 000 km service at 15 000, not 17 148.
+type Start struct {
+	Registered time.Time
+	Purchased  time.Time
+	Odo        int
+}
+
+// base is an interval's last milestone at or before the purchase: the last
+// multiple of distance from 0 at or below the purchase reading, and the last
+// step of months from Registered not after the purchase day (each counted
+// from Registered, so month ends don't drift). Without a distance, the
+// purchase reading; without months, the purchase day.
+func (s Start) base(distance, months *int) (time.Time, int) {
+	date, odo := DateOnly(s.Purchased), s.Odo
+	if distance != nil && *distance > 0 {
+		odo = s.Odo / *distance * *distance
+	}
+	if months != nil && *months > 0 {
+		date, _ = s.dates(*months)
+	}
+	return date, odo
+}
+
+// dates are the last step of months from Registered at or before the
+// purchase day, and the next one: the first due after it. Both count from
+// Registered (31 May + 12 months is 31 May, though + 6 is 30 Nov).
+func (s Start) dates(months int) (last, next time.Time) {
+	bought, reg := DateOnly(s.Purchased), DateOnly(s.Registered)
+	if !reg.Before(bought) {
+		return bought, addMonths(bought, months)
+	}
+	y1, m1, _ := reg.Date()
+	y2, m2, _ := bought.Date()
+	n := ((y2-y1)*12 + int(m2-m1)) / months
+	for n > 0 && addMonths(reg, n*months).After(bought) {
+		n--
+	}
+	for !addMonths(reg, (n+1)*months).After(bought) {
+		n++
+	}
+	return addMonths(reg, n*months), addMonths(reg, (n+1)*months)
+}
+
+// startOf is the Start of a vehicle first registered on registered (nil
+// when not entered: the purchase day), bought on purchased at the reading odo.
+func startOf(registered *time.Time, purchased time.Time, odo int) Start {
+	s := Start{Registered: purchased, Purchased: purchased, Odo: odo}
+	if registered != nil {
+		s.Registered = *registered
+	}
+	return s
+}
+
+// start is the vehicle's Start.
+func (v Vehicle) start() Start {
+	return startOf(v.FirstRegisteredOn, v.PurchasedOn, v.OdometerAtPurchase)
+}
+
+// start is the kit's vehicle's Start.
+func (k Kit) start() Start {
+	return startOf(k.VehicleFirstRegisteredOn, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase)
+}
+
 // dueFrom works out when a service is due: intervalDistance and
 // intervalMonths after ref, the service it counts from, or after the
-// purchase (baseDate, baseOdo) without one.
-func dueFrom(ref *ServiceRef, baseDate time.Time, baseOdo int, intervalDistance, intervalMonths *int, currentOdo int, today time.Time) Due {
+// interval's last milestone before the purchase without one (Start.base).
+func dueFrom(ref *ServiceRef, start Start, intervalDistance, intervalMonths *int, currentOdo int, today time.Time) Due {
 	if intervalDistance == nil && intervalMonths == nil {
 		return Due{State: DueNone}
 	}
-	fromDate, fromOdo := baseDate, baseOdo
+	fromDate, fromOdo := start.base(intervalDistance, intervalMonths)
 	if ref != nil {
 		fromDate, fromOdo = ref.PerformedOn, ref.Odometer
 	}
@@ -153,6 +222,9 @@ func dueFrom(ref *ServiceRef, baseDate time.Time, baseOdo int, intervalDistance,
 	}
 	if intervalMonths != nil {
 		dueDate := addMonths(DateOnly(fromDate), *intervalMonths)
+		if ref == nil {
+			_, dueDate = start.dates(*intervalMonths)
+		}
 		days := int(dueDate.Sub(DateOnly(today)).Hours() / 24)
 		d.DueDate, d.DaysLeft = &dueDate, &days
 		// DueSoonDays, but never more than half the interval, or a monthly
@@ -175,17 +247,18 @@ func dueFrom(ref *ServiceRef, baseDate time.Time, baseOdo int, intervalDistance,
 // InterDue computes when the kit's intermediate service is due: a step
 // (InterStep and InterMonths: half the distance at the full time, or half
 // the time on a kit with a time only) after the latest service of either
-// kind, or after the purchase before the first.
+// kind, or after the step's last milestone before the purchase (Start)
+// before the first.
 func (k Kit) InterDue(currentOdo int, today time.Time) Due {
 	if !k.Intermediate || k.Archived() {
 		return Due{State: DueNone}
 	}
-	return dueFrom(k.counted(), k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.InterStep(), k.InterMonths(), currentOdo, today)
+	return dueFrom(k.counted(), k.start(), k.InterStep(), k.InterMonths(), currentOdo, today)
 }
 
 // counted is the service the schedules count from: the latest one, unless
 // that is the break-in, which no schedule counts from (the manual's
-// intervals run from the purchase): then the purchase, or, for a break-in
+// intervals run from new): then the milestones (Start), or, for a break-in
 // that is also the first full service, its date (breakInFull).
 func (k Kit) counted() *ServiceRef {
 	if k.LastService != nil && k.LastService.Tier == TierBreakIn {
@@ -207,30 +280,33 @@ func (k Kit) lastFull() *ServiceRef {
 // breakInFull is the kit's break-in when it is also the first full service
 // (BreakInIsFull: a light rider's, done once the first full service's time
 // was close): the schedules then count the time from it, and the distance
-// from the purchase still, as a manual counts it (a break-in at 1 000 km
-// never moves the first full service past 10 000). Nil otherwise.
+// from 0 still (Start: a vehicle with a break-in was bought below its first
+// milestone), as a manual counts it (a break-in at 1 000 km never moves the
+// first full service past 10 000). Nil otherwise.
 func (k Kit) breakInFull() *ServiceRef {
-	if k.BreakIn == nil || !BreakInIsFull(*k.BreakIn, k.VehiclePurchasedOn, k.IntervalMonths) {
+	if k.BreakIn == nil || !BreakInIsFull(*k.BreakIn, k.start(), k.IntervalMonths) {
 		return nil
 	}
-	return &ServiceRef{ID: k.BreakIn.ID, PerformedOn: k.BreakIn.PerformedOn, Odometer: k.VehicleOdometerAtPurchase, Tier: TierBreakIn}
+	_, odo := k.start().base(k.IntervalDistance, nil)
+	return &ServiceRef{ID: k.BreakIn.ID, PerformedOn: k.BreakIn.PerformedOn, Odometer: odo, Tier: TierBreakIn}
 }
 
 // BreakInIsFull reports whether a break-in also counts as the kit's first
 // full service: it was done in the last quarter of the first full service's
-// time (FullTakesOver; about 3 months on a 12-month kit), due soon, or
-// past it. A light rider reaches Break-in at near the end of the year, so
+// time (FullTakesOver; about 3 months on a 12-month kit, counted from start),
+// due soon, or past it. A light rider reaches Break-in at near the end of the year, so
 // that break-in is the yearly service too; a normal rider's, in the first
 // months, restarts nothing. By time only: a kit without months has none.
-func BreakInIsFull(breakIn ServiceRef, purchasedOn time.Time, months *int) bool {
+func BreakInIsFull(breakIn ServiceRef, start Start, months *int) bool {
 	if months == nil {
 		return false
 	}
-	full := dueFrom(nil, purchasedOn, 0, nil, months, 0, breakIn.PerformedOn)
+	full := dueFrom(nil, start, nil, months, 0, breakIn.PerformedOn)
 	if full.State == DueSoon || full.State == DueOverdue {
 		return true
 	}
-	days := int(full.DueDate.Sub(DateOnly(purchasedOn)).Hours() / 24)
+	from, _ := start.base(nil, months)
+	days := int(full.DueDate.Sub(from).Hours() / 24)
 	return *full.DaysLeft <= days/FullTakesOver
 }
 
@@ -238,13 +314,17 @@ func BreakInIsFull(breakIn ServiceRef, purchasedOn time.Time, months *int) bool 
 // counts from a break-in, unless it is also the first full service (by its
 // time only: counted, lastFull).
 //   - A break-in missed (breakInMissed) is due as the full service, at
-//     the break-in's reading.
+//     the break-in's reading (breakInDue).
 //   - While the break-in is waited for (breakInPending), its own interval
-//     from the purchase, with a warranty or without: the first service is
+//     from new (Start), with a warranty or without: the first service is
 //     the break-in or the full one, so nothing takes turns yet.
 //   - While the vehicle is under warranty (UnderWarranty), it counts its
-//     own interval from the last full service, or from the purchase before
-//     the first: intermediate services never move it, as a warranty asks.
+//     own interval from the last full service, or from its last milestone
+//     before the purchase (Start) before the first: intermediate services
+//     never move it, as a warranty asks.
+//
+// Before the first service, every case counts from its own interval's last
+// milestone before the purchase (Start.base).
 //   - Without a warranty and without an intermediate service, from the
 //     last service.
 //   - Otherwise (no warranty, or it has ended) services take turns, each a
@@ -257,22 +337,21 @@ func (k Kit) FullDue(currentOdo int, today time.Time) Due {
 	}
 	if k.breakInMissed(currentOdo) {
 		// A break-in done this late is a full service: due since the
-		// break-in's reading, or the kit's months after the purchase.
-		from := k.VehicleOdometerAtPurchase
-		return dueFrom(nil, k.VehiclePurchasedOn, from, ptrTo(*k.BreakInAt-from), k.IntervalMonths, currentOdo, today)
+		// break-in's reading, or the break-in's year.
+		return k.breakInDue(currentOdo, today)
 	}
 	if k.breakInPending(currentOdo) {
 		// Waiting for the break-in, the first service is the break-in or the
 		// full one (never an intermediate), so nothing takes turns yet: the
-		// kit's own interval from the purchase, with a warranty or without.
-		return dueFrom(nil, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
+		// kit's own interval from new, with a warranty or without.
+		return dueFrom(nil, k.start(), k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	if k.UnderWarranty(currentOdo, today) {
-		return dueFrom(k.lastFull(), k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
+		return dueFrom(k.lastFull(), k.start(), k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	last := k.counted()
 	if !k.Intermediate {
-		return dueFrom(last, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, k.IntervalDistance, k.IntervalMonths, currentOdo, today)
+		return dueFrom(last, k.start(), k.IntervalDistance, k.IntervalMonths, currentOdo, today)
 	}
 	steps := 2
 	if k.InterSinceFull {
@@ -285,7 +364,7 @@ func (k Kit) FullDue(currentOdo int, today time.Time) Due {
 	if m := k.InterMonths(); m != nil {
 		months = ptrTo(steps * *m)
 	}
-	return dueFrom(last, k.VehiclePurchasedOn, k.VehicleOdometerAtPurchase, distance, months, currentOdo, today)
+	return dueFrom(last, k.start(), distance, months, currentOdo, today)
 }
 
 func ptrTo(n int) *int { return &n }
@@ -308,12 +387,14 @@ func (k Kit) NextIsBreakIn(currentOdo int, today time.Time) bool {
 
 // breakInPending reports whether the kit still waits for the vehicle's
 // break-in: it has one, nothing has been logged with it, and the vehicle
-// hasn't gone past its first full distance.
+// hasn't gone past its first full distance (from 0: a vehicle with a
+// break-in was bought below its first milestone).
 func (k Kit) breakInPending(currentOdo int) bool {
 	if !k.HasBreakIn() || k.LastService != nil || k.Archived() {
 		return false
 	}
-	return k.IntervalDistance == nil || currentOdo < k.VehicleOdometerAtPurchase+*k.IntervalDistance
+	_, from := k.start().base(k.IntervalDistance, nil)
+	return k.IntervalDistance == nil || currentOdo < from+*k.IntervalDistance
 }
 
 // breakInMissed reports whether the break-in is still waited for but the
@@ -331,16 +412,39 @@ func (k Kit) HasBreakIn() bool {
 }
 
 // BreakInDue computes when the break-in is due (NextIsBreakIn): at the
-// reading BreakInAt, or the kit's months after the purchase, whichever
-// comes first. A light rider reaches the year before Break-in at: then the
+// reading BreakInAt, or the kit's months from new (Start), whichever comes
+// first. A light rider reaches the year before Break-in at: then the
 // break-in is the yearly service too (BreakInIsFull), and its date must
 // not pass unseen.
 func (k Kit) BreakInDue(currentOdo int, today time.Time) Due {
 	if !k.NextIsBreakIn(currentOdo, today) {
 		return Due{State: DueNone}
 	}
-	from := k.VehicleOdometerAtPurchase
-	return dueFrom(nil, k.VehiclePurchasedOn, from, ptrTo(*k.BreakInAt-from), k.IntervalMonths, currentOdo, today)
+	return k.breakInDue(currentOdo, today)
+}
+
+// breakInDue is when the break-in's reading or year comes: BreakInAt, or the
+// kit's months from its last milestone before the purchase (Start.base).
+// The reading counts from the purchase reading, so it is "due soon" within
+// half of what is left to ride from there (as on a vehicle bought at 0),
+// not of the whole Break-in at.
+func (k Kit) breakInDue(currentOdo int, today time.Time) Due {
+	from := &ServiceRef{Odometer: k.VehicleOdometerAtPurchase}
+	byReading := dueFrom(from, k.start(), ptrTo(*k.BreakInAt-from.Odometer), nil, currentOdo, today)
+	if k.IntervalMonths == nil {
+		return byReading
+	}
+	return byReading.or(dueFrom(nil, k.start(), nil, k.IntervalMonths, currentOdo, today))
+}
+
+// or puts together a Due by a reading only (d) and one by a date only (o),
+// whichever comes first, as dueFrom does for an interval with both.
+func (d Due) or(o Due) Due {
+	d.DueDate, d.DaysLeft = o.DueDate, o.DaysLeft
+	if o.State.Rank() < d.State.Rank() {
+		d.State = o.State
+	}
+	return d
 }
 
 // UnderWarranty reports whether the kit's vehicle is under warranty

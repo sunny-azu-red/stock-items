@@ -28,7 +28,7 @@ type KitFilter struct {
 func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) {
 	var args sqlArgs
 	sql := `
-		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.purchased_on, v.odometer_at_purchase,
+		SELECT k.id, k.version, k.vehicle_id, v.name, v.color, v.odometer, v.first_registered_on, v.purchased_on, v.odometer_at_purchase,
 		       v.warranty_ends_on, v.warranty_ends_at,
 		       k.name, k.interval_distance, k.interval_months, k.intermediate, k.break_in_at, k.warranty_required, k.notes,
 		       ls.id, ls.performed_on, ls.odometer, ls.kit_tier,
@@ -92,7 +92,7 @@ func (s *Store) ListKits(ctx context.Context, f KitFilter) ([]stock.Kit, error) 
 		var lsOdo, lfOdo, biOdo *int
 		var lsTier *stock.KitTier
 		err := r.Scan(&k.ID, &k.Version, &k.VehicleID, &k.VehicleName, &k.VehicleColor, &k.VehicleOdometer,
-			&k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
+			&k.VehicleFirstRegisteredOn, &k.VehiclePurchasedOn, &k.VehicleOdometerAtPurchase, &k.VehicleWarrantyEndsOn, &k.VehicleWarrantyEndsAt,
 			&k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt, &k.WarrantyRequired, &k.Notes,
 			&lsID, &lsDate, &lsOdo, &lsTier,
 			&lfID, &lfDate, &lfOdo,

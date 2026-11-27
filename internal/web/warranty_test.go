@@ -88,6 +88,49 @@ func TestVehicleWarrantyBoughtUsed(t *testing.T) {
 		`name="warranty_ends_on" value="2023-11-11"`)
 }
 
+// A vehicle bought used: before the first service with a kit, its
+// schedule and the warranty count from the manual's milestones, from 0 and
+// First registered on (stock.Start). LittleJoy's Valve Check was due at
+// 15 000 (16 500 at the latest), not 17 148: 15 000 past what it was
+// bought at.
+func TestFirstRegisteredOn(t *testing.T) {
+	a := warrantyApp(t) // 23 Nov 2026
+	form := url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
+		"odometer": {"27102"}, "purchased_on": {"2024-07-04"}, "odometer_at_purchase": {"2148"}, "first_registered_on": {"2021-11-11"},
+		"has_warranty": {"1"}, "warranty_ends_on": {"2032-11-11"}}
+	rec := a.post("/vehicles", form)
+	expect(t, rec, http.StatusSeeOther)
+	path := rec.Header().Get("Location")
+	id := itoa(mustID(t, path))
+	expect(t, a.get(path), http.StatusOK, "<dt>First registered</dt><dd>11 Nov 2021</dd>")
+	expect(t, a.get(path+"/edit"), http.StatusOK, `name="first_registered_on" value="2021-11-11"`)
+
+	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Valve Check"}, "interval_distance": {"15000"}, "warranty_required": {"1"}})
+	expect(t, rec, http.StatusSeeOther)
+	kit := rec.Header().Get("Location")
+	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Valve Check"},
+		"performed_on": {"2025-10-02"}, "odometer": {"21679"}}), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "Due by 15\u202f000 km · 16\u202f500 km at the latest")
+
+	// After a service of the user's own, the next counts from it, as a
+	// dealer resets the dash: 21 679 + 15 000.
+	expect(t, a.get(kit), http.StatusOK, "36\u202f679 km")
+
+	// Refused after the purchase or in the future; what was typed comes back.
+	for _, tt := range []struct{ on, msg string }{
+		{"2024-07-05", "First registered on can&#39;t be after the purchase date"},
+		{"2026-12-25", "Date cannot be in the future"},
+	} {
+		form.Set("name", "Demo "+tt.on)
+		form.Set("first_registered_on", tt.on)
+		expect(t, a.post("/vehicles", form), http.StatusUnprocessableEntity, tt.msg, `name="first_registered_on" value="`+tt.on+`"`)
+	}
+	// Empty is fine: a vehicle bought new.
+	form.Set("name", "New one")
+	form.Set("first_registered_on", "")
+	expect(t, a.post("/vehicles", form), http.StatusSeeOther)
+}
+
 // A stale edit form comes back with the warranty as it was typed.
 func TestVehicleWarrantyStaleForm(t *testing.T) {
 	a := warrantyApp(t)

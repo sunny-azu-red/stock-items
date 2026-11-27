@@ -484,11 +484,11 @@ func TestBreakInWindow(t *testing.T) {
 		on   time.Time
 		want bool
 	}{{d(2025, 2, 13), false}, {d(2025, 10, 1), false}, {d(2025, 10, 2), true}, {d(2026, 1, 1), true}, {d(2026, 3, 1), true}} {
-		if got := BreakInIsFull(ServiceRef{PerformedOn: tt.on}, bought, ptr(12)); got != tt.want {
+		if got := BreakInIsFull(ServiceRef{PerformedOn: tt.on}, Start{Registered: bought, Purchased: bought}, ptr(12)); got != tt.want {
 			t.Errorf("break-in on %s: is full = %v, want %v", tt.on.Format(time.DateOnly), got, tt.want)
 		}
 	}
-	if BreakInIsFull(ServiceRef{PerformedOn: d(2026, 3, 1)}, bought, nil) {
+	if BreakInIsFull(ServiceRef{PerformedOn: d(2026, 3, 1)}, Start{Registered: bought, Purchased: bought}, nil) {
 		t.Error("a kit without months: want never")
 	}
 	kit := func() Kit {
@@ -717,5 +717,77 @@ func TestHalfwayByTime(t *testing.T) {
 	}
 	if got := v.Warranty(d(2029, 2, 1)).State; got != WarrantyLost {
 		t.Errorf("no Full 31 days past 48 months: %s, want lost", got)
+	}
+}
+
+// Before the first service with a kit, its schedule counts from the
+// manual's milestones (Start): from 0 and the day the vehicle was first
+// registered, the next one after the purchase. A vehicle bought new (first
+// registered when bought, at 0) counts as before.
+func TestScheduleStart(t *testing.T) {
+	d := func(y int, m time.Month, dd int) time.Time { return time.Date(y, m, dd, 0, 0, 0, 0, time.UTC) }
+	bought := d(2025, 1, 1)
+	for _, tt := range []struct {
+		name       string
+		dist, mo   *int
+		inter      bool
+		breakIn    *int
+		boughtAt   int
+		registered *time.Time
+		today      time.Time
+		odo        int
+		next       string // break-in, inter or full
+		state      DueState
+		dueOdo     *int
+		dueDate    string
+	}{
+		{"new: as before", ptr(10000), ptr(12), true, nil, 0, nil, d(2025, 2, 1), 600, "inter", DueOK, ptr(5000), "2026-01-01"},
+		{"new, first registered when bought: the same", ptr(10000), ptr(12), true, nil, 0, ptr(bought), d(2025, 2, 1), 600, "inter", DueOK, ptr(5000), "2026-01-01"},
+		{"LittleJoy's Valve Check: 15 000, not 17 148", ptr(15000), nil, false, nil, 2148, ptr(d(2021, 11, 11)), d(2025, 2, 1), 2500, "full", DueOK, ptr(15000), ""},
+		{"bought at 20 000: the next at 30 000", ptr(15000), nil, false, nil, 20000, ptr(d(2021, 11, 11)), d(2025, 2, 1), 20100, "full", DueOK, ptr(30000), ""},
+		{"bought exactly at a milestone: the next one", ptr(15000), nil, false, nil, 15000, nil, d(2025, 2, 1), 15100, "full", DueOK, ptr(30000), ""},
+		{"used, halfway: the intermediate at 4 000 and the registration's anniversary", ptr(8000), ptr(12), true, nil, 2148, ptr(d(2021, 11, 11)), d(2025, 2, 1), 2500, "inter", DueOK, ptr(4000), "2025-11-11"},
+		{"halfway, bought past the intermediate milestone: the Full at 8 000", ptr(8000), nil, true, nil, 5000, nil, d(2025, 2, 1), 5100, "full", DueOK, ptr(8000), ""},
+		{"time only, halfway: the next of either is the 4-year Full", nil, ptr(48), true, nil, 2148, ptr(d(2021, 11, 11)), d(2025, 2, 1), 2500, "full", DueOK, nil, "2025-11-11"},
+		{"registered on the 31st: the anniversary is a month after the purchase", nil, ptr(12), false, nil, 2148, ptr(d(2024, 1, 31)), bought, 2148, "full", DueSoon, nil, "2025-01-31"},
+		{"month ends don't drift: 31 May + 12 months, though + 6 is 30 Nov", nil, ptr(6), false, nil, 2148, ptr(d(2024, 5, 31)), d(2025, 2, 1), 2500, "full", DueOK, nil, "2025-05-31"},
+		{"demo registered 4 months before: the break-in by the registration's year", ptr(10000), ptr(12), true, ptr(1000), 350, ptr(d(2024, 9, 1)), d(2025, 2, 1), 500, "break-in", DueOK, ptr(1000), "2025-09-01"},
+		{"bought at 600: the break-in soon within half of the 400 km left", ptr(10000), ptr(12), true, ptr(1000), 600, nil, d(2025, 2, 1), 790, "break-in", DueOK, ptr(1000), "2026-01-01"},
+		{"bought at 600: soon from 800", ptr(10000), ptr(12), true, ptr(1000), 600, nil, d(2025, 2, 1), 800, "break-in", DueSoon, ptr(1000), "2026-01-01"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			k := Kit{IntervalDistance: tt.dist, IntervalMonths: tt.mo, Intermediate: tt.inter, BreakInAt: tt.breakIn,
+				VehiclePurchasedOn: bought, VehicleOdometerAtPurchase: tt.boughtAt, VehicleFirstRegisteredOn: tt.registered,
+				VehicleWarrantyEndsOn: ptr(d(2029, 12, 31))}
+			next := "full"
+			switch {
+			case k.NextIsBreakIn(tt.odo, tt.today):
+				next = "break-in"
+			case k.NextIsIntermediate(tt.odo, tt.today):
+				next = "inter"
+			}
+			due := k.Due(tt.odo, tt.today)
+			date := ""
+			if due.DueDate != nil {
+				date = due.DueDate.Format(time.DateOnly)
+			}
+			odoOK := (due.DueOdometer == nil) == (tt.dueOdo == nil) && (tt.dueOdo == nil || *due.DueOdometer == *tt.dueOdo)
+			if next != tt.next || due.State != tt.state || !odoOK || date != tt.dueDate {
+				t.Errorf("next %s, %s at %v by %q; want %s, %s at %v by %q", next, due.State, deref(due.DueOdometer), date,
+					tt.next, tt.state, deref(tt.dueOdo), tt.dueDate)
+			}
+		})
+	}
+
+	// The demo's break-in done early restarts nothing: the intermediate and
+	// the Full keep the registration's year.
+	k := Kit{IntervalDistance: ptr(10000), IntervalMonths: ptr(12), Intermediate: true, BreakInAt: ptr(1000),
+		VehiclePurchasedOn: bought, VehicleOdometerAtPurchase: 350, VehicleFirstRegisteredOn: ptr(d(2024, 9, 1)),
+		VehicleWarrantyEndsOn: ptr(d(2029, 12, 31))}
+	br := &ServiceRef{ID: 1, PerformedOn: d(2025, 3, 1), Odometer: 1000, Tier: TierBreakIn}
+	k.LastService, k.BreakIn, k.FirstServiceID = br, br, 1
+	checkNext(t, k, 1200, d(2025, 3, 10), "inter", DueOK, ptr(5000), "2025-09-01")
+	if f := k.FullDue(1200, d(2025, 3, 10)); deref(f.DueOdometer) != 10000 || f.DueDate.Format(time.DateOnly) != "2025-09-01" {
+		t.Errorf("Full due %v / %v, want 10 000 km / 2025-09-01", deref(f.DueOdometer), f.DueDate)
 	}
 }

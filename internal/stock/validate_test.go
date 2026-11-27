@@ -209,6 +209,26 @@ func TestVehicleInputValidate(t *testing.T) {
 	if errs := good.ValidateNew(); errs.Any() {
 		t.Errorf("unexpected error on valid input: %v", errs)
 	}
+
+	// First registered on is optional, by the purchase at the latest (the
+	// same day for one bought new).
+	for _, tt := range []struct {
+		name string
+		on   *time.Time
+		bad  bool
+	}{
+		{"empty", nil, false},
+		{"years before the purchase", ptr(time.Date(2021, 11, 11, 0, 0, 0, 0, time.UTC)), false},
+		{"the purchase day", ptr(validDate), false},
+		{"after the purchase", ptr(validDate.AddDate(0, 0, 1)), true},
+		{"year out of range", ptr(time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)), true},
+	} {
+		in := good
+		in.FirstRegisteredOn = tt.on
+		if got := in.ValidateNew()["first_registered_on"] != ""; got != tt.bad {
+			t.Errorf("first registered %s: error %v, want %v (%v)", tt.name, got, tt.bad, in.ValidateNew())
+		}
+	}
 }
 
 func TestMovementInputValidate(t *testing.T) {

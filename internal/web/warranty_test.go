@@ -433,7 +433,7 @@ func TestBreakInMarkedOnEdit(t *testing.T) {
 		"performed_on": {"2025-04-30"}, "odometer": {"960"}}
 	// A Full there is the break-in now: refused.
 	expect(t, a.post("/services", first), http.StatusUnprocessableEntity,
-		"This is the kit&#39;s break-in (due by 1 000 km): log it as Break-in")
+		"This close to 1 000 km, the kit&#39;s first service is its break-in: log it as Break-in")
 	// One saved before that rule (GreyJoy's first, logged as Full).
 	first.Set("kit_tier", "break_in")
 	rec = a.post("/services", first)
@@ -536,6 +536,11 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	expect(t, a.get(path), http.StatusOK, `<span class="badge badge-ok">`, "Under warranty")
 	expect(t, a.get(kit+"/edit"), http.StatusOK,
 		`<label class="toggle"><input type="checkbox" id="warranty_required" name="warranty_required" value="1"> Required by the warranty</label>`)
+	// Its hint says what loses the warranty, never the grace.
+	for _, page := range []string{kit + "/edit", "/kits/new?vehicle=" + id} {
+		expect(t, a.get(page), http.StatusOK, "a break-in or full service done late, or not done, loses it")
+		expectNot(t, a.get(page), "10%", "30 days")
+	}
 
 	// Ticked: lost, by the break-in (1 000 km, nothing logged at 10 500).
 	kitForm.Set("warranty_required", "1")
@@ -549,6 +554,13 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 		`<span class="meta">Was due by 1 000 km</span>`, `<span class="meta">Not logged</span>`)
 	expectNot(t, a.get(path), "1 100 km", "at the latest", "<dt>Warranty lost</dt>", "lost past", "lost by")
 	expect(t, a.get("/vehicles"), http.StatusOK, "Warranty lost")
+	// Ended, lost or not, it says ended: no "lost" after the date.
+	vehicle.Set("warranty_ends_on", "2026-11-01")
+	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "<dt>Warranty ended</dt><dd>1 Nov 2026</dd>")
+	expectNot(t, a.get(path), `class="lost"`)
+	vehicle.Set("warranty_ends_on", "2029-12-31")
+	expect(t, a.postV(path, vehicle), http.StatusSeeOther)
 	// Lost: services take turns, so nothing logged means the full one, two
 	// steps from the purchase (10 000 km, two years).
 	expect(t, a.get(kit), http.StatusOK, "Next: Full", "<dt>Due at</dt><dd>10 000 km</dd>", "<dt>Due by</dt><dd>1 Jan 2028</dd>")
@@ -565,8 +577,9 @@ func TestWarrantyLostAndBackfilled(t *testing.T) {
 	logged("break_in", "2026-02-01", "1000")
 	late := logged("full", "2026-10-01", "11200")
 	expect(t, a.get(path), http.StatusOK, "Oil Service · full service</a>",
-		`<span class="meta">Was due by 10 000 km or 1 Jan 2027</span>`, "11 200 km on 1 Oct 2026</a></span>")
-	expectNot(t, a.get(path), "11 000 km", "31 Jan 2027", "lost by")
+		`<span class="meta">Was due by 10 000 km</span>`, "11 200 km on 1 Oct 2026</a></span>")
+	// Missed by its reading: 1 Jan 2027, still ahead, isn't named.
+	expectNot(t, a.get(path), "11 000 km", "1 Jan 2027", "31 Jan 2027", "lost by")
 	// Its reading corrected to 10 900, inside the grace: back under warranty.
 	expect(t, a.postV(late, url.Values{"vehicle_id": {id}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
 		"performed_on": {"2026-10-01"}, "odometer": {"10900"}}), http.StatusSeeOther)
@@ -698,7 +711,7 @@ func TestBreakInWindowOverHTTP(t *testing.T) {
 	service := url.Values{"vehicle_id": {itoa(k.VehicleID)}, "kit_id": {kitID}, "kit_tier": {"full"}, "title": {"Oil Service"},
 		"performed_on": {"2026-11-23"}, "odometer": {"1000"}}
 	expect(t, a.post("/services", service), http.StatusUnprocessableEntity,
-		"This is the kit&#39;s break-in (due by 1 000 km): log it as Break-in")
+		"This close to 1 000 km, the kit&#39;s first service is its break-in: log it as Break-in")
 	service.Set("kit_tier", "break_in")
 	expect(t, a.post("/services", service), http.StatusSeeOther)
 	expect(t, a.get(vehicle), http.StatusOK, "Under warranty")

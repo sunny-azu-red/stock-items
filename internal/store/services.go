@@ -341,7 +341,7 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 		// this rule still saves unchanged.
 		// The messages name the limit, never the grace: it is what to aim
 		// at (stock.WarrantyMiss).
-		return &ConflictError{Field: "kit_tier", Message: fmt.Sprintf("This is the kit's break-in (due by %s): log it as Break-in",
+		return &ConflictError{Field: "kit_tier", Message: fmt.Sprintf("This close to %s, the kit's first service is its break-in: log it as Break-in",
 			stock.FormatDistance(*breakInAt))}
 	case in.KitTier == stock.TierBreakIn && breakIn && in.Odometer != nil &&
 		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&

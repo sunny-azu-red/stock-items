@@ -71,7 +71,8 @@
          service with its real date and reading, or correcting a wrong one,
          takes it off. It names the limit, never the grace (the latest it
          could be done, the day it was lost): the limit is what to aim at.
-         Every limit here has passed: "Was due by". */}}
+         It names only the limits missed (stock.WarrantyMiss), which have
+         passed: "Was due by". */}}
     {{with ($v.Warranty $.Today).Misses}}
     <section class="card card-danger" id="warranty-lost" aria-labelledby="warranty-lost-h">
       <div class="card-head"><h2 id="warranty-lost-h">{{icon "shield-x"}} Warranty lost</h2></div>

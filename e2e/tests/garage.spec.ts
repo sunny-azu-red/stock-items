@@ -2000,8 +2000,8 @@ test("a missed service the warranty asks for shows in a red card", async ({ page
   await expect(card.locator("li")).toHaveCount(1);
   // One kind of service (no halfway, no break-in): named alone.
   await expect(card.locator("li .title")).toHaveText("Oil Service");
-  // The kit counts 7 500 km and 12 months; the vehicle was bought used.
-  await expect(card.locator("li")).toContainText(/Was due by .+ km or 1 Mar 2025/);
+  // Missed by its date only: the reading, not passed, isn't named.
+  await expect(card.locator("li")).toContainText("Was due by 1 Mar 2025");
   await expect(card.locator("li")).not.toContainText("at the latest");
   await expect(card.locator("li")).not.toContainText("1 Apr 2025");
   // Under the odometer, before the facts.

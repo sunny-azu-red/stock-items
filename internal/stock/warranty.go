@@ -31,7 +31,7 @@ type Warranty struct {
 	EndsOn *time.Time
 	EndsAt *int
 	// Misses are the services it asked for that were done late or not at
-	// all (WarrantyLost), the one that lost it first first; none otherwise.
+	// all (WarrantyLost), sorted by the day each lost it; none otherwise.
 	Misses []WarrantyMiss
 }
 
@@ -56,9 +56,10 @@ type WarrantyKit struct {
 
 // WarrantyMiss is a service the warranty asked for that was done past its
 // limit and the grace (WarrantyGrace, WarrantyGraceDays), or is past them
-// and not done. The grace is applied, never shown: the page names the limit
-// itself (DueOdometer, DueDate), the one to aim at, as a dealer may not
-// allow it. So what it decides is unexported, out of the templates' reach.
+// and not done. The grace is applied, never shown: a dealer may not allow
+// it, so the page names the limit itself (DueOdometer, DueDate), the one to
+// aim at, and what the grace decides is unexported, out of the templates'
+// reach.
 type WarrantyMiss struct {
 	KitID int64
 	Kit   string
@@ -68,7 +69,10 @@ type WarrantyMiss struct {
 	// Service · full service); a kit with one kind is named alone (Spark
 	// Plugs).
 	Kinds bool
-	// DueOdometer and DueDate are the limit, without the grace.
+	// DueOdometer and DueDate are the limits it missed, without the grace:
+	// a full service due by 10 000 km or 1 Jan 2027 and missed by its
+	// reading has no DueDate, so the page's "Was due by" never names a
+	// limit still ahead.
 	DueOdometer *int
 	DueDate     *time.Time
 	// Done is the service done late; nil when it hasn't been done.
@@ -238,6 +242,13 @@ func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMis
 			m.lostOn = m.latestDate.AddDate(0, 0, 1)
 		default:
 			return nil
+		}
+		// Only the limits it missed: the other one may still be ahead.
+		if !byOdo {
+			m.DueOdometer = nil
+		}
+		if !byDate {
+			m.DueDate = nil
 		}
 		return m
 	}

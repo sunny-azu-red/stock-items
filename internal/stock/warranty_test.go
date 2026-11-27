@@ -297,6 +297,15 @@ func TestWarrantyMisses(t *testing.T) {
 		{"Oil Service", TierFull, 20500, day(2026, 12, 1), "20000 / 2027-03-31"},
 		{"Oil Service", TierFull, 0, day(2027, 6, 1), "31500 / 2027-12-31"},
 	})
+	// Each names only the limits it missed (the page's "Was due by"): the
+	// break-in and the late-by-distance Full their readings, the Full late
+	// by its date that date, the one not done (past 31 500, not yet past
+	// 31 Dec 2027) its reading.
+	for i, want := range []struct{ odo, date bool }{{true, false}, {false, true}, {true, false}, {true, false}} {
+		if m := w.Misses[i]; (m.DueOdometer != nil) != want.odo || (m.DueDate != nil) != want.date {
+			t.Errorf("miss %d: due %v / %v, want a reading %v, a date %v", i, deref(m.DueOdometer), m.DueDate, want.odo, want.date)
+		}
+	}
 	if firstMiss(w) == nil || firstMiss(w).Tier != TierBreakIn {
 		t.Errorf("first miss = %+v, want the break-in", firstMiss(w))
 	}

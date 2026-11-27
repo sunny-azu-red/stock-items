@@ -58,7 +58,7 @@ The app keeps no reading for a day except a service's, so a reading's miss is da
 
 **The grace is applied, never shown.** The app aims at the limit itself: a dealer may not allow the grace, so showing it would make it look like the limit to plan to. Nothing on a page says the latest a service could be done or the day or reading the warranty was lost by; `WarrantyMiss` keeps those unexported (`latestOdometer`, `latestDate`, `lostOn`), out of the templates' reach, and the service form's refusals name only the limit. Decided 2026-11-27.
 
-The vehicle page shows it with the red **Warranty lost** badge, its facts' *Warranty ends* followed by "· lost" in red (it would still run, so the date alone would read as covered), and a red card under the Odometer, **Warranty lost**, listing every miss, the first first: the kit (linked), and the kind missed on a kit with more than one (halfway, or a break-in on the vehicle: Oil Service · full service; Spark Plugs alone), "Was due by" the limit (every one listed has passed), and what happened: done at a reading on a day (linked to the service) or not logged.
+The vehicle page shows it with the red **Warranty lost** badge, its facts' *Warranty ends* followed by "· lost" in red (it would still run, so the date alone would read as covered), and a red card under the Odometer, **Warranty lost**, listing every miss, the first first: the kit (linked), and the kind missed on a kit with more than one (halfway, or a break-in on the vehicle: Oil Service · full service; Spark Plugs alone), "Was due by" the limits it missed (a full service missed by its reading doesn't name a date still ahead), and what happened: done at a reading on a day (linked to the service) or not logged.
 
 - **Backfilling clears it**: logging the missed services with their real dates and readings (B10 → L4), or correcting a wrongly entered reading, puts the warranty back.
 - **Otherwise it stays lost**: on-time services after a late Full don't bring it back (L14). Decided 2026-11-26.
@@ -111,7 +111,7 @@ Without halfway it is always the Full (after the break-in).
 | A second break-in | This kit has a break-in already |
 | Intermediate as the first service of a kit with a break-in | This kit's first service is its break-in: log it as Break-in or Full |
 | Break-in read past Break-in at + 10%, when it becomes a break-in or its reading changes | The break-in was due by 1 000 km, and this one is too late for it: log it as Full |
-| Full as the kit's first service read by Break-in at + 10% (a kit with a break-in), when it becomes a Full or its reading changes | This is the kit's break-in (due by 1 000 km): log it as Break-in |
+| Full as the kit's first service read by Break-in at + 10% (a kit with a break-in), when it becomes a Full or its reading changes | This close to 1 000 km, the kit's first service is its break-in: log it as Break-in |
 
 Log service offers Break-in on a new service until one is logged with the kit (`Kit.BreakIn`), also after other services, to backfill one done on time: the store takes it only as the kit's first service, so it must be dated before them, and refuses it dated after ("This kit has an earlier service: only its first is the break-in"). It starts with the kind due next, never Break-in once something is logged. Intermediate isn't offered as a break-in kit's first service. A break-in saved late before the 10% rule, or a Full saved in the window before the window rule, still saves while its kind and reading stay. Services before the purchase, and with an archived kit or vehicle, are refused too ([data-model.md](data-model.md)).
 
@@ -174,7 +174,7 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
   - Then, the same day: the vehicle form asks **Bought: New · Used or demo** (nothing picked to start) instead of an optional First registered on. New was at 0 and registered when bought (no fields; the server writes them); Used or demo needs both, a demo or pre-registered bike included, as its schedules need the same two facts. An empty `first_registered_on` now means bought new, at 0 (migration 00009's CHECK), so the two half-filled states are gone: a used vehicle without a registration (its months silently from the purchase: LittleJoy's bug) and a new one with a reading. 00009 gave a vehicle bought above 0 without a date its purchase day, which its schedules already counted from, to be corrected on its page. The schedules didn't change for the states kept; the scan, run again on them alone, broke no rule.
 
 - 2026-11-27 (the grace on the Warranty lost card, "10 500 km or 27 Dec 2027 at the latest"):
-  - The grace is applied, never shown: the card says "Was due by" the limit and what happened, not the latest or when it was lost, and the service form's refusals name only the limit. A user would take the grace for the limit to plan to, and a dealer may not give it.
+  - The grace is applied, never shown: the card says "Was due by" the limits missed (not one still ahead) and what happened, not the latest or when it was lost, and the service form's refusals name only the limit. A user would take the grace for the limit to plan to, and a dealer may not give it.
   - The facts' *Warranty lost* is gone (the badge and the card say it); *Warranty ends* says "· lost" in red while it is lost.
 
 ## Tests

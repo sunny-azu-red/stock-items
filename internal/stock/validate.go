@@ -608,8 +608,8 @@ func (in KitInput) Validate() Errors {
 			// The break-in comes before the full schedule's first distance.
 			errs.Add("interval_distance", "Enter the distance: the break-in comes before it")
 		case in.Intermediate && *in.BreakInAt >= *in.IntervalDistance/2:
-			// The intermediate service counts from the purchase too, so a
-			// break-in past it would leave it overdue.
+			// The intermediate service counts from new too (stock.Start),
+			// so a break-in past it would leave it overdue.
 			errs.Add("break_in_at", "The break-in comes before the first "+FormatDistance(*in.IntervalDistance/2)+
 				": with Halfway ticked, the intermediate service is due there")
 		case *in.BreakInAt >= *in.IntervalDistance:

@@ -258,7 +258,7 @@ func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMis
 		isFull := s.Tier == TierFull
 		// A break-in that is also the first full service (a light rider's,
 		// done once that service's time was close) counts as it, by its
-		// time: the distance still counts from the purchase.
+		// time: the distance still counts from 0 (Start).
 		if !isFull && !BreakInIsFull(s, start, k.IntervalMonths) {
 			continue
 		}

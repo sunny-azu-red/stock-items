@@ -56,7 +56,7 @@ Every limit that passed fell while the warranty ran (it runs from the purchase u
 
 The app keeps no reading for a day except a service's, so a reading's miss is dated "by" the first service logged past it: the day it was lost or later.
 
-The vehicle page shows it in two places. Its facts say when (*Warranty lost*: the first miss's day, linking to the card). A red card under the Odometer, **Warranty lost**, lists every miss, the first first: the kit (linked) and kind, due by and the latest it could be done (the limit + 10% and 30 days), and what happened: done at a reading on a day (linked to the service) or not logged, and when it lost the warranty.
+The vehicle page shows it in two places. Its facts say when (*Warranty lost*: the first miss's day, linking to the card). A red card under the Odometer, **Warranty lost**, lists every miss, the first first: the kit (linked), and the kind missed on a kit with more than one (halfway, or a break-in on the vehicle: Oil Service · full service; Spark Plugs alone), due by and the latest it could be done (the limit + 10% and 30 days), and what happened: done at a reading on a day (linked to the service) or not logged, and when it lost the warranty.
 
 - **Backfilling clears it**: logging the missed services with their real dates and readings (B10 → L4), or correcting a wrongly entered reading, puts the warranty back.
 - **Otherwise it stays lost**: on-time services after a late Full don't bring it back (L14). Decided 2026-11-26.

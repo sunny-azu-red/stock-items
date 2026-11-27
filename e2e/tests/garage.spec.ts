@@ -1968,7 +1968,8 @@ test("a missed service the warranty asks for shows in a red card", async ({ page
   const card = page.locator("#warranty-lost");
   await expect(card.getByRole("heading", { name: "Warranty lost" })).toBeVisible();
   await expect(card.locator("li")).toHaveCount(1);
-  await expect(card.locator("li .title")).toHaveText("Oil Service · full service");
+  // One kind of service (no halfway, no break-in): named alone.
+  await expect(card.locator("li .title")).toHaveText("Oil Service");
   await expect(card.locator("li")).toContainText("lost on 1 Apr 2025");
   // Under the odometer, before the facts.
   const order = await page.locator(".stack:has(> #warranty-lost) > *").evaluateAll((els) => els.map((e) => e.id || e.querySelector("h2")?.textContent?.trim() || "facts"));

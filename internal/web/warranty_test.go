@@ -810,13 +810,15 @@ func TestWarrantyLostCard(t *testing.T) {
 	got := card()
 	for _, want := range []string{
 		`<h2 id="warranty-lost-h"><svg class="icon" aria-hidden="true"><use href="#i-shield-x"></use></svg> Warranty lost</h2>`,
-		`<a class="title" href="/kits/` + oil + `">Oil Service · full service</a>`,
+		// Kits with one kind of service are named alone (no halfway, no
+		// break-in on the vehicle).
+		`<a class="title" href="/kits/` + oil + `">Oil Service</a>`,
 		"Due by 10\u202f000 km or 1 Jan 2026 · 11\u202f000 km or 31 Jan 2026 at the latest",
 		"Not logged · lost by 1 Feb 2026",
-		`<a class="title" href="/kits/` + valve + `">Valve Check · full service</a>`,
+		`<a class="title" href="/kits/` + valve + `">Valve Check</a>`,
 		"Due by 15\u202f000 km · 16\u202f500 km at the latest",
 		`Done at <a href="` + valveSvc + `">16` + "\u202f" + `953 km on 1 Jun 2026</a> · lost by 1 Jun 2026`,
-		`<a class="title" href="/kits/` + air + `">Air Filter · full service</a>`,
+		`<a class="title" href="/kits/` + air + `">Air Filter</a>`,
 		// Its 16 500 km passed with nothing logged: dated by the first
 		// service logged past it (the valve check's).
 		"Not logged · lost by 1 Jun 2026",

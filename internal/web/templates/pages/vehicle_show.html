@@ -76,7 +76,7 @@
       <ul class="list">
       {{range .}}
         <li><span class="grow">
-          <a class="title" href="/kits/{{.KitID}}">{{.Kit}} · {{if eq .Tier "break_in"}}break-in{{else}}full service{{end}}</a>
+          <a class="title" href="/kits/{{.KitID}}">{{.Kit}}{{if .Kinds}} · {{if eq .Tier "break_in"}}break-in{{else}}full service{{end}}{{end}}</a>
           <span class="meta">Due by {{template "miss-limit" (dict "Odo" .DueOdometer "Date" .DueDate)}} · {{template "miss-limit" (dict "Odo" .LatestOdometer "Date" .LatestDate)}} at the latest</span>
           <span class="meta">{{with .Done}}Done at <a href="/services/{{.ID}}">{{distance .Odometer}} on {{date .PerformedOn}}</a>{{else}}Not logged{{end}} · lost {{if .LostOnExact}}on {{end}}{{template "miss-when" .}}</span>
         </span></li>

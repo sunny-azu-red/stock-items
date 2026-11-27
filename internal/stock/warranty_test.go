@@ -358,3 +358,34 @@ func TestWarrantyMissesFromStart(t *testing.T) {
 		t.Errorf("12 Dec 2025: %s %+v, want lost, latest 31 000", w.State, w.FirstMiss())
 	}
 }
+
+// A miss names its kind (Oil Service · full service) only on a kit with
+// more than one: halfway, or a break-in on the vehicle. Spark plugs every
+// 15 000 km have one kind, and are named alone.
+func TestWarrantyMissKinds(t *testing.T) {
+	day := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	for _, tt := range []struct {
+		name     string
+		kit      WarrantyKit
+		boughtAt int
+		want     bool
+	}{
+		{"one kind", WarrantyKit{IntervalDistance: ptr(15000)}, 0, false},
+		{"halfway", WarrantyKit{IntervalDistance: ptr(8000), IntervalMonths: ptr(12), Intermediate: true}, 0, true},
+		{"a break-in on the vehicle", WarrantyKit{IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}, 0, true},
+		{"bought past Break-in at: one kind", WarrantyKit{IntervalDistance: ptr(8000), BreakInAt: ptr(1000)}, 2148, false},
+	} {
+		tt.kit.KitID, tt.kit.Name = 1, "Kit"
+		v := Vehicle{Odometer: tt.boughtAt + 20000, PurchasedOn: day(2025, 1, 1), OdometerAtPurchase: tt.boughtAt,
+			WarrantyEndsOn: ptr(day(2029, 12, 31)), WarrantyKits: []WarrantyKit{tt.kit}}
+		w := v.Warranty(day(2025, 6, 1))
+		if len(w.Misses) == 0 {
+			t.Fatalf("%s: no miss", tt.name)
+		}
+		for _, m := range w.Misses {
+			if m.Kinds != tt.want {
+				t.Errorf("%s: %s miss Kinds = %v, want %v", tt.name, m.Tier, m.Kinds, tt.want)
+			}
+		}
+	}
+}

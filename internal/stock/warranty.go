@@ -53,8 +53,11 @@ type WarrantyKit struct {
 	Name             string
 	IntervalDistance *int
 	IntervalMonths   *int
-	BreakInAt        *int
-	Services         []ServiceRef
+	// Intermediate is Kit.Intermediate: with a break-in on the vehicle, it
+	// says the kit has more than one kind of service (WarrantyMiss.Kinds).
+	Intermediate bool
+	BreakInAt    *int
+	Services     []ServiceRef
 	// Readings are the vehicle's services with any kit or none, oldest
 	// first: the readings the app knows a day for, which date a reading
 	// passed with nothing logged (WarrantyMiss.LostOn).
@@ -68,6 +71,11 @@ type WarrantyMiss struct {
 	KitID int64
 	Kit   string
 	Tier  KitTier // TierBreakIn or TierFull
+	// Kinds says the kit has more than one kind of service on the vehicle
+	// (halfway, or a break-in): the page then names the kind missed (Oil
+	// Service · full service); a kit with one kind is named alone (Spark
+	// Plugs).
+	Kinds bool
 	// DueOdometer and DueDate are the limit, without the grace;
 	// LatestOdometer and LatestDate with it: the last reading and day it
 	// could be done.
@@ -167,6 +175,7 @@ func warrantyWithKits(endsOn *time.Time, endsAt *int, start Start, kits []Warran
 //     the distance still from 0 (Kit.breakInFull).
 func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMiss {
 	var out []WarrantyMiss
+	kinds := k.Intermediate || (k.BreakInAt != nil && *k.BreakInAt > start.Odo)
 	var full []ServiceRef
 	for _, s := range k.Services {
 		if s.Tier == TierFull || s.Tier == TierBreakIn {
@@ -186,7 +195,7 @@ func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMis
 	}
 	if k.BreakInAt != nil && *k.BreakInAt > start.Odo {
 		limit := *k.BreakInAt + WarrantyGrace(*k.BreakInAt)
-		miss := WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierBreakIn, DueOdometer: ptrTo(*k.BreakInAt), LatestOdometer: &limit}
+		miss := WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierBreakIn, Kinds: kinds, DueOdometer: ptrTo(*k.BreakInAt), LatestOdometer: &limit}
 		switch {
 		case len(full) > 0 && full[0].Odometer > limit:
 			done := full[0]
@@ -210,7 +219,7 @@ func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMis
 	// late checks a full service done (done; or not, by now) at the
 	// reading atOdo on the day on, counted from the last full one.
 	late := func(atOdo int, on time.Time, done bool) *WarrantyMiss {
-		m := &WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierFull}
+		m := &WarrantyMiss{KitID: k.KitID, Kit: k.Name, Tier: TierFull, Kinds: kinds}
 		byOdo, byDate := false, false
 		if k.IntervalDistance != nil {
 			due, latest := fromOdo+*k.IntervalDistance, fromOdo+*k.IntervalDistance+WarrantyGrace(*k.IntervalDistance)

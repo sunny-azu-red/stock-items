@@ -168,7 +168,7 @@ func loadWarrantyKits(ctx context.Context, q querier, vehicleIDs []int64) (map[i
 		return out, nil
 	}
 	rows, err := q.Query(ctx, `
-		SELECT k.vehicle_id, k.id, k.name, k.interval_distance, k.interval_months, k.break_in_at,
+		SELECT k.vehicle_id, k.id, k.name, k.interval_distance, k.interval_months, k.intermediate, k.break_in_at,
 		       sr.id, sr.performed_on, sr.odometer, sr.kit_tier
 		FROM service_kits k
 		LEFT JOIN service_records sr ON sr.kit_id = k.id AND sr.vehicle_id = k.vehicle_id AND sr.kit_tier IN ('full', 'break_in')
@@ -185,7 +185,7 @@ func loadWarrantyKits(ctx context.Context, q querier, vehicleIDs []int64) (map[i
 		var srDate *time.Time
 		var srOdo *int
 		var srTier *stock.KitTier
-		if err := rows.Scan(&vid, &k.KitID, &k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.BreakInAt,
+		if err := rows.Scan(&vid, &k.KitID, &k.Name, &k.IntervalDistance, &k.IntervalMonths, &k.Intermediate, &k.BreakInAt,
 			&srID, &srDate, &srOdo, &srTier); err != nil {
 			return nil, err
 		}

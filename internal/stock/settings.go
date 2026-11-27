@@ -37,10 +37,10 @@ type Settings struct {
 	// DashboardRecent is how many stock changes the dashboard shows.
 	DashboardRecent int
 
-	ActivityPageSize int // stock changes on one Activity page
-	ServicesPageSize int // services on one page of the log
 	ItemHistory      int // stock changes on an item's page
+	ServicesPageSize int // services on one page of the log
 	VehicleServices  int // services on a vehicle's page
+	ActivityPageSize int // stock changes on one Activity page
 
 	// SKUSearchURL is the search link of a part number: the number goes in
 	// place of its one {q}. SKUSearchPrefix, unless empty, is added to
@@ -135,7 +135,7 @@ func DefaultSettings() Settings {
 		NumberFormat: NumberSpaceDot,
 		DateFormat:   "2 Jan 2006",
 		DaysAgo:      30, DashboardRecent: 8,
-		ActivityPageSize: 200, ServicesPageSize: 100, ItemHistory: 100, VehicleServices: 10,
+		ItemHistory: 100, ServicesPageSize: 100, VehicleServices: 10, ActivityPageSize: 200,
 		SKUSearchURL: DefaultSKUSearchURL,
 		ExpiringDays: 60,
 		Categories: []string{"Oil & Fluids", "Filters", "Brakes", "Gaskets & O-Rings", "Chain & Sprockets",
@@ -241,10 +241,10 @@ func (in *SettingsInput) Validate() Errors {
 	}
 	between("days_ago", in.DaysAgo, 0, 365)
 	between("dashboard_recent", in.DashboardRecent, 1, 50)
-	between("activity_page_size", in.ActivityPageSize, 10, 1000)
-	between("services_page_size", in.ServicesPageSize, 10, 1000)
 	between("item_history", in.ItemHistory, 10, 1000)
+	between("services_page_size", in.ServicesPageSize, 10, 1000)
 	between("vehicle_services", in.VehicleServices, 1, 100)
+	between("activity_page_size", in.ActivityPageSize, 10, 1000)
 	if msg := CheckSearchURL(in.SKUSearchURL); msg != "" {
 		errs.Add("sku_search_url", msg)
 	}

@@ -822,6 +822,9 @@
      isn't, so nothing needs clearing. */
   .toggled-fields { margin-top: var(--gap); }
   .form-section:has(> .toggle input:not(:checked)) > .toggled-fields { display: none; }
+  /* A vehicle's purchase reading and first registration: only when it was
+     bought used (or as a demo). Bought new, the server writes them. */
+  .form-section:not(:has(input[name="bought"][value="used"]:checked)) .used-only { display: none; }
   /* A kit's intermediate service comes halfway through its distance, or
      its time without one: it shows once there is either. Its break-in
      comes before the distance: it shows once there is one. Both stay while

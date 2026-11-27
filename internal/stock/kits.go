@@ -133,8 +133,9 @@ func dueSoonDistance(intervalDistance int) int {
 
 // Start is where a vehicle's schedules count from before its first
 // service with a kit: the manual's milestones, from 0 and the day it was
-// first registered (Vehicle.FirstRegisteredOn, the purchase day when not
-// entered), as if the first owner had kept to them. Only the user's own
+// first registered (Vehicle.FirstRegisteredOn; the purchase day for a
+// vehicle bought new, Vehicle.BoughtNew), as if the first owner had kept to
+// them. Only the user's own
 // services are logged, so the first one due is the next milestone after the
 // purchase (Purchased, at the reading Odo): LittleJoy, bought at 2 148 km,
 // owes its 15 000 km service at 15 000, not 17 148.
@@ -180,8 +181,9 @@ func (s Start) dates(months int) (last, next time.Time) {
 	return addMonths(reg, n*months), addMonths(reg, (n+1)*months)
 }
 
-// startOf is the Start of a vehicle first registered on registered (nil
-// when not entered: the purchase day), bought on purchased at the reading odo.
+// startOf is the Start of a vehicle first registered on registered, bought
+// on purchased at the reading odo. A vehicle bought new (registered nil,
+// Vehicle.BoughtNew) was registered when bought, at 0.
 func startOf(registered *time.Time, purchased time.Time, odo int) Start {
 	s := Start{Registered: purchased, Purchased: purchased, Odo: odo}
 	if registered != nil {

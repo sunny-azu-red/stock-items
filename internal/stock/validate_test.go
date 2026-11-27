@@ -158,7 +158,7 @@ func TestItemInputBarcodeSKU(t *testing.T) {
 func TestVehicleInputValidate(t *testing.T) {
 	bought := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	in := VehicleInput{Name: " KTM 390 ", VIN: " vbk123 ", Make: "KTM", Model: "390 Duke", Year: ptr(2021),
-		Odometer: ptr(12000), PurchasedOn: &bought, OdometerAtPurchase: ptr(0)}
+		Odometer: ptr(12000), Bought: BoughtNew, PurchasedOn: &bought, OdometerAtPurchase: ptr(0)}
 	in.Normalize()
 	if errs := in.ValidateNew(); errs.Any() {
 		t.Fatalf("unexpected errors: %v", errs)
@@ -167,7 +167,7 @@ func TestVehicleInputValidate(t *testing.T) {
 	// (make, model, year, VIN, plate) isn't. The odometer only on a new
 	// vehicle (ValidateNew): an edit leaves it.
 	errs := VehicleInput{Name: "KTM", Kind: KindMotorcycle, Color: "#ffffff"}.ValidateNew()
-	for _, f := range []string{"odometer", "purchased_on", "odometer_at_purchase"} {
+	for _, f := range []string{"odometer", "bought", "purchased_on", "odometer_at_purchase"} {
 		if errs[f] == "" {
 			t.Errorf("want %s required, got %v", f, errs)
 		}
@@ -205,28 +205,40 @@ func TestVehicleInputValidate(t *testing.T) {
 	zeroOdo := 0
 	currOdo := 1000
 	good := VehicleInput{Name: "GreyJoy", Kind: KindMotorcycle, Color: "#ffffff", Make: "KTM", Model: "1290 Super Adventure S", Year: ptr(2024), VIN: "VBKV1",
-		PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
+		Bought: BoughtNew, PurchasedOn: &validDate, OdometerAtPurchase: &zeroOdo, Odometer: &currOdo}
 	if errs := good.ValidateNew(); errs.Any() {
 		t.Errorf("unexpected error on valid input: %v", errs)
 	}
 
-	// First registered on is optional, by the purchase at the latest (the
-	// same day for one bought new).
+	// Bought new: at 0 and registered when bought, nothing else. Bought
+	// used (or as a demo): First registered on is required, by the purchase
+	// at the latest; the reading may be 0 (a pre-registered bike nobody
+	// rode).
+	reg := ptr(time.Date(2021, 11, 11, 0, 0, 0, 0, time.UTC))
 	for _, tt := range []struct {
-		name string
-		on   *time.Time
-		bad  bool
+		name   string
+		bought Bought
+		at     int
+		on     *time.Time
+		field  string // the field with an error, "" for none
 	}{
-		{"empty", nil, false},
-		{"years before the purchase", ptr(time.Date(2021, 11, 11, 0, 0, 0, 0, time.UTC)), false},
-		{"the purchase day", ptr(validDate), false},
-		{"after the purchase", ptr(validDate.AddDate(0, 0, 1)), true},
-		{"year out of range", ptr(time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)), true},
+		{"new", BoughtNew, 0, nil, ""},
+		{"new with a reading", BoughtNew, 2148, nil, "odometer_at_purchase"},
+		{"new with a registration", BoughtNew, 0, reg, "first_registered_on"},
+		{"nothing chosen", "", 0, nil, "bought"},
+		{"used", BoughtUsed, 2148, reg, ""},
+		{"used at 0, pre-registered", BoughtUsed, 0, reg, ""},
+		{"used without a registration", BoughtUsed, 2148, nil, "first_registered_on"},
+		{"used, registered the purchase day", BoughtUsed, 2148, ptr(validDate), ""},
+		{"used, registered after the purchase", BoughtUsed, 2148, ptr(validDate.AddDate(0, 0, 1)), "first_registered_on"},
+		{"used, year out of range", BoughtUsed, 2148, ptr(time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)), "first_registered_on"},
 	} {
 		in := good
-		in.FirstRegisteredOn = tt.on
-		if got := in.ValidateNew()["first_registered_on"] != ""; got != tt.bad {
-			t.Errorf("first registered %s: error %v, want %v (%v)", tt.name, got, tt.bad, in.ValidateNew())
+		in.Bought, in.OdometerAtPurchase, in.FirstRegisteredOn = tt.bought, ptr(tt.at), tt.on
+		in.Odometer = ptr(30000)
+		errs := in.ValidateNew()
+		if tt.field == "" && errs.Any() || tt.field != "" && errs[tt.field] == "" {
+			t.Errorf("%s: errors %v, want one on %q", tt.name, errs, tt.field)
 		}
 	}
 }

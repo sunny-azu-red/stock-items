@@ -63,9 +63,10 @@ async function showInter(page: Page) {
 const listGroups = (page: Page) => page.getByRole("listbox").locator(".combo-group").allTextContents();
 
 // Every vehicle has what its owner knows (the odometer and purchase are
-// required; make, model, year and VIN only shown): here bought on
-// 1 Mar 2024 at its current reading, so a kit never done is overdue by its
-// months and on track by its distance, whatever the day the tests run.
+// required; make, model, year and VIN only shown): here bought used on
+// 1 Mar 2024 at its current reading, first registered that day, so a kit
+// never done is overdue by its months and on track by its distance,
+// whatever the day the tests run.
 async function addVehicle(page: Page, name: string, odometer: string, warrantyEndsOn?: string) {
   await page.goto("/vehicles/new");
   await field(page, "Name").fill(name);
@@ -76,7 +77,9 @@ async function addVehicle(page: Page, name: string, odometer: string, warrantyEn
   await field(page, "VIN").fill("VBKE2E" + model.join(""));
   await page.getByLabel("Odometer (km)", { exact: true }).fill(odometer);
   await field(page, "Purchased on").fill("2024-03-01");
+  await page.locator("label", { hasText: exact("Used or demo") }).click();
   await page.getByLabel("Odometer at purchase (km)").fill(odometer);
+  await field(page, "First registered on").fill("2024-03-01");
   if (warrantyEndsOn) {
     // Its fields show once the box is ticked.
     await expect(page.getByLabel("Warranty ends on")).toBeHidden();
@@ -153,6 +156,32 @@ test("set up vehicles and the example inventory", async ({ page }) => {
 
   await page.goto("/");
   await expect(page.locator(".tile").filter({ hasText: "Items" })).toContainText("13");
+});
+
+// Bought decides what the purchase holds: nothing is picked to start, New
+// was at 0 and registered when bought (no fields for them), Used or demo
+// asks for both.
+test("a vehicle's Bought shows the purchase reading and registration only when used", async ({ page }) => {
+  await page.goto("/vehicles/new");
+  const at = page.getByLabel("Odometer at purchase (km)");
+  const reg = field(page, "First registered on");
+  await expect(page.locator('input[name="bought"]:checked')).toHaveCount(0);
+  await expect(at).toBeHidden();
+  await expect(reg).toBeHidden();
+  await field(page, "Name").fill("Bought test");
+  await page.getByRole("button", { name: "Save vehicle" }).click();
+  await expect(page.locator("#bought-err")).toHaveText("Choose New or Used or demo");
+
+  await page.locator("label", { hasText: exact("Used or demo") }).click();
+  await expect(at).toBeVisible();
+  await expect(reg).toBeVisible();
+  await page.getByRole("button", { name: "Save vehicle" }).click();
+  await expect(page.locator("#first_registered_on-err")).toHaveText("First registered on is required");
+  await expect(page.locator('input[name="bought"][value="used"]')).toBeChecked();
+
+  await page.locator("label", { hasText: exact("New") }).click();
+  await expect(at).toBeHidden();
+  await expect(reg).toBeHidden();
 });
 
 test("filter stock by vehicle and copy it as text", async ({ page, context }, testInfo) => {

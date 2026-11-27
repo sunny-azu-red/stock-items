@@ -166,8 +166,8 @@ func TestReorderColumnsKeepsEverything(t *testing.T) {
 	// Every rebuilt table and each table pointing at one, with deleted last
 	// rows, so the sequences are past the highest id (the trash holds them).
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES
-			('KTM 390', 12000, '2024-03-01', 10), ('Golf', 0, '2020-01-01', 0), ('Sold', 1, '2020-01-01', 0);
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase, first_registered_on) VALUES
+			('KTM 390', 12000, '2024-03-01', 10, '2023-09-01'), ('Golf', 0, '2020-01-01', 0, NULL), ('Sold', 1, '2020-01-01', 0, NULL);
 		INSERT INTO items (name, brand, unit, quantity, min_quantity, expires_on, location) VALUES
 			('Rear Brake Pads', 'OEM', 'piece', 2, 1, NULL, 'Shelf'), ('15W50', 'Silkolene', 'ml', 1525.5, 1000, '2029-06-30', ''),
 			('Gone', '', 'g', 0, NULL, NULL, '');

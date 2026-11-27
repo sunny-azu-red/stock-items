@@ -102,8 +102,12 @@ func TestVehicleDisplayFieldsAreOptional(t *testing.T) {
 	form := a.get("/vehicles/new")
 	expect(t, form, http.StatusOK, `<label for="make">Make</label>`, `<label for="vin">VIN</label>`,
 		`<label for="odometer">Odometer (km)</label><span class="req"`, `<label for="purchased_on">Purchased on</label><span class="req"`)
-	expect(t, a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}, "odometer": {""}, "purchased_on": {""}, "odometer_at_purchase": {""}}),
-		http.StatusUnprocessableEntity, "Odometer is required", "Purchase date is required", "Odometer at purchase is required")
+	expect(t, a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}, "odometer": {""}, "purchased_on": {""}, "bought": {""}}),
+		http.StatusUnprocessableEntity, "Odometer is required", "Purchase date is required", "Choose New or Used or demo")
+	// Bought used, what it was at and when it was first registered too.
+	expect(t, a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}, "bought": {"used"},
+		"odometer_at_purchase": {""}, "first_registered_on": {""}}),
+		http.StatusUnprocessableEntity, "Odometer at purchase is required", "First registered on is required")
 	rec := a.post("/vehicles", url.Values{"name": {"Pedal bike"}, "kind": {"other"}})
 	expect(t, rec, http.StatusSeeOther)
 	page := a.get(rec.Header().Get("Location"))
@@ -188,11 +192,12 @@ func TestVehiclePurchaseBaselineFlow(t *testing.T) {
 
 	// Vehicle show page renders purchase details
 	show := a.get(vPath)
-	expect(t, show, http.StatusOK, "GreyJoy", "Purchased", "1 Mar 2026", "0 km")
+	expect(t, show, http.StatusOK, "GreyJoy", "<dt>Purchased</dt><dd>1 Mar 2026 · new</dd>")
+	expectNot(t, show, "<dt>First registered</dt>")
 
 	// Edit form retains purchase values
 	edit := a.get(vPath + "/edit")
-	expect(t, edit, http.StatusOK, `name="purchased_on" value="2026-03-01"`, `name="odometer_at_purchase" value="0"`)
+	expect(t, edit, http.StatusOK, `name="purchased_on" value="2026-03-01"`, `id="bought-new" name="bought" value="new" checked`)
 
 	// Create a kit with interval
 	vID := mustID(t, vPath)

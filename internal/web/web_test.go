@@ -148,7 +148,10 @@ var (
 
 // vehicleFormDefaults adds the vehicle form's required fields a test
 // doesn't name to a form posted to path (other forms are left as they
-// are). A test that leaves one out on purpose sends it empty.
+// are). A test that leaves one out on purpose sends it empty. Bought, when
+// not named, is Used or demo for a vehicle bought above 0 (or given a
+// first registration), first registered when bought unless it says, as its
+// schedules counted before there was a date; New otherwise.
 func vehicleFormDefaults(path string, form url.Values) url.Values {
 	if !vehicleFormPath.MatchString(path) {
 		return form
@@ -161,6 +164,16 @@ func vehicleFormDefaults(path string, form url.Values) url.Values {
 	}
 	for k, v := range form {
 		sent[k] = v
+	}
+	if !form.Has("bought") {
+		if at := sent.Get("odometer_at_purchase"); (at != "" && at != "0") || form.Has("first_registered_on") {
+			sent.Set("bought", "used")
+			if !form.Has("first_registered_on") {
+				sent.Set("first_registered_on", sent.Get("purchased_on"))
+			}
+		} else {
+			sent.Set("bought", "new")
+		}
 	}
 	return sent
 }
@@ -178,6 +191,15 @@ func anchored(in stock.VehicleInput) stock.VehicleInput {
 	}
 	if in.PurchasedOn == nil {
 		in.PurchasedOn = ptr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	}
+	// Bought above 0: used, first registered (as its schedules counted
+	// before there was a date) when bought.
+	if *in.OdometerAtPurchase > 0 && in.FirstRegisteredOn == nil {
+		in.FirstRegisteredOn = in.PurchasedOn
+	}
+	in.Bought = stock.BoughtNew
+	if in.FirstRegisteredOn != nil {
+		in.Bought = stock.BoughtUsed
 	}
 	return in
 }

@@ -88,22 +88,25 @@ func TestVehicleWarrantyBoughtUsed(t *testing.T) {
 		`name="warranty_ends_on" value="2023-11-11"`)
 }
 
-// A vehicle bought used: before the first service with a kit, its
-// schedule and the warranty count from the manual's milestones, from 0 and
-// First registered on (stock.Start). LittleJoy's Valve Check was due at
-// 15 000 (16 500 at the latest), not 17 148: 15 000 past what it was
-// bought at.
-func TestFirstRegisteredOn(t *testing.T) {
+// Bought: New or Used or demo. Bought new, a vehicle was at 0 and first
+// registered when bought, whatever the hidden fields hold; bought used (or
+// as a demo), both are required. Before the first service with a kit, its
+// schedule and the warranty count from the manual's milestones, from 0
+// and the first registration (stock.Start): LittleJoy's Valve Check was due
+// at 15 000 (16 500 at the latest), not 17 148.
+func TestBought(t *testing.T) {
 	a := warrantyApp(t) // 23 Nov 2026
-	form := url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"},
+	expect(t, a.get("/vehicles/new"), http.StatusOK, `id="bought-new" name="bought" value="new">`, `id="bought-used" name="bought" value="used">`)
+	form := url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"}, "bought": {"used"},
 		"odometer": {"27102"}, "purchased_on": {"2024-07-04"}, "odometer_at_purchase": {"2148"}, "first_registered_on": {"2021-11-11"},
 		"has_warranty": {"1"}, "warranty_ends_on": {"2032-11-11"}}
 	rec := a.post("/vehicles", form)
 	expect(t, rec, http.StatusSeeOther)
 	path := rec.Header().Get("Location")
 	id := itoa(mustID(t, path))
-	expect(t, a.get(path), http.StatusOK, "<dt>First registered</dt><dd>11 Nov 2021</dd>")
-	expect(t, a.get(path+"/edit"), http.StatusOK, `name="first_registered_on" value="2021-11-11"`)
+	expect(t, a.get(path), http.StatusOK, "<dt>Purchased</dt><dd>4 Jul 2024 · 2\u202f148 km</dd>", "<dt>First registered</dt><dd>11 Nov 2021</dd>")
+	expect(t, a.get(path+"/edit"), http.StatusOK, `id="bought-used" name="bought" value="used" checked`,
+		`name="odometer_at_purchase" value="2148"`, `name="first_registered_on" value="2021-11-11"`)
 
 	rec = a.post("/kits", url.Values{"vehicle_id": {id}, "name": {"Valve Check"}, "interval_distance": {"15000"}, "warranty_required": {"1"}})
 	expect(t, rec, http.StatusSeeOther)
@@ -111,24 +114,54 @@ func TestFirstRegisteredOn(t *testing.T) {
 	expect(t, a.post("/services", url.Values{"vehicle_id": {id}, "kit_id": {itoa(mustID(t, kit))}, "kit_tier": {"full"}, "title": {"Valve Check"},
 		"performed_on": {"2025-10-02"}, "odometer": {"21679"}}), http.StatusSeeOther)
 	expect(t, a.get(path), http.StatusOK, "Due by 15\u202f000 km · 16\u202f500 km at the latest")
-
 	// After a service of the user's own, the next counts from it, as a
 	// dealer resets the dash: 21 679 + 15 000.
 	expect(t, a.get(kit), http.StatusOK, "36\u202f679 km")
 
-	// Refused after the purchase or in the future; what was typed comes back.
+	// Used or demo: refused without a date, after the purchase or in the
+	// future; what was typed comes back, the choice too.
 	for _, tt := range []struct{ on, msg string }{
+		{"", "First registered on is required"},
 		{"2024-07-05", "First registered on can&#39;t be after the purchase date"},
 		{"2026-12-25", "Date cannot be in the future"},
 	} {
 		form.Set("name", "Demo "+tt.on)
 		form.Set("first_registered_on", tt.on)
-		expect(t, a.post("/vehicles", form), http.StatusUnprocessableEntity, tt.msg, `name="first_registered_on" value="`+tt.on+`"`)
+		expect(t, a.post("/vehicles", form), http.StatusUnprocessableEntity, tt.msg,
+			`name="first_registered_on" value="`+tt.on+`"`, `id="bought-used" name="bought" value="used" checked`)
 	}
-	// Empty is fine: a vehicle bought new.
-	form.Set("name", "New one")
-	form.Set("first_registered_on", "")
-	expect(t, a.post("/vehicles", form), http.StatusSeeOther)
+	// No choice: refused.
+	form.Set("bought", "")
+	form.Set("first_registered_on", "2021-11-11")
+	expect(t, a.post("/vehicles", form), http.StatusUnprocessableEntity, "Choose New or Used or demo")
+
+	// New: at 0 and registered when bought, whatever the hidden fields hold
+	// (they come back as typed, for switching back).
+	form.Set("name", "GreyJoy")
+	form.Set("bought", "new")
+	rec = a.post("/vehicles", form)
+	expect(t, rec, http.StatusSeeOther)
+	grey := rec.Header().Get("Location")
+	v, err := a.store.GetVehicle(context.Background(), mustID(t, grey))
+	if err != nil || v.OdometerAtPurchase != 0 || v.FirstRegisteredOn != nil || !v.BoughtNew() {
+		t.Errorf("bought new: at %d, registered %v (%v), want 0 and none", v.OdometerAtPurchase, v.FirstRegisteredOn, err)
+	}
+	page := a.get(grey)
+	expect(t, page, http.StatusOK, "<dt>Purchased</dt><dd>4 Jul 2024 · new</dd>")
+	expectNot(t, page, "<dt>First registered</dt>")
+	expect(t, a.get(grey+"/edit"), http.StatusOK, `id="bought-new" name="bought" value="new" checked`,
+		`name="odometer_at_purchase" value=""`, `name="first_registered_on" value=""`)
+
+	// Switching LittleJoy to New and back.
+	edit := url.Values{"name": {"LittleJoy"}, "kind": {"motorcycle"}, "color": {"#f26b0f"}, "bought": {"new"}, "purchased_on": {"2024-07-04"},
+		"has_warranty": {"1"}, "warranty_ends_on": {"2032-11-11"}}
+	expect(t, a.postV(path, edit), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "<dt>Purchased</dt><dd>4 Jul 2024 · new</dd>")
+	edit.Set("bought", "used")
+	edit.Set("odometer_at_purchase", "2148")
+	edit.Set("first_registered_on", "2021-11-11")
+	expect(t, a.postV(path, edit), http.StatusSeeOther)
+	expect(t, a.get(path), http.StatusOK, "<dt>First registered</dt><dd>11 Nov 2021</dd>", "Due by 15\u202f000 km")
 }
 
 // A stale edit form comes back with the warranty as it was typed.

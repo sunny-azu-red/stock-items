@@ -69,8 +69,12 @@ func withWarrantyKits(ctx context.Context, q querier, vehicles []stock.Vehicle) 
 }
 
 func vehicleConflict(err error) error {
-	if isUniqueViolation(err) {
+	switch {
+	case isUniqueViolation(err):
 		return &ConflictError{Field: "name", Message: "A vehicle with this name already exists"}
+	case isCheckViolation(err, "vehicles_bought_new_at_0_check"):
+		// stock.VehicleInput.Validate refuses it first.
+		return &ConflictError{Field: "first_registered_on", Message: "First registered on is required"}
 	}
 	return err
 }

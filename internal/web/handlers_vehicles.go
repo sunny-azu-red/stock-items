@@ -21,8 +21,11 @@ type vehicleForm struct {
 	ID                                 int64
 	Name, Kind, Make, Model, Year      string
 	Plate, VIN, Color, Odometer, Notes string
-	FirstRegisteredOn                  string
-	PurchasedOn, OdometerAtPurchase    string
+	// Bought is the Bought choice ("new", "used" or "" before one is
+	// picked); OdometerAtPurchase and FirstRegisteredOn show for "used".
+	Bought                          string
+	FirstRegisteredOn               string
+	PurchasedOn, OdometerAtPurchase string
 	// ShowWarranty is the Has a warranty box; WarrantyEndsOn and
 	// WarrantyEndsAt are its fields, shown while it is ticked.
 	ShowWarranty                   bool
@@ -50,10 +53,16 @@ func vehicleFormFrom(v stock.Vehicle) vehicleForm {
 		}
 		return t.Format("2006-01-02")
 	}
+	// Bought new: the purchase reading and registration aren't fields of
+	// its own, so switching to Used or demo starts them empty.
+	atPurchase := ""
+	if !v.BoughtNew() {
+		atPurchase = strconv.Itoa(v.OdometerAtPurchase)
+	}
 	return vehicleForm{
 		ID: v.ID, Name: v.Name, Kind: string(v.Kind), Make: v.Make, Model: v.Model, Year: optIntString(v.Year),
-		Plate: v.Plate, VIN: v.VIN, Color: v.Color, FirstRegisteredOn: day(v.FirstRegisteredOn),
-		PurchasedOn: v.PurchasedOn.Format("2006-01-02"), OdometerAtPurchase: strconv.Itoa(v.OdometerAtPurchase),
+		Plate: v.Plate, VIN: v.VIN, Color: v.Color, Bought: string(v.Bought()), FirstRegisteredOn: day(v.FirstRegisteredOn),
+		PurchasedOn: v.PurchasedOn.Format("2006-01-02"), OdometerAtPurchase: atPurchase,
 		ShowWarranty:   v.WarrantyEndsOn != nil || v.WarrantyEndsAt != nil,
 		WarrantyEndsOn: day(v.WarrantyEndsOn), WarrantyEndsAt: optIntString(v.WarrantyEndsAt), Notes: v.Notes,
 		Stored: v.Name, Version: v.Version,
@@ -64,8 +73,8 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 	f := vehicleForm{
 		Name: formText(r, "name"), Kind: formText(r, "kind"), Make: formText(r, "make"), Model: formText(r, "model"),
 		Year: formText(r, "year"), Plate: formText(r, "plate"), VIN: formText(r, "vin"), Color: formText(r, "color"),
-		FirstRegisteredOn: formText(r, "first_registered_on"),
-		PurchasedOn:       formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
+		Bought: formText(r, "bought"), FirstRegisteredOn: formText(r, "first_registered_on"),
+		PurchasedOn: formText(r, "purchased_on"), OdometerAtPurchase: formText(r, "odometer_at_purchase"),
 		ShowWarranty: formText(r, "has_warranty") == "1", WarrantyEndsOn: formText(r, "warranty_ends_on"), WarrantyEndsAt: formText(r, "warranty_ends_at"),
 		Notes:   formText(r, "notes"),
 		Version: parseVersion(r), FormKey: parseFormKey(r), Errors: stock.Errors{},
@@ -73,7 +82,7 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 	checkFormKey(f.Errors, f.FormKey)
 	in := stock.VehicleInput{
 		Name: f.Name, Kind: stock.VehicleKind(f.Kind), Make: f.Make, Model: f.Model, Plate: f.Plate, VIN: f.VIN,
-		Color: f.Color, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey,
+		Color: f.Color, Notes: f.Notes, Version: f.Version, FormKey: f.FormKey, Bought: stock.Bought(f.Bought),
 	}
 	var err error
 	if in.Year, err = parseOptInt(f.Year); err != nil {
@@ -86,7 +95,14 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 			f.Errors.Add("odometer", err.Error())
 		}
 	}
-	if in.OdometerAtPurchase, err = parseOptInt(f.OdometerAtPurchase); err != nil {
+	// Bought new: at 0, and first registered when bought, whatever the
+	// hidden fields hold (kept in the form, for switching back). Otherwise
+	// both are read (Validate says what's missing).
+	newOne := in.Bought == stock.BoughtNew
+	if newOne {
+		zero := 0
+		in.OdometerAtPurchase = &zero
+	} else if in.OdometerAtPurchase, err = parseOptInt(f.OdometerAtPurchase); err != nil {
 		f.Errors.Add("odometer_at_purchase", err.Error())
 	}
 	// Not parseEventDate: a vehicle may have been bought before 1990 (its
@@ -96,7 +112,9 @@ func parseVehicleForm(r *http.Request, now time.Time, isNew bool) (vehicleForm, 
 	} else if in.PurchasedOn != nil && in.PurchasedOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
 		f.Errors.Add("purchased_on", "Date cannot be in the future")
 	}
-	if in.FirstRegisteredOn, err = parseOptDate(f.FirstRegisteredOn); err != nil {
+	if newOne {
+		in.FirstRegisteredOn = nil
+	} else if in.FirstRegisteredOn, err = parseOptDate(f.FirstRegisteredOn); err != nil {
 		f.Errors.Add("first_registered_on", err.Error())
 	} else if in.FirstRegisteredOn != nil && in.FirstRegisteredOn.After(stock.DateOnly(now).AddDate(0, 0, 1)) {
 		f.Errors.Add("first_registered_on", "Date cannot be in the future")

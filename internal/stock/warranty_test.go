@@ -71,7 +71,7 @@ func TestVehicleWarrantyValidate(t *testing.T) {
 	day := func(y int, m time.Month, d int) *time.Time { t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC); return &t }
 	base := func(edit func(*VehicleInput)) Errors {
 		in := VehicleInput{Name: "A", Kind: KindMotorcycle, Color: "#ffffff", Make: "KTM", Model: "390", Year: ptr(2024), VIN: "VBK1",
-			Odometer: ptr(10000), PurchasedOn: day(2024, 1, 1), OdometerAtPurchase: ptr(0)}
+			Odometer: ptr(10000), Bought: BoughtNew, PurchasedOn: day(2024, 1, 1), OdometerAtPurchase: ptr(0)}
 		edit(&in)
 		return in.Validate()
 	}
@@ -91,12 +91,14 @@ func TestVehicleWarrantyValidate(t *testing.T) {
 		// Bought used: its warranty may have ended before it was bought.
 		{"date before the purchase", base(func(in *VehicleInput) {
 			in.HasWarranty, in.PurchasedOn, in.WarrantyEndsOn = true, day(2024, 7, 4), day(2023, 11, 11)
+			in.Bought, in.OdometerAtPurchase, in.FirstRegisteredOn = BoughtUsed, ptr(2148), day(2021, 11, 11)
 		}), ""},
 		{"date year out of range", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsOn = true, day(2101, 1, 1) }), "warranty_ends_on"},
 		{"reading 0", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(0) }), "warranty_ends_at"},
 		{"reading over the maximum", base(func(in *VehicleInput) { in.HasWarranty, in.WarrantyEndsAt = true, ptr(MaxOdometer+1) }), "warranty_ends_at"},
 		{"reading below the purchase reading", base(func(in *VehicleInput) {
 			in.HasWarranty, in.OdometerAtPurchase, in.WarrantyEndsOn, in.WarrantyEndsAt = true, ptr(5000), day(2028, 3, 1), ptr(4000)
+			in.Bought, in.FirstRegisteredOn = BoughtUsed, day(2023, 6, 1)
 		}), ""},
 	}
 	for _, tt := range tests {

@@ -27,6 +27,15 @@ func anchored(in stock.VehicleInput) stock.VehicleInput {
 	if in.PurchasedOn == nil {
 		in.PurchasedOn = ptr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
 	}
+	// Bought above 0: used, first registered (as its schedules counted
+	// before there was a date) when bought.
+	if *in.OdometerAtPurchase > 0 && in.FirstRegisteredOn == nil {
+		in.FirstRegisteredOn = in.PurchasedOn
+	}
+	in.Bought = stock.BoughtNew
+	if in.FirstRegisteredOn != nil {
+		in.Bought = stock.BoughtUsed
+	}
 	return in
 }
 

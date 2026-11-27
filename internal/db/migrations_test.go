@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -488,5 +490,77 @@ func TestHalfwayByTimeMigration(t *testing.T) {
 	}
 	if err := refused(t, pool, coolant); err == nil {
 		t.Error("after Down: a time-only intermediate service was taken")
+	}
+}
+
+// 00009: an empty first_registered_on means bought new, at 0. A vehicle
+// bought above 0 without one gets its purchase day (what its schedules
+// counted from), its version moving on, and so does a trash snapshot of
+// one; then a vehicle above 0 needs a date.
+func TestBoughtNewMigration(t *testing.T) {
+	pool, provider := migrationDB(t)
+	ctx := context.Background()
+	if _, err := provider.UpTo(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase, first_registered_on) VALUES
+			('LittleJoy', 27102, '2024-07-04', 2148, NULL), ('GreyJoy', 18937, '2025-04-04', 0, NULL),
+			('Demo', 900, '2025-02-01', 350, '2024-09-01');
+		INSERT INTO trash (kind, label, payload) VALUES ('vehicle', 'Vehicle: Sold',
+			'{"vehicles": [{"id": 60, "name": "Sold", "odometer": 9000, "purchased_on": "2023-05-01", "odometer_at_purchase": 5000}]}'),
+			('vehicle', 'Vehicle: Old new', '{"vehicles": [{"id": 61, "name": "Old new", "odometer": 10, "purchased_on": "2023-05-01", "odometer_at_purchase": 0}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(ctx, `SELECT name, COALESCE(first_registered_on::text, ''), version FROM vehicles ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var name, reg string
+		var version int
+		if err := rows.Scan(&name, &reg, &version); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fmt.Sprintf("%s %s v%d", name, reg, version))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"LittleJoy 2024-07-04 v2", "GreyJoy  v1", "Demo 2024-09-01 v1"}; !slices.Equal(got, want) {
+		t.Errorf("after Up: %q, want %q", got, want)
+	}
+	var sold, oldNew string
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(payload -> 'vehicles' -> 0 ->> 'first_registered_on', '')
+		FROM trash WHERE label = 'Vehicle: Sold'`).Scan(&sold); err != nil || sold != "2023-05-01" {
+		t.Errorf("the snapshot of a vehicle bought used: %q (%v), want its purchase day", sold, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(payload -> 'vehicles' -> 0 ->> 'first_registered_on', '')
+		FROM trash WHERE label = 'Vehicle: Old new'`).Scan(&oldNew); err != nil || oldNew != "" {
+		t.Errorf("the snapshot of a vehicle bought new: %q (%v), want none", oldNew, err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO vehicles (id, name, odometer, purchased_on, odometer_at_purchase, first_registered_on) OVERRIDING SYSTEM VALUE
+		SELECT id, name, odometer, purchased_on, odometer_at_purchase, first_registered_on
+		FROM jsonb_populate_recordset(NULL::vehicles, (SELECT payload -> 'vehicles' FROM trash WHERE label = 'Vehicle: Sold'))`); err != nil {
+		t.Errorf("restoring the snapshot: %v", err)
+	}
+	if err := refused(t, pool, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('Used', 3000, '2024-01-01', 2000)`); err == nil ||
+		!strings.Contains(err.Error(), "vehicles_bought_new_at_0_check") {
+		t.Errorf("after Up: a vehicle bought above 0 without a date: %v, want refused", err)
+	}
+	if _, err := provider.DownTo(ctx, 8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO vehicles (name, odometer, purchased_on, odometer_at_purchase) VALUES ('Used', 3000, '2024-01-01', 2000)`); err != nil {
+		t.Errorf("after Down: %v", err)
+	}
+	var lj string
+	if err := pool.QueryRow(ctx, `SELECT first_registered_on::text FROM vehicles WHERE name = 'LittleJoy'`).Scan(&lj); err != nil || lj != "2024-07-04" {
+		t.Errorf("after Down: LittleJoy's date %q (%v), want it kept", lj, err)
 	}
 }

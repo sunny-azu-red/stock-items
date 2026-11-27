@@ -66,7 +66,9 @@ type Vehicle struct {
 	// bought new: the purchase day): before the first service with a kit,
 	// its schedule counts from the manual's milestones from 0 and that day
 	// (Start). Make, Model, Year, VIN and Plate are only shown, and optional.
-	Odometer           int
+	Odometer int
+	// FirstRegisteredOn is nil exactly when the vehicle was bought new
+	// (BoughtNew), at 0 (a CHECK).
 	FirstRegisteredOn  *time.Time
 	PurchasedOn        time.Time
 	OdometerAtPurchase int
@@ -515,6 +517,27 @@ type Kit struct {
 	// ArchivedAt is set for kits no longer used: they leave lists and
 	// reminders, but their services keep them.
 	ArchivedAt *time.Time
+}
+
+// Bought is how a vehicle was bought: new, or used (which takes a demo or
+// pre-registered one too: it needs the same two facts).
+type Bought string
+
+const (
+	BoughtNew  Bought = "new"
+	BoughtUsed Bought = "used"
+)
+
+// BoughtNew reports whether the vehicle was bought new: at 0, and first
+// registered when bought (no First registered on of its own).
+func (v Vehicle) BoughtNew() bool { return v.FirstRegisteredOn == nil }
+
+// Bought is how the vehicle was bought (BoughtNew).
+func (v Vehicle) Bought() Bought {
+	if v.BoughtNew() {
+		return BoughtNew
+	}
+	return BoughtUsed
 }
 
 // Archived reports whether the kit has been archived.

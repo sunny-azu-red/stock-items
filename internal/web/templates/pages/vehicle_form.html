@@ -63,9 +63,12 @@
   <div class="form-section">
     <h2>{{if $d.IsNew}}Odometer{{else}}Purchase{{end}}</h2>
     <p class="hint">Until a service is logged, reminders count from the manual's milestones: 0 {{distUnit}} and the first registration.</p>
-    {{/* Add vehicle: four fields, two a row (Odometer at purchase needs two
-         columns: its label and "?" outgrow one at four a row), the readings
-         first. The edit form: three, Odometer at purchase the span-2. */}}
+    {{/* The required fields first, First registered on (optional, empty for
+         a vehicle bought new) last. Add vehicle: four fields, two a row
+         (Odometer at purchase needs two columns: its label and "?" outgrow
+         one at four a row), the readings then the dates. The edit form:
+         three, the purchase's day and reading together, Odometer at
+         purchase the span-2. */}}
     <div class="form-grid">
       {{if $d.IsNew}}
       <div class="field span-2{{if index $e "odometer"}} has-error{{end}}">
@@ -75,17 +78,17 @@
       </div>
       {{template "odometer-at-purchase" .}}
       {{end}}
-      <div class="field{{if $d.IsNew}} span-2{{end}}{{if index $e "first_registered_on"}} has-error{{end}}">
-        <div class="label-row"><label for="first_registered_on">First registered on</label>{{template "tip" (dict "For" "First registered on" "ID" "first-registered-on-tip" "Text" "The Registration date on the vehicle's delivery certificate, not a later re-registration. Leave it empty for a vehicle bought new.")}}</div>
-        <input class="input" type="date" id="first_registered_on" name="first_registered_on" value="{{$f.FirstRegisteredOn}}" {{invalid (index $e "first_registered_on") "first_registered_on" "first-registered-on-tip"}}>
-        {{template "field-err" (fieldErr (index $e "first_registered_on") "first_registered_on")}}
-      </div>
       <div class="field{{if $d.IsNew}} span-2{{end}}{{if index $e "purchased_on"}} has-error{{end}}">
         <div class="label-row"><label for="purchased_on">Purchased on</label>{{template "req"}}</div>
         <input class="input" type="date" id="purchased_on" name="purchased_on" value="{{$f.PurchasedOn}}" required {{invalid (index $e "purchased_on") "purchased_on"}}>
         {{template "field-err" (fieldErr (index $e "purchased_on") "purchased_on")}}
       </div>
       {{if not $d.IsNew}}{{template "odometer-at-purchase" .}}{{end}}
+      <div class="field{{if $d.IsNew}} span-2{{end}}{{if index $e "first_registered_on"}} has-error{{end}}">
+        <div class="label-row"><label for="first_registered_on">First registered on</label>{{template "tip" (dict "For" "First registered on" "ID" "first-registered-on-tip" "Text" "The Registration date on the vehicle's delivery certificate, not a later re-registration. Leave it empty for a vehicle bought new.")}}</div>
+        <input class="input" type="date" id="first_registered_on" name="first_registered_on" value="{{$f.FirstRegisteredOn}}" {{invalid (index $e "first_registered_on") "first_registered_on" "first-registered-on-tip"}}>
+        {{template "field-err" (fieldErr (index $e "first_registered_on") "first_registered_on")}}
+      </div>
     </div>
   </div>
   {{/* The warranty's fields show while its box is ticked (CSS); the server
@@ -122,9 +125,9 @@
   </div>
 </form>
 {{end}}
-{{/* Odometer at purchase: second on Add vehicle (beside the odometer),
-     last on the edit form. Two columns: its label and "?" outgrow one at
-     four a row. */}}
+{{/* Odometer at purchase: second on both forms (beside the odometer on Add
+     vehicle, beside Purchased on on the edit form). Two columns: its label
+     and "?" outgrow one at four a row. */}}
 {{define "odometer-at-purchase"}}{{$f := .Data.Form}}{{$e := $f.Errors}}
       <div class="field span-2{{if index $e "odometer_at_purchase"}} has-error{{end}}">
         <div class="label-row"><label for="odometer_at_purchase">Odometer at purchase ({{distUnit}})</label>{{template "req"}}{{template "tip" (dict "For" "Odometer at purchase" "ID" "odometer-at-purchase-tip" "Text" "0 for a brand new vehicle.")}}</div>

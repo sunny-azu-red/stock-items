@@ -99,10 +99,12 @@ func stockUnitsJSON() (string, error) {
 	for _, su := range stock.SubUnits {
 		units[su.Value] = unit{Base: su.Base, Factor: su.Factor, Label: su.Label}
 	}
+	sep, dec := stock.Current().NumberFormat.Separators()
 	b, err := json.Marshal(map[string]any{
 		"suffixes": stock.Suffixes(),
 		"units":    units,
-		"sep":      strings.TrimSuffix(strings.TrimPrefix(stock.FormatInt(1000), "1"), "000"), // thousands
+		"sep":      sep, // thousands
+		"dec":      dec, // the decimal mark
 	})
 	return string(b), err
 }

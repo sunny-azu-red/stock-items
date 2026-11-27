@@ -120,15 +120,14 @@ type Due struct {
 	DaysLeft     *int
 }
 
-// DueSoonDays is how many days ahead a date based service counts as "soon".
-const DueSoonDays = 30
-
 // dueSoonDistance returns the distance within which a distance interval
-// counts as "due soon": 10% of the interval, at least 500 (in the distance
-// unit), but never more than half of it (or a short interval is "soon" right
-// away).
+// counts as "due soon": the settings' share of the interval
+// (Settings.DueSoonPercent, 10%), at least their minimum (DueSoonMinDistance,
+// 500 in the distance unit), but never more than half of it (or a short
+// interval is "soon" right away).
 func dueSoonDistance(intervalDistance int) int {
-	return min(max(500, intervalDistance/10), intervalDistance/2)
+	set := Current()
+	return min(max(set.DueSoonMinDistance, intervalDistance*set.DueSoonPercent/100), intervalDistance/2)
 }
 
 // Start is where a vehicle's schedules count from before its first
@@ -229,11 +228,11 @@ func dueFrom(ref *ServiceRef, start Start, intervalDistance, intervalMonths *int
 		}
 		days := int(dueDate.Sub(DateOnly(today)).Hours() / 24)
 		d.DueDate, d.DaysLeft = &dueDate, &days
-		// DueSoonDays, but never more than half the interval, or a monthly
-		// service would be "soon" right after it was done.
+		// Settings.DueSoonDays, but never more than half the interval, or a
+		// monthly service would be "soon" right after it was done.
 		intervalDays := int(dueDate.Sub(DateOnly(fromDate)).Hours() / 24)
 		overdue = overdue || days < 0
-		soon = soon || days <= min(DueSoonDays, intervalDays/2)
+		soon = soon || days <= min(Current().DueSoonDays, intervalDays/2)
 	}
 	switch {
 	case overdue:
@@ -564,39 +563,13 @@ func (d Due) Summary() string {
 	return strings.Join(parts, " · ")
 }
 
-// DistanceUnit labels every distance the app shows: odometer readings and
-// service intervals ("km" unless APP_DISTANCE says otherwise; main sets it
-// once at startup). It is only a label: distances are stored and compared as
-// typed.
-var DistanceUnit = "km"
+// FormatDistance renders a distance with thousands separators and the
+// distance unit in use (Settings.DistanceUnit): "12 345 km".
+func FormatDistance(n int) string { return FormatInt(n) + " " + Current().DistanceUnit }
 
-// FormatDistance renders a distance with thousands separators and the unit:
-// "12 345 km".
-func FormatDistance(n int) string { return FormatInt(n) + " " + DistanceUnit }
-
-// thousandsSep is a narrow no-break space. Unlike a comma or point it reads
-// the same with decimal points and decimal commas: "1 500" is never 1.5.
-const thousandsSep = ' '
-
-// FormatInt renders an integer with thousands separators.
-func FormatInt(n int) string {
-	s := strconv.Itoa(n)
-	neg := strings.HasPrefix(s, "-")
-	if neg {
-		s = s[1:]
-	}
-	var b strings.Builder
-	for i, r := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteRune(thousandsSep)
-		}
-		b.WriteRune(r)
-	}
-	if neg {
-		return "-" + b.String()
-	}
-	return b.String()
-}
+// FormatInt renders an integer with the thousands separator in use
+// (Settings.NumberFormat).
+func FormatInt(n int) string { return grouped(strconv.Itoa(n), Current().NumberFormat) }
 
 func plural(n int, word string) string {
 	if n == 1 {

@@ -153,12 +153,10 @@ func TestVehicleMakeModelSuggestions(t *testing.T) {
 	)
 }
 
-// APP_DISTANCE relabels every distance and its form labels; the numbers
-// are kept as typed.
+// The distance unit setting relabels every distance and its form labels;
+// the numbers are kept as typed.
 func TestDistanceUnit(t *testing.T) {
-	old := stock.DistanceUnit
-	t.Cleanup(func() { stock.DistanceUnit = old })
-	stock.DistanceUnit = "mi"
+	useSettings(t, func(s *stock.Settings) { s.DistanceUnit = "mi" })
 	a := newApp(t)
 	expect(t, a.get("/vehicles/new"), http.StatusOK, "Odometer (mi)", "Odometer at purchase (mi)", "<h2>Odometer</h2>")
 	rec := a.post("/vehicles", url.Values{

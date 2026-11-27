@@ -24,9 +24,7 @@ const (
 		UNION SELECT brand, 0 FROM item_skus WHERE brand <> '' AND item_id <> $1`
 	categorySpellings = `
 		SELECT category AS v, 0 AS pref FROM items WHERE category <> '' AND id <> $1
-		UNION SELECT unnest(ARRAY['Oil & Fluids', 'Filters', 'Brakes', 'Gaskets & O-Rings', 'Chain & Sprockets',
-		                          'Electrical', 'Tyres', 'Cleaning & Care', 'Hardware', 'Tools',
-		                          'Maintenance Kits', 'Bearings & Seals', 'Controls & Cables', 'Suspension']), 1`
+		UNION SELECT unnest(categories), 1 FROM settings`
 	locationSpellings = `SELECT location AS v, 0 AS pref FROM items WHERE location <> '' AND id <> $1`
 	supplierSpellings = `SELECT supplier AS v, 0 AS pref FROM stock_movements WHERE supplier <> '' AND id <> $1`
 	makeSpellings     = `SELECT make AS v, 0 AS pref FROM vehicles WHERE make <> '' AND id <> $1`
@@ -39,10 +37,10 @@ const (
 	serviceTitleSpellings = `
 		SELECT name AS v, 0 AS pref FROM service_kits WHERE name <> ''
 		UNION SELECT title, 0 FROM service_records WHERE title <> '' AND id <> $1` + workDefaults
+	// The built-in ones are the Settings page's lists (Categories, Work
+	// names).
 	workDefaults = `
-		UNION SELECT unnest(ARRAY['Oil Service', 'Air Filter', 'Brake Pads (Front)', 'Brake Pads (Rear)',
-		                          'Brake Fluid', 'Cabin Filter', 'Clutch Fluid', 'Coolant',
-		                          'Spark Plugs', 'Valve Check']), 1`
+		UNION SELECT unnest(work_names), 1 FROM settings`
 )
 
 // suggestions is a suggestion list: one spelling for each, by name.

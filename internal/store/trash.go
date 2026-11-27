@@ -883,4 +883,4 @@ func trashLabel(what, name string, details ...string) string {
 	return label
 }
 
-func day(t time.Time) string { return t.Format("2 Jan 2006") }
+func day(t time.Time) string { return stock.FormatDate(t) }

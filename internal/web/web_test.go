@@ -42,15 +42,27 @@ func newAppAt(t *testing.T, now func() time.Time) *testApp {
 	pool := testdb.New(t)
 	st := store.New(pool)
 	srv, err := New(st, Options{
-		Currency: "EUR", Version: "test",
-		SKUSearchURL: "https://duckduckgo.com/?q={q}", SKUSearchPrefix: "site:de",
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Now:    now,
+		Version: "test",
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Now:     now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return &testApp{t: t, store: st, pool: pool, h: srv.Handler()}
+}
+
+// useSettings puts settings in use until the test ends: the defaults, as
+// edit changes them. It sets the app's copy in memory (stock.Use), as a
+// save does; the row in the test's schema keeps its defaults. Tests here
+// don't run in parallel, so one test's settings never reach another's.
+func useSettings(t *testing.T, edit func(*stock.Settings)) {
+	t.Helper()
+	old := stock.Current()
+	set := stock.DefaultSettings()
+	edit(&set)
+	stock.Use(set)
+	t.Cleanup(func() { stock.Use(old) })
 }
 
 func (a *testApp) do(req *http.Request) *httptest.ResponseRecorder {
@@ -646,14 +658,6 @@ func TestParseOptMoney(t *testing.T) {
 	}
 	if got, err := parseOptMoney("  "); got != nil || err != nil {
 		t.Errorf("blank: %v, %v", got, err)
-	}
-}
-
-func TestFormatDecimal(t *testing.T) {
-	for in, want := range map[float64]string{0: "0.00", 2.995: "3.00", 1234.5: "1\u202f234.50", -0.001: "0.00", -12.5: "-12.50"} {
-		if got := formatDecimal(in); got != want {
-			t.Errorf("formatDecimal(%v) = %q, want %q", in, got, want)
-		}
 	}
 }
 

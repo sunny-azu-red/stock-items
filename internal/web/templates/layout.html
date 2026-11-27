@@ -23,7 +23,11 @@
     <div class="sidebar-head">
       {{/* The build, for a hover (and /healthz, from any device). */}}
       <a class="app-brand" href="/" title="Pitbox {{.Version}}"><span class="app-brand-mark">{{icon "package"}}</span> Pitbox</a>
-      {{template "appearance" .}}
+      <span class="sidebar-tools">
+        {{template "appearance" .}}
+        {{/* Settings: the app's, for everyone (Appearance is this device's). */}}
+        <a class="icon-btn appearance-btn" href="/settings" title="Settings (,)" aria-label="Settings" aria-keyshortcuts=","{{if eq .Nav "settings"}} aria-current="page"{{end}}>{{icon "settings"}}</a>
+      </span>
     </div>
     <nav class="nav" aria-label="Main">
       {{template "nav-link" (dict "Href" "/" "Icon" "layout-dashboard" "Label" "Dashboard" "Active" (eq .Nav "dashboard") "Tab" true)}}
@@ -83,7 +87,7 @@
   <a href="/shopping" {{if eq .Nav "shopping"}}aria-current="page"{{end}}>{{icon "shopping-cart"}}Shop{{if .ShoppingCount}}<span class="count">{{.ShoppingCount}}</span>{{end}}</a>
   {{/* Current on the pages it leads to. From Appearance, in the More
        sheet's place, it goes back to More (app.js). */}}
-  <button type="button" popovertarget="more"{{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash")}} class="current" aria-current="page"{{end}}>{{icon "menu"}}More</button>
+  <button type="button" popovertarget="more"{{if or (eq .Nav "vehicles") (eq .Nav "activity") (eq .Nav "trash") (eq .Nav "settings")}} class="current" aria-current="page"{{end}}>{{icon "menu"}}More</button>
 </nav>
 {{/* One polite live region for every toast. */}}
 <div id="toasts" class="toasts" role="status"></div>

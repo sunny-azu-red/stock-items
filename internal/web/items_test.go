@@ -47,6 +47,10 @@ func TestStockFilterAndExport(t *testing.T) {
 }
 
 func TestItemFormFlow(t *testing.T) {
+	// Another search engine and a prefix, as the Settings page sets them.
+	useSettings(t, func(s *stock.Settings) {
+		s.SKUSearchURL, s.SKUSearchPrefix = "https://duckduckgo.com/?q={q}", "site:de"
+	})
 	a := newApp(t)
 	k390, k1290 := a.seed()
 

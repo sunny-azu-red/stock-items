@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/joho/godotenv"
 )
@@ -27,28 +26,17 @@ type DB struct {
 	Password string
 }
 
-// Config is the full application configuration.
+// Config is what the app needs from its deployment: the database, where to
+// listen, and the time zone. Preferences (currency, units, formats, the
+// part number search, …) are settings, kept in the database and set on the
+// Settings page (stock.Settings), never in the environment.
 type Config struct {
-	DB       DB
-	Host     string
-	Port     string
-	Currency string
-	// Distance is the label of odometer readings and service intervals,
-	// e.g. "km" or "mi", shown as typed. Nothing is converted.
-	Distance string
-	// SKUSearchURL is the search engine URL of part number links: the
-	// number goes in place of {q}, e.g. "https://www.google.com/search?q={q}".
-	SKUSearchURL string
-	// SKUSearchPrefix is added to every part number search, e.g. "site:de".
-	// Empty means none.
-	SKUSearchPrefix string
+	DB   DB
+	Host string
+	Port string
 	// Location decides when "today" starts: the zone named by TZ, or the
 	// machine's zone when TZ is unset, empty or unknown.
 	Location *time.Location
-	// AllowedHosts are the host names and IPs the server answers to
-	// (APP_ALLOWED_HOSTS, comma-separated, any port ignored); empty means
-	// any. Loopback always works.
-	AllowedHosts []string
 }
 
 // Addr is the HTTP listen address.
@@ -69,15 +57,6 @@ func (d DB) URL() string {
 // upwards, so tests inside packages find the project file) and then the
 // process environment. Real environment variables always win.
 func Load() (Config, error) {
-	cfg, err := load()
-	if err != nil {
-		return cfg, err
-	}
-	return cfg, cfg.check()
-}
-
-// load reads the settings without checking them.
-func load() (Config, error) {
 	if p := findDotenv(); p != "" {
 		if err := godotenv.Load(p); err != nil {
 			return Config{}, fmt.Errorf("load %s: %w", p, err)
@@ -92,27 +71,11 @@ func load() (Config, error) {
 			Username: env("DB_USERNAME", "postgres"),
 			Password: os.Getenv("DB_PASSWORD"),
 		},
-		Host:            env("HOST", "0.0.0.0"),
-		Port:            env("PORT", "8080"),
-		Currency:        env("APP_CURRENCY", "EUR"),
-		Distance:        env("APP_DISTANCE", "km"),
-		SKUSearchURL:    env("APP_SKU_SEARCH_URL", DefaultSKUSearchURL),
-		SKUSearchPrefix: strings.TrimSpace(os.Getenv("APP_SKU_SEARCH_PREFIX")),
-		Location:        location(),
-		AllowedHosts:    list(os.Getenv("APP_ALLOWED_HOSTS")),
+		Host:     env("HOST", "0.0.0.0"),
+		Port:     env("PORT", "8080"),
+		Location: location(),
 	}
 	return cfg, nil
-}
-
-// list splits a comma-separated setting, dropping blanks.
-func list(v string) []string {
-	var out []string
-	for _, s := range strings.Split(v, ",") {
-		if s = strings.TrimSpace(s); s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 // location reads TZ. Go itself turns an empty or unknown TZ into UTC; here
@@ -164,53 +127,10 @@ func machineZone() *time.Location {
 	return loc
 }
 
-// DefaultSKUSearchURL is the part number search used when
-// APP_SKU_SEARCH_URL is unset.
-const DefaultSKUSearchURL = "https://www.google.com/search?q={q}"
-
-// check refuses settings that would otherwise only show up later, as
-// broken part number links or an odd price label.
-func (c Config) check() error {
-	u, err := url.Parse(strings.ReplaceAll(c.SKUSearchURL, "{q}", "x"))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("APP_SKU_SEARCH_URL must be a full http(s) URL such as %s, not %q", DefaultSKUSearchURL, c.SKUSearchURL)
-	}
-	if err := checkPlaceholder(c.SKUSearchURL); err != nil {
-		return err
-	}
-	if utf8.RuneCountInString(c.Currency) > 10 {
-		return fmt.Errorf("APP_CURRENCY %q is too long (at most 10 characters)", c.Currency)
-	}
-	if utf8.RuneCountInString(c.Distance) > 10 {
-		return fmt.Errorf("APP_DISTANCE %q is too long (at most 10 characters)", c.Distance)
-	}
-	for _, h := range c.AllowedHosts {
-		// A URL would never match a Host header, and every page would be
-		// refused.
-		if strings.ContainsAny(h, "/@?# ") {
-			return fmt.Errorf("APP_ALLOWED_HOSTS takes host names or IPs such as pitbox.lan,192.168.1.5, not %q", h)
-		}
-	}
-	return nil
-}
-
-// checkPlaceholder wants exactly one {q} in the part number search URL:
-// that is where the number goes.
-func checkPlaceholder(searchURL string) error {
-	switch n := strings.Count(searchURL, "{q}"); {
-	case n == 0:
-		return fmt.Errorf("APP_SKU_SEARCH_URL must mark where the part number goes with {q}, as in %s, not %q", DefaultSKUSearchURL, searchURL)
-	case n > 1:
-		return fmt.Errorf("APP_SKU_SEARCH_URL must contain {q} once, not %d times: %q", n, searchURL)
-	}
-	return nil
-}
-
-// LoadDB reads the database settings like Load, without checking the app's
-// other settings: tests need only the database, and a part number search
-// URL the app would refuse shouldn't stop them.
+// LoadDB reads the database settings like Load: tests need only the
+// database.
 func LoadDB() (DB, error) {
-	cfg, err := load()
+	cfg, err := Load()
 	return cfg.DB, err
 }
 

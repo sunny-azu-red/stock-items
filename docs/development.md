@@ -79,6 +79,7 @@ A guide's browser support notes can lag the browsers: check a feature in Chrome 
 ## Adding a feature (checklist)
 
 1. **Schema change?** Add a new migration file. Don't edit old ones.
+1. **A number, list, label or format someone could want different?** It's a setting, not a constant: a column of `settings` through a migration, on the Settings page ([conventions.md](conventions.md#settings)).
 2. **Rules** go in `internal/stock` with table-driven tests.
 3. **Queries** go in `internal/store`. Keep multi-row writes inside `inTx` (`inFormTx` for a form's save), and route stock changes through `applyMovement`. When one transaction locks several items, lock them in id order (see `CreateService`) and `FOR NO KEY UPDATE`, after any service row and vehicle, or two requests can deadlock. Refuse archived things in the store, not just in the page.
 4. **Handler** goes in `internal/web/handlers_*.go`: parse into a form struct, validate, call the store, redirect with a flash message.

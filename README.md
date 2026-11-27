@@ -61,7 +61,7 @@ Or run the published image, e.g. as a Portainer stack from [compose.yaml](compos
 
 ## Configuration
 
-All settings come from environment variables or a `.env` file (real environment variables win):
+The environment (or a `.env` file; real environment variables win) holds only what a deployment needs: the database, where to listen and the time zone. Everything else (currency, distance unit, number and date formats, list sizes, the part number search, the suggestion lists, and the thresholds of the reminders and the warranty) is on the **Settings** page, the gear beside Appearance, kept in the database; a new install starts at the defaults.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -70,11 +70,6 @@ All settings come from environment variables or a `.env` file (real environment 
 | `DB_SCHEMA` | `public` | Postgres schema. The real data lives in `public`; develop on a copy (`dev`): development builds refuse `public` unless `APP_ALLOW_PUBLIC_SCHEMA=1` |
 | `DB_USERNAME`, `DB_PASSWORD` | `postgres`, empty | Credentials |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Where the web server listens |
-| `APP_CURRENCY` | `EUR` | Label shown next to prices (up to 10 characters) |
-| `APP_DISTANCE` | `km` | Label of odometer readings and service intervals, shown as typed, e.g. `mi` (up to 10 characters). Only a label: distances are kept as entered, so changing it doesn't convert them |
-| `APP_SKU_SEARCH_URL` | `https://www.google.com/search?q={q}` | Search engine for SKU links: the brand and number go in place of `{q}`. Must be a full `http(s)://` URL with exactly one `{q}`, or the app won't start |
-| `APP_SKU_SEARCH_PREFIX` | none | Added to every SKU search, e.g. `site:de` |
-| `APP_ALLOWED_HOSTS` | any | Host names and IPs the app answers to, comma-separated (ports ignored), e.g. `pitbox.lan,192.168.1.5`. Other names get 421, which keeps a web page whose name was pointed at your server (DNS rebinding) from using the app; `localhost` and loopback IPs always work |
 | `TZ` | machine's zone | The app's zone, e.g. `Europe/Berlin`: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today") and the times pages show. Empty or unknown also means the machine's zone (an unknown name logs a warning). Timestamps are stored in UTC and the database's own zone doesn't matter |
 
 `.env` is git-ignored. Never commit it.

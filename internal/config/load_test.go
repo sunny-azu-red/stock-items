@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"testing"
 
@@ -12,7 +11,9 @@ import (
 
 // settings are the variables load reads.
 var settings = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_USERNAME", "DB_PASSWORD",
-	"HOST", "PORT", "APP_CURRENCY", "APP_DISTANCE", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "TZ", "APP_ALLOWED_HOSTS"}
+	"HOST", "PORT", "TZ",
+	// Retired: settings now (stock.Settings). Load ignores them.
+	"APP_CURRENCY", "APP_DISTANCE", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "APP_ALLOWED_HOSTS"}
 
 // cleanEnv unsets every setting until the test ends, and runs it in a new
 // directory holding the given files.
@@ -64,24 +65,16 @@ APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 	if cfg.Host != "0.0.0.0" || cfg.Port != "8080" || cfg.Addr() != "0.0.0.0:8080" {
 		t.Errorf("Host, Port, Addr = %q, %q, %q", cfg.Host, cfg.Port, cfg.Addr())
 	}
-	if cfg.Currency != "lei" || cfg.SKUSearchPrefix != "site:de" || cfg.SKUSearchURL != DefaultSKUSearchURL {
-		t.Errorf("Currency, SKUSearchPrefix, SKUSearchURL = %q, %q, %q", cfg.Currency, cfg.SKUSearchPrefix, cfg.SKUSearchURL)
-	}
-	if cfg.Distance != "mi" {
-		t.Errorf("Distance = %q, want mi (trimmed, case kept)", cfg.Distance)
-	}
 	if cfg.Location == nil {
 		t.Error("no Location")
 	}
-	if got := cfg.AllowedHosts; !slices.Equal(got, []string{"pitbox.lan", "192.168.1.5:8080"}) {
-		t.Errorf("AllowedHosts = %q", got)
-	}
 
-	// Settings the app would only fail on later are refused at once;
-	// LoadDB, for tests, needs only the database's.
+	// The retired APP_* variables are settings now: left in a .env or the
+	// environment, they are ignored, even a value the Settings page would
+	// refuse.
 	t.Setenv("APP_SKU_SEARCH_URL", "www.google.com/search")
-	if _, err := Load(); err == nil {
-		t.Error("Load took a search URL without http(s) and {q}")
+	if _, err := Load(); err != nil {
+		t.Errorf("Load refused a retired variable: %v", err)
 	}
 	if db, err := LoadDB(); err != nil || db.Host != "db.lan" {
 		t.Errorf("LoadDB = %+v, %v", db, err)
@@ -96,7 +89,7 @@ func TestLoadWithoutDotenv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" || cfg.Currency != "EUR" || cfg.Distance != "km" || cfg.AllowedHosts != nil {
+	if cfg.DB.Host != "10.0.0.5" || cfg.DB.Port != "5432" {
 		t.Errorf("cfg = %+v", cfg)
 	}
 	if got := cfg.Addr(); got != "[::1]:8080" {

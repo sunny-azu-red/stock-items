@@ -478,7 +478,7 @@
     try {
       stockUnits = JSON.parse(tpl.getAttribute("data-units"));
     } catch (err) {
-      stockUnits = { suffixes: {}, units: {}, sep: " " };
+      stockUnits = { suffixes: {}, units: {}, sep: " ", dec: "." };
     }
     return stockUnits;
   }
@@ -509,10 +509,11 @@
       else large = u.label;
     });
     var r = Math.round(q * 100) / 100;
-    if (large && r >= 1000 && r % 10 === 0) return String(Math.round(r) / 1000) + " " + large;
+    var dec = cfg.dec || ".";
+    if (large && r >= 1000 && r % 10 === 0) return String(Math.round(r) / 1000).replace(".", dec) + " " + large;
     var parts = String(r).split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, cfg.sep);
-    return parts.join(".") + " " + small;
+    return parts.join(dec) + " " + small;
   }
   // stockBadgeFor is the stock badge of an item's <option> (data-have,
   // data-have-base, data-low, data-min, data-unit) when need (base units, 0
@@ -1162,10 +1163,75 @@
     });
   }
 
+  // ---- Settings: what differs from its default ---------------------------
+  // A field (data-setting) whose box differs from its data-default is
+  // tinted and shows its ↺ (data-reset), which puts the default back; each
+  // section's heading and the foot count them. The server renders the same
+  // from what the boxes hold, and nothing is saved until Save settings.
+  function settingValue(kind, v) {
+    if (kind === "list") return v.split("\n").map(function (l) { return l.trim(); }).filter(Boolean).join("\n");
+    return v.trim();
+  }
+  function markSettings(form) {
+    var total = 0;
+    form.querySelectorAll("[data-settings-section]").forEach(function (sec) {
+      var n = 0;
+      sec.querySelectorAll("[data-setting]").forEach(function (f) {
+        var box = f.querySelector(".input");
+        var changed = settingValue(f.dataset.kind, box.value) !== settingValue(f.dataset.kind, f.dataset.default);
+        f.classList.toggle("changed", changed);
+        f.querySelector("[data-reset]").hidden = !changed;
+        f.querySelector("[data-changed-sr]").hidden = !changed;
+        if (changed) n++;
+      });
+      var badge = sec.querySelector("[data-changed-count]");
+      if (badge) {
+        badge.hidden = n === 0;
+        badge.textContent = n + " changed";
+      }
+      total += n;
+    });
+    // The header's Reset all, while anything differs.
+    document.querySelectorAll("[data-reset-all]").forEach(function (b) { b.hidden = total === 0; });
+    var note = form.querySelector("[data-changed-note]");
+    if (note) {
+      note.textContent = total === 0 ? "Every setting is at its default" :
+        total === 1 ? "1 setting differs from its default" : total + " settings differ from their defaults";
+    }
+  }
+  document.querySelectorAll(".settings-form").forEach(function (form) {
+    form.addEventListener("input", function () { markSettings(form); });
+    form.addEventListener("change", function () { markSettings(form); });
+    form.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-reset]");
+      if (!b) return;
+      var f = b.closest("[data-setting]");
+      var box = f.querySelector(".input");
+      box.value = f.dataset.default;
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      box.focus(); // the ↺ goes, so the focus goes to what it changed
+    });
+    // Reset all: every default in its box, as each ↺ does; Save settings
+    // keeps them, Cancel doesn't.
+    document.querySelectorAll("[data-reset-all]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        form.querySelectorAll("[data-setting]").forEach(function (f) {
+          var box = f.querySelector(".input");
+          if (box.value === f.dataset.default) return;
+          box.value = f.dataset.default;
+          box.dispatchEvent(new Event("input", { bubbles: true })); // unsaved: Leave asks
+        });
+        var save = form.querySelector('button[type="submit"]');
+        if (save) save.focus(); // Reset all goes; what's left to do is Save
+      });
+    });
+  });
+
   // ---- Keyboard shortcuts -------------------------------------------------
   // "/" focuses search (opening the stock page when this page has none),
   // "a" opens Add item and "l" Log service: the first letter of the button
-  // each stands for (the sidebar's), on every page alike.
+  // each stands for (the sidebar's), on every page alike. "," opens
+  // Settings, as in most apps.
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;
@@ -1173,9 +1239,9 @@
     if (e.key === "/") {
       e.preventDefault();
       if (!focusSearch()) window.location.href = "/stock#search";
-    } else if (e.key === "a" || e.key === "l") {
+    } else if (e.key === "a" || e.key === "l" || e.key === ",") {
       if (dirty && !window.confirm("Leave this page? What you typed isn't saved yet.")) return;
-      window.location.href = e.key === "a" ? "/items/new" : "/services/new";
+      window.location.href = { a: "/items/new", l: "/services/new", ",": "/settings" }[e.key];
     }
   });
   function focusSearch() {

@@ -215,8 +215,8 @@ func TestUndatedCallsUseTheAppsDay(t *testing.T) {
 	}
 
 	in := func(days int) *time.Time { d := today.AddDate(0, 0, days); return &d }
-	mustItem(t, s, stock.ItemInput{Name: "Last day", Unit: stock.UnitML, Quantity: 100, ExpiresOn: in(store.ExpiringDays)})
-	mustItem(t, s, stock.ItemInput{Name: "A day later", Unit: stock.UnitML, Quantity: 100, ExpiresOn: in(store.ExpiringDays + 1)})
+	mustItem(t, s, stock.ItemInput{Name: "Last day", Unit: stock.UnitML, Quantity: 100, ExpiresOn: in(stock.Current().ExpiringDays)})
+	mustItem(t, s, stock.ItemInput{Name: "A day later", Unit: stock.UnitML, Quantity: 100, ExpiresOn: in(stock.Current().ExpiringDays + 1)})
 	id := mustItem(t, s, stock.ItemInput{Name: "Yesterday", Unit: stock.UnitML, Quantity: 100, ExpiresOn: in(-1)})
 	items, err := s.ListItems(ctx, store.ItemFilter{Expiring: true})
 	if err != nil {

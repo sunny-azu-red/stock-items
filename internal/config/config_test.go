@@ -25,39 +25,6 @@ func TestSchema(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
-	good := Config{Currency: "EUR", Distance: "km", SKUSearchURL: DefaultSKUSearchURL}
-	tests := []struct {
-		name string
-		edit func(*Config)
-		ok   bool
-	}{
-		{"defaults", func(*Config) {}, true},
-		{"other engine", func(c *Config) { c.SKUSearchURL = "http://duckduckgo.com/?q={q}" }, true},
-		{"lei", func(c *Config) { c.Currency = "lei" }, true},
-		{"no scheme", func(c *Config) { c.SKUSearchURL = "www.google.com/search?q={q}" }, false},
-		{"script", func(c *Config) { c.SKUSearchURL = "javascript:alert(1)//" }, false},
-		{"placeholder in the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q={q}&lang=de" }, true},
-		{"placeholder in the path", func(c *Config) { c.SKUSearchURL = "https://parts.example.com/find/{q}" }, true},
-		{"no {q}", func(c *Config) { c.SKUSearchURL = "https://www.google.com/search" }, false},
-		{"value after the query", func(c *Config) { c.SKUSearchURL = "https://example.com/search?q=&lang=de" }, false},
-		{"{q} twice", func(c *Config) { c.SKUSearchURL = "https://example.com/{q}?q={q}" }, false},
-		{"placeholder without http", func(c *Config) { c.SKUSearchURL = "example.com/{q}" }, false},
-		{"long currency", func(c *Config) { c.Currency = "Romanian lei" }, false},
-		{"miles", func(c *Config) { c.Distance = "mi" }, true},
-		{"long distance", func(c *Config) { c.Distance = "nautical miles" }, false},
-		{"allowed hosts", func(c *Config) { c.AllowedHosts = []string{"pitbox.lan", "192.168.1.5:8080", "[fe80::1]"} }, true},
-		{"a URL as an allowed host", func(c *Config) { c.AllowedHosts = []string{"http://pitbox.lan"} }, false},
-	}
-	for _, tt := range tests {
-		c := good
-		tt.edit(&c)
-		if err := c.check(); (err == nil) != tt.ok {
-			t.Errorf("%s: check() = %v, want ok %v", tt.name, err, tt.ok)
-		}
-	}
-}
-
 // tzif is a zone file (TZif version 1) of a zone that is always offset
 // seconds east of UTC.
 func tzif(abbr string, offset int32) []byte {

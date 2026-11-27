@@ -71,6 +71,9 @@ func (e *StaleError) Error() string {
 	case e.Gone:
 		return "This " + e.What + " was deleted since you opened it."
 	}
+	if e.What == WhatSettings {
+		return "The settings were changed since you opened them (another tab or person). Reload to see the latest, then make your change again."
+	}
 	return "This " + e.What + " was changed since you opened it (another tab or person). Reload to see the latest, then make your change again."
 }
 

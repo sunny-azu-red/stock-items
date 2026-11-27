@@ -596,7 +596,7 @@ type itemPage struct {
 	ExpiryState       string
 	PurchaseCount     int
 	Usage             stock.ItemUsage
-	HistoryCapped     bool   // Movements holds only the first itemHistory entries
+	HistoryCapped     bool   // Movements holds only the first Settings.ItemHistory entries
 	Today             string // yyyy-mm-dd, the default date of a stock change
 	History           sortHeads
 }
@@ -609,9 +609,6 @@ func (p itemPage) AllEntriesQuery() string {
 	return q.Encode()
 }
 
-// itemHistory is how many stock changes the item page shows.
-const itemHistory = 100
-
 func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (itemPage, error) {
 	ctx := r.Context()
 	it, err := s.store.GetItem(ctx, id)
@@ -623,6 +620,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 		return itemPage{}, err
 	}
 	order := historySorts.parse(r.URL.Query())
+	itemHistory := stock.Current().ItemHistory
 	moves, err := s.store.ListMovements(ctx, store.MovementFilter{ItemID: id, Limit: itemHistory + 1, Sort: order.Key, Desc: order.Desc})
 	if err != nil {
 		return itemPage{}, err
@@ -654,7 +652,7 @@ func (s *Server) loadItemPage(r *http.Request, id int64, move movementForm) (ite
 	p := itemPage{
 		Item: it, Vehicles: vehicles, VehicleMap: vehicleMap(vehicles), Movements: moves, Kits: s.kitViews(kits, vehicles),
 		UnitPrice: price, Move: move, SubUnits: stock.SubUnitsFor(it.Unit), Suppliers: suppliers,
-		ExpiryState: it.ExpiryState(s.now(), store.ExpiringDays), PurchaseCount: purchases, Usage: usage,
+		ExpiryState: it.ExpiryState(s.now(), stock.Current().ExpiringDays), PurchaseCount: purchases, Usage: usage,
 		HistoryCapped: len(moves) > itemHistory, Today: s.now().Format("2006-01-02"),
 		History: sortHeads{Order: order, Path: itemPath(id), Anchor: "history"},
 	}

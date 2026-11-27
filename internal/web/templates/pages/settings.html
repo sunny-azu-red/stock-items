@@ -1,0 +1,48 @@
+{{/* The Settings page (handlers_settings.go): every setting a field with
+     its "?", in sections from the widest reach to the narrowest. A field
+     whose box differs from its default is tinted, its label in the accent,
+     with a ↺ that shows the default and puts it back (app.js, until Save
+     settings); the server renders the same from what the box holds. */}}
+{{define "head-title"}}Settings{{end}}
+{{define "head-line"}}<span>Changes apply at once on every page and device. Nothing saved is converted: the units and formats change only how things read.</span>{{end}}
+{{/* Reset all puts every default in its box, as each ↺ does (app.js):
+     nothing is saved until Save settings, so it asks nothing. */}}
+{{define "head-actions"}}<button class="btn" type="button" data-reset-all{{if not .Data.Changed}} hidden{{end}}>{{icon "rotate-ccw"}} Reset all</button>{{end}}
+{{define "content"}}{{$d := .Data}}{{$e := $d.Errors}}
+<form class="card page-form settings-form" method="post" action="/settings" novalidate>
+  <input type="hidden" name="version" value="{{$d.Version}}">
+  <input type="hidden" name="back" value="{{$d.Back}}">
+  {{template "form-key" $d.FormKey}}
+  {{template "form-banners" $d}}
+  {{range $d.Sections}}{{$sec := .}}
+  <div class="form-section" data-settings-section>
+    {{with .Title}}<h2 class="settings-head">{{.}}<span class="badge badge-accent" data-changed-count{{if not $sec.Changed}} hidden{{end}}>{{$sec.Changed}} changed</span></h2>{{end}}
+    {{with .Note}}<p class="hint">{{.}}</p>{{end}}
+    <div class="form-grid">
+      {{range .Fields}}{{$err := index $e .Name}}{{$tip := print .Name "-tip"}}
+      <div class="field{{with .Span}} {{.}}{{end}}{{if .Changed}} changed{{end}}{{if $err}} has-error{{end}}" data-setting data-kind="{{.Kind}}" data-default="{{.Default}}">
+        <div class="label-row"><label for="{{.Name}}">{{.LabelText}}</label>{{if .Required}}{{template "req"}}{{end}}{{template "tip" (dict "For" .LabelText "ID" $tip "Text" .Tip)}}<span class="sr-only" data-changed-sr{{if not .Changed}} hidden{{end}}>Changed from the default.</span><button class="reset-link setting-reset" type="button" data-reset title="{{.Long}}" aria-label="{{.Long}}: {{.LabelText}}"{{if not .Changed}} hidden{{end}}>{{icon "rotate-ccw"}}{{.Short}}</button></div>
+        {{if eq .Kind "select"}}{{$v := .Value}}{{$def := .Default}}
+        <select class="input" id="{{.Name}}" name="{{.Name}}" {{invalid $err .Name $tip}}>{{range .Options}}<option value="{{.Value}}"{{if eq .Value $v}} selected{{end}}>{{.Label}}{{if eq .Value $def}} (default){{end}}</option>{{end}}</select>
+        {{else if eq .Kind "list"}}
+        <textarea class="input" id="{{.Name}}" name="{{.Name}}" rows="6" {{invalid $err .Name $tip}}>{{.Value}}</textarea>
+        {{else if eq .Kind "number"}}
+        <input class="input" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}" inputmode="numeric" autocomplete="off" {{invalid $err .Name $tip}}>
+        {{else}}
+        <input class="input" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if eq .Name "sku_search_url"}} inputmode="url"{{end}} autocomplete="off" {{invalid $err .Name $tip}}>
+        {{end}}
+        {{template "field-err" (fieldErr $err .Name)}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+  <div class="form-section form-actions">
+    <p class="hint req-note"><span data-changed-note>{{template "settings-changed" $d.Changed}}</span> · <span class="req" aria-hidden="true">*</span> required</p>
+    <a class="btn btn-ghost spacer" href="{{$d.Back}}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{icon "check"}} Save settings</button>
+  </div>
+</form>
+{{end}}
+{{/* How many settings differ from their defaults (app.js writes the same). */}}
+{{define "settings-changed"}}{{if eq . 0}}Every setting is at its default{{else if eq . 1}}1 setting differs from its default{{else}}{{.}} settings differ from their defaults{{end}}{{end}}

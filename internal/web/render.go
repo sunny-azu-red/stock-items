@@ -11,18 +11,15 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"math"
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
-	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
 //go:embed templates
@@ -167,7 +164,7 @@ func (s *Server) funcs() template.FuncMap {
 		"delta":      stock.FormatDelta,
 		"num":        stock.FormatNumber,
 		"distance":   formatDistance,
-		"distUnit":   func() string { return stock.DistanceUnit },
+		"distUnit":   func() string { return stock.Current().DistanceUnit },
 		"distNum":    stock.FormatInt, // a distance's figure, without its unit
 		"money":      s.formatMoney,
 		"date":       formatDate,
@@ -175,7 +172,7 @@ func (s *Server) funcs() template.FuncMap {
 		"deref":      derefFloat,
 		"changeName": changeName,
 		// expiryState is "expired", "soon" or "" for an item today.
-		"expiryState": func(it stock.Item) string { return it.ExpiryState(s.now(), store.ExpiringDays) },
+		"expiryState": func(it stock.Item) string { return it.ExpiryState(s.now(), stock.Current().ExpiringDays) },
 		"dict":        dict,
 		"add":         func(a, b int) int { return a + b },
 		"hasID": func(ids []int64, id int64) bool {
@@ -208,10 +205,14 @@ func (s *Server) funcs() template.FuncMap {
 			if len(brand) > 0 {
 				b = brand[0]
 			}
-			return skuSearchURL(s.skuSearch, s.skuSearchPrefix, code, b)
+			set := stock.Current()
+			return skuSearchURL(set.SKUSearchURL, set.SKUSearchPrefix, code, b)
 		},
-		"skuSearchTitle": func() string { return s.skuSearchTitle },
-		"emptyLine":      func() lineRow { return lineRow{} },
+		"skuSearchTitle": func() string {
+			set := stock.Current()
+			return searchTitle(set.SKUSearchURL, set.SKUSearchPrefix)
+		},
+		"emptyLine": func() lineRow { return lineRow{} },
 		// stockBadge is an item's badge for the "stock-badge" partial;
 		// withQty puts what is in stock in it (see newStockBadge).
 		"stockBadge":       func(it stock.Item, withQty bool) stockBadge { return newStockBadge(it, 0, withQty) },
@@ -253,7 +254,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 		s.serverError(w, r, fmt.Errorf("unknown page template %q", page))
 		return
 	}
-	v.Currency = s.currency
+	v.Currency = stock.Current().Currency
 	v.Version = s.version
 	v.Today = s.now()
 	v.Theme = themeFrom(r)
@@ -386,8 +387,8 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, url, flash str
 }
 
 // skuSearchURL is the search link of a part number: the number (and the
-// prefix, if any) escaped and put in place of the {q} in base (New refuses
-// a base without exactly one). In the query it is query-escaped, so "A+B"
+// prefix, if any) escaped and put in place of the {q} in base (the
+// settings refuse a base without exactly one). In the query it is query-escaped, so "A+B"
 // and "A&B=C" stay one value; in the path or the fragment it is
 // path-escaped, so "12/34" stays one segment.
 func skuSearchURL(base, prefix, code, brand string) string {
@@ -450,7 +451,7 @@ func (s *Server) formatMoney(v any) string {
 	if !ok {
 		return "—"
 	}
-	return fmt.Sprintf("%s %s", formatDecimal(f), s.currency)
+	return stock.FormatDecimal(f) + " " + stock.Current().Currency
 }
 
 // formatUnitPrice shows a price per base unit the way shops do:
@@ -463,21 +464,6 @@ func (s *Server) formatUnitPrice(p *float64, u stock.Unit) string {
 	return s.formatMoney(price) + " / " + per
 }
 
-// formatDecimal renders f with two decimals and thousands separators.
-func formatDecimal(f float64) string {
-	s := strconv.FormatFloat(math.Abs(f), 'f', 2, 64)
-	whole, frac, _ := strings.Cut(s, ".")
-	n, err := strconv.Atoi(whole)
-	if err != nil { // NaN, Inf or beyond int: show it as is
-		return s
-	}
-	sign := ""
-	if f < 0 && s != "0.00" {
-		sign = "-"
-	}
-	return sign + stock.FormatInt(n) + "." + frac
-}
-
 func formatDistance(v any) string {
 	if n, ok := derefIntOK(v); ok {
 		return stock.FormatDistance(n)
@@ -487,22 +473,27 @@ func formatDistance(v any) string {
 
 func formatDate(v any) string {
 	if t, ok := derefTime(v); ok {
-		return t.Format("2 Jan 2006")
+		return stock.FormatDate(t)
 	}
 	return "—"
 }
 
+// relativeDate writes a recent day as words: "today", "yesterday", "3 days
+// ago", up to the settings' DaysAgo (0 for never); an older one, or a later
+// one, as its date.
 func relativeDate(t, now time.Time) string {
 	days := int(stock.DateOnly(now).Sub(stock.DateOnly(t)).Hours() / 24)
+	limit := stock.Current().DaysAgo
 	switch {
+	case limit == 0:
 	case days == 0:
 		return "today"
 	case days == 1:
 		return "yesterday"
-	case days > 1 && days < 30:
+	case days > 1 && days < limit:
 		return fmt.Sprintf("%d days ago", days)
 	}
-	return t.Format("2 Jan 2006")
+	return stock.FormatDate(t)
 }
 
 func derefTime(v any) (time.Time, bool) {

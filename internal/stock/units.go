@@ -258,12 +258,12 @@ func FormatQuantity(q float64, u Unit) string {
 	switch u {
 	case UnitML:
 		if useLargeUnit(RoundQty(q)) {
-			return FormatNumber(RoundQty(q)/1000) + " L"
+			return decimalMark(FormatNumber(RoundQty(q)/1000)) + " L"
 		}
 		return formatSmall(q) + " ml"
 	case UnitGram:
 		if useLargeUnit(RoundQty(q)) {
-			return FormatNumber(RoundQty(q)/1000) + " kg"
+			return decimalMark(FormatNumber(RoundQty(q)/1000)) + " kg"
 		}
 		return formatSmall(q) + " g"
 	default:
@@ -284,18 +284,15 @@ func formatSmall(q float64) string {
 	return formatGrouped(r)
 }
 
-// formatGrouped is FormatNumber with thousands separators: "1 234.5".
-func formatGrouped(f float64) string {
-	s := FormatNumber(f)
-	whole, frac, hasFrac := strings.Cut(s, ".")
-	n, err := strconv.Atoi(whole)
-	if err != nil || (n > -1000 && n < 1000) {
-		return s
-	}
-	if hasFrac {
-		return FormatInt(n) + "." + frac
-	}
-	return FormatInt(n)
+// formatGrouped is FormatNumber in the number format in use
+// (Settings.NumberFormat), with thousands separators: "1 234.5".
+func formatGrouped(f float64) string { return grouped(FormatNumber(f), Current().NumberFormat) }
+
+// decimalMark is a FormatNumber with the decimal mark in use, for a large
+// unit's figure (1.5 L), which isn't grouped.
+func decimalMark(s string) string {
+	_, dec := Current().NumberFormat.Separators()
+	return strings.Replace(s, ".", dec, 1)
 }
 
 // FormatDelta renders a signed quantity change: "+2 pcs", "−500 ml".

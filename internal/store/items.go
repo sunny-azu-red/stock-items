@@ -24,7 +24,7 @@ type ItemFilter struct {
 	Query    string
 	Category string
 	LowStock bool
-	Expiring bool // with stock left and expired or expiring within ExpiringDays
+	Expiring bool // with stock left and expired or expiring within Settings.ExpiringDays
 	InStock  bool // quantity > 0
 	// Sort is one of the Sort* keys (anything else sorts by name), and
 	// Desc reverses it. See itemOrder.
@@ -44,9 +44,6 @@ const (
 	ArchivedOnly = "only"
 	ArchivedAll  = "all"
 )
-
-// ExpiringDays is the look-ahead used for the "expiring soon" filter.
-const ExpiringDays = 60
 
 // Sort orders understood by ListItems.
 const (
@@ -125,7 +122,7 @@ func (s *Store) ListItems(ctx context.Context, f ItemFilter) ([]stock.Item, erro
 			today = appToday()
 		}
 		where = append(where, "i.quantity > 0 AND i.expires_on IS NOT NULL AND i.expires_on <= "+
-			args.add(stock.DateOnly(today))+"::date + "+args.add(ExpiringDays)+"::int")
+			args.add(stock.DateOnly(today))+"::date + "+args.add(stock.Current().ExpiringDays)+"::int")
 	}
 	if f.InStock {
 		where = append(where, "i.quantity > 0")

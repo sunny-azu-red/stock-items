@@ -82,7 +82,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	recent, err := s.store.ListMovements(ctx, store.MovementFilter{Limit: 8, VehicleID: vid, General: vid != 0})
+	recent, err := s.store.ListMovements(ctx, store.MovementFilter{Limit: stock.Current().DashboardRecent, VehicleID: vid, General: vid != 0})
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) error {
 		if it.IsLow() {
 			p.LowItems = append(p.LowItems, it)
 		}
-		if it.ExpiryState(today, store.ExpiringDays) != "" {
+		if it.ExpiryState(today, stock.Current().ExpiringDays) != "" {
 			p.Expiring = append(p.Expiring, it)
 		}
 	}
@@ -168,9 +168,6 @@ func (p activityPage) ChipQuery(id int64, general bool) string {
 	p.VehicleID, p.General = id, general
 	return p.filterValues(p.Kind, 0).Encode()
 }
-
-// activityPageSize is how many stock changes one Activity page shows.
-const activityPageSize = 200
 
 // KindQuery is the query string for the given kind ("" for all), keeping
 // the year, the item filter and the sort, and starting at the first page.
@@ -347,6 +344,7 @@ func (s *Server) activity(w http.ResponseWriter, r *http.Request) error {
 		p.Years = append(p.Years, p.Year)
 		slices.SortFunc(p.Years, func(a, b int) int { return b - a })
 	}
+	activityPageSize := stock.Current().ActivityPageSize
 	f := store.MovementFilter{Kind: stock.MovementKind(p.Kind), Year: p.Year, Limit: activityPageSize + 1, Offset: (p.Page - 1) * activityPageSize,
 		Sort: p.Sort.Key, Desc: p.Sort.Desc, VehicleID: vid, General: p.General}
 	if item != nil {

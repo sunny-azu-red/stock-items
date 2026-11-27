@@ -1595,7 +1595,7 @@ test("the photo opens larger on the page, and Close, Esc or a tap outside closes
 });
 
 test("no page scrolls sideways", async ({ page }) => {
-  const paths = ["/", "/stock", "/stock?view=list", "/stock?sort=expiry&dir=desc", "/activity?sort=price", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new"];
+  const paths = ["/", "/stock", "/stock?view=list", "/stock?sort=expiry&dir=desc", "/activity?sort=price", "/vehicles", "/services", "/shopping", "/activity", "/trash", "/items/new", "/kits/new", "/services/new", "/settings"];
   // Also every detail page linked from the stock list and vehicles.
   await page.goto("/stock");
   paths.push(await page.locator(".item-row a.item-name").first().getAttribute("href") as string);
@@ -1776,6 +1776,7 @@ test("screenshots", async ({ page }, testInfo) => {
     ["activity-sorted", "/activity?sort=price"],
     ["movement-edit", movement],
     ["trash", "/trash"],
+    ["settings", "/settings"],
     ["not-found", "/no-such-page"],
   ];
   for (const scheme of ["light", "dark"] as const) {
@@ -2047,7 +2048,7 @@ test("every box sits on whole pixels and its text lines up", async ({ page }) =>
   const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", "/stock?sort=expiry&dir=desc", item, "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
     kit, kit + "?sort=missing", "/kits/new", kit + "/edit", "/shopping", "/shopping?v=" + vehicle.split("/").pop(), bought, "/activity", "/activity?sort=price",
-    "/activity?kind=bought&year=2026", movement, "/trash", "/no-such-page"];
+    "/activity?kind=bought&year=2026", movement, "/trash", "/settings", "/no-such-page"];
   for (const p of paths) {
     await page.goto(p);
     await check(p);
@@ -2117,7 +2118,7 @@ test("every page header has the same spacing", async ({ page }, testInfo) => {
   const archivedVehicle = await maybe("/vehicles?archived=1", "a.vehicle-card");
   const paths = ["/", "/stock", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
-    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/no-such-page", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/settings", "/no-such-page", ...[purchase, archivedItem, archivedVehicle].filter((p): p is string => !!p)];
   const problems: string[] = [];
   // And the pages that show the Working on bar: the header starts below it.
   const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
@@ -2238,7 +2239,7 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
   const movement = await link("/activity", 'a[href^="/movements/"]');
   const paths = ["/", "/stock", "/stock?view=list", "/stock?low=1", "/stock?archived=1", item, item.replace("/items/", "/activity?item="), "/items/new", item + "/edit",
     "/vehicles", "/vehicles?archived=1", vehicle, "/vehicles/new", vehicle + "/edit", "/services", "/services?archived=1", service, "/services/new", service + "/edit",
-    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/no-such-page"];
+    kit, "/kits/new", kit + "/edit", "/shopping", "/activity", movement, "/trash", "/settings", "/no-such-page"];
   const working = ["/", "/stock", "/services", "/activity", "/shopping", item];
   const problems: string[] = [];
   let cookie = false;
@@ -2360,14 +2361,21 @@ test("every page's spacing follows the scale", async ({ page }, testInfo) => {
         }
         if (heights.size > 1) out.push(`${sel} bars of ${[...heights].map(([hh, t]) => `${hh}px ("${t}")`).join(", ")}`);
       }
-      // The Appearance button is a nav row's box: its hover ends on the
-      // same edge as the nav's, and it is as tall.
-      const theme = [...document.querySelectorAll(".sidebar-head .icon-btn")].find((b) => b.getBoundingClientRect().width > 0);
+      // The sidebar head's buttons (Appearance, Settings) are nav rows'
+      // boxes: as tall, and the last one's hover ends on the same edge as
+      // the nav's.
+      const tools = [...document.querySelectorAll(".sidebar-head .icon-btn")].filter((b) => b.getBoundingClientRect().width > 0);
       const navLink = document.querySelector(".sidebar .nav a");
-      if (desktop && theme && navLink) {
-        const t = theme.getBoundingClientRect(), n = navLink.getBoundingClientRect();
-        if (Math.round(t.right) !== Math.round(n.right) || Math.round(t.height) !== Math.round(n.height))
-          out.push(`the Appearance button is ${Math.round(t.height)}px tall ending at ${Math.round(t.right)}px, the nav's rows ${Math.round(n.height)}px ending at ${Math.round(n.right)}px`);
+      if (desktop && tools.length && navLink) {
+        const n = navLink.getBoundingClientRect();
+        for (const b of tools) {
+          const t = b.getBoundingClientRect();
+          if (Math.round(t.height) !== Math.round(n.height))
+            out.push(`the ${b.getAttribute("aria-label")} button is ${Math.round(t.height)}px tall, the nav's rows ${Math.round(n.height)}px`);
+        }
+        const last = tools[tools.length - 1].getBoundingClientRect();
+        if (Math.round(last.right) !== Math.round(n.right))
+          out.push(`the sidebar head's last button ends at ${Math.round(last.right)}px, the nav's rows at ${Math.round(n.right)}px`);
       }
       // The sidebar's logo is level with the page heading's row, a control
       // (36px) tall, unless a bar (Working on, or its offer on a vehicle's
@@ -2427,6 +2435,12 @@ test("a form's gaps are 10px or 17px as you see them", async ({ page }, testInfo
     ["/shopping", "Shopping"], ["/shopping", "Shopping with errors", submit("Add")],
     [item, "an item's Bought"], [item, "an item's Used", async () => { await page.getByRole("tab", { name: "Used" }).click(); }],
     [item, "an item's Adjust", async () => { await page.getByRole("tab", { name: "Adjust" }).click(); }], [movement, "a stock change's edit form"],
+    ["/settings", "Settings"],
+    ["/settings", "Settings with errors", async () => { await page.locator("#activity_page_size").fill("lots"); await submit("Save settings")(); }],
+    // Changed fields show their ↺ in the label row: the boxes stay level.
+    ["/settings", "Settings with changes", async () => {
+      for (const [id, v] of [["currency", "LEI"], ["warranty_grace_percent", "15"], ["sku_search_prefix", "site:ro"]]) await page.locator("#" + id).fill(v);
+    }],
   ];
   const problems: string[] = [];
   for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
@@ -2840,7 +2854,7 @@ test("every form follows the Forms rules", async ({ page }, testInfo) => {
   const movements = [...new Set(await page.locator('a[href^="/movements/"]').evaluateAll((as) => as.map((a) => a.getAttribute("href") as string)))].slice(0, 8);
   // [path, the item page's tab to open first]
   const pages: [string, string?][] = [["/items/new"], [item + "/edit"], ["/vehicles/new"], [vehicle + "/edit"], ["/kits/new"], [kit + "/edit"],
-    ["/services/new"], [service + "/edit"], [fromKit], ["/shopping"], [item], [item, "Used"], [item, "Adjust"], ...movements.map((m): [string] => [m])];
+    ["/services/new"], [service + "/edit"], [fromKit], ["/shopping"], [item], [item, "Used"], [item, "Adjust"], ["/settings"], ...movements.map((m): [string] => [m])];
   const problems: string[] = [];
   for (const width of phone(testInfo) ? [0] : [0, 1100, 900]) {
     if (width) await page.setViewportSize({ width, height: 900 });
@@ -3045,4 +3059,67 @@ test("a part row moves to the picked vehicle's item of its name", async ({ page 
   // And back.
   await pickVehicle(page, "KTM 390");
   await expect(id).toHaveValue(k390);
+});
+
+test("settings mark what differs from the default, and ↺ puts it back", async ({ page }) => {
+  // Nothing is saved: the pages after keep the defaults.
+  await page.goto("/settings");
+  const field = page.locator(".field", { has: page.locator("#warranty_grace_percent") });
+  const reset = field.locator("[data-reset]");
+  const count = page.locator("[data-settings-section]", { has: page.locator("#warranty_grace_percent") }).locator("[data-changed-count]");
+  const note = page.locator("[data-changed-note]");
+  await expect(field).not.toHaveClass(/\bchanged\b/);
+  await expect(reset).toBeHidden();
+  await expect(count).toBeHidden();
+  await expect(note).toHaveText("Every setting is at its default");
+
+  await page.locator("#warranty_grace_percent").fill("15");
+  await expect(field).toHaveClass(/\bchanged\b/);
+  await expect(reset).toBeVisible();
+  await expect(reset).toHaveText("10%");
+  await expect(reset).toHaveAttribute("title", "Reset to 10%");
+  await expect(count).toHaveText("1 changed");
+  await expect(note).toHaveText("1 setting differs from its default");
+  // The box is tinted: not the plain field's background.
+  const bg = (sel: string) => page.locator(sel).evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await bg("#warranty_grace_percent")).not.toBe(await bg("#warranty_grace_days"));
+
+  // A list counts by its lines: a blank line and spaces change nothing.
+  const cats = page.locator("#categories");
+  await cats.fill((await cats.inputValue()).replace("Brakes", "  Brakes  ") + "\n\n");
+  await expect(note).toHaveText("1 setting differs from its default");
+
+  await reset.click();
+  await expect(page.locator("#warranty_grace_percent")).toHaveValue("10");
+  await expect(page.locator("#warranty_grace_percent")).toBeFocused();
+  await expect(field).not.toHaveClass(/\bchanged\b/);
+  await expect(reset).toBeHidden();
+  await expect(count).toBeHidden();
+  await expect(note).toHaveText("Every setting is at its default");
+
+  // Reset all fills every box with its default, and asks nothing: nothing
+  // is saved until Save settings.
+  const resetAll = page.getByRole("button", { name: "Reset all" });
+  await expect(resetAll).toBeHidden();
+  await page.locator("#currency").fill("LEI");
+  await page.locator("#warranty_grace_days").fill("45");
+  await expect(resetAll).toBeVisible();
+  await expect(note).toHaveText("2 settings differ from their defaults");
+  await resetAll.click();
+  await expect(page.locator("#currency")).toHaveValue("EUR");
+  await expect(page.locator("#warranty_grace_days")).toHaveValue("30");
+  await expect(note).toHaveText("Every setting is at its default");
+  await expect(resetAll).toBeHidden();
+  await expect(page.getByRole("button", { name: "Save settings" })).toBeFocused();
+});
+
+test("the gear beside Appearance opens Settings, and so does the , key", async ({ page }, testInfo) => {
+  await page.goto("/");
+  if (phone(testInfo)) await page.locator(".tabbar").getByRole("button", { name: "More" }).click();
+  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Settings");
+  await page.goto("/stock");
+  await page.keyboard.press(",");
+  await expect(page).toHaveURL(/\/settings$/);
 });

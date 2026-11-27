@@ -18,11 +18,6 @@ const (
 	WarrantyLost WarrantyState = "lost"
 )
 
-// WarrantySoonDistance is how close to the warranty's end reading (in the
-// distance unit) it counts as ending soon. A date counts within
-// DueSoonDays, as a service's does.
-const WarrantySoonDistance = 1000
-
 // Warranty is the computed state of a vehicle's warranty.
 type Warranty struct {
 	State WarrantyState
@@ -55,7 +50,7 @@ type WarrantyKit struct {
 }
 
 // WarrantyMiss is a service the warranty asked for that was done past its
-// limit and the grace (WarrantyGrace, WarrantyGraceDays), or is past them
+// limit and the grace (WarrantyGrace, Settings.GraceDays), or is past them
 // and not done. The grace is applied, never shown: a dealer may not allow
 // it, so the page names the limit itself (DueOdometer, DueDate), the one to
 // aim at, and what the grace decides is unexported, out of the templates'
@@ -92,15 +87,12 @@ type WarrantyMiss struct {
 	lostOn time.Time
 }
 
-// WarrantyGraceDays is how many days past its date a service the warranty
-// asks for may still be done: dealers allow about a month, whatever the
-// interval.
-const WarrantyGraceDays = 30
-
 // WarrantyGrace is how far past its reading a service the warranty asks
-// for may still be done: 10% of its distance (100 km on a break-in at
-// 1 000, 1 500 on a 15 000 interval), as dealers allow.
-func WarrantyGrace(distance int) int { return distance / 10 }
+// for may still be done: Settings.GracePercent of its distance (10% by
+// default, as dealers allow: 100 km on a break-in at 1 000, 1 500 on a
+// 15 000 interval). How many days past its date is Settings.GraceDays
+// (30, about a month, whatever the interval).
+func WarrantyGrace(distance int) int { return distance * Current().GracePercent / 100 }
 
 // WarrantyOf works out a warranty that ends on endsOn (the last day it
 // covers) or past the reading endsAt, whichever comes first, given the
@@ -115,12 +107,12 @@ func WarrantyOf(endsOn *time.Time, endsAt *int, odo int, today time.Time) Warran
 		// Both are midnight UTC days, so a DST change can't make one 23 hours.
 		days := int(DateOnly(*endsOn).Sub(DateOnly(today)).Hours() / 24)
 		ended = ended || days < 0
-		soon = soon || days <= DueSoonDays
+		soon = soon || days <= Current().WarrantySoonDays
 	}
 	if endsAt != nil {
 		left := *endsAt - odo
 		ended = ended || left < 0
-		soon = soon || left <= WarrantySoonDistance
+		soon = soon || left <= Current().WarrantySoonDistance
 	}
 	switch {
 	case ended:
@@ -224,7 +216,7 @@ func (k WarrantyKit) misses(start Start, odo int, today time.Time) []WarrantyMis
 			if !counted {
 				_, due = start.dates(*k.IntervalMonths)
 			}
-			latest := due.AddDate(0, 0, WarrantyGraceDays)
+			latest := due.AddDate(0, 0, Current().GraceDays)
 			m.DueDate, m.latestDate = &due, &latest
 			byDate = DateOnly(on).After(latest)
 		}

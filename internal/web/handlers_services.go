@@ -550,9 +550,6 @@ type servicesPage struct {
 	More              bool // there are older services
 }
 
-// servicesPageSize is how many services one page of the log shows.
-const servicesPageSize = 100
-
 // PageQuery is the query string for page n of the log.
 func (p servicesPage) PageQuery(n int) string {
 	q := url.Values{}
@@ -650,6 +647,7 @@ func (s *Server) serviceList(w http.ResponseWriter, r *http.Request) error {
 		p.Kits = s.kitViews(activeKits, allVehicles)
 	}
 	scopeKits(p.Kits, p.Scope())
+	servicesPageSize := stock.Current().ServicesPageSize
 	f := store.ServiceFilter{VehicleID: p.VehicleID, Limit: servicesPageSize + 1, Offset: (p.Page - 1) * servicesPageSize}
 	if p.Services, err = s.store.ListServices(ctx, f); err != nil {
 		return err

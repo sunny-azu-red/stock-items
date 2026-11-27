@@ -4,6 +4,8 @@ How a service kit decides which service comes next, when it is due, and when the
 
 The worked examples are the kit schedule matrix (artifact <https://claude.ai/artifact/CUe5MX3g8DFptHWuPQGgia>): every case ID below (B6, W11, L4, …) is one of its situations, run through this code on a sample kit (10 000 km / 12 months, halfway, break-in at 1 000, bought new on 1 Jan 2025); the U cases are used, demo and pre-registered vehicles (LittleJoy's kits among them). It also has simulated riders over three years on a new and a used bike, and a full scan of every kit shape.
 
+**The thresholds are settings** (the Settings page, `stock.Settings`; [conventions.md](conventions.md#settings)): the grace (10% and 30 days), due soon (30 days; 10% of the distance, at least 500) and ends soon (1 000 km and 30 days). The rules below are written with those defaults, the values the code had before they were settings. Nothing computed is stored, so a change applies to every kit and vehicle at once: a warranty lost late by a 10% grace is kept by a 20% one, and lost again at 10%. The last quarter and "at most half the interval" are the model's shape, not settings.
+
 ## Terms
 
 | Term | Meaning | Code |
@@ -13,13 +15,13 @@ The worked examples are the kit schedule matrix (artifact <https://claude.ai/art
 | Full | The kit's main service, with its full parts. | `TierFull` |
 | Intermediate | With **Halfway between full services** ticked: a lighter service halfway through the interval. On a kit with a distance, at half the distance (an even one) at the full time; on a kit with a time only, at half the time (an even number of months: Coolant every 48 months, its intermediate at 24). | `Kit.Intermediate`, `InterStep`, `InterMonths` |
 | Break-in | A new vehicle's first service, due at the kit's **Break-in at** reading or its time from new (Start), whichever comes first, with the full parts. Only on a vehicle bought below that reading. | `TierBreakIn`, `Kit.HasBreakIn`, `BreakInDue` |
-| Break-in window | The kit's first service read by Break-in at + 10% (1 100): it must be the break-in (a Full there is refused). | `store.checkKitTier` |
+| Break-in window | The kit's first service read by Break-in at + the grace, 10% (1 100): it must be the break-in (a Full there is refused). | `store.checkKitTier` |
 | Break-in as the first Full | A break-in done once the first Full's time is close (its last quarter, due soon or past it): a light rider's, near the end of the year. The time counts from it, the distance still from 0. | `BreakInIsFull`, `Kit.breakInFull` |
 | Step | With halfway, from one service to the next: half the distance and the full time, or half the time on a kit with a time only. | `InterStep`, `InterMonths` |
 | Start | Where a kit's schedule counts from before its first service on the vehicle: the manual's milestones, from 0 and the vehicle's **First registered on** (`first_registered_on`, the delivery certificate's Registration date: Bought Used or demo; the purchase day for one bought New, at 0). The last milestone of the interval at or before the purchase (a multiple of the distance at or below `odometer_at_purchase`, a step of months from the registration not after `purchased_on`), so the first due is the next one after it, as if the first owner had kept to the manual. | `stock.Start`, `Start.base`, `Start.dates` |
 | Counted from | The service a schedule counts from: the last service of any kind (`counted`) or the last Full (`lastFull`); the Start before the first. Never the break-in, unless it is also the first Full: then its date, and the distance from 0. | `Kit.counted`, `Kit.lastFull` |
 | Required by the warranty | A kit checkbox: the warranty asks for this kit's break-in and Full on time. | `Kit.WarrantyRequired`, `service_kits.warranty_required` |
-| Grace | How late a required service may be before the warranty is lost: 10% of its distance (100 km on a break-in at 1 000, 1 500 on a 15 000 km interval) and 30 days, whatever the interval. | `WarrantyGrace`, `WarrantyGraceDays` |
+| Grace | How late a required service may be before the warranty is lost: 10% of its distance (100 km on a break-in at 1 000, 1 500 on a 15 000 km interval) and 30 days, whatever the interval (Settings: Grace (%), Grace (days)). | `WarrantyGrace`, `Settings.GracePercent`, `GraceDays` |
 | Last quarter | A quarter of the kit's own distance and of its months in days (2 500 km or about 91 days on 10 000 km / 12 months): the Full takes over from the intermediate inside it. | `FullTakesOver`, `Kit.fullClose` |
 
 Schedules only count from the user's own services: nothing is logged before the purchase (date or reading), and a vehicle bought past Break-in at has no break-in ([data-model.md](data-model.md)). Before the first one, they take the first owner's part as kept to the manual (Start): LittleJoy, bought at 2 148 km and first registered on 11 Nov 2021, owes its 15 000 km Valve Check at 15 000, not 17 148; a bike bought at 20 000 km owes its 15 000 km job at 30 000; a demo bike registered 4 months before it was bought owes its first Full 12 months after the registration. A vehicle bought new (Bought New: at 0, registered when bought) counts as it always did.
@@ -32,7 +34,7 @@ A vehicle's warranty ends on `warranty_ends_on` (its last day) or past `warranty
 |---|---|---|
 | `none` | nothing | No end entered. |
 | `active` | Under warranty (green) | It runs. |
-| `soon` | Warranty ends soon (amber) | It runs, with 30 days or 1 000 km left. |
+| `soon` | Warranty ends soon (amber) | It runs, with 30 days or 1 000 km left (Settings: Ends soon (days), Ends soon (km)). |
 | `lost` | Warranty lost (red) | It would run, but a required kit missed a service (below). |
 | `ended` | Warranty ended (grey) | Past its day or reading. Shown even if it was lost first. |
 
@@ -97,7 +99,7 @@ A **missed break-in** (`breakInMissed`): still waited for (nothing logged, the v
 
 Without halfway it is always the Full (after the break-in).
 
-**Due soon** (the badge, `dueFrom`) is separate from the last quarter: within max(500, 10% of the distance), at most half the interval, or 30 days (at most half the interval in days). Exactly at the limit is still "soon", one unit or day past is "overdue". Months end on the same day of the month or the month's last day (`addMonths`).
+**Due soon** (the badge, `dueFrom`) is separate from the last quarter: within max(500, 10% of the distance), at most half the interval, or 30 days (at most half the interval in days); the 500, 10% and 30 days are Settings' …but at least, Due soon (%) and Due soon (days). Exactly at the limit is still "soon", one unit or day past is "overdue". Months end on the same day of the month or the month's last day (`addMonths`).
 
 ## What is refused
 

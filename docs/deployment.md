@@ -87,16 +87,11 @@ CI publishes it as `ghcr.io/sunny-azu-red/pitbox` for `linux/amd64` only (see [U
    | `DB_HOST` | `192.168.1.10` | required: the Postgres server's LAN address |
    | `DB_PASSWORD` | | required |
    | `DB_PORT`, `DB_DATABASE`, `DB_SCHEMA`, `DB_USERNAME` | | default `5432`, `stock_items`, `public`, `postgres` |
-   | `APP_CURRENCY` | `LEI` | default `EUR`; up to 10 characters |
-   | `APP_DISTANCE` | `mi` | default `km`; up to 10 characters, shown as typed. Only a label: odometer readings and intervals are kept as entered, not converted |
-   | `APP_SKU_SEARCH_URL` | `https://duckduckgo.com/?q={q}` | default `https://www.google.com/search?q={q}`. Part number links put the brand and number (or just the number) in place of `{q}`, wherever it is (`https://example.com/search?q={q}&lang=de`). A full `http(s)://` URL with exactly one `{q}`, or the app won't start (see [Upgrades](#upgrades)) |
-   | `APP_SKU_SEARCH_PREFIX` | `site:de` | added to every part number search; none if unset |
-   | `APP_ALLOWED_HOSTS` | `pitbox.lan,192.168.1.5` | the names and IPs you open Pitbox by (ports ignored); any other gets 421, so a web page whose name was pointed at your server (DNS rebinding) can't use it. Unset: any name. `localhost` always works |
    | `TZ` | `Europe/Berlin` | the app's zone: when "today" starts (form dates, date checks, expiring, reminders, spending, "Deleted today"), and the times pages show. Default the Docker host's zone (`compose.yaml` mounts its `/etc/localtime`); empty or unknown also means that. The database's own zone doesn't matter: the app's sessions are in UTC and timestamps are stored in UTC |
    | `PITBOX_PORT` | `3002` | port on the Docker host; default `3002` |
    | `PITBOX_TAG` | `sha-7e8f96f` | default `latest`, the newest `master` that passed CI; pin `sha-<commit>` (or a tagged version) to stay on it |
 
-   Type values without quotes.
+   Type values without quotes. That's all the stack needs: the currency, distance unit, number and date formats, part number search and the rest are on the app's **Settings** page (the gear beside Appearance), kept in the database.
 4. **Deploy the stack** and open `http://<docker-host>:3002` (or the `PITBOX_PORT` you set). Don't add `PORT`: the compose file doesn't pass it to the container, so it changes nothing.
 
 **Updating:** after a push to `master` whose CI passed, open the stack, click **Update the stack** and turn on **Re-pull image and redeploy**. New migrations run on start, so take a [backup](#backups) first when the update adds a file to `internal/db/migrations`. Going back to an older tag is only safe if no migration came in between; otherwise restore the backup.
@@ -133,6 +128,8 @@ Docker's `--env-file` keeps quotes as part of the value, so write `DB_PASSWORD=s
 ## Upgrades
 
 New migrations are applied automatically on start; to apply them separately, run `pitbox -migrate-only`. With systemd, stop the service, replace the binary and start it again. With Docker, see [Portainer](#portainer).
+
+**00010 (settings).** The preferences move from the environment to a `settings` table, set on the Settings page, and `APP_ALLOWED_HOSTS` is gone (Pitbox is reached over the VPN). The table starts at the defaults (EUR, km, Google, no prefix, and the reminder and warranty thresholds as they were), so after deploying, open **Settings** and set what the stack's `APP_CURRENCY`, `APP_DISTANCE`, `APP_SKU_SEARCH_URL` and `APP_SKU_SEARCH_PREFIX` said (LEI and `site:ro` here), then remove those and `APP_ALLOWED_HOSTS` from the stack. Left there, they're ignored.
 
 **The squash.** Every migration up to 21 Nov 2026 is in `00001_init.sql` (goose version 1); later ones follow it from 00002. **Never start an image from before `a756c20`:** it would run its old migrations 00002–00022 again on the existing tables, and those before the first failure would stay applied. To go back to such an image, restore the backup taken before the move (`stock_items-public-20261121-122205.dump` in the sync backups) with it.
 

@@ -56,7 +56,6 @@ func run() error {
 		return err
 	}
 	time.Local = cfg.Location
-	stock.DistanceUnit = cfg.Distance
 	if *healthcheck {
 		return checkHealth(cfg)
 	}
@@ -88,6 +87,14 @@ func run() error {
 	if *migrateOnly {
 		return nil
 	}
+	st := store.New(pool)
+	// The Settings page's row (migration 00010 makes it): what the pages
+	// and rules use until the page saves another (stock.Use).
+	settings, err := st.GetSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("read settings: %w", err)
+	}
+	stock.Use(settings)
 
 	if v, err := web.PhotoTools(ctx); err != nil {
 		logger.Warn("photo uploads will be refused until libvips-tools is installed", "err", err)
@@ -106,14 +113,10 @@ func run() error {
 		logger.Info("pinned date for screenshots", "date", pinned)
 	}
 
-	srv, err := web.New(store.New(pool), web.Options{
-		Currency:        cfg.Currency,
-		SKUSearchURL:    cfg.SKUSearchURL,
-		SKUSearchPrefix: cfg.SKUSearchPrefix,
-		Version:         buildVersion(),
-		AllowedHosts:    cfg.AllowedHosts,
-		Logger:          logger,
-		Now:             nowFunc,
+	srv, err := web.New(st, web.Options{
+		Version: buildVersion(),
+		Logger:  logger,
+		Now:     nowFunc,
 	})
 	if err != nil {
 		return err

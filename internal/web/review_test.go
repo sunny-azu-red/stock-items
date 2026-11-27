@@ -3,10 +3,7 @@ package web
 import (
 	"context"
 	"html"
-	"io"
-	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -111,7 +108,8 @@ func TestAnAdjustmentKeepsItsDate(t *testing.T) {
 
 // Part number links put the number where the search URL's {q} is,
 // escaped so that spaces, &, /, + and accents stay part of the one value,
-// with or without the prefix. A URL without exactly one {q} is refused.
+// with or without the prefix (the settings' SKUSearchURL and
+// SKUSearchPrefix).
 func TestPartNumberLinks(t *testing.T) {
 	codes := []string{"77038005044", "AB 12", "A&B=C", "12/34", "A+B", "Ø8-ü", "50%"}
 	a := newApp(t)
@@ -145,13 +143,8 @@ func TestPartNumberLinks(t *testing.T) {
 			}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			srv, err := New(a.store, Options{SKUSearchURL: tt.url, SKUSearchPrefix: tt.prefix,
-				Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-			if err != nil {
-				t.Fatal(err)
-			}
-			rec := httptest.NewRecorder()
-			srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, itemPath(id), nil))
+			useSettings(t, func(s *stock.Settings) { s.SKUSearchURL, s.SKUSearchPrefix = tt.url, tt.prefix })
+			rec := a.get(itemPath(id))
 			expect(t, rec, http.StatusOK)
 			links := regexp.MustCompile(`<a class="sku-link" href="([^"]*)"`).FindAllStringSubmatch(rec.Body.String(), -1)
 			if len(links) != len(codes) {
@@ -183,15 +176,7 @@ func TestPartNumberLinks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		srv, err := New(a.store, Options{
-			SKUSearchURL: "https://www.google.com/search?q={q}",
-			Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, itemPath(oilID), nil))
+		rec := a.get(itemPath(oilID)) // the default: Google
 		expect(t, rec, http.StatusOK)
 		link := regexp.MustCompile(`<a class="sku-link" href="([^"]*)"`).FindStringSubmatch(rec.Body.String())
 		if len(link) < 2 {
@@ -205,24 +190,15 @@ func TestPartNumberLinks(t *testing.T) {
 			t.Errorf("got query %q, want %q", got, "Silkolene 601449901")
 		}
 	})
-	// A search URL that isn't http(s) (config refuses one; New doesn't)
-	// never becomes a link that runs script.
+	// A search URL that isn't http(s) (the Settings page refuses one,
+	// stock.CheckSearchURL; one in the row anyway) never becomes a link
+	// that runs script.
 	t.Run("not a script", func(t *testing.T) {
-		srv, err := New(a.store, Options{SKUSearchURL: "javascript:alert(document.cookie)//{q}",
-			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-		if err != nil {
-			t.Fatal(err)
-		}
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, itemPath(id), nil))
+		useSettings(t, func(s *stock.Settings) { s.SKUSearchURL = "javascript:alert(document.cookie)//{q}" })
+		rec := a.get(itemPath(id))
 		expect(t, rec, http.StatusOK, `<a class="sku-link" href="#ZgotmplZ"`)
 		expectNot(t, rec, "javascript:")
 	})
-	for _, bad := range []string{"https://www.google.com/search?q=", "https://example.com/{q}?q={q}"} {
-		if _, err := New(a.store, Options{SKUSearchURL: bad}); err == nil {
-			t.Errorf("New accepted the search URL %q", bad)
-		}
-	}
 }
 
 // Photos in the trash show their thumbnails, so several replaced

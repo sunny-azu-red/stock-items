@@ -184,7 +184,7 @@ func checkVehicleOdometer(ctx context.Context, tx pgx.Tx, id int64, current, odo
 	}
 	if odo < top {
 		return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
-			"The service on %s logged %s. Fix or delete that service first.", on.Format("2 Jan 2006"), stock.FormatDistance(top))}
+			"The service on %s logged %s. Fix or delete that service first.", stock.FormatDate(on), stock.FormatDistance(top))}
 	}
 	return nil
 }
@@ -226,7 +226,7 @@ func checkVehicleOdometerAtPurchase(ctx context.Context, tx pgx.Tx, id int64, od
 	}
 	if odo > lowestOdo {
 		return &ConflictError{Field: "odometer_at_purchase", Message: fmt.Sprintf(
-			"Higher than the %s logged on %s. Fix or delete that service first.", stock.FormatDistance(lowestOdo), on.Format("2 Jan 2006"))}
+			"Higher than the %s logged on %s. Fix or delete that service first.", stock.FormatDistance(lowestOdo), stock.FormatDate(on))}
 	}
 	return nil
 }
@@ -246,7 +246,7 @@ func checkVehiclePurchasedOn(ctx context.Context, tx pgx.Tx, id int64, purchased
 	}
 	if stock.DateOnly(purchasedOn).After(stock.DateOnly(earliestDate)) {
 		return &ConflictError{Field: "purchased_on", Message: fmt.Sprintf(
-			"Later than the service logged on %s. Fix or delete that service first.", earliestDate.Format("2 Jan 2006"))}
+			"Later than the service logged on %s. Fix or delete that service first.", stock.FormatDate(earliestDate))}
 	}
 	return nil
 }
@@ -266,7 +266,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 	day := stock.DateOnly(in.PerformedOn)
 	if day.Before(stock.DateOnly(purchasedOn)) {
 		return &ConflictError{Field: "performed_on", Message: fmt.Sprintf(
-			"Earlier than %s, when the vehicle was purchased", purchasedOn.Format("2 Jan 2006"))}
+			"Earlier than %s, when the vehicle was purchased", stock.FormatDate(purchasedOn))}
 	}
 	odo := *in.Odometer
 	if odo < purchasedOdo {
@@ -281,7 +281,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 		ORDER BY odometer DESC LIMIT 1`, in.VehicleID, except, day, odo).Scan(&other, &on)
 	if err == nil {
 		return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
-			"Lower than the %s logged on %s, before this service", stock.FormatDistance(other), on.Format("2 Jan 2006"))}
+			"Lower than the %s logged on %s, before this service", stock.FormatDistance(other), stock.FormatDate(on))}
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
@@ -292,7 +292,7 @@ func checkServiceOdometer(ctx context.Context, tx pgx.Tx, in stock.ServiceInput,
 		ORDER BY odometer LIMIT 1`, in.VehicleID, except, day, odo).Scan(&other, &on)
 	if err == nil {
 		return &ConflictError{Field: "odometer", Message: fmt.Sprintf(
-			"Higher than the %s logged on %s, after this service", stock.FormatDistance(other), on.Format("2 Jan 2006"))}
+			"Higher than the %s logged on %s, after this service", stock.FormatDistance(other), stock.FormatDate(on))}
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err

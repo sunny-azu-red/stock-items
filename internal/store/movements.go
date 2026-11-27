@@ -425,7 +425,7 @@ func (s *Store) DeleteMovement(ctx context.Context, id int64, version int) (dele
 		if err != nil {
 			return err
 		}
-		label := trashLabel(m.Kind.Label(), m.ItemName, stock.FormatDelta(m.Delta, m.ItemUnit), m.OccurredOn.Format("2 Jan 2006"))
+		label := trashLabel(m.Kind.Label(), m.ItemName, stock.FormatDelta(m.Delta, m.ItemUnit), stock.FormatDate(m.OccurredOn))
 		if trashID, err = putTrash(ctx, tx, TrashMovement, label, p); err != nil {
 			return err
 		}

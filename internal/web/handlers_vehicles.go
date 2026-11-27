@@ -407,7 +407,7 @@ func (s *Server) vehicleOdometer(w http.ResponseWriter, r *http.Request) error {
 	back := s.back(r, vehiclePath(id))
 	odo, err := parseOptInt(formText(r, "odometer"))
 	if err != nil || odo == nil || *odo < 0 || *odo > stock.MaxOdometer {
-		s.setFlash(w, "error", "Enter the odometer reading in "+stock.DistanceUnit)
+		s.setFlash(w, "error", "Enter the odometer reading in "+stock.Current().DistanceUnit)
 		s.redirect(w, r, back, "")
 		return nil
 	}

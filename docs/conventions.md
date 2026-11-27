@@ -33,6 +33,17 @@ These rules keep the app simple, safe and consistent. They apply to people and c
 - Autocomplete suggestions (`Suppliers`, `Makes`, `Models`, `Brands`, `Categories`, `Locations`, `KitNames`) are one source each in `internal/store/spellings.go` (the spellings in use as `v`, `pref` 0, and built-in defaults, `pref` 1), listed with `SELECT DISTINCT ON (lower(v)) v ... ORDER BY lower(v), pref, v COLLATE "C"`. `DISTINCT ON (lower(v))` deduplicates case variations, while `v COLLATE "C"` breaks ties deterministically using ASCII byte order (`'A'-'Z'` before `'a'-'z'`). So the capitalized spelling wins on any server, whatever its `LC_COLLATE`; in `Categories` and `KitNames` a value the user typed wins over the built-in default first (`pref`). The CI container initializes with `POSTGRES_INITDB_ARGS: "--locale=C.UTF-8"` for environment parity.
 - Saving such a field takes the list's spelling (`spell`, in the write's transaction): text that differs from a spelling another record uses only in case is saved as the list shows it (`ktm` as `KTM`). The record being saved and the built-in defaults don't count, so the only record with a spelling can change its case, and a field whose text is exactly what the record had stays as it is, so saving a record never rewrites a field it didn't change. A new field with suggestions gets a source in `spellings.go` and a `spell` on every write of it.
 
+## Settings
+
+**Preferences and thresholds live in the `settings` table, never in code or the environment.** A number, list, label or format a user could want different (a threshold, a "soon", a grace, a page size, a built-in list, a unit or a format) is a setting on the Settings page. The environment holds only what a deployment needs: the database, the listen address and `TZ`. To add one:
+
+1. A migration: `ALTER TABLE settings ADD COLUMN … NOT NULL DEFAULT <the value the code had>` with a CHECK of its range, then `SELECT reorder_columns('settings', ARRAY[…])` to put it in its section's place (the columns follow the page).
+2. `stock.Settings`: the field (in the same place), its `DefaultSettings()` value and its `Validate()` rule; the code reads it with `stock.Current()`. `store/settings.go`: `SettingsColumns`, the SELECT, the scan and the UPDATE.
+3. `web/handlers_settings.go`: its `settingDefs` entry in its section of `settingSections` (units and formats, lists, stock, services, warranty; a new area gets a section, in the nav's order): label (its unit in brackets), its "?" (what it changes and anything it doesn't, sentences with full stops) and how it's typed. Under its box goes only its error.
+4. Tests: a rule it drives gets a stock test with another value (`settings_test.go`), and the web test saves it over HTTP. `TestSettingsRow` and `TestSettingsComplete` fail on a column without its field, out of order, or with a default other than `DefaultSettings()`.
+
+What stays a constant, with a comment saying why: safety and memory limits (photo sizes and memory, body sizes), validation limits that match a column's size, machine formats (exports, form values, ISO dates), and the shape of the schedule model (the last quarter, at most half the interval).
+
 ## Domain
 
 - Quantities are stored in base units (pieces, ml, g) and converted only at the edges (`stock.ParseAmount`, `stock.FormatQuantity`, `stock.SplitForInput`).
@@ -98,6 +109,7 @@ One name for each thing, everywhere: pages, messages, comments and docs. `TestVo
 | 3 pcs (`stock.FormatQuantity`) | 3x |
 | Type (Activity's column and chips: All types) | What, Everything, kind |
 | Add item · Add vehicle · Add kit · Log service (button, page title and empty state alike; also the kit page's button) | New item, New service kit, Create a kit, Do this service |
+| Settings (the app's, for everyone: the gear) · Appearance (this device's: the palette) · Save settings · Reset all | Preferences, Options, Configuration |
 | Save service · Delete (a service's buttons, like every Save and Delete; what happens to its parts is said in the header line, the Delete tooltip and the message after) | Save & take parts from stock, Delete & return parts |
 | Save item · Save vehicle · Save kit · Save service · Save purchase (a Save button names the thing, on the add form and the edit form alike: the page title, *Add vehicle* or *Edit KTM 390*, and the message after, *Added X* or *Saved X*, say which) | Save, Save changes, Update vehicle, Add vehicle (as the submit button: the sidebar's Add vehicle opens the form, and the two would look the same) |
 | Interval (a kit's distance and time, whichever comes first: the kit form's section, *Give a kit a distance or time*, *No interval*) · Distance (km) · Time (months) (its two fields; "the time" in a sentence, "48 months" for a figure) | Schedule (for the kit form's section: the kit page's Schedule card and Log service's Schedule are when things happen), Months (the field), every X km / months, this many months |

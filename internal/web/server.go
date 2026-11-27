@@ -6,32 +6,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/netip"
 	"strings"
 	"time"
 
-	"github.com/sunny-azu-red/stock-items/internal/config"
 	"github.com/sunny-azu-red/stock-items/internal/store"
 )
 
-// Options configure the web server.
+// Options configure the web server. What a user sets (currency, part
+// number search, …) is in the settings (stock.Current), not here.
 type Options struct {
-	Currency string
-	// SKUSearchURL is the search URL of part number links (default
-	// Google): the number goes in place of its one {q}. SKUSearchPrefix is
-	// added to every such search.
-	SKUSearchURL    string
-	SKUSearchPrefix string
-	Version         string
-	// AllowedHosts are the host names and IPs the server answers to (any
-	// port is ignored); empty means any. See checkHost.
-	AllowedHosts []string
-	Logger       *slog.Logger
+	Version string
+	Logger  *slog.Logger
 	// Now overrides the clock (tests). Its times are shown in the app's
 	// zone, time.Local.
 	Now func() time.Time
@@ -39,30 +27,22 @@ type Options struct {
 
 // Server handles HTTP requests.
 type Server struct {
-	store           *store.Store
-	log             *slog.Logger
-	tmpl            *templates
-	currency        string
-	skuSearch       string
-	skuSearchPrefix string
-	skuSearchTitle  string // where part number links search, for their tooltips
-	version         string
-	allowedHosts    map[string]bool // by hostName; nil for any
-	assetHashes     map[string]string
-	now             func() time.Time
-	mux             *http.ServeMux // set by Handler; used by back
+	store       *store.Store
+	log         *slog.Logger
+	tmpl        *templates
+	version     string
+	assetHashes map[string]string
+	now         func() time.Time
+	mux         *http.ServeMux // set by Handler; used by back
 }
 
 // New builds a Server and parses all templates.
 func New(st *store.Store, opts Options) (*Server, error) {
 	s := &Server{
-		store:           st,
-		log:             opts.Logger,
-		currency:        opts.Currency,
-		skuSearch:       opts.SKUSearchURL,
-		skuSearchPrefix: strings.TrimSpace(opts.SKUSearchPrefix),
-		version:         opts.Version,
-		now:             opts.Now,
+		store:   st,
+		log:     opts.Logger,
+		version: opts.Version,
+		now:     opts.Now,
 	}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -70,26 +50,10 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	if s.now == nil {
 		s.now = time.Now
 	}
-	for _, h := range opts.AllowedHosts {
-		if s.allowedHosts == nil {
-			s.allowedHosts = map[string]bool{}
-		}
-		s.allowedHosts[hostName(h)] = true
-	}
 	// "Today" and every time shown are the app's zone (time.Local, which
 	// main sets from TZ), whatever zone the clock's time comes in.
 	clock := s.now
 	s.now = func() time.Time { return clock().In(time.Local) }
-	if s.currency == "" {
-		s.currency = "EUR"
-	}
-	if s.skuSearch == "" {
-		s.skuSearch = config.DefaultSKUSearchURL
-	}
-	if strings.Count(s.skuSearch, "{q}") != 1 {
-		return nil, fmt.Errorf("SKUSearchURL %q must contain {q} once, where the part number goes", s.skuSearch)
-	}
-	s.skuSearchTitle = searchTitle(s.skuSearch, s.skuSearchPrefix)
 	var err error
 	if s.assetHashes, err = hashAssets(); err != nil {
 		return nil, err
@@ -181,12 +145,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /theme", h(s.setTheme))
 	mux.HandleFunc("POST /accent", h(s.setAccent))
 	mux.HandleFunc("POST /working-on", h(s.setWorkingOn))
+	mux.HandleFunc("GET /settings", h(s.settingsEdit))
+	mux.HandleFunc("POST /settings", h(s.settingsUpdate))
 
 	mux.HandleFunc("/", h(func(w http.ResponseWriter, r *http.Request) error { return store.ErrNotFound }))
 
 	var handler http.Handler = mux
 	handler = http.NewCrossOriginProtection().Handler(handler)
-	handler = s.checkHost(handler)
 	handler = s.recoverPanics(handler)
 	handler = securityHeaders(handler)
 	handler = s.logRequests(handler)
@@ -292,49 +257,6 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
-}
-
-// checkHost answers a request for a host not in AllowedHosts with 421.
-// The app has no login, and cross-origin protection can't tell a page
-// whose own name was pointed at this server (DNS rebinding) from the app
-// itself: the browser calls both same-origin, and only the Host header
-// shows the other name. Loopback names always work, and so does /healthz,
-// which the Docker healthcheck asks for on whatever HOST says.
-func (s *Server) checkHost(next http.Handler) http.Handler {
-	if s.allowedHosts == nil {
-		return next
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := hostName(r.Host)
-		if s.allowedHosts[h] || isLoopback(h) || r.URL.Path == "/healthz" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, "Pitbox doesn't answer to this host name. If it is yours, add it to APP_ALLOWED_HOSTS.",
-			http.StatusMisdirectedRequest)
-	})
-}
-
-// hostName is a host without its port, as compared in checkHost:
-// "Pitbox.LAN:8080" and "pitbox.lan." are "pitbox.lan", "[::1]:8080" is
-// "::1".
-func hostName(h string) string {
-	if host, _, err := net.SplitHostPort(h); err == nil {
-		h = host
-	}
-	h = strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")
-	if ip, err := netip.ParseAddr(h); err == nil {
-		return ip.Unmap().String()
-	}
-	return strings.TrimSuffix(strings.ToLower(h), ".")
-}
-
-// isLoopback reports whether h (see hostName) can only name this machine.
-func isLoopback(h string) bool {
-	if ip, err := netip.ParseAddr(h); err == nil {
-		return ip.IsLoopback()
-	}
-	return h == "localhost"
 }
 
 type statusRecorder struct {

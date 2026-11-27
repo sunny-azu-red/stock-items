@@ -143,11 +143,10 @@ func TestDueSummaryAtTheDueOdometer(t *testing.T) {
 	}
 }
 
-// APP_DISTANCE only relabels distances: the numbers stay as they are.
+// The distance unit setting only relabels distances: the numbers stay as
+// they are.
 func TestFormatDistanceUnit(t *testing.T) {
-	old := DistanceUnit
-	t.Cleanup(func() { DistanceUnit = old })
-	DistanceUnit = "mi"
+	useSettings(t, func(s *Settings) { s.DistanceUnit = "mi" })
 	if got := FormatDistance(12000); got != "12\u202f000 mi" {
 		t.Errorf("FormatDistance = %q", got)
 	}

@@ -67,7 +67,7 @@ func TestTheAppsDayIsItsZones(t *testing.T) {
 		}
 		// The last day "expiring" reaches from 1 November, a day past it
 		// from 31 October; and yesterday.
-		last := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, store.ExpiringDays)
+		last := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, stock.Current().ExpiringDays)
 		soon, gone := expiring("Motul", last.Format(time.DateOnly)), expiring("Liqui Moly", "2026-10-31")
 		soonBadge := []string{`<span class="badge badge-warn" title="Best before">`, "Expires " + last.Format("2 Jan 2006") + "</span>"}
 		goneBadge := []string{`<span class="badge badge-danger" title="Best before">`, "Expired 31 Oct 2026</span>"}

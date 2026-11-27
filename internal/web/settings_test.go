@@ -1,13 +1,17 @@
 package web
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/sunny-azu-red/stock-items/internal/stock"
 	"github.com/sunny-azu-red/stock-items/internal/store"
@@ -211,4 +215,93 @@ func TestGraceSettingOverHTTP(t *testing.T) {
 
 	saveSettings(t, a, func(s *stock.Settings) {})
 	expect(t, a.get(path), http.StatusOK, "Warranty lost", "Was due by 1\u202f000 km")
+}
+
+// The Settings form posted twice at once saves once: the second waits for
+// the first's claim of the key, then says saved already. After a failed
+// save the same key saves.
+func TestSettingsFormKeys(t *testing.T) {
+	keepSettings(t)
+	a := newApp(t)
+	ctx := context.Background()
+	key := formKey(t, a, "/settings", "/settings")
+	form := settingsForm(stock.DefaultSettings())
+	form.Set("currency", "LEI")
+	form = with(form, key, "1")
+
+	// Hold the settings row, which a save locks after claiming the key.
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM settings WHERE id = 1 FOR UPDATE`); err != nil {
+		t.Fatal(err)
+	}
+	var held string
+	if err := tx.QueryRow(ctx, `SELECT transactionid::text FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'transactionid'`).
+		Scan(&held); err != nil {
+		t.Fatal(err)
+	}
+	recs := make([]*httptest.ResponseRecorder, 2)
+	var wg sync.WaitGroup
+	send := func(i int) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			recs[i] = a.post("/settings", form)
+		}()
+	}
+	send(0)
+	first := a.waiter(t, held)
+	send(1)
+	a.waiting(t, 2, "settings", held, first)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	expect(t, recs[0], http.StatusSeeOther)
+	if f := flashOf(t, recs[0]); f.Message != "Saved settings" {
+		t.Errorf("first flash = %+v", f)
+	}
+	expectSavedAlready(t, recs[1], "/settings")
+	if got, _ := a.store.GetSettings(ctx); got.Version != 2 || got.Currency != "LEI" {
+		t.Errorf("row = version %d, %s; want saved once", got.Version, got.Currency)
+	}
+
+	// A failed save keeps its key; fixed, the same key saves.
+	key = formKey(t, a, "/settings", "/settings")
+	bad := settingsForm(stock.DefaultSettings())
+	bad.Set("dashboard_recent", "0")
+	rec := a.post("/settings", with(bad, key, "2"))
+	expect(t, rec, http.StatusUnprocessableEntity, "Enter a number from 1 to 50", key)
+	bad.Set("dashboard_recent", "12")
+	expect(t, a.post("/settings", with(bad, key, "2")), http.StatusSeeOther)
+	if got := stock.Current(); got.DashboardRecent != 12 || got.Version != 3 {
+		t.Errorf("in use: %+v", got)
+	}
+}
+
+// "Days ago" counts up to and with its setting: today and yesterday as
+// words, then "N days ago", then the date; 0 always the date.
+func TestDaysAgo(t *testing.T) {
+	now := time.Date(2026, 11, 27, 15, 0, 0, 0, time.UTC)
+	ago := func(d int) string { return relativeDate(now.AddDate(0, 0, -d), now) }
+	tests := []struct {
+		limit int
+		want  map[int]string
+	}{
+		{30, map[int]string{0: "today", 1: "yesterday", 2: "2 days ago", 30: "30 days ago", 31: "27 Oct 2026", -1: "28 Nov 2026"}},
+		{5, map[int]string{4: "4 days ago", 5: "5 days ago", 6: "21 Nov 2026"}},
+		{1, map[int]string{0: "today", 1: "yesterday", 2: "25 Nov 2026"}},
+		{0, map[int]string{0: "27 Nov 2026", 1: "26 Nov 2026"}},
+	}
+	for _, tt := range tests {
+		useSettings(t, func(s *stock.Settings) { s.DaysAgo = tt.limit })
+		for d, want := range tt.want {
+			if got := ago(d); got != want {
+				t.Errorf("DaysAgo %d, %d days back: %q, want %q", tt.limit, d, got, want)
+			}
+		}
+	}
 }

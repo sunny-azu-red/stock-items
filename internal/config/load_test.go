@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// settings are the variables load reads.
-var settings = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_USERNAME", "DB_PASSWORD",
+// envVars are the variables Load reads, and the retired ones it ignores.
+var envVars = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_USERNAME", "DB_PASSWORD",
 	"HOST", "PORT", "TZ",
 	// Retired: settings now (stock.Settings). Load ignores them.
 	"APP_CURRENCY", "APP_DISTANCE", "APP_SKU_SEARCH_URL", "APP_SKU_SEARCH_PREFIX", "APP_ALLOWED_HOSTS"}
@@ -19,7 +19,7 @@ var settings = []string{"DB_HOST", "DB_PORT", "DB_DATABASE", "DB_SCHEMA", "DB_US
 // directory holding the given files.
 func cleanEnv(t *testing.T, files map[string]string) string {
 	t.Helper()
-	for _, k := range settings {
+	for _, k := range envVars {
 		t.Setenv(k, "") // put back when the test ends
 		os.Unsetenv(k)
 	}
@@ -46,19 +46,16 @@ func TestLoad(t *testing.T) {
 	cleanEnv(t, map[string]string{".env": `DB_HOST=db.lan
 DB_PORT=" 5433 "
 DB_SCHEMA=" public "
+DB_USERNAME=from-dotenv
 DB_PASSWORD=" p@ss w0rd "
-APP_CURRENCY=RON
-APP_DISTANCE=" mi "
-APP_SKU_SEARCH_PREFIX=" site:de "
-APP_ALLOWED_HOSTS=" pitbox.lan, ,192.168.1.5:8080,"
 `})
-	t.Setenv("APP_CURRENCY", " lei ") // the real environment wins over .env
-	t.Setenv("PORT", "  ")            // blank is the default
+	t.Setenv("DB_USERNAME", " pitbox ") // the real environment wins over .env
+	t.Setenv("PORT", "  ")              // blank is the default
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := DB{Host: "db.lan", Port: "5433", Database: "stock_items", Schema: "", Username: "postgres", Password: " p@ss w0rd "}
+	want := DB{Host: "db.lan", Port: "5433", Database: "stock_items", Schema: "", Username: "pitbox", Password: " p@ss w0rd "}
 	if cfg.DB != want {
 		t.Errorf("DB = %+v, want %+v", cfg.DB, want)
 	}

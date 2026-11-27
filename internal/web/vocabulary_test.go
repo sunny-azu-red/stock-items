@@ -47,6 +47,7 @@ func TestVocabulary(t *testing.T) {
 		{re: `Other items`, use: `"General": an item list heads a vehicle's items "For KTM 390", then "General" (docs/design.md, Item lists)`},
 		{re: `[Ff]ocus mode|My [Gg]arage|>\s*Show all\s*<|Stop working on`, use: `"Working on X" (the bar), "Work on" (the chips), "All vehicles" (to stop)`},
 		{re: `placeholder="optional"|\(optional\)</h2>`, use: "a red star on required fields instead", uiOnly: true},
+		{re: `\b(Preferences|Configuration|Options) page\b|>\s*(Preferences|Configuration)\s*<`, use: `"Settings" (the page and its gear; Appearance is the device's palette)`},
 		{re: `data-confirm`, use: `the "confirm-dialog" partial (a <dialog> opened with commandfor)`, uiOnly: true},
 		// Asking first; the photo's viewer (item_show.html) asks nothing.
 		{re: `<button[^>]*command="show-modal"`, use: "nothing: it can be undone. Only permanent deletes ask", uiOnly: true, allowIn: "trash.html", unless: `commandfor="photo-view"`},

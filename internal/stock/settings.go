@@ -31,8 +31,8 @@ type Settings struct {
 	// DateFormat is the Go layout of the dates pages show. Date boxes and
 	// exports keep 2006-01-02.
 	DateFormat string
-	// DaysAgo: a date this many days back or fewer reads "3 days ago";
-	// 0 shows every date in full (no "today" or "yesterday" either).
+	// DaysAgo: a date this many days back or fewer reads "3 days ago"
+	// (today and yesterday as words); 0 shows every date in full.
 	DaysAgo int
 	// DashboardRecent is how many stock changes the dashboard shows.
 	DashboardRecent int
@@ -40,6 +40,7 @@ type Settings struct {
 	ActivityPageSize int // stock changes on one Activity page
 	ServicesPageSize int // services on one page of the log
 	ItemHistory      int // stock changes on an item's page
+	VehicleServices  int // services on a vehicle's page
 
 	// SKUSearchURL is the search link of a part number: the number goes in
 	// place of its one {q}. SKUSearchPrefix, unless empty, is added to
@@ -134,7 +135,7 @@ func DefaultSettings() Settings {
 		NumberFormat: NumberSpaceDot,
 		DateFormat:   "2 Jan 2006",
 		DaysAgo:      30, DashboardRecent: 8,
-		ActivityPageSize: 200, ServicesPageSize: 100, ItemHistory: 100,
+		ActivityPageSize: 200, ServicesPageSize: 100, ItemHistory: 100, VehicleServices: 10,
 		SKUSearchURL: DefaultSKUSearchURL,
 		ExpiringDays: 60,
 		Categories: []string{"Oil & Fluids", "Filters", "Brakes", "Gaskets & O-Rings", "Chain & Sprockets",
@@ -154,19 +155,43 @@ func DefaultSettings() Settings {
 // process, so a copy in memory is the row.
 var current atomic.Pointer[Settings]
 
-// Current returns the settings in use (DefaultSettings until Use).
+// Current returns a copy of the settings in use (DefaultSettings until
+// Use): changing it changes nothing else.
 func Current() Settings {
-	if s := current.Load(); s != nil {
-		return *s
+	s := current.Load()
+	if s == nil {
+		return DefaultSettings()
 	}
-	return DefaultSettings()
+	c := *s
+	c.Categories = slices.Clone(s.Categories)
+	c.WorkNames = slices.Clone(s.WorkNames)
+	return c
 }
 
-// Use makes s the settings in use.
+// Use makes s the settings in use, whatever they were (main at start,
+// tests).
 func Use(s Settings) {
 	s.Categories = slices.Clone(s.Categories)
 	s.WorkNames = slices.Clone(s.WorkNames)
 	current.Store(&s)
+}
+
+// UseSaved makes s, just saved, the settings in use, unless a later save
+// is in use already: two saves close together each put theirs in use
+// after their commit, in either order, and the row's version says which is
+// newer.
+func UseSaved(s Settings) {
+	s.Categories = slices.Clone(s.Categories)
+	s.WorkNames = slices.Clone(s.WorkNames)
+	for {
+		old := current.Load()
+		if old != nil && old.Version >= s.Version {
+			return
+		}
+		if current.CompareAndSwap(old, &s) {
+			return
+		}
+	}
 }
 
 // SettingsInput is the Settings page's form.
@@ -175,7 +200,8 @@ type SettingsInput struct {
 	FormKey string
 }
 
-// The limits of the settings, as the settings table's CHECKs have them.
+// The limits of the settings, as the settings table's CHECKs have them
+// (one list line's length is Go's alone: a CHECK can't see into an array).
 const (
 	maxLabel     = 10  // currency and distance unit
 	maxListItems = 100 // categories, work names
@@ -218,6 +244,7 @@ func (in *SettingsInput) Validate() Errors {
 	between("activity_page_size", in.ActivityPageSize, 10, 1000)
 	between("services_page_size", in.ServicesPageSize, 10, 1000)
 	between("item_history", in.ItemHistory, 10, 1000)
+	between("vehicle_services", in.VehicleServices, 1, 100)
 	if msg := CheckSearchURL(in.SKUSearchURL); msg != "" {
 		errs.Add("sku_search_url", msg)
 	}
@@ -281,6 +308,20 @@ func CheckSearchURL(s string) string {
 
 // FormatDate writes a calendar day in the date format in use.
 func FormatDate(t time.Time) string { return t.Format(Current().DateFormat) }
+
+// FormatLongDate writes a day as a heading does, with its weekday:
+// "Friday, 27 November 2026" in the default format (the month in full),
+// "Friday, 27.11.2026" in the others.
+func FormatLongDate(t time.Time) string {
+	if f := Current().DateFormat; f != "2 Jan 2006" {
+		return t.Format("Monday, ") + t.Format(f)
+	}
+	return t.Format("Monday, 2 January 2006")
+}
+
+// DecimalExample writes an example number for a form's placeholder with
+// the decimal mark in use: "1.5", or "1,5" (forms take either).
+func DecimalExample(s string) string { return decimalMark(s) }
 
 // FormatDecimal writes f with two decimals and thousands separators, in
 // the number format in use: "1 234.50".

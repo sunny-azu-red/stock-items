@@ -499,6 +499,7 @@ func TestFormsCarryVersions(t *testing.T) {
 	bought := "/shopping/" + itoa(free) + "/bought"
 	check(bought, bought, "/shopping/"+itoa(free)+"/link")
 	check("/items/new?shopping="+itoa(free), "/shopping/"+itoa(free)+"/link")
+	check("/settings", "/settings")
 }
 
 // Every Undo and Restore still works over HTTP, with versions on every

@@ -278,7 +278,7 @@
       <td class="num {{if lt .Delta 0.0}}delta-neg{{else}}delta-pos{{end}}">{{delta .Delta .ItemUnit}}</td>
       <td class="num">{{with .TotalPrice}}{{money .}}{{end}}</td>
       <td class="muted small">{{if .ServiceRecordID}}Used in this service{{else}}{{.Note}}{{end}}</td>
-      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{.OccurredOn.Format "2 Jan 2006"}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if and .ServiceRecordID $link}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
+      <td class="num">{{if .Editable}}<a class="icon-btn" href="/movements/{{.ID}}/edit" aria-label="Edit the {{changeName .Kind}} of {{date .OccurredOn}}" title="Edit or delete">{{icon "pencil"}}</a>{{else if and .ServiceRecordID $link}}<a class="icon-btn" href="/services/{{.ServiceRecordID}}" aria-label="View service {{.ServiceTitle}}" title="View service">{{icon "eye"}}</a>{{end}}</td>
     </tr>
   {{end}}
   </tbody>

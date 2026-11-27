@@ -465,6 +465,9 @@
     &:hover { color: var(--accent-strong); }
     & .icon { width: 14px; height: 14px; }
   }
+  /* As a button (Appearance's Reset to default, a setting's ↺): a link's
+     look, no box. */
+  button.reset-link { padding: 0; border: 0; background: none; cursor: pointer; }
 
   /* A card's footer: a total under its list, the list's pager, or what you
      do with the list (Add kit, Add 2 missing, Add all), from the left. */
@@ -709,7 +712,6 @@
   .accent-head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-size: var(--text-sm); --lh: 1.45;
-    & .reset-link { padding: 0; border: 0; background: none; cursor: pointer; }
   }
   .accent-title { font-weight: 600; color: var(--muted); }
   .accent-name { margin-left: 4px; font-weight: 500; color: var(--text); }
@@ -1686,11 +1688,11 @@
      A section's heading counts them. */
   .settings-form {
     & .settings-head { display: flex; align-items: center; gap: 8px; }
-    /* A link's look, not a button's: no box, so a changed field's label
-       row is as tall as the others and its box stays level with theirs. */
+    /* A reset-link, so a changed field's label row is as tall as the
+       others and its box stays level with theirs; in the accent, as what
+       it resets is. */
     & .setting-reset {
-      margin-left: auto; padding: 0; border: 0; background: none; cursor: pointer;
-      font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--accent-strong); white-space: nowrap;
+      margin-left: auto; font-size: var(--text-sm); color: var(--accent-strong); white-space: nowrap;
       &:hover { color: var(--accent); }
     }
     & .field.changed {

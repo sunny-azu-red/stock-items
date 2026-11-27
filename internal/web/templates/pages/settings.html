@@ -21,7 +21,7 @@
     <div class="form-grid">
       {{range .Fields}}{{$err := index $e .Name}}{{$tip := print .Name "-tip"}}
       <div class="field{{with .Span}} {{.}}{{end}}{{if .Changed}} changed{{end}}{{if $err}} has-error{{end}}" data-setting data-kind="{{.Kind}}" data-default="{{.Default}}">
-        <div class="label-row"><label for="{{.Name}}">{{.LabelText}}</label>{{if .Required}}{{template "req"}}{{end}}{{template "tip" (dict "For" .LabelText "ID" $tip "Text" .Tip)}}<span class="sr-only" data-changed-sr{{if not .Changed}} hidden{{end}}>Changed from the default.</span><button class="reset-link setting-reset" type="button" data-reset title="{{.Long}}" aria-label="{{.Long}}: {{.LabelText}}"{{if not .Changed}} hidden{{end}}>{{icon "rotate-ccw"}}{{.Short}}</button></div>
+        <div class="label-row"><label for="{{.Name}}">{{.LabelText}}</label>{{if .Required}}{{template "req"}}{{end}}{{template "tip" (dict "For" .LabelText "ID" $tip "Text" .TipText)}}<span class="sr-only" data-changed-sr{{if not .Changed}} hidden{{end}}>Changed from the default.</span><button class="reset-link setting-reset" type="button" data-reset title="{{.Long}}" aria-label="{{.Long}}: {{.LabelText}}"{{if not .Changed}} hidden{{end}}>{{icon "rotate-ccw"}}{{.Short}}</button></div>
         {{if eq .Kind "select"}}{{$v := .Value}}{{$def := .Default}}
         <select class="input" id="{{.Name}}" name="{{.Name}}" {{invalid $err .Name $tip}}>{{range .Options}}<option value="{{.Value}}"{{if eq .Value $v}} selected{{end}}>{{.Label}}{{if eq .Value $def}} (default){{end}}</option>{{end}}</select>
         {{else if eq .Kind "list"}}

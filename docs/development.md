@@ -26,6 +26,7 @@ The real data lives in `public`, and starting the app applies new migrations to 
   - It backs the target up (`pg_dump -Fc` into `~/backups/stock-items/sync`, next to the nightly dumps, whose cron job also prunes them after 14 days, read back completely before it gets its name), then replaces it in one transaction written to a file beforehand: it locks the target's tables, repeats the checks, checks nothing was written since the backup, clears the target, restores the copy, and commits only if the result matches the copy exactly (objects, columns, constraints, indexes, views, triggers, function bodies, sequences and a hash of every row, with output settings pinned), `stock` owns everything and no grant or comment is lost.
   - Any error, a lock held longer than 10 s, Ctrl-C, a hang-up or a kill rolls it back (psql also dies with the script); the end asks the server whether the transaction committed and says so, and only after a commit does it print the command that puts the backup back. A rollback that finds the target changed anyway says something else wrote to it, and not to restore the backup over that. Each run keeps a log next to the backups, and clears what a killed run left (its staging database and work files).
 - `scripts/test-db-server.sh` tests all of this against a throwaway Postgres 18 in Docker (`docker`, `psql`, `pg_dump`, `setpriv`, Go): copies between scrap schemas, both wrappers, restoring backups, every refusal and rollback (each against a target that differs from the source, so a wrong commit would show), Ctrl-C, hang-up, kill and kill -9 mid-transaction, writes racing the backup and the transaction, a source changed while the prompt waits and attempts to run code as the superuser. Each of its safety tests was checked to fail when the safeguard it covers is removed.
+- A sync copies the `settings` row with everything else: dev → public carries dev's currency, formats and thresholds into the real data. A running app keeps the settings it read at start, so restart it after a sync (the Settings page shows the row; the pages, what is in use).
 
 To experiment without touching even that, run with a throwaway schema:
 
@@ -38,7 +39,8 @@ DB_SCHEMA=e2e_playground PORT=8090 go run ./cmd/pitbox
 | Layer | Where | Needs DB | Run |
 |---|---|---|---|
 | Domain rules (units, grouping, export, due dates…) | `internal/stock/*_test.go` | no | `go test ./internal/stock/` |
-| Settings, `.env`, the `public` guard, health check | `internal/config/*_test.go`, `cmd/pitbox/main_test.go` | no | `go test ./internal/config/ ./cmd/...` |
+| Deployment config (env, `.env`), the `public` guard, health check | `internal/config/*_test.go`, `cmd/pitbox/main_test.go` | no | `go test ./internal/config/ ./cmd/...` |
+| Settings: defaults, validation, formats, each rule with another value; the row and its columns; the page over HTTP (`TestSettingsComplete`) | `internal/stock/settings_test.go`, `internal/store/settings_test.go`, `internal/web/settings_test.go` | store and web | `go test -run Settings ./internal/...` |
 | Migration files: numbering, names, goose markers | `internal/db/migrations_order_test.go` | no | `go test -run TestMigrationFiles ./internal/db/` |
 | Schema rules the database enforces, Down then Up, UTC sessions | `internal/db/migrations_test.go` | yes | `go test ./internal/db/` |
 | Store (SQL, transactions, ledger invariant, lock order, SQL without zones) | `internal/store/*_test.go` | yes | `go test ./internal/store/` |

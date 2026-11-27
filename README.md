@@ -36,7 +36,8 @@ It is built for one household on a home network: no login, one binary, one Postg
 - **Saved once, never twice:** a double click, a retry on a bad connection ("Still saving… try again") or Back and Save never logs a service or a purchase twice, and a form opened in another tab can't overwrite newer changes.
 - **Suggestions as you type:** the item to buy or a part's item, with what's in stock, and the brands, categories, locations, makes and models, shops and service names you've used before, each kept in one spelling (`ktm` is saved as the `KTM` in use).
 - **Photos** of items (JPEG, PNG, GIF, WebP or HEIC; shrunk in the browser before upload, then by libvips on the server, and stored in Postgres), best-before dates, storage locations and notes.
-- Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service).
+- Works well on a [phone](docs/screenshots/mobile) in the garage, in current Chrome, with keyboard shortcuts (`/` Search stock, `a` Add item, `l` Log service, `,` Settings).
+- **Settings for everything you'd want your way:** currency, distance unit, number and date formats, list sizes, the part number search, the suggestion lists, and when services are due soon, when a warranty ends soon and its grace. Each says what it changes and marks what differs from its default, with ↺ to put it back.
 - **Appearance per device:** light, dark or the system's theme, and the accent colour picked from presets or made with a custom hue and intensity, remembered on each device.
 
 | Stock grouped by vehicle | Service kit | Vehicles |

@@ -375,7 +375,8 @@ func ptrTo(n int) *int { return &n }
 // with it yet, the vehicle was bought below that reading and hasn't gone
 // past its first full distance since (a kit added long after the break-in
 // doesn't ask for one). The break-in takes the full parts (ActiveLines);
-// its first service read by Break-in at + 10% must be it
+// its first service read by Break-in at + the grace (WarrantyGrace) must
+// be it
 // (store.checkKitTier), and no schedule counts from it unless it is also
 // the first full service (breakInFull).
 //

@@ -334,7 +334,7 @@ func checkKitTier(ctx context.Context, tx pgx.Tx, in stock.ServiceInput, service
 	case in.KitTier == stock.TierFull && breakIn && !earlier && !otherBreakIn && in.Odometer != nil &&
 		(changed || odometerWas == nil || *odometerWas != *in.Odometer) &&
 		*in.Odometer <= *breakInAt+stock.WarrantyGrace(*breakInAt):
-		// The kit's first service read by Break-in at + 10% is its
+		// The kit's first service read by Break-in at + the grace is its
 		// break-in: a light rider's, done when the year is close, counts as
 		// the first full service too (stock.BreakInIsFull). Checked when it
 		// becomes a full service or its reading changes, so one saved before

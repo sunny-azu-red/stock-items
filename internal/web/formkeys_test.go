@@ -121,6 +121,7 @@ func TestFormsCarryFormKeys(t *testing.T) {
 	check("/kits/new", "/kits", 1)
 	check("/services/new", "/services", 1)
 	check("/shopping", "/shopping", 1)
+	check("/settings", "/settings", 1)
 	for _, r := range records() {
 		action, _ := r.make(t, a)
 		check(action+"/edit", action, 1)

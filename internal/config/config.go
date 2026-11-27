@@ -1,5 +1,6 @@
-// Package config loads application settings from the environment and an
-// optional .env file.
+// Package config loads the deployment's configuration (the database, the
+// listen address, the time zone) from the environment and an optional .env
+// file. What a user sets is in the database (stock.Settings).
 package config
 
 import (

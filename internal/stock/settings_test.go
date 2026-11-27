@@ -24,8 +24,8 @@ func TestCurrentIsACopy(t *testing.T) {
 	c := Current()
 	c.Currency = "XXX"
 	c.Categories[0] = "Changed"
-	if got := Current(); got.Currency != "EUR" {
-		t.Errorf("Currency = %q after changing a copy", got.Currency)
+	if got := Current(); got.Currency != "EUR" || got.Categories[0] != "Oil & Fluids" {
+		t.Errorf("Currency, Categories[0] = %q, %q after changing a copy", got.Currency, got.Categories[0])
 	}
 	set := DefaultSettings()
 	Use(set)
@@ -159,6 +159,7 @@ func TestSettingsValidate(t *testing.T) {
 		{"a page of 5", func(s *Settings) { s.ActivityPageSize = 5 }, "activity_page_size"},
 		{"a page of 5 000", func(s *Settings) { s.ServicesPageSize = 5000 }, "services_page_size"},
 		{"a history of 1 000", func(s *Settings) { s.ItemHistory = 1000 }, ""},
+		{"no services on a vehicle's page", func(s *Settings) { s.VehicleServices = 0 }, "vehicle_services"},
 		{"a search without {q}", func(s *Settings) { s.SKUSearchURL = "https://www.google.com/search" }, "sku_search_url"},
 		{"a long prefix", func(s *Settings) { s.SKUSearchPrefix = strings.Repeat("x", 101) }, "sku_search_prefix"},
 		{"expiring 0 days", func(s *Settings) { s.ExpiringDays = 0 }, "expiring_days"},
@@ -308,5 +309,31 @@ func TestGraceSettings(t *testing.T) {
 	useSettings(t, func(s *Settings) { s.GracePercent = 15 })
 	if got := WarrantyGrace(1000); got != 150 {
 		t.Errorf("WarrantyGrace(1000) at 15%% = %d", got)
+	}
+}
+
+// UseSaved never puts older settings in use than are: the save that
+// committed last may put its own in use first.
+func TestUseSaved(t *testing.T) {
+	useSettings(t, func(*Settings) {})
+	v2, v3 := DefaultSettings(), DefaultSettings()
+	v2.Version, v2.Currency = 2, "LEI"
+	v3.Version, v3.Currency = 3, "RON"
+	UseSaved(v3)
+	UseSaved(v2) // late
+	if got := Current(); got.Version != 3 || got.Currency != "RON" {
+		t.Errorf("in use: version %d, %s; want 3, RON", got.Version, got.Currency)
+	}
+}
+
+func TestFormatLongDate(t *testing.T) {
+	day := time.Date(2026, 11, 27, 0, 0, 0, 0, time.UTC)
+	useSettings(t, func(*Settings) {})
+	if got := FormatLongDate(day); got != "Friday, 27 November 2026" {
+		t.Errorf("the default: %q", got)
+	}
+	useSettings(t, func(s *Settings) { s.DateFormat = "02.01.2006" })
+	if got := FormatLongDate(day); got != "Friday, 27.11.2026" {
+		t.Errorf("02.01.2006: %q", got)
 	}
 }

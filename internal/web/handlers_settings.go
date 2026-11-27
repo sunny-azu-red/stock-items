@@ -65,7 +65,7 @@ type settingSection struct {
 var settingSections = []settingSection{
 	{Names: []string{"currency", "distance_unit", "number_format", "date_format", "days_ago", "dashboard_recent"}},
 	{Title: "Lists", Note: "How many rows the longer lists show at once. Fewer loads faster on a phone.",
-		Names: []string{"activity_page_size", "services_page_size", "item_history"}},
+		Names: []string{"activity_page_size", "services_page_size", "item_history", "vehicle_services"}},
 	{Title: "Stock", Note: "Part number links, best-before warnings and the categories the item form offers.",
 		Names: []string{"sku_search_url", "sku_search_prefix", "expiring_days", "categories"}},
 	{Title: "Services", Note: "When a kit's next service shows Due soon, and the names its forms offer. Overdue always starts at the limit itself.",
@@ -161,7 +161,7 @@ var settingDefs = []settingDef{
 		"Odometer readings, service intervals and the warranty. Only a label: switching km to mi doesn't convert the readings saved. Up to 10 characters.",
 		"", func(s *stock.Settings) *string { return &s.DistanceUnit }, same),
 	selectSetting("number_format", "Numbers",
-		"Thousands and decimals on every page. Forms take a dot or a comma as the decimal mark whatever this says, and the CSV exports always write 1500.50.",
+		"Thousands and decimals on every page. Forms take a dot or a comma as the decimal mark whatever this says, and the CSV exports' number columns always write 1500.50 (their display columns follow this).",
 		func(s *stock.Settings) *string { return (*string)(&s.NumberFormat) },
 		func() []settingOption {
 			var o []settingOption
@@ -181,20 +181,23 @@ var settingDefs = []settingDef{
 			return o
 		}),
 	numberSetting("days_ago", "“Days ago” up to", "days",
-		"Dates this recent read as “3 days ago”, today and yesterday as words. 0 shows every date in full.",
+		"Dates this many days back or fewer read as “3 days ago”, today and yesterday as words. 0 shows every date in full.",
 		"span-2", func(s *stock.Settings) *int { return &s.DaysAgo }),
 	numberSetting("dashboard_recent", "Recent changes on the dashboard", "",
 		"How many of the latest stock changes the dashboard shows, from 1 to 50.",
 		"span-2", func(s *stock.Settings) *int { return &s.DashboardRecent }),
 	numberSetting("activity_page_size", "Activity per page", "",
-		"Stock changes on one Activity page before Next, from 10 to 1 000.",
+		"Stock changes on one Activity page, the older ones behind Older, from 10 to 1 000.",
 		"", func(s *stock.Settings) *int { return &s.ActivityPageSize }),
 	numberSetting("services_page_size", "Services per page", "",
-		"Services on one page of the log before Next, from 10 to 1 000.",
+		"Services on one page of Service history (Services), the older ones behind Older, from 10 to 1 000.",
 		"", func(s *stock.Settings) *int { return &s.ServicesPageSize }),
 	numberSetting("item_history", "Stock changes on an item's page", "",
 		"The item's history, newest first, from 10 to 1 000. Older ones are on Activity, filtered to the item.",
-		"span-2", func(s *stock.Settings) *int { return &s.ItemHistory }),
+		"", func(s *stock.Settings) *int { return &s.ItemHistory }),
+	numberSetting("vehicle_services", "Services on a vehicle's page", "",
+		"The latest services in a vehicle's Service history card, from 1 to 100. All services → shows the rest.",
+		"", func(s *stock.Settings) *int { return &s.VehicleServices }),
 	textSetting("sku_search_url", "Part number search",
 		"Where a part number links to: {q} is where the number goes, and an item's brand goes in with it. Any http(s) address with one {q}, such as https://www.ebay.com/sch/i.html?_nkw={q}.",
 		"span-2", func(s *stock.Settings) *string { return &s.SKUSearchURL }, func(v string) string {
@@ -207,7 +210,7 @@ var settingDefs = []settingDef{
 		"Added to every part number search, to narrow it to a country or a shop, such as site:ro or site:shop.example.",
 		"", func(s *stock.Settings) *string { return &s.SKUSearchPrefix }, same),
 	numberSetting("expiring_days", "Best before soon", "days",
-		"Items in stock this close to their best-before date show Expiring soon and are in the Expiring filter. An item with nothing left has nothing to expire.",
+		"Items in stock this close to their best-before date get an amber Expires badge and are on the dashboard's Expiring card and in the Expiring filter. An item with nothing left has nothing to expire.",
 		"", func(s *stock.Settings) *int { return &s.ExpiringDays }),
 	listSetting("categories", "Categories offered",
 		"Offered as you type an item's category, after the ones in use. One per line. Removing one here changes no item, and categories in use are always offered.",
@@ -216,7 +219,7 @@ var settingDefs = []settingDef{
 		"A service due by date shows Due soon this many days ahead, but never more than half the kit's months, so a monthly kit isn't soon right away.",
 		"", func(s *stock.Settings) *int { return &s.DueSoonDays }),
 	numberSetting("due_soon_percent", "Due soon", "%",
-		"A service due by reading shows Due soon within this share of the kit's distance (10% is 1 000 km before a 10 000 km service), never more than half of it.",
+		"A service due by reading shows Due soon within this share of the kit's distance (10% is 1 000 {dist} before a 10 000 {dist} service), never more than half of it.",
 		"", func(s *stock.Settings) *int { return &s.DueSoonPercent }),
 	numberSetting("due_soon_min_distance", "…but at least", "distance",
 		"The reading's Due soon never starts closer than this, so a short interval doesn't turn Due soon only at the last moment.",
@@ -231,7 +234,7 @@ var settingDefs = []settingDef{
 		"The warranty shows Ends soon this many days before its end date.",
 		"", func(s *stock.Settings) *int { return &s.WarrantySoonDays }),
 	numberSetting("warranty_grace_percent", "Grace", "%",
-		"How far past its reading a service the warranty asks for still keeps it, and how far past Break-in at a service still counts as the break-in: 10% is 100 km on a break-in at 1 000 km. Dealers allow about 10%; some terms state none, so 0 is the strict choice.",
+		"How far past its reading a service the warranty asks for still keeps it, and how far past Break-in at a service still counts as the break-in: 10% is 100 {dist} on a break-in at 1 000 {dist}. Dealers allow about 10%; some terms state none, so 0 is the strict choice.",
 		"", func(s *stock.Settings) *int { return &s.GracePercent }),
 	numberSetting("warranty_grace_days", "Grace", "days",
 		"How many days past its date a service the warranty asks for still keeps it: about a month, whatever the interval.",
@@ -257,6 +260,11 @@ type settingField struct {
 	Long    string // the ↺'s title: "Reset to …"
 	Changed bool
 	Options []settingOption
+}
+
+// TipText is the field's "?", in the distance unit in use.
+func (f settingField) TipText() string {
+	return strings.ReplaceAll(f.Tip, "{dist}", stock.Current().DistanceUnit)
 }
 
 // Required reports whether the field can't be left empty: every number,
@@ -394,7 +402,7 @@ func (s *Server) settingsUpdate(w http.ResponseWriter, r *http.Request) error {
 	if !errs.Any() {
 		set, err := s.store.UpdateSettings(r.Context(), in)
 		if err == nil {
-			stock.Use(set)
+			stock.UseSaved(set)
 			s.redirect(w, r, "/settings", "Saved settings")
 			return nil
 		}

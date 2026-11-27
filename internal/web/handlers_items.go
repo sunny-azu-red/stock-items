@@ -830,7 +830,7 @@ func amountError(err error, u stock.Unit, prompt string) string {
 func examplesFor(u stock.Unit) string {
 	switch u {
 	case stock.UnitML:
-		return "500 ml or 1.5 L"
+		return "500 ml or " + stock.DecimalExample("1.5") + " L"
 	case stock.UnitGram:
 		return "400 g or 1 kg"
 	}
@@ -844,7 +844,7 @@ func examplesFor(u stock.Unit) string {
 func numberExampleFor(u stock.Unit) string {
 	switch u {
 	case stock.UnitML:
-		return "1.5"
+		return stock.DecimalExample("1.5")
 	case stock.UnitGram:
 		return "1"
 	}

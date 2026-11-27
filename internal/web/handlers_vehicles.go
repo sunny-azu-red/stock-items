@@ -465,7 +465,7 @@ func (s *Server) vehicleShow(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	services, err := s.store.ListServices(ctx, store.ServiceFilter{VehicleID: id, Limit: 10})
+	services, err := s.store.ListServices(ctx, store.ServiceFilter{VehicleID: id, Limit: stock.Current().VehicleServices})
 	if err != nil {
 		return err
 	}

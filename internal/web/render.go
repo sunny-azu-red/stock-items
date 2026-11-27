@@ -168,6 +168,7 @@ func (s *Server) funcs() template.FuncMap {
 		"distNum":    stock.FormatInt, // a distance's figure, without its unit
 		"money":      s.formatMoney,
 		"date":       formatDate,
+		"longDate":   stock.FormatLongDate, // a heading's: "Friday, 27 November 2026"
 		"ago":        func(t time.Time) string { return relativeDate(t, s.now()) },
 		"deref":      derefFloat,
 		"changeName": changeName,
@@ -479,21 +480,20 @@ func formatDate(v any) string {
 }
 
 // relativeDate writes a recent day as words: "today", "yesterday", "3 days
-// ago", up to the settings' DaysAgo (0 for never); an older one, or a later
-// one, as its date.
+// ago", up to the settings' DaysAgo days back (0 for never); an older one,
+// or a later one, as its date.
 func relativeDate(t, now time.Time) string {
 	days := int(stock.DateOnly(now).Sub(stock.DateOnly(t)).Hours() / 24)
-	limit := stock.Current().DaysAgo
-	switch {
-	case limit == 0:
-	case days == 0:
-		return "today"
-	case days == 1:
-		return "yesterday"
-	case days > 1 && days < limit:
-		return fmt.Sprintf("%d days ago", days)
+	if limit := stock.Current().DaysAgo; limit == 0 || days < 0 || days > limit {
+		return stock.FormatDate(t)
 	}
-	return stock.FormatDate(t)
+	switch days {
+	case 0:
+		return "today"
+	case 1:
+		return "yesterday"
+	}
+	return fmt.Sprintf("%d days ago", days)
 }
 
 func derefTime(v any) (time.Time, bool) {

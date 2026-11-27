@@ -2,7 +2,7 @@
 
 How a service kit decides which service comes next, when it is due, and when the vehicle's warranty is lost. The rules live in `internal/stock` (`kits.go`, `warranty.go`, `validate.go`); the store loads what they need and enforces what can be saved (`internal/store/kits.go`, `services.go`, `vehicles.go`). Change the code and this file together.
 
-The worked examples are the kit schedule matrix (artifact <https://claude.ai/artifact/CUe5MX3g8DFptHWuPQGgia>): every case ID below (B6, W11, L4, …) is one of its situations, run through this code on a sample kit (10 000 km / 12 months, halfway, break-in at 1 000, bought new on 1 Jan 2025), plus simulated riders over three years and a full scan of every kit shape.
+The worked examples are the kit schedule matrix (artifact <https://claude.ai/artifact/CUe5MX3g8DFptHWuPQGgia>): every case ID below (B6, W11, L4, …) is one of its situations, run through this code on a sample kit (10 000 km / 12 months, halfway, break-in at 1 000, bought new on 1 Jan 2025); the U cases are used, demo and pre-registered vehicles (LittleJoy's kits among them). It also has simulated riders over three years on a new and a used bike, and a full scan of every kit shape.
 
 ## Terms
 
@@ -181,4 +181,4 @@ The vehicle form refuses raising the purchase reading past a kit's Break-in at (
 - `internal/stock/validate_test.go`: the kit form rows above.
 - Over HTTP, `internal/web/warranty_test.go`: `TestBought`, `TestBreakIn`, `TestBreakInLateRefused`, `TestBreakInWindowOverHTTP`, `TestBreakInMarkedOnEdit`, `TestBreakInBackfill`, `TestWarrantyLostAndBackfilled`, `TestWarrantyLostHistory`, `TestWarrantyLostCard`, `TestArchiveRequiredKit`, `TestKitStaysWithItsVehicle`, `TestHalfwayByTime`, `TestWarrantyDecidesKitSchedule`.
 - e2e, `e2e/tests/garage.spec.ts`: "a missed service the warranty asks for shows in a red card" (and the page-wide tests then measure the card).
-- The full scan (the matrix's last section): every valid kit shape × 5 vehicles × 30 riders over four years, against twelve rules (R1–R12), with a throwaway harness run through `go run -overlay`.
+- The full scan (the matrix's last section): every kit shape `KitInput.Validate` accepts × every kind of vehicle the vehicle form can save (New at 0; Used or demo bought at 0 to 31 000 km and first registered the same day to almost five years before, on a 31st or a 29 Feb) × riders on time, late inside the grace and late past it, every day for four years, against R1–R12 and N1–N3 (what is due first falls after the purchase; a vehicle bought New behaves as at 5e62f20, checked by a second build of the old code; no warranty miss has a limit before the purchase), with a throwaway harness run through `go run -overlay`.
